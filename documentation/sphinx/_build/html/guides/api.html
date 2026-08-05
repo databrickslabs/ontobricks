@@ -2540,6 +2540,63 @@ above).</p>
 </section>
 </section>
 <hr class="docutils" />
+<section id="run-history-endpoints">
+<h3>Run History Endpoints<a class="headerlink" href="#run-history-endpoints" title="Link to this heading">¶</a></h3>
+<p>Read the registry’s build-run trace (<code class="docutils literal notranslate"><span class="pre">build_runs</span></code>) and analytics-run history
+(<code class="docutils literal notranslate"><span class="pre">graph_analytics_runs</span></code>). <strong>All four are admin-only</strong>, like every other
+<code class="docutils literal notranslate"><span class="pre">/settings</span></code> path. The first two back <strong>Settings → Automation → Runs</strong>; the last
+two are per-domain readers kept for programmatic use.</p>
+<section id="list-build-runs-every-domain-paginated">
+<h4>List Build Runs (every domain, paginated)<a class="headerlink" href="#list-build-runs-every-domain-paginated" title="Link to this heading">¶</a></h4>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /settings/runs/build?domain=&amp;limit=25&amp;offset=0</span>
+</pre></div>
+</div>
+<p>Newest-first, spanning every domain unless <code class="docutils literal notranslate"><span class="pre">domain</span></code> is given (an empty value
+means every domain). <code class="docutils literal notranslate"><span class="pre">limit</span></code> is 1–200; <code class="docutils literal notranslate"><span class="pre">offset</span></code> is ≥ 0.</p>
+<p><strong>Response:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;success&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;domain&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;runs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">41</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;domain&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hr&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;success&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;triple_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">18240</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;started_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-08-04T07:12:03&quot;</span><span class="p">}],</span>
+<span class="w">  </span><span class="nt">&quot;total&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">137</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;limit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">25</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;offset&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">total</span></code> is the full match count, not the page length — page through with
+<code class="docutils literal notranslate"><span class="pre">offset</span></code> until <code class="docutils literal notranslate"><span class="pre">offset</span> <span class="pre">+</span> <span class="pre">len(runs)</span> <span class="pre">==</span> <span class="pre">total</span></code>. Every row carries the <code class="docutils literal notranslate"><span class="pre">domain</span></code> it
+belongs to.</p>
+</section>
+<section id="list-analytics-runs-every-domain-paginated">
+<h4>List Analytics Runs (every domain, paginated)<a class="headerlink" href="#list-analytics-runs-every-domain-paginated" title="Link to this heading">¶</a></h4>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /settings/runs/analytics?domain=&amp;limit=25&amp;offset=0</span>
+</pre></div>
+</div>
+<p>Same contract and same response envelope as above, over analytics runs
+(<code class="docutils literal notranslate"><span class="pre">status</span></code>, <code class="docutils literal notranslate"><span class="pre">class_filter</span></code>, <code class="docutils literal notranslate"><span class="pre">node_count</span></code>, <code class="docutils literal notranslate"><span class="pre">edge_count</span></code>,
+<code class="docutils literal notranslate"><span class="pre">connected_components</span></code>, <code class="docutils literal notranslate"><span class="pre">avg_degree</span></code>, <code class="docutils literal notranslate"><span class="pre">density</span></code>, <code class="docutils literal notranslate"><span class="pre">duration_ms</span></code>,
+<code class="docutils literal notranslate"><span class="pre">computed_at</span></code>). Spans every version of every domain.</p>
+</section>
+<section id="build-runs-for-one-domain">
+<h4>Build Runs for One Domain<a class="headerlink" href="#build-runs-for-one-domain" title="Link to this heading">¶</a></h4>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /settings/build-runs/{domain_name}?version=&amp;limit=100</span>
+</pre></div>
+</div>
+<p>Newest-first, optionally scoped to one <code class="docutils literal notranslate"><span class="pre">version</span></code>. Not paginated (<code class="docutils literal notranslate"><span class="pre">limit</span></code> is
+1–1000).</p>
+</section>
+<section id="build-statistics-for-one-domain">
+<h4>Build Statistics for One Domain<a class="headerlink" href="#build-statistics-for-one-domain" title="Link to this heading">¶</a></h4>
+<div class="highlight-http notranslate"><div class="highlight"><pre><span></span><span class="err">GET /settings/build-analytics/{domain_name}?version=</span>
+</pre></div>
+</div>
+<p>Aggregates over that domain’s build runs: totals, success rate, duration
+min/avg/max, the latest triple count, the currently active build (the most
+recent successful run) and a per-version breakdown.</p>
+</section>
+</section>
+<hr class="docutils" />
 <section id="mapping-sql-wizard-endpoints">
 <h3>Mapping SQL Wizard Endpoints<a class="headerlink" href="#mapping-sql-wizard-endpoints" title="Link to this heading">¶</a></h3>
 <p>LLM-assisted SQL generation for mapping queries.</p>

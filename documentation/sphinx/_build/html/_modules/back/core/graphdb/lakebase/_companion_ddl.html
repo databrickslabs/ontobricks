@@ -142,7 +142,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">safe_identifier</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">safe_identifier</span><span class="p">,</span> <span class="n">sql_cast</span>
 
 <span class="c1"># Lakeflow synced-table PK (object_hash comes from the Delta warehouse view).</span>
 <span class="n">LAKEFLOW_SYNC_PRIMARY_KEY</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
@@ -222,7 +222,7 @@
     <span class="n">inner</span> <span class="o">=</span> <span class="n">spark_sql</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)</span>
     <span class="k">return</span> <span class="p">(</span>
         <span class="s2">&quot;SELECT subject, predicate, object, &quot;</span>
-        <span class="s2">&quot;sha2(cast(object AS string), 256) AS object_hash &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;sha2(</span><span class="si">{</span><span class="n">sql_cast</span><span class="p">(</span><span class="s1">&#39;object&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;STRING&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">, 256) AS object_hash &quot;</span>
         <span class="sa">f</span><span class="s2">&quot;FROM (</span><span class="si">{</span><span class="n">inner</span><span class="si">}</span><span class="s2">) AS _ob_triples&quot;</span>
     <span class="p">)</span></div>
 

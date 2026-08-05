@@ -127,6 +127,9 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
@@ -152,6 +155,33 @@
     <span class="s2">&quot;/api/openapi.json&quot;</span><span class="p">,</span>
     <span class="s2">&quot;/favicon.ico&quot;</span><span class="p">,</span>
 <span class="p">)</span>
+
+<span class="c1"># A session ID becomes a filename under ``session_dir``, so a value arriving in</span>
+<span class="c1"># a cookie is only trusted when it has the exact shape _generate_session_id</span>
+<span class="c1"># produces. Matched with fullmatch, never with ^...$: Python&#39;s ``$`` also</span>
+<span class="c1"># matches immediately before a trailing newline, which would let a 33-character</span>
+<span class="c1"># value through and resolve to a different file than the one validated.</span>
+<span class="n">_SESSION_ID_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[0-9a-f]</span><span class="si">{32}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># How stale a session file&#39;s mtime must be before a read refreshes it. Bounds</span>
+<span class="c1"># the metadata writes to at most one per session per interval. The reaper adds</span>
+<span class="c1"># this same interval to its cutoff to compensate for the resulting mtime lag, so</span>
+<span class="c1"># the constraint is safe for any configured session_max_age.</span>
+<span class="n">_SESSION_TOUCH_INTERVAL</span> <span class="o">=</span> <span class="mi">3600</span>
+
+
+<div class="viewcode-block" id="is_valid_session_id">
+<a class="viewcode-back" href="../../../../api/app.objects.session.html#back.objects.session.FileSessionMiddleware.is_valid_session_id">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_valid_session_id</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``True`` iff *value* has the shape a generated session id has.</span>
+
+<span class="sd">    A session id is exactly 32 lowercase hex characters — the format</span>
+<span class="sd">    ``str(uuid.uuid4()).replace(&quot;-&quot;, &quot;&quot;)`` produces.  Centralising the check</span>
+<span class="sd">    here means there is one source of truth for the pattern wherever a</span>
+<span class="sd">    caller-supplied id is used as a filesystem path.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_SESSION_ID_RE</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="n">value</span><span class="p">))</span></div>
+
 
 
 <div class="viewcode-block" id="FileSessionMiddleware">
@@ -186,9 +216,21 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">session_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_session_id_from_cookie</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Extract and validate session ID from cookie.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the session ID from the cookie, or ``None`` if unusable.</span>
+
+<span class="sd">        A malformed value is reported as no cookie at all, which makes the</span>
+<span class="sd">        caller mint a fresh ID — the same outcome a user with a corrupted</span>
+<span class="sd">        cookie already got, so nothing legitimate regresses.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">cookie_value</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">cookies</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session_cookie</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">cookie_value</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid_session_id</span><span class="p">(</span><span class="n">cookie_value</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Rejected malformed session cookie (</span><span class="si">%d</span><span class="s2"> chars, starts </span><span class="si">%r</span><span class="s2">)&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">cookie_value</span><span class="p">),</span>
+                <span class="n">cookie_value</span><span class="p">[:</span><span class="mi">8</span><span class="p">],</span>
+            <span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="k">return</span> <span class="n">cookie_value</span>
 
@@ -221,6 +263,26 @@
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error saving session </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">session_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="nf">_touch_session</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Refresh a session file&#39;s mtime so it records last *use*, not last edit.</span>
+
+<span class="sd">        ``reap_expired_sessions`` deletes by mtime, and the session cookie is</span>
+<span class="sd">        renewed on every response — so without this a session that is read for</span>
+<span class="sd">        days but never modified would be reaped while its cookie is still</span>
+<span class="sd">        valid, and the user would silently land on an empty session.</span>
+
+<span class="sd">        Never creates the file: ``Path.touch()`` would, ``os.utime`` on a</span>
+<span class="sd">        missing path raises ``FileNotFoundError`` and is swallowed below. That</span>
+<span class="sd">        also covers the file being unlinked between the stat and the utime.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">session_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_dir</span> <span class="o">/</span> <span class="n">session_id</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">session_file</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_mtime</span> <span class="o">&lt;</span> <span class="n">_SESSION_TOUCH_INTERVAL</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">utime</span><span class="p">(</span><span class="n">session_file</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Could not touch session </span><span class="si">%s</span><span class="s2">...: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">session_id</span><span class="p">[:</span><span class="mi">8</span><span class="p">],</span> <span class="n">e</span><span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_generate_session_id</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a new session ID.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -239,34 +301,24 @@
             <span class="n">request</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">session_modified</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="k">return</span> <span class="k">await</span> <span class="n">call_next</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
 
-        <span class="c1"># Get or create session ID</span>
         <span class="n">session_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_session_id_from_cookie</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-        <span class="n">is_new_session</span> <span class="o">=</span> <span class="kc">False</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">session_id</span><span class="p">:</span>
+            <span class="c1"># No file is written here. A session that is never modified never</span>
+            <span class="c1"># reaches disk, which is what stops cookie-less traffic from</span>
+            <span class="c1"># littering session_dir with empty {} files.</span>
             <span class="n">session_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_session_id</span><span class="p">()</span>
-            <span class="n">is_new_session</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="n">session_data</span> <span class="o">=</span> <span class="p">{}</span>
-            <span class="c1"># Create empty session file immediately</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_save_session</span><span class="p">(</span><span class="n">session_id</span><span class="p">,</span> <span class="n">session_data</span><span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;NEW session created: </span><span class="si">%s</span><span class="s2">...&quot;</span><span class="p">,</span> <span class="n">session_id</span><span class="p">[:</span><span class="mi">8</span><span class="p">])</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># Check if session file exists</span>
-            <span class="n">session_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session_dir</span> <span class="o">/</span> <span class="n">session_id</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">session_file</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-                <span class="c1"># Session cookie exists but file is missing - create new session</span>
-                <span class="n">session_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_session_id</span><span class="p">()</span>
-                <span class="n">is_new_session</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">session_data</span> <span class="o">=</span> <span class="p">{}</span>
-                <span class="c1"># Create empty session file immediately</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_save_session</span><span class="p">(</span><span class="n">session_id</span><span class="p">,</span> <span class="n">session_data</span><span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;Old session file not found, created NEW session: </span><span class="si">%s</span><span class="s2">...&quot;</span><span class="p">,</span>
-                    <span class="n">session_id</span><span class="p">[:</span><span class="mi">8</span><span class="p">],</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="c1"># Load existing session (served from in-memory cache after first hit)</span>
-                <span class="n">session_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_session</span><span class="p">(</span><span class="n">session_id</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_touch_session</span><span class="p">(</span><span class="n">session_id</span><span class="p">)</span>
+            <span class="c1"># The ID is reused even when its file is missing. Minting a</span>
+            <span class="c1"># replacement here made N concurrent requests carrying the same</span>
+            <span class="c1"># cookie produce N sessions. _load_session resolves cache hit,</span>
+            <span class="c1"># disk hit, and neither — so file presence is not our concern, and</span>
+            <span class="c1"># deferring to it keeps a live cached session that lost its file.</span>
+            <span class="n">session_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_session</span><span class="p">(</span><span class="n">session_id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">session_data</span><span class="p">:</span>
                 <span class="n">pd</span> <span class="o">=</span> <span class="n">session_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain_data&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">session_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
                     <span class="s2">&quot;project_data&quot;</span><span class="p">,</span> <span class="p">{}</span>
                 <span class="p">)</span>
@@ -323,6 +375,51 @@
 
         <span class="k">return</span> <span class="n">response</span></div>
 </div>
+
+
+
+<div class="viewcode-block" id="reap_expired_sessions">
+<a class="viewcode-back" href="../../../../api/app.objects.session.html#back.objects.session.FileSessionMiddleware.reap_expired_sessions">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reap_expired_sessions</span><span class="p">(</span><span class="n">session_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">max_age</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Delete session files unused for longer than ``max_age`` seconds.</span>
+
+<span class="sd">    Only names matching :data:`_SESSION_ID_RE` are considered — the directory is</span>
+<span class="sd">    shared with whatever else lands there, and a reaper that deletes purely by</span>
+<span class="sd">    age eventually deletes something it did not create.</span>
+
+<span class="sd">    The cutoff includes a grace window of :data:`_SESSION_TOUCH_INTERVAL` because</span>
+<span class="sd">    ``_touch_session`` only refreshes a file&#39;s mtime at most once per interval.</span>
+<span class="sd">    A file whose mtime is ``max_age`` old may have been used up to</span>
+<span class="sd">    ``_SESSION_TOUCH_INTERVAL`` seconds ago — exactly within the cookie&#39;s</span>
+<span class="sd">    remaining lifetime.  Using ``max_age + _SESSION_TOUCH_INTERVAL`` as the</span>
+<span class="sd">    threshold guarantees a file is not deleted while its cookie is still valid,</span>
+<span class="sd">    regardless of the configured ``max_age``.</span>
+
+<span class="sd">    Returns the number of files removed. Never raises: this runs during app</span>
+<span class="sd">    startup, and a sweep failure must not stop the app from booting.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">directory</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">session_dir</span><span class="p">)</span>
+    <span class="n">cutoff</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">max_age</span> <span class="o">-</span> <span class="n">_SESSION_TOUCH_INTERVAL</span>
+    <span class="n">removed</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">entries</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">directory</span><span class="o">.</span><span class="n">iterdir</span><span class="p">())</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not scan session dir </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">session_dir</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mi">0</span>
+
+    <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid_session_id</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">name</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">stat</span><span class="p">(</span><span class="n">follow_symlinks</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">st_mtime</span> <span class="o">&gt;=</span> <span class="n">cutoff</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">entry</span><span class="o">.</span><span class="n">unlink</span><span class="p">()</span>
+            <span class="n">removed</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Could not remove expired session </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">removed</span></div>
 
 
 

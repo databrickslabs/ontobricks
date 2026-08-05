@@ -154,6 +154,13 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.industry.fhir</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_fhir_versions</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AGGREGATE_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">DECISION_TABLE_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">RULE_FAMILY_CATEGORIES</span><span class="p">,</span>
+    <span class="n">SWRL_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">rule_check_id</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_BASE_URI</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span>
 
 <span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/ontology&quot;</span><span class="p">,</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Ontology&quot;</span><span class="p">])</span>
@@ -601,6 +608,39 @@
 <span class="c1"># ===========================================</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_selectable_rule_families</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List the non-SHACL rules a data quality run executes, as selectables.</span>
+
+<span class="sd">    Each entry mirrors a shape closely enough for the run page to render and</span>
+<span class="sd">    select it: the ``id`` is the same check id the run reports, so ticking one</span>
+<span class="sd">    here is what the run filters on.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ontology_dict</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ontology_dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">ontology_dict</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
+
+    <span class="n">families</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="p">(</span><span class="n">SWRL_ID_PREFIX</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[],</span> <span class="s2">&quot;SWRL Rule&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">DECISION_TABLE_ID_PREFIX</span><span class="p">,</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">,</span> <span class="p">[]),</span> <span class="s2">&quot;Decision Table&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="n">AGGREGATE_ID_PREFIX</span><span class="p">,</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">,</span> <span class="p">[]),</span> <span class="s2">&quot;Aggregate Rule&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">rules</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">prefix</span><span class="p">,</span> <span class="n">family</span><span class="p">,</span> <span class="n">fallback</span> <span class="ow">in</span> <span class="n">families</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">rule</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">family</span> <span class="ow">or</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">rules</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">rule_check_id</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">index</span><span class="p">),</span>
+                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fallback</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">index</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">RULE_FAMILY_CATEGORIES</span><span class="p">[</span><span class="n">prefix</span><span class="p">],</span>
+                    <span class="s2">&quot;family&quot;</span><span class="p">:</span> <span class="n">prefix</span><span class="p">,</span>
+                    <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+    <span class="k">return</span> <span class="n">rules</span>
+
+
 <div class="viewcode-block" id="list_shapes">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.list_shapes">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/dataquality/list&quot;</span><span class="p">)</span>
@@ -608,13 +648,21 @@
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">category</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List all SHACL data-quality shapes, optionally filtered by category.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List all SHACL data-quality shapes, optionally filtered by category.</span>
+
+<span class="sd">    ``rules`` carries the non-SHACL families a data quality run also executes</span>
+<span class="sd">    (SWRL rules, decision tables, aggregate rules) so they can be selected one</span>
+<span class="sd">    by one like a shape. They are kept out of ``shapes`` because the ontology</span>
+<span class="sd">    editor manages actual shapes only.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
     <span class="n">domain</span><span class="o">.</span><span class="n">deduplicate_shacl_shapes</span><span class="p">()</span>
     <span class="n">shapes</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span>
+    <span class="n">rules</span> <span class="o">=</span> <span class="n">_selectable_rule_families</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">category</span><span class="p">:</span>
         <span class="n">shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">category</span><span class="p">]</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">shapes</span><span class="p">}</span></div>
+        <span class="n">rules</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rules</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">category</span><span class="p">]</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">shapes</span><span class="p">,</span> <span class="s2">&quot;rules&quot;</span><span class="p">:</span> <span class="n">rules</span><span class="p">}</span></div>
 
 
 
@@ -653,6 +701,8 @@
                 <span class="n">message</span><span class="o">=</span><span class="n">shape_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
                 <span class="n">label</span><span class="o">=</span><span class="n">shape_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
                 <span class="n">enabled</span><span class="o">=</span><span class="n">shape_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
+                <span class="n">conditions</span><span class="o">=</span><span class="n">shape_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;conditions&quot;</span><span class="p">,</span> <span class="p">[]),</span>
+                <span class="n">condition_logic</span><span class="o">=</span><span class="n">shape_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;condition_logic&quot;</span><span class="p">,</span> <span class="s2">&quot;and&quot;</span><span class="p">),</span>
             <span class="p">)</span>
             <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_shape</span><span class="p">)</span>
 
@@ -722,7 +772,7 @@
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No Turtle content provided&quot;</span><span class="p">)</span>
 
         <span class="n">svc</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="p">()</span>
-        <span class="n">imported</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">import_shapes</span><span class="p">(</span><span class="n">turtle_content</span><span class="p">)</span>
+        <span class="n">imported</span><span class="p">,</span> <span class="n">report</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">import_shapes_with_report</span><span class="p">(</span><span class="n">turtle_content</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">imported</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No valid shapes found in the provided Turtle&quot;</span><span class="p">)</span>
 
@@ -731,11 +781,16 @@
         <span class="n">shapes</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span>
         <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span> <span class="o">=</span> <span class="n">shapes</span>
         <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="n">dropped</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;conditions_dropped&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Imported </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span><span class="si">}</span><span class="s2"> shapes&quot;</span>
+        <span class="k">if</span> <span class="n">dropped</span><span class="p">:</span>
+            <span class="n">message</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; — </span><span class="si">{</span><span class="n">dropped</span><span class="si">}</span><span class="s2"> lost their conditions and now apply to every instance&quot;</span>
         <span class="k">return</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Imported </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span><span class="si">}</span><span class="s2"> shapes&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
             <span class="s2">&quot;shapes&quot;</span><span class="p">:</span> <span class="n">shapes</span><span class="p">,</span>
             <span class="s2">&quot;imported_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">),</span>
+            <span class="s2">&quot;conditions_dropped&quot;</span><span class="p">:</span> <span class="n">dropped</span><span class="p">,</span>
         <span class="p">}</span></div>
 
 
@@ -1087,6 +1142,88 @@
     <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;SWRL rule is invalid&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">))</span>
     <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;valid&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Rule syntax is valid&quot;</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="get_swrl_text">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.get_swrl_text">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/swrl/text&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_swrl_text</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serialize all SWRL rules as OntoBricks SWRL text.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.SWRLTextCodec</span><span class="w"> </span><span class="kn">import</span> <span class="n">serialize_rules</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">serialize_rules</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">)}</span></div>
+
+
+
+<div class="viewcode-block" id="export_swrl">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.export_swrl">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/swrl/export&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">export_swrl</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Download SWRL rules as an OntoBricks SWRL text file.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">Response</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.SWRLTextCodec</span><span class="w"> </span><span class="kn">import</span> <span class="n">serialize_rules</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="n">serialize_rules</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">)</span>
+    <span class="n">export_name</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain&quot;</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;project&quot;</span><span class="p">,</span> <span class="p">{}))</span>
+        <span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">export_name</span><span class="si">}</span><span class="s2">_swrl_rules.swrl&quot;</span>
+    <span class="k">return</span> <span class="n">Response</span><span class="p">(</span>
+        <span class="n">content</span><span class="o">=</span><span class="n">text</span><span class="p">,</span>
+        <span class="n">media_type</span><span class="o">=</span><span class="s2">&quot;text/plain&quot;</span><span class="p">,</span>
+        <span class="n">headers</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Content-Disposition&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s1">&#39;attachment; filename=&quot;</span><span class="si">{</span><span class="n">filename</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">},</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="import_swrl">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.ontology.import_swrl">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/swrl/import&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">import_swrl</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">)</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Import SWRL rules from OntoBricks SWRL text (always append).&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.SWRLTextCodec</span><span class="w"> </span><span class="kn">import</span> <span class="n">parse_rules</span>
+
+    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;SWRL import failed&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">str</span><span class="p">(</span><span class="n">text</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No SWRL text provided&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">imported</span> <span class="o">=</span> <span class="n">parse_rules</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">imported</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No valid SWRL rules found in the provided text&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">rule</span> <span class="ow">in</span> <span class="n">imported</span><span class="p">:</span>
+            <span class="n">errors</span> <span class="o">=</span> <span class="n">Ontology</span><span class="o">.</span><span class="n">validate_swrl_rule</span><span class="p">(</span><span class="n">rule</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Invalid rule &#39;</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;: </span><span class="si">{</span><span class="s1">&#39;; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">errors</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+        <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+        <span class="n">rules</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">)</span>
+        <span class="n">rules</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">rules</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">record_change</span><span class="p">(</span>
+            <span class="s2">&quot;swrl_added&quot;</span><span class="p">,</span>
+            <span class="n">entity_type</span><span class="o">=</span><span class="s2">&quot;swrl&quot;</span><span class="p">,</span>
+            <span class="n">entity_ref</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span><span class="si">}</span><span class="s2"> imported&quot;</span><span class="p">,</span>
+            <span class="n">summary</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Imported </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span><span class="si">}</span><span class="s2"> SWRL rule(s)&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">domain</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Imported </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">)</span><span class="si">}</span><span class="s2"> rules&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;rules&quot;</span><span class="p">:</span> <span class="n">rules</span><span class="p">,</span>
+            <span class="s2">&quot;imported_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">imported</span><span class="p">),</span>
+        <span class="p">}</span></div>
 
 
 

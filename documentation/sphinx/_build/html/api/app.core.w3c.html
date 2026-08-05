@@ -677,6 +677,33 @@ RDFS is simpler than OWL and uses rdfs:Class instead of owl:Class.</p>
 <p>Central orchestrator for all SHACL data-quality operations.  Routes and
 UI code should only import <code class="docutils literal notranslate"><span class="pre">SHACLService</span></code>; the generator and parser
 are internal implementation details.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.RANGE_OPS">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLService.</span></span><span class="sig-name descname"><span class="pre">RANGE_OPS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'sh:maxExclusive':</span> <span class="pre">'&lt;',</span> <span class="pre">'sh:maxInclusive':</span> <span class="pre">'&lt;=',</span> <span class="pre">'sh:minExclusive':</span> <span class="pre">'&gt;',</span> <span class="pre">'sh:minInclusive':</span> <span class="pre">'&gt;='}</span></span><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.RANGE_OPS" title="Link to this definition">¶</a></dt>
+<dd><p>Value-range constraints, mapped to the comparison a conforming value passes.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.LENGTH_OPS">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLService.</span></span><span class="sig-name descname"><span class="pre">LENGTH_OPS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'sh:maxLength':</span> <span class="pre">'&lt;=',</span> <span class="pre">'sh:minLength':</span> <span class="pre">'&gt;='}</span></span><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.LENGTH_OPS" title="Link to this definition">¶</a></dt>
+<dd><p>String-length constraints, same convention.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.IN_MEMORY_TYPES">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLService.</span></span><span class="sig-name descname"><span class="pre">IN_MEMORY_TYPES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">frozenset({'sh:class',</span> <span class="pre">'sh:hasValue',</span> <span class="pre">'sh:maxCount',</span> <span class="pre">'sh:maxExclusive',</span> <span class="pre">'sh:maxInclusive',</span> <span class="pre">'sh:maxLength',</span> <span class="pre">'sh:minCount',</span> <span class="pre">'sh:minExclusive',</span> <span class="pre">'sh:minInclusive',</span> <span class="pre">'sh:minLength',</span> <span class="pre">'sh:pattern'})</span></span><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.IN_MEMORY_TYPES" title="Link to this definition">¶</a></dt>
+<dd><p>Constraint kinds <a class="reference internal" href="#back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory" title="back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory"><code class="xref py py-meth docutils literal notranslate"><span class="pre">SHACLService.evaluate_shape_in_memory()</span></code></a> can check.
+A shape outside this set is reported as not evaluated rather than passing —
+an engine that cannot run a rule must not vouch for the data.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.IN_MEMORY_PARAMS">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLService.</span></span><span class="sig-name descname"><span class="pre">IN_MEMORY_PARAMS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">frozenset({'sh:maxCount',</span> <span class="pre">'sh:maxExclusive',</span> <span class="pre">'sh:maxInclusive',</span> <span class="pre">'sh:maxLength',</span> <span class="pre">'sh:minCount',</span> <span class="pre">'sh:minExclusive',</span> <span class="pre">'sh:minInclusive',</span> <span class="pre">'sh:minLength'})</span></span><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.IN_MEMORY_PARAMS" title="Link to this definition">¶</a></dt>
+<dd><p>Parameters that select an in-memory check on their own, for shapes whose
+<code class="docutils literal notranslate"><span class="pre">shacl_type</span></code> names only the first of several constraints.</p>
+</dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.SHACLService.</span></span><span class="sig-name descname"><span class="pre">SHACLService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'http://example.org/ontology#'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService" title="Link to this definition">¶</a></dt>
@@ -691,12 +718,14 @@ generator can produce correct shape URIs.</p>
 </dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.create_shape">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shacl_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sh:minCount'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">severity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sh:Violation'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.create_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.create_shape" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">category</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">property_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shacl_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sh:minCount'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">severity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'sh:Violation'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enabled</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conditions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">condition_logic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'and'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.create_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.create_shape" title="Link to this definition">¶</a></dt>
 <dd><p>Build a new shape dict (not yet persisted).</p>
 <p>When <em>shape_id</em> is <code class="docutils literal notranslate"><span class="pre">None</span></code> (default) a random UUID suffix is used,
 which is correct for user-created shapes.  Callers that need a
 <strong>deterministic</strong> ID (e.g. legacy-constraint migration) should
 pass an explicit <em>shape_id</em>.</p>
+<p><em>conditions</em> guards the constraint: the shape then only applies to the
+instances matching them.  See <a class="reference internal" href="#module-back.core.w3c.shacl.ShapeConditions" title="back.core.w3c.shacl.ShapeConditions"><code class="xref py py-mod docutils literal notranslate"><span class="pre">back.core.w3c.shacl.ShapeConditions</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -712,6 +741,8 @@ pass an explicit <em>shape_id</em>.</p>
 <li><p><strong>label</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>enabled</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>)</p></li>
 <li><p><strong>shape_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>conditions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>condition_logic</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -784,6 +815,25 @@ pass an explicit <em>shape_id</em>.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.import_shapes_with_report">
+<span class="sig-name descname"><span class="pre">import_shapes_with_report</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">turtle_content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'turtle'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.import_shapes_with_report"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.import_shapes_with_report" title="Link to this definition">¶</a></dt>
+<dd><p>Parse SHACL Turtle, returning <code class="docutils literal notranslate"><span class="pre">(shapes,</span> <span class="pre">report)</span></code>.</p>
+<p>The report’s <code class="docutils literal notranslate"><span class="pre">conditions_dropped</span></code> counts shapes whose guard could not
+be reconstructed; see <code class="xref py py-meth docutils literal notranslate"><span class="pre">SHACLParser.parse_with_report()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>turtle_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>fmt</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)">tuple</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -910,6 +960,8 @@ Shape IDs are deterministic so calling this method multiple times is idempotent.
 <dd><p>Translate a single SHACL shape dict into Spark SQL.</p>
 <p>The SQL checks against a triple store table with columns
 <code class="docutils literal notranslate"><span class="pre">(subject,</span> <span class="pre">predicate,</span> <span class="pre">object)</span></code>.</p>
+<p>A shape carrying conditions keeps its constraint query unchanged and
+has it restricted to the subjects matching the guard.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p>SQL string, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if the shape cannot be translated.</p>
@@ -928,11 +980,30 @@ Shape IDs are deterministic so calling this method multiple times is idempotent.
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.supports_in_memory">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">supports_in_memory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.supports_in_memory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.supports_in_memory" title="Link to this definition">¶</a></dt>
+<dd><p>Whether <a class="reference internal" href="#back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory" title="back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory"><code class="xref py py-meth docutils literal notranslate"><span class="pre">evaluate_shape_in_memory()</span></code></a> can check <em>shape</em>.</p>
+<p>An unsupported shape yields no violations, which is indistinguishable
+from a clean result — callers must ask first and report the check as
+not run.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">evaluate_shape_in_memory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLService.html#SHACLService.evaluate_shape_in_memory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLService.SHACLService.evaluate_shape_in_memory" title="Link to this definition">¶</a></dt>
 <dd><p>Evaluate a single SHACL shape against an in-memory list of triples.</p>
 <p>Each triple is <code class="docutils literal notranslate"><span class="pre">{&quot;subject&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;predicate&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;object&quot;:</span> <span class="pre">...}</span></code>.
 Returns a list of violation dicts (empty if no violations).</p>
+<p>A shape carrying conditions is evaluated exactly as an unconditional
+one, then its violations are filtered down to the guarded subjects.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -999,22 +1070,237 @@ shape dicts compatible with <code class="docutils literal notranslate"><span cla
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>turtle_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>format</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.SHACLParser.SHACLParser.parse_with_report">
+<span class="sig-name descname"><span class="pre">parse_with_report</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">turtle_content</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'turtle'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/SHACLParser.html#SHACLParser.parse_with_report"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.SHACLParser.SHACLParser.parse_with_report" title="Link to this definition">¶</a></dt>
+<dd><p>Parse SHACL Turtle into shape dicts plus an import report.</p>
+<p>The report carries <code class="docutils literal notranslate"><span class="pre">conditions_dropped</span></code>: the number of shapes that
+arrived with a SPARQL target.  Conditions are not reconstructed from
+the query — the constraint is imported unguarded, so the caller must
+surface the count to the user.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
 <li><p><strong>turtle_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – SHACL serialised as Turtle (or another RDF format).</p></li>
 <li><p><strong>format</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – RDFLib parse format (default <code class="docutils literal notranslate"><span class="pre">turtle</span></code>).</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>List of internal shape dicts.</p>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">(shapes,</span> <span class="pre">report)</span></code>.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>], <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
 
 </dd></dl>
 
+<p id="module-back.core.w3c.shacl.ShapeConditions">Conditional guards for SHACL data-quality shapes.</p>
+<p>A conformance or consistency shape may carry an optional list of conditions,
+read as <em>IF status = active AND amount &gt; 1000 THEN &lt;constraint&gt; must hold</em>.
+The conditions only narrow the focus nodes the constraint applies to — the
+constraint itself is untouched, which is why every translator here produces a
+<strong>subject filter</strong> rather than a new kind of check.</p>
+<p>A single condition is <code class="docutils literal notranslate"><span class="pre">{property,</span> <span class="pre">property_uri,</span> <span class="pre">op,</span> <span class="pre">value}</span></code>.  Unlike a
+decision-table cell it carries its own property, so rows are independent and
+there is no rectangular invariant to maintain.</p>
+<p>Operators are the decision-table vocabulary (<code class="docutils literal notranslate"><span class="pre">DT_OP_SQL</span></code>) plus <code class="docutils literal notranslate"><span class="pre">exists</span></code> /
+<code class="docutils literal notranslate"><span class="pre">notExists</span></code> for relationships, so the two rule builders stay in sync.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.CONDITION_CATEGORIES">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">CONDITION_CATEGORIES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('conformance',</span> <span class="pre">'consistency')</span></span><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.CONDITION_CATEGORIES" title="Link to this definition">¶</a></dt>
+<dd><p>Only these quality dimensions accept conditions.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.EXISTENCE_OPS">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">EXISTENCE_OPS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">frozenset({'exists',</span> <span class="pre">'notExists'})</span></span><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.EXISTENCE_OPS" title="Link to this definition">¶</a></dt>
+<dd><p>Relationship operators — they ignore <code class="docutils literal notranslate"><span class="pre">value</span></code>.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.CONDITION_OPS">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">CONDITION_OPS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">frozenset({'contains',</span> <span class="pre">'endsWith',</span> <span class="pre">'eq',</span> <span class="pre">'exists',</span> <span class="pre">'gt',</span> <span class="pre">'gte',</span> <span class="pre">'lt',</span> <span class="pre">'lte',</span> <span class="pre">'neq',</span> <span class="pre">'notExists',</span> <span class="pre">'startsWith'})</span></span><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.CONDITION_OPS" title="Link to this definition">¶</a></dt>
+<dd><p>Every operator a condition may use (<code class="docutils literal notranslate"><span class="pre">any</span></code> is a decision-table wildcard
+with no meaning for a guard, so it is excluded).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.get_conditions">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">get_conditions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/ShapeConditions.html#get_conditions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.get_conditions" title="Link to this definition">¶</a></dt>
+<dd><p>Return the usable conditions of <em>shape</em>, or an empty list.</p>
+<p>Conditions with no property URI or an unknown operator are dropped so a
+partially filled row can never widen or narrow a rule by accident.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.get_logic">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">get_logic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/ShapeConditions.html#get_logic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.get_logic" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.validate">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conditions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">category</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_class_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/ShapeConditions.html#validate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.validate" title="Link to this definition">¶</a></dt>
+<dd><p>Return an error message for an invalid condition list, else <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>logic</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>category</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>target_class_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.subject_sql">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">subject_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conditions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cls_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">esc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/ShapeConditions.html#subject_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.subject_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Build a query selecting the subjects that satisfy <em>conditions</em>.</p>
+<p>Attribute conditions use a <code class="docutils literal notranslate"><span class="pre">LEFT</span> <span class="pre">JOIN</span></code>: under <code class="docutils literal notranslate"><span class="pre">or</span></code> an inner join on a
+missing property would drop subjects the other branch should match, and
+under <code class="docutils literal notranslate"><span class="pre">and</span></code> a NULL object fails its comparison anyway, so one join form
+is correct for both.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>conditions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><em>Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>logic</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cls_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>table</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>esc</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>normalize_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.wrap_sql">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">wrap_sql</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_sql</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">condition_sql</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/ShapeConditions.html#wrap_sql"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.wrap_sql" title="Link to this definition">¶</a></dt>
+<dd><p>Restrict an existing violation query to condition-matching subjects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>base_sql</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>condition_sql</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.matching_subjects">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">matching_subjects</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conditions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instances</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subj_by_pred</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resolve_uri</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">&lt;lambda&gt;&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/ShapeConditions.html#matching_subjects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.matching_subjects" title="Link to this definition">¶</a></dt>
+<dd><p>Return the subset of <em>instances</em> satisfying <em>conditions</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>conditions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><em>Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>logic</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>instances</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+<li><p><strong>subj_by_pred</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>]</em><em>]</em>)</p></li>
+<li><p><strong>resolve_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><em>Callable</em></a><em>[</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Set" title="(in Python v3.14)"><em>Set</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.ShapeConditions.sparql_target">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.ShapeConditions.</span></span><span class="sig-name descname"><span class="pre">sparql_target</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conditions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cls_uri</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/ShapeConditions.html#sparql_target"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.ShapeConditions.sparql_target" title="Link to this definition">¶</a></dt>
+<dd><p>Build the <code class="docutils literal notranslate"><span class="pre">sh:select</span></code> query selecting the guarded focus nodes.</p>
+<p>Full IRIs are used throughout: prefixes inside a <code class="docutils literal notranslate"><span class="pre">sh:select</span></code> string
+resolve from <code class="docutils literal notranslate"><span class="pre">sh:prefixes</span></code>, not from the enclosing document, and no
+<code class="docutils literal notranslate"><span class="pre">sh:prefixes</span></code> declaration is emitted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>conditions</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><em>Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>]</em>)</p></li>
+<li><p><strong>logic</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>cls_uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a> | None</p>
+</dd>
+</dl>
+</dd></dl>
+
 <p id="module-back.core.w3c.shacl.constants">SHACL-related constants shared by parser, generator, and service.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.constants.SWRL_CATEGORY">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.constants.</span></span><span class="sig-name descname"><span class="pre">SWRL_CATEGORY</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'structural'</span></span><a class="headerlink" href="#back.core.w3c.shacl.constants.SWRL_CATEGORY" title="Link to this definition">¶</a></dt>
+<dd><p>A data quality run also executes rule families that are not SHACL shapes.
+Their results are filed under these dimensions, so a run must honour the
+same dimension selection the shapes do.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.constants.SWRL_ID_PREFIX">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.constants.</span></span><span class="sig-name descname"><span class="pre">SWRL_ID_PREFIX</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'swrl'</span></span><a class="headerlink" href="#back.core.w3c.shacl.constants.SWRL_ID_PREFIX" title="Link to this definition">¶</a></dt>
+<dd><p>Non-SHACL rules have no shape id, so a run addresses them by a synthetic
+one. The list endpoint, the run selection and the reported result must all
+derive it the same way or a rule becomes unselectable.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="back.core.w3c.shacl.constants.rule_check_id">
+<span class="sig-prename descclassname"><span class="pre">back.core.w3c.shacl.constants.</span></span><span class="sig-name descname"><span class="pre">rule_check_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/w3c/shacl/constants.html#rule_check_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.w3c.shacl.constants.rule_check_id" title="Link to this definition">¶</a></dt>
+<dd><p>Return the check id a non-SHACL <em>rule</em> is selected and reported under.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>rule</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>)</p></li>
+<li><p><strong>index</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 </section>
 

@@ -1808,9 +1808,11 @@
         <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;List triple-store UC objects in the Registry schema, grouped by domain version.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List triple-store and analytics UC objects, grouped by domain version.&quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.delta.objects</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">domain_match_key</span><span class="p">,</span>
             <span class="n">fetch_uc_schema_tables</span><span class="p">,</span>
+            <span class="n">group_analytics_objects</span><span class="p">,</span>
             <span class="n">group_triplestore_objects</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -1830,6 +1832,10 @@
                 <span class="s2">&quot;registry_catalog&quot;</span><span class="p">:</span> <span class="n">catalog</span><span class="p">,</span>
                 <span class="s2">&quot;registry_schema&quot;</span><span class="p">:</span> <span class="n">schema</span><span class="p">,</span>
                 <span class="s2">&quot;domains&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s2">&quot;analytics&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s2">&quot;orphans&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s2">&quot;analytics_location&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;analytics_message&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="p">(</span>
                     <span class="s2">&quot;Registry catalog/schema is not configured &quot;</span>
                     <span class="s2">&quot;(Settings → Registry)&quot;</span>
@@ -1842,6 +1848,7 @@
             <span class="n">domains</span> <span class="o">=</span> <span class="p">[</span>
                 <span class="p">{</span>
                     <span class="s2">&quot;base&quot;</span><span class="p">:</span> <span class="n">grp</span><span class="p">[</span><span class="s2">&quot;base&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;key&quot;</span><span class="p">:</span> <span class="n">domain_match_key</span><span class="p">(</span><span class="n">grp</span><span class="p">[</span><span class="s2">&quot;base&quot;</span><span class="p">]),</span>
                     <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="p">[</span>
                         <span class="p">{</span>
                             <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;kind&quot;</span><span class="p">],</span>
@@ -1853,6 +1860,12 @@
                 <span class="p">}</span>
                 <span class="k">for</span> <span class="n">grp</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">g</span><span class="p">:</span> <span class="n">g</span><span class="p">[</span><span class="s2">&quot;base&quot;</span><span class="p">])</span>
             <span class="p">]</span>
+            <span class="n">analytics_location</span><span class="p">,</span> <span class="n">analytics</span><span class="p">,</span> <span class="n">analytics_message</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">SettingsService</span><span class="o">.</span><span class="n">_analytics_objects</span><span class="p">(</span>
+                    <span class="n">settings</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">raw_tables</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">domain_keys</span> <span class="o">=</span> <span class="p">{</span><span class="n">d</span><span class="p">[</span><span class="s2">&quot;key&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">domains</span> <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s2">&quot;key&quot;</span><span class="p">]}</span>
             <span class="k">return</span> <span class="p">{</span>
                 <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
                 <span class="s2">&quot;registry_configured&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -1860,6 +1873,10 @@
                 <span class="s2">&quot;registry_catalog&quot;</span><span class="p">:</span> <span class="n">catalog</span><span class="p">,</span>
                 <span class="s2">&quot;registry_schema&quot;</span><span class="p">:</span> <span class="n">schema</span><span class="p">,</span>
                 <span class="s2">&quot;domains&quot;</span><span class="p">:</span> <span class="n">domains</span><span class="p">,</span>
+                <span class="s2">&quot;analytics&quot;</span><span class="p">:</span> <span class="n">analytics</span><span class="p">,</span>
+                <span class="s2">&quot;orphans&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">analytics</span> <span class="k">if</span> <span class="n">a</span><span class="p">[</span><span class="s2">&quot;key&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">domain_keys</span><span class="p">],</span>
+                <span class="s2">&quot;analytics_location&quot;</span><span class="p">:</span> <span class="n">analytics_location</span><span class="p">,</span>
+                <span class="s2">&quot;analytics_message&quot;</span><span class="p">:</span> <span class="n">analytics_message</span><span class="p">,</span>
             <span class="p">}</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;triple_store_databricks_objects failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
@@ -1867,6 +1884,64 @@
                 <span class="s2">&quot;list Delta triple-store objects failed&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span></div>
 
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_analytics_objects</span><span class="p">(</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+        <span class="n">registry_catalog</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">registry_tables</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Group the analytics job&#39;s UC output tables, best-effort.</span>
+
+<span class="sd">        The job writes to ``analytics_job_output_schema`` when set and to the</span>
+<span class="sd">        registry schema otherwise, so the common case reuses the enumeration the</span>
+<span class="sd">        caller already performed. A scan that fails returns its reason instead of</span>
+<span class="sd">        raising — the triple-store listing must still render.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.delta.objects</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">fetch_uc_schema_tables</span><span class="p">,</span>
+            <span class="n">group_analytics_objects</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">configured</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;analytics_job_output_schema&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">location</span> <span class="o">=</span> <span class="n">configured</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">registry_catalog</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">registry_schema</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">location</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="n">location</span><span class="p">,</span>
+                <span class="p">[],</span>
+                <span class="sa">f</span><span class="s2">&quot;Analytics output schema &#39;</span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2">&#39; is not a catalog.schema pair&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span> <span class="o">=</span> <span class="n">location</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="n">registry_catalog</span><span class="p">,</span> <span class="n">registry_schema</span><span class="p">):</span>
+                <span class="n">raw_tables</span> <span class="o">=</span> <span class="n">registry_tables</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">raw_tables</span> <span class="o">=</span> <span class="n">fetch_uc_schema_tables</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;analytics object listing failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">location</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="p">[],</span> <span class="sa">f</span><span class="s2">&quot;Could not list analytics tables in </span><span class="si">{</span><span class="n">location</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">groups</span> <span class="o">=</span> <span class="n">group_analytics_objects</span><span class="p">(</span><span class="n">raw_tables</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+        <span class="n">analytics</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;key&quot;</span><span class="p">:</span> <span class="n">grp</span><span class="p">[</span><span class="s2">&quot;key&quot;</span><span class="p">],</span>
+                <span class="s2">&quot;base&quot;</span><span class="p">:</span> <span class="n">grp</span><span class="p">[</span><span class="s2">&quot;base&quot;</span><span class="p">],</span>
+                <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="p">[</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;kind&quot;</span><span class="p">],</span>
+                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+                        <span class="s2">&quot;full_name&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;full_name&quot;</span><span class="p">],</span>
+                    <span class="p">}</span>
+                    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">grp</span><span class="p">[</span><span class="s2">&quot;sorted_items&quot;</span><span class="p">]</span>
+                <span class="p">],</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="n">grp</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">g</span><span class="p">:</span> <span class="n">g</span><span class="p">[</span><span class="s2">&quot;base&quot;</span><span class="p">])</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">location</span><span class="p">,</span> <span class="n">analytics</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
 
 <div class="viewcode-block" id="SettingsService.get_graph_engine_config_result">
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_graph_engine_config_result">[docs]</a>
@@ -2258,6 +2333,145 @@
                 <span class="k">else</span> <span class="s2">&quot;engine_config (local-dev fallback)&quot;</span>
             <span class="p">),</span>
         <span class="p">}</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_neo4j_connection_from_config</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a :class:`Neo4jConnection` from the persisted Neo4j engine config.</span>
+
+<span class="sd">        Shared by the Neo4j admin endpoints (databases list, objects list,</span>
+<span class="sd">        health, drop). Returns ``(conn, gcfg)`` or raises the mapped error.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.engine_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">neo4j_section</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jConnection</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">Neo4jConnection</span><span class="p">,</span>
+            <span class="n">resolve_neo4j_database</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
+            <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
+        <span class="p">)</span>
+        <span class="n">global_config_service</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">gcfg</span> <span class="o">=</span> <span class="n">neo4j_section</span><span class="p">(</span>
+            <span class="n">global_config_service</span><span class="o">.</span><span class="n">get_graph_engine_config</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">gcfg</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">gcfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Neo4j engine_config is empty — set the Bolt URI/Username and Save first.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">conn</span> <span class="o">=</span> <span class="n">Neo4jConnection</span><span class="p">(</span>
+            <span class="n">uri</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">gcfg</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">database</span><span class="o">=</span><span class="n">resolve_neo4j_database</span><span class="p">(</span><span class="n">gcfg</span><span class="p">),</span>
+            <span class="n">auth_method</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">gcfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;auth_method&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;basic&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;basic&quot;</span><span class="p">,</span>
+            <span class="n">engine_config</span><span class="o">=</span><span class="n">gcfg</span><span class="p">,</span>
+            <span class="n">encrypted</span><span class="o">=</span><span class="nb">bool</span><span class="p">(</span><span class="n">gcfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;encrypted&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">conn</span><span class="p">,</span> <span class="n">gcfg</span>
+
+<div class="viewcode-block" id="SettingsService.graph_engine_neo4j_databases_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_databases_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">graph_engine_neo4j_databases_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List Neo4j databases on the server for the Domain Info DB selector (P4).&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jReadOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jReadOps</span>
+
+        <span class="n">conn</span><span class="p">,</span> <span class="n">gcfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_neo4j_connection_from_config</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="n">Neo4jReadOps</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span><span class="o">.</span><span class="n">list_databases</span><span class="p">()</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                <span class="k">pass</span>
+        <span class="c1"># Always include the configured database so the selector is never empty.</span>
+        <span class="n">configured</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">database</span>
+        <span class="k">if</span> <span class="n">configured</span> <span class="ow">and</span> <span class="n">configured</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">configured</span><span class="p">]</span> <span class="o">+</span> <span class="n">names</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;databases&quot;</span><span class="p">:</span> <span class="n">names</span><span class="p">,</span> <span class="s2">&quot;configured&quot;</span><span class="p">:</span> <span class="n">configured</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SettingsService.graph_engine_neo4j_labels_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_labels_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">graph_engine_neo4j_labels_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List materialised Neo4j graphs (marker labels) + counts for the admin Objects tab (P5).&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jReadOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jReadOps</span>
+
+        <span class="n">conn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_neo4j_connection_from_config</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">labels</span> <span class="o">=</span> <span class="n">Neo4jReadOps</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span><span class="o">.</span><span class="n">list_labels</span><span class="p">()</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                <span class="k">pass</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;graphs&quot;</span><span class="p">:</span> <span class="n">labels</span><span class="p">,</span> <span class="s2">&quot;database&quot;</span><span class="p">:</span> <span class="n">conn</span><span class="o">.</span><span class="n">database</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SettingsService.graph_engine_neo4j_health_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_health_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">graph_engine_neo4j_health_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Bolt health probe for the Neo4j admin Health tab (P5).&quot;&quot;&quot;</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">time</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_time</span>
+
+        <span class="n">conn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_neo4j_connection_from_config</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">_time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">get_driver</span><span class="p">()</span><span class="o">.</span><span class="n">verify_connectivity</span><span class="p">()</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s2">&quot;RETURN 1 AS probe&quot;</span><span class="p">)</span>
+            <span class="n">ok</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">None</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">ok</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                <span class="k">pass</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;ok&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span>
+            <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="n">err</span><span class="p">,</span>
+            <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">conn</span><span class="o">.</span><span class="n">uri</span><span class="p">,</span>
+            <span class="s2">&quot;database&quot;</span><span class="p">:</span> <span class="n">conn</span><span class="o">.</span><span class="n">database</span><span class="p">,</span>
+            <span class="s2">&quot;latency_ms&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">((</span><span class="n">_time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SettingsService.graph_engine_neo4j_drop_label_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_drop_label_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">graph_engine_neo4j_drop_label_result</span><span class="p">(</span>
+        <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Drop one Neo4j graph (marker label): its nodes, rels, constraint, schema map (P5).&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jWriteOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jWriteOps</span><span class="p">,</span> <span class="n">sanitise_label</span>
+
+        <span class="n">clean</span> <span class="o">=</span> <span class="p">(</span><span class="n">label</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">clean</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No graph label provided to drop.&quot;</span><span class="p">)</span>
+        <span class="n">conn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_neo4j_connection_from_config</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># drop_table sanitises internally; pass the label through unchanged</span>
+            <span class="c1"># (it already equals the sanitised marker as listed by list_labels).</span>
+            <span class="n">Neo4jWriteOps</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span><span class="o">.</span><span class="n">drop_table</span><span class="p">(</span><span class="n">clean</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                <span class="k">pass</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;dropped&quot;</span><span class="p">:</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">clean</span><span class="p">)}</span></div>
 
 
 <div class="viewcode-block" id="SettingsService.graph_engine_uc_catalogs_result">
@@ -3915,13 +4129,25 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">list_schedules_result</span><span class="p">(</span>
         <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Every schedule of every task type, plus the type catalogue.</span>
+
+<span class="sd">        The catalogue lets the settings UI build its type selector and</span>
+<span class="sd">        per-type columns from the backend registry instead of hardcoding</span>
+<span class="sd">        the list a second time.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.scheduler_tasks</span><span class="w"> </span><span class="kn">import</span> <span class="n">task_type_catalog</span>
+
         <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
             <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
         <span class="p">)</span>
         <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">entries</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">get_all_schedules</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;schedules&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">}</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;schedules&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">,</span>
+                <span class="s2">&quot;task_types&quot;</span><span class="p">:</span> <span class="n">task_type_catalog</span><span class="p">(),</span>
+            <span class="p">}</span>
         <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
             <span class="k">raise</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -3937,14 +4163,23 @@
         <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create or update a schedule of any task type.</span>
+
+<span class="sd">        Per-type options arrive in ``config`` and are validated by the</span>
+<span class="sd">        task type itself, so this method never branches on the type.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">try</span><span class="p">:</span>
+            <span class="n">task_type</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;task_type&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;build&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
             <span class="n">domain_name</span> <span class="o">=</span> <span class="p">(</span>
                 <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;project_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
             <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">target_key</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_key&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
             <span class="n">interval_minutes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;interval_minutes&quot;</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
-            <span class="n">drop_existing</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;drop_existing&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
             <span class="n">enabled</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
             <span class="n">version</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;latest&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;config&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">config</span> <span class="o">=</span> <span class="p">{}</span>
 
             <span class="k">if</span> <span class="ow">not</span> <span class="n">domain_name</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Domain name is required&quot;</span><span class="p">)</span>
@@ -3959,14 +4194,16 @@
                 <span class="n">token</span><span class="p">,</span>
                 <span class="n">registry_cfg</span><span class="p">,</span>
                 <span class="n">settings</span><span class="p">,</span>
+                <span class="n">task_type</span><span class="p">,</span>
                 <span class="n">domain_name</span><span class="p">,</span>
                 <span class="n">interval_minutes</span><span class="p">,</span>
-                <span class="n">drop_existing</span><span class="p">,</span>
-                <span class="n">enabled</span><span class="p">,</span>
+                <span class="n">target_key</span><span class="o">=</span><span class="n">target_key</span><span class="p">,</span>
+                <span class="n">enabled</span><span class="o">=</span><span class="n">enabled</span><span class="p">,</span>
                 <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">,</span>
+                <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Failed to save schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
         <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
             <span class="k">raise</span>
@@ -3979,9 +4216,12 @@
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_schedule_history_result">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_schedule_history_result</span><span class="p">(</span>
+        <span class="n">task_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">target_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
             <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
@@ -3989,9 +4229,15 @@
         <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">entries</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">get_schedule_history</span><span class="p">(</span>
-                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">task_type</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">target_key</span>
             <span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;domain_name&quot;</span><span class="p">:</span> <span class="n">domain_name</span><span class="p">,</span> <span class="s2">&quot;history&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">}</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;task_type&quot;</span><span class="p">:</span> <span class="n">task_type</span><span class="p">,</span>
+                <span class="s2">&quot;domain_name&quot;</span><span class="p">:</span> <span class="n">domain_name</span><span class="p">,</span>
+                <span class="s2">&quot;target_key&quot;</span><span class="p">:</span> <span class="n">target_key</span><span class="p">,</span>
+                <span class="s2">&quot;history&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">,</span>
+            <span class="p">}</span>
         <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
             <span class="k">raise</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -4032,6 +4278,88 @@
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
                 <span class="s2">&quot;Failed to load build runs&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_all_runs_result</span><span class="p">(</span>
+        <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;One page of registry-wide run history for the admin Runs page.</span>
+
+<span class="sd">        *kind* is ``&quot;build&quot;`` or ``&quot;analytics&quot;``. ``folder=None`` spans every</span>
+<span class="sd">        domain. The two kinds share every step but the registry method, so</span>
+<span class="sd">        they share one body rather than two near-copies.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
+            <span class="n">svc</span> <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">svc</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">is_configured</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Registry not configured&quot;</span><span class="p">)</span>
+            <span class="n">reader</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">svc</span><span class="o">.</span><span class="n">load_all_build_runs</span>
+                <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;build&quot;</span>
+                <span class="k">else</span> <span class="n">svc</span><span class="o">.</span><span class="n">load_all_graph_analytics_runs</span>
+            <span class="p">)</span>
+            <span class="n">runs</span><span class="p">,</span> <span class="n">total</span> <span class="o">=</span> <span class="n">reader</span><span class="p">(</span><span class="n">folder</span><span class="o">=</span><span class="n">folder</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">{</span>
+                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                <span class="s2">&quot;domain&quot;</span><span class="p">:</span> <span class="n">folder</span><span class="p">,</span>
+                <span class="s2">&quot;runs&quot;</span><span class="p">:</span> <span class="n">runs</span><span class="p">,</span>
+                <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="n">total</span><span class="p">,</span>
+                <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="n">limit</span><span class="p">,</span>
+                <span class="s2">&quot;offset&quot;</span><span class="p">:</span> <span class="n">offset</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;get_all_</span><span class="si">%s</span><span class="s2">_runs failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Failed to load </span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> runs&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+
+<div class="viewcode-block" id="SettingsService.get_all_build_runs_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_all_build_runs_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_all_build_runs_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">25</span><span class="p">,</span>
+        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;One page of build runs across every domain in the registry.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_all_runs_result</span><span class="p">(</span>
+            <span class="s2">&quot;build&quot;</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">folder</span><span class="o">=</span><span class="n">folder</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SettingsService.get_all_analytics_runs_result">
+<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_all_analytics_runs_result">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_all_analytics_runs_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">folder</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">25</span><span class="p">,</span>
+        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;One page of analytics runs across every domain in the registry.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_all_runs_result</span><span class="p">(</span>
+            <span class="s2">&quot;analytics&quot;</span><span class="p">,</span>
+            <span class="n">session_mgr</span><span class="p">,</span>
+            <span class="n">settings</span><span class="p">,</span>
+            <span class="n">folder</span><span class="o">=</span><span class="n">folder</span><span class="p">,</span>
+            <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span>
+            <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="SettingsService.get_build_analytics_result">
@@ -4078,9 +4406,12 @@
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.delete_schedule_result">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">delete_schedule_result</span><span class="p">(</span>
+        <span class="n">task_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">target_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
@@ -4088,9 +4419,11 @@
             <span class="p">)</span>
 
             <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
-            <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">remove_schedule</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">)</span>
+            <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">remove_schedule</span><span class="p">(</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">task_type</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">target_key</span>
+            <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Failed to remove schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
         <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
             <span class="k">raise</span>
@@ -4103,23 +4436,24 @@
 <a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.trigger_schedule_now_result">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">trigger_schedule_now_result</span><span class="p">(</span>
+        <span class="n">task_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
         <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">target_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fire the build schedule for *domain_name* immediately.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fire a schedule immediately, without touching its own clock.&quot;&quot;&quot;</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
                 <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
             <span class="p">)</span>
             <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
             <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">run_schedule_now</span><span class="p">(</span>
-                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">domain_name</span>
+                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">task_type</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">target_key</span>
             <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                    <span class="s2">&quot;Failed to trigger schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span>
-                <span class="p">)</span>
+                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Failed to trigger schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span><span class="p">)</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
         <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
             <span class="k">raise</span>
@@ -4127,32 +4461,6 @@
             <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;trigger_schedule_now failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
                 <span class="s2">&quot;Failed to trigger schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
-
-
-    <span class="c1"># ------------------------------------------------------------------</span>
-    <span class="c1"># Cohort schedules — periodic Cohort analysis + materialisation</span>
-    <span class="c1"># ------------------------------------------------------------------</span>
-
-<div class="viewcode-block" id="SettingsService.list_cohort_schedules_result">
-<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.list_cohort_schedules_result">[docs]</a>
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">list_cohort_schedules_result</span><span class="p">(</span>
-        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
-            <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-        <span class="p">)</span>
-        <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">entries</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">get_all_cohort_schedules</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;schedules&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">}</span>
-        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
-            <span class="k">raise</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;list_cohort_schedules failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                <span class="s2">&quot;Failed to list cohort schedules&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
 
@@ -4252,164 +4560,6 @@
             <span class="p">)</span>
             <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
                 <span class="s2">&quot;Failed to list cohort rules&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
-
-
-<div class="viewcode-block" id="SettingsService.save_cohort_schedule_result">
-<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.save_cohort_schedule_result">[docs]</a>
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">save_cohort_schedule_result</span><span class="p">(</span>
-        <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
-        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
-        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">domain_name</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;domain_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">rule_id</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rule_id&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">interval_minutes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;interval_minutes&quot;</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
-            <span class="n">enabled</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
-            <span class="n">version</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;version&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;latest&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-            <span class="n">output_graph</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_graph&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
-            <span class="n">output_uc</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_uc&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
-
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">domain_name</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Domain name is required&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">rule_id</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Cohort rule id is required&quot;</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">output_graph</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">output_uc</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
-                    <span class="s2">&quot;At least one output target (graph or UC table) is required&quot;</span>
-                <span class="p">)</span>
-
-            <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
-                <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-            <span class="p">)</span>
-
-            <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
-            <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">save_cohort_schedule</span><span class="p">(</span>
-                <span class="n">host</span><span class="p">,</span>
-                <span class="n">token</span><span class="p">,</span>
-                <span class="n">registry_cfg</span><span class="p">,</span>
-                <span class="n">settings</span><span class="p">,</span>
-                <span class="n">domain_name</span><span class="p">,</span>
-                <span class="n">rule_id</span><span class="p">,</span>
-                <span class="n">interval_minutes</span><span class="p">,</span>
-                <span class="n">enabled</span><span class="p">,</span>
-                <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">,</span>
-                <span class="n">output_graph</span><span class="o">=</span><span class="n">output_graph</span><span class="p">,</span>
-                <span class="n">output_uc</span><span class="o">=</span><span class="n">output_uc</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                    <span class="s2">&quot;Failed to save cohort schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span>
-                <span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
-        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
-            <span class="k">raise</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;save_cohort_schedule failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                <span class="s2">&quot;Failed to save cohort schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
-
-
-<div class="viewcode-block" id="SettingsService.get_cohort_schedule_history_result">
-<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.get_cohort_schedule_history_result">[docs]</a>
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_cohort_schedule_history_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
-        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-        <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
-            <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-        <span class="p">)</span>
-        <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">entries</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">get_cohort_schedule_history</span><span class="p">(</span>
-                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">rule_id</span>
-            <span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span>
-                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-                <span class="s2">&quot;domain_name&quot;</span><span class="p">:</span> <span class="n">domain_name</span><span class="p">,</span>
-                <span class="s2">&quot;rule_id&quot;</span><span class="p">:</span> <span class="n">rule_id</span><span class="p">,</span>
-                <span class="s2">&quot;history&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">,</span>
-            <span class="p">}</span>
-        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
-            <span class="k">raise</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
-                <span class="s2">&quot;get_cohort_schedule_history failed for &#39;</span><span class="si">%s</span><span class="s2">/</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">domain_name</span><span class="p">,</span>
-                <span class="n">rule_id</span><span class="p">,</span>
-                <span class="n">e</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                <span class="s2">&quot;Failed to load cohort schedule history&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
-
-
-<div class="viewcode-block" id="SettingsService.delete_cohort_schedule_result">
-<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.delete_cohort_schedule_result">[docs]</a>
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">delete_cohort_schedule_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
-        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
-                <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-            <span class="p">)</span>
-            <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
-            <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">remove_cohort_schedule</span><span class="p">(</span>
-                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">rule_id</span>
-            <span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                    <span class="s2">&quot;Failed to remove cohort schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span>
-                <span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">ok</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
-        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
-            <span class="k">raise</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;delete_cohort_schedule failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                <span class="s2">&quot;Failed to remove cohort schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
-
-
-<div class="viewcode-block" id="SettingsService.trigger_cohort_schedule_now_result">
-<a class="viewcode-back" href="../../../../api/app.objects.domain.html#back.objects.domain.SettingsService.SettingsService.trigger_cohort_schedule_now_result">[docs]</a>
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">trigger_cohort_schedule_now_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span><span class="p">,</span>
-        <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fire the cohort materialisation schedule for *(domain, rule)* now.&quot;&quot;&quot;</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">_</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_resolve_context</span><span class="p">(</span>
-                <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-            <span class="p">)</span>
-            <span class="n">scheduler</span> <span class="o">=</span> <span class="n">SettingsService</span><span class="o">.</span><span class="n">_get_scheduler</span><span class="p">()</span>
-            <span class="n">ok</span><span class="p">,</span> <span class="n">msg</span> <span class="o">=</span> <span class="n">scheduler</span><span class="o">.</span><span class="n">run_cohort_schedule_now</span><span class="p">(</span>
-                <span class="n">host</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">registry_cfg</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">rule_id</span>
-            <span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                    <span class="s2">&quot;Failed to trigger cohort schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="n">msg</span>
-                <span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">}</span>
-        <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
-            <span class="k">raise</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;trigger_cohort_schedule_now failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span>
-                <span class="s2">&quot;Failed to trigger cohort schedule&quot;</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span></div>
 
 

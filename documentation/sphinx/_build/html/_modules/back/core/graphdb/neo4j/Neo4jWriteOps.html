@@ -119,23 +119,29 @@
           <div class="body" role="main">
             
   <h1>Source code for back.core.graphdb.neo4j.Neo4jWriteOps</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Neo4j write/CRUD operations on the flat-triple model.</span>
+<span></span><span class="sd">&quot;&quot;&quot;Neo4j write/CRUD operations on the **typed property-graph** model.</span>
 
-<span class="sd">Owns schema management (constraint create/drop), bulk write paths</span>
-<span class="sd">(``UNWIND`` + ``MERGE`` for inserts, ``UNWIND`` + ``MATCH`` + ``DETACH</span>
-<span class="sd">DELETE`` for deletes), and cohort wipes. Receives a</span>
-<span class="sd">:class:`Neo4jConnection` (composition) so all queries go through the</span>
-<span class="sd">shared logging / auth layer.</span>
+<span class="sd">Every subject/object URI is a node (MERGE-keyed on its full URI — the URI is a</span>
+<span class="sd">globally unique id, confirmed with Benoit 2026-07-28), ``rdf:type`` becomes a</span>
+<span class="sd">Neo4j label, ``rdfs:label`` becomes the ``name`` property, literal-object</span>
+<span class="sd">predicates become node properties, and URI-object predicates become real</span>
+<span class="sd">relationships ``(s)-[:reltype]-&gt;(o)``.</span>
 
-<span class="sd">Schema convention: one Cypher label per logical store (sanitised from</span>
-<span class="sd">the table name). Multi-label compound patterns (e.g. ``:Triple:&lt;store&gt;``)</span>
-<span class="sd">are deliberately avoided because Neo4j 5+ rejects them in</span>
-<span class="sd">``CREATE CONSTRAINT``.</span>
+<span class="sd">Every node also carries a reserved **marker label** — the sanitised graph/table</span>
+<span class="sd">name — so a whole domain graph is one ``MATCH (n:&lt;graph_label&gt;)`` away for</span>
+<span class="sd">counting, dropping, and isolation. The forward transform is pure</span>
+<span class="sd">(:mod:`Neo4jGraphModel`); the reverse maps needed to reconstruct exact SPO</span>
+<span class="sd">triples on read are persisted by :class:`Neo4jSchemaMap`.</span>
+
+<span class="sd">Public method signatures are unchanged from the flat-triple version so the</span>
+<span class="sd">``GraphDBBackend`` contract and all callers keep working.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jConnection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jConnection</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jGraphModel</span><span class="w"> </span><span class="kn">import</span> <span class="n">plan_writes</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jSchemaMap</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jSchemaMap</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -144,18 +150,27 @@
 <div class="viewcode-block" id="sanitise_label">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.sanitise_label">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Neo4j labels are case-sensitive identifiers; sanitise to ``[A-Za-z0-9_]``.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">c</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">isalnum</span><span class="p">()</span> <span class="ow">or</span> <span class="n">c</span> <span class="o">==</span> <span class="s2">&quot;_&quot;</span> <span class="k">else</span> <span class="s2">&quot;_&quot;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">table_name</span><span class="p">)</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Neo4j labels are case-sensitive identifiers; sanitise to ``[A-Za-z0-9_]``.</span>
+
+<span class="sd">    Also used for the per-graph **marker label** applied to every node of a</span>
+<span class="sd">    graph. Retained (and re-exported) for :class:`Neo4jReadOps` /</span>
+<span class="sd">    :class:`Neo4jStore`, which key their queries on the same marker.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cleaned</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">c</span> <span class="k">if</span> <span class="n">c</span><span class="o">.</span><span class="n">isalnum</span><span class="p">()</span> <span class="ow">or</span> <span class="n">c</span> <span class="o">==</span> <span class="s2">&quot;_&quot;</span> <span class="k">else</span> <span class="s2">&quot;_&quot;</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">table_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">cleaned</span> <span class="ow">and</span> <span class="n">cleaned</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+        <span class="n">cleaned</span> <span class="o">=</span> <span class="s2">&quot;_&quot;</span> <span class="o">+</span> <span class="n">cleaned</span>
+    <span class="k">return</span> <span class="n">cleaned</span> <span class="ow">or</span> <span class="s2">&quot;_&quot;</span></div>
 
 
 
 <div class="viewcode-block" id="Neo4jWriteOps">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jWriteOps">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Neo4jWriteOps</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Schema + CRUD writes for the flat-triple Neo4j backend.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Schema + CRUD writes for the typed property-graph Neo4j backend.&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">connection</span><span class="p">:</span> <span class="n">Neo4jConnection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span> <span class="o">=</span> <span class="n">connection</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span> <span class="o">=</span> <span class="n">Neo4jSchemaMap</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
 
     <span class="c1"># ----------------------------------------------------------------------</span>
     <span class="c1">#  Schema (constraint lifecycle)</span>
@@ -164,29 +179,35 @@
 <div class="viewcode-block" id="Neo4jWriteOps.create_table">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jWriteOps.create_table">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a uniqueness constraint on node identity for this graph.</span>
+
+<span class="sd">        One constraint per graph marker label enforces ``uri`` uniqueness and</span>
+<span class="sd">        creates the backing index (fast MERGE + lookup).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;CREATE CONSTRAINT triple_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_spo IF NOT EXISTS &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;FOR (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;REQUIRE (t.subject, t.predicate, t.object) IS UNIQUE&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;CREATE CONSTRAINT node_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_uri IF NOT EXISTS &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;FOR (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) REQUIRE n.uri IS UNIQUE&quot;</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Created Neo4j triple label: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span></div>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Created Neo4j graph marker label + uri constraint: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Neo4jWriteOps.drop_table">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jWriteOps.drop_table">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">drop_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Drop the graph: all nodes of the marker label (+ their relationships),</span>
+<span class="sd">        the uniqueness constraint, and the persisted schema map.&quot;&quot;&quot;</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DROP CONSTRAINT triple_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_spo IF EXISTS&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) DETACH DELETE t&quot;</span><span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Dropped Neo4j triple label: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DROP CONSTRAINT node_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_uri IF EXISTS&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) DETACH DELETE n&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Dropped Neo4j graph: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Neo4jWriteOps.optimize_table">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jWriteOps.optimize_table">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">optimize_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># Neo4j has no manual VACUUM/OPTIMIZE; the indexer runs online.</span>
+        <span class="c1"># Neo4j indexes online; no manual VACUUM/OPTIMIZE.</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
 
@@ -203,31 +224,105 @@
         <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
         <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write triples as a property graph. Returns the triple count consumed.</span>
+
+<span class="sd">        Per batch, three phases keep the graph consistent regardless of triple</span>
+<span class="sd">        ordering (a relationship may reference a node whose own triples arrive</span>
+<span class="sd">        later): (1) MERGE all nodes + set labels/properties, (2) MERGE all</span>
+<span class="sd">        relationships. The reverse schema maps are merged + persisted once.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
             <span class="k">return</span> <span class="mi">0</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
         <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;UNWIND $rows AS r &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;MERGE (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">subject: r.subject, predicate: r.predicate, object: r.object</span><span class="se">}}</span><span class="s2">)&quot;</span>
-        <span class="p">)</span>
+        <span class="n">agg_label_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">agg_reltype_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">agg_prop_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span> <span class="n">batch_size</span><span class="p">):</span>
             <span class="n">batch</span> <span class="o">=</span> <span class="n">triples</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">]</span>
-            <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">planned</span> <span class="o">=</span> <span class="n">plan_writes</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+
+            <span class="c1"># Phase 1: nodes (MERGE on uri, apply marker + class labels, set props)</span>
+            <span class="n">node_rows</span> <span class="o">=</span> <span class="p">[</span>
                 <span class="p">{</span>
-                    <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                    <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                    <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">n</span><span class="o">.</span><span class="n">uri</span><span class="p">,</span>
+                    <span class="s2">&quot;labels&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">labels</span><span class="p">),</span>
+                    <span class="s2">&quot;props&quot;</span><span class="p">:</span> <span class="n">n</span><span class="o">.</span><span class="n">properties</span><span class="p">,</span>
                 <span class="p">}</span>
-                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">batch</span>
+                <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">planned</span><span class="o">.</span><span class="n">nodes</span>
             <span class="p">]</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="n">rows</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">node_rows</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_merge_nodes</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">node_rows</span><span class="p">)</span>
+
+            <span class="c1"># Phase 2: relationships (batched — one UNWIND per reltype)</span>
+            <span class="k">if</span> <span class="n">planned</span><span class="o">.</span><span class="n">edges</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_merge_edges</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">planned</span><span class="o">.</span><span class="n">edges</span><span class="p">)</span>
+
+            <span class="n">agg_label_map</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">planned</span><span class="o">.</span><span class="n">label_map</span><span class="p">)</span>
+            <span class="n">agg_reltype_map</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">planned</span><span class="o">.</span><span class="n">reltype_map</span><span class="p">)</span>
+            <span class="n">agg_prop_map</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">planned</span><span class="o">.</span><span class="n">prop_map</span><span class="p">)</span>
             <span class="n">total</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
                 <span class="n">on_progress</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">))</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Inserted </span><span class="si">%d</span><span class="s2"> triples into Neo4j label </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
+
+        <span class="c1"># Persist reverse maps once (idempotent merge).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">merge_and_save</span><span class="p">(</span>
+            <span class="n">label</span><span class="p">,</span> <span class="n">agg_label_map</span><span class="p">,</span> <span class="n">agg_reltype_map</span><span class="p">,</span> <span class="n">agg_prop_map</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Inserted </span><span class="si">%d</span><span class="s2"> triples as property graph into </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">total</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_merge_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">node_rows</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;MERGE nodes + set their class labels without requiring APOC.</span>
+
+<span class="sd">        Neo4j cannot parameterise labels in ``SET n:$x``, and APOC may be</span>
+<span class="sd">        unavailable on Aura free tier, so we group rows by their label set and</span>
+<span class="sd">        emit one statement per distinct label combination with the labels</span>
+<span class="sd">        inlined (sanitised → injection-safe).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
+
+        <span class="n">by_labels</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">tuple</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">node_rows</span><span class="p">:</span>
+            <span class="n">by_labels</span><span class="p">[</span><span class="nb">tuple</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;labels&quot;</span><span class="p">])]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span><span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">],</span> <span class="s2">&quot;props&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;props&quot;</span><span class="p">]}</span>
+            <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">labels</span><span class="p">,</span> <span class="n">rows</span> <span class="ow">in</span> <span class="n">by_labels</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">set_labels</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;:`</span><span class="si">{</span><span class="n">lbl</span><span class="si">}</span><span class="s2">`&quot;</span> <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">labels</span><span class="p">)</span>  <span class="c1"># sanitised upstream</span>
+            <span class="n">label_clause</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;SET n</span><span class="si">{</span><span class="n">set_labels</span><span class="si">}</span><span class="s2"> &quot;</span> <span class="k">if</span> <span class="n">set_labels</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;UNWIND $rows AS r &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;MERGE (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: r.uri</span><span class="se">}}</span><span class="s2">) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;SET n += r.props &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">label_clause</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">rows</span><span class="o">=</span><span class="n">rows</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_merge_edges</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">edges</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;MERGE relationships in bulk — one ``UNWIND`` statement per reltype.</span>
+
+<span class="sd">        Relationship types cannot be parameterised in Cypher, so we group edges</span>
+<span class="sd">        by their (sanitised, injection-safe) reltype and emit one batched</span>
+<span class="sd">        statement each, turning phase 2 from O(edges) round-trips into</span>
+<span class="sd">        O(distinct reltypes). Endpoints are matched by ``uri`` (both were</span>
+<span class="sd">        MERGE-created in phase 1).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
+
+        <span class="n">by_reltype</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">:</span>
+            <span class="n">by_reltype</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">reltype</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="n">e</span><span class="o">.</span><span class="n">subject</span><span class="p">,</span> <span class="s2">&quot;o&quot;</span><span class="p">:</span> <span class="n">e</span><span class="o">.</span><span class="n">object</span><span class="p">})</span>
+
+        <span class="k">for</span> <span class="n">reltype</span><span class="p">,</span> <span class="n">rows</span> <span class="ow">in</span> <span class="n">by_reltype</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;UNWIND $rows AS r &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (s:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: r.s</span><span class="se">}}</span><span class="s2">), (o:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: r.o</span><span class="se">}}</span><span class="s2">) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;MERGE (s)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`]-&gt;(o)&quot;</span><span class="p">,</span>
+                <span class="n">rows</span><span class="o">=</span><span class="n">rows</span><span class="p">,</span>
+            <span class="p">)</span>
 
 <div class="viewcode-block" id="Neo4jWriteOps.delete_triples">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jWriteOps.delete_triples">[docs]</a>
@@ -238,30 +333,64 @@
         <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
         <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove triples from the property graph. Returns the count consumed.</span>
+
+<span class="sd">        Inverse of insert: for each triple, remove the matching relationship</span>
+<span class="sd">        (URI object), unset the property (literal object), or remove the class</span>
+<span class="sd">        label (rdf:type). Nodes that end up with only the marker label and no</span>
+<span class="sd">        other class label are deleted (they no longer represent an entity).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
             <span class="k">return</span> <span class="mi">0</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">deleted</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;UNWIND $rows AS r &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">subject: r.subject, predicate: r.predicate, object: r.object</span><span class="se">}}</span><span class="s2">) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;DETACH DELETE t&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jGraphModel</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">is_uri</span><span class="p">,</span>
+            <span class="n">reltype_from_predicate</span><span class="p">,</span>
+            <span class="n">label_from_class_uri</span><span class="p">,</span>
+            <span class="n">_local_name</span><span class="p">,</span>
+            <span class="n">_sanitise_ident</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span>
+
+        <span class="n">deleted</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span> <span class="n">batch_size</span><span class="p">):</span>
             <span class="n">batch</span> <span class="o">=</span> <span class="n">triples</span><span class="p">[</span><span class="n">i</span> <span class="p">:</span> <span class="n">i</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">]</span>
-            <span class="n">rows</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="p">{</span>
-                    <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                    <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                    <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                <span class="p">}</span>
-                <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">batch</span>
-            <span class="p">]</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">rows</span><span class="o">=</span><span class="n">rows</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">batch</span><span class="p">:</span>
+                <span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">o</span> <span class="o">=</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">s</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">p</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">p</span> <span class="o">==</span> <span class="n">RDF_TYPE</span><span class="p">:</span>
+                    <span class="n">lbl</span> <span class="o">=</span> <span class="n">label_from_class_uri</span><span class="p">(</span><span class="n">o</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $s</span><span class="se">}}</span><span class="s2">) REMOVE n:`</span><span class="si">{</span><span class="n">lbl</span><span class="si">}</span><span class="s2">`&quot;</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">s</span>
+                    <span class="p">)</span>
+                <span class="k">elif</span> <span class="n">p</span> <span class="o">==</span> <span class="n">RDFS_LABEL</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $s</span><span class="se">}}</span><span class="s2">) REMOVE n.name&quot;</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">s</span>
+                    <span class="p">)</span>
+                <span class="k">elif</span> <span class="n">is_uri</span><span class="p">(</span><span class="n">o</span><span class="p">):</span>
+                    <span class="n">rel</span> <span class="o">=</span> <span class="n">reltype_from_predicate</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $s</span><span class="se">}}</span><span class="s2">)-[r:`</span><span class="si">{</span><span class="n">rel</span><span class="si">}</span><span class="s2">`]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $o</span><span class="se">}}</span><span class="s2">) &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;DELETE r&quot;</span><span class="p">,</span>
+                        <span class="n">s</span><span class="o">=</span><span class="n">s</span><span class="p">,</span>
+                        <span class="n">o</span><span class="o">=</span><span class="n">o</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">key</span> <span class="o">=</span> <span class="n">_sanitise_ident</span><span class="p">(</span><span class="n">_local_name</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $s</span><span class="se">}}</span><span class="s2">) REMOVE n.`</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">`&quot;</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="n">s</span>
+                    <span class="p">)</span>
             <span class="n">deleted</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">on_progress</span><span class="p">:</span>
                 <span class="n">on_progress</span><span class="p">(</span><span class="n">deleted</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">))</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleted </span><span class="si">%d</span><span class="s2"> triples from Neo4j label </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">deleted</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
+
+        <span class="c1"># Sweep nodes that lost all entity meaning (marker-only, no rels, no name).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE size(labels(n)) = 1 &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;AND NOT (n)--() AND n.name IS NULL DETACH DELETE n&quot;</span>
+        <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Deleted </span><span class="si">%d</span><span class="s2"> triples from Neo4j graph </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">deleted</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">deleted</span></div>
 
 
@@ -273,20 +402,21 @@
         <span class="n">cohort_uri_prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">in_cohort_predicate</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove a cohort&#39;s nodes + membership edges (idempotent).</span>
+
+<span class="sd">        Cohort-entity nodes have a ``uri`` starting with *cohort_uri_prefix*;</span>
+<span class="sd">        membership edges are relationships whose type derives from</span>
+<span class="sd">        *in_cohort_predicate* pointing at such nodes. DETACH-deleting the cohort</span>
+<span class="sd">        nodes removes both in one step.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">cohort_uri_prefix</span><span class="p">:</span>
             <span class="k">return</span> <span class="mi">0</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE t.subject STARTS WITH $prefix &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;   OR (t.predicate = $in_pred AND t.object STARTS WITH $prefix) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WITH t LIMIT 100000 &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;DETACH DELETE t &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN count(t) AS deleted&quot;</span>
-        <span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                <span class="n">cypher</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="n">cohort_uri_prefix</span><span class="p">,</span> <span class="n">in_pred</span><span class="o">=</span><span class="n">in_cohort_predicate</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE n.uri STARTS WITH $prefix &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WITH n LIMIT 100000 DETACH DELETE n RETURN count(n) AS deleted&quot;</span><span class="p">,</span>
+                <span class="n">prefix</span><span class="o">=</span><span class="n">cohort_uri_prefix</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;deleted&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span> <span class="k">if</span> <span class="n">rows</span> <span class="k">else</span> <span class="mi">0</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>

@@ -357,7 +357,7 @@
 <ul class="simple">
 <li><p><strong>CORS</strong> — allows credentials for local dev.</p></li>
 <li><p><strong>PermissionMiddleware</strong> — when running as a Databricks App, resolves the user role from registry permissions and blocks viewers from mutating HTTP methods; bypasses <code class="docutils literal notranslate"><span class="pre">/static/</span></code>, <code class="docutils literal notranslate"><span class="pre">/api/</span></code>, <code class="docutils literal notranslate"><span class="pre">/graphql/</span></code>, OpenAPI, health, etc. Local dev behaves as admin.</p></li>
-<li><p><strong>FileSessionMiddleware</strong> — cookie-backed <strong>file sessions</strong> (JSON on disk under <code class="docutils literal notranslate"><span class="pre">settings.session_dir</span></code>); skips static, docs, health, and <code class="docutils literal notranslate"><span class="pre">/tasks/*</span></code> so task polling does not churn session I/O.</p></li>
+<li><p><strong>FileSessionMiddleware</strong> — cookie-backed <strong>file sessions</strong> (JSON on disk under <code class="docutils literal notranslate"><span class="pre">settings.session_dir</span></code>); skips static, docs, health, and <code class="docutils literal notranslate"><span class="pre">/tasks/*</span></code> so task polling does not churn session I/O. The cookie must be 32 lowercase hex characters, since it is used as a filename; anything else mints a fresh ID. Files are written only once a session is actually modified, their mtime records last use (refreshed at most hourly), and <code class="docutils literal notranslate"><span class="pre">reap_expired_sessions()</span></code> clears ones older than <code class="docutils literal notranslate"><span class="pre">settings.session_max_age</span></code> at startup.</p></li>
 </ul>
 </li>
 <li><p><strong>Static files</strong> are mounted at <code class="docutils literal notranslate"><span class="pre">/static</span></code> from <code class="docutils literal notranslate"><span class="pre">src/front/static/</span></code> (with a fallback path for unusual layouts).</p></li>
@@ -438,7 +438,7 @@
 <section id="menu-and-client-side-navigation">
 <h3>3.4 Menu and client-side navigation<a class="headerlink" href="#menu-and-client-side-navigation" title="Link to this heading">¶</a></h3>
 <ul class="simple">
-<li><p><strong>Declarative menu:</strong> <code class="docutils literal notranslate"><span class="pre">src/front/config/menu_config.json</span></code> defines sections (Domain, Ontology, Mapping, …), <strong>routes</strong> (e.g. <code class="docutils literal notranslate"><span class="pre">/domain/</span></code>), groups, items, and <code class="docutils literal notranslate"><span class="pre">navbar_actions</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">projectSave</span></code>). The server can expose this to the client or the client can load it; either way it is the <strong>source of truth</strong> for section IDs and default tabs.</p></li>
+<li><p><strong>Declarative menu:</strong> <code class="docutils literal notranslate"><span class="pre">src/front/config/menu_config.json</span></code> defines sections (Domain, Ontology, Mapping, Knowledge Graph, …), <strong>routes</strong> (e.g. <code class="docutils literal notranslate"><span class="pre">/domain/</span></code>), top-level Bootstrap Icons, groups, items, and <code class="docutils literal notranslate"><span class="pre">navbar_actions</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">domainSave</span></code>). The server can expose this to the client or the client can load it; either way it is the <strong>source of truth</strong> for section IDs, icons, and default tabs. When changing a top-level <code class="docutils literal notranslate"><span class="pre">icon</span></code>, also update <code class="docutils literal notranslate"><span class="pre">breadcrumb.js</span></code> <code class="docutils literal notranslate"><span class="pre">_ROUTE_MAP</span></code> (and any hardcoded labels such as the help walkthrough); <code class="docutils literal notranslate"><span class="pre">tests/units/front/test_knowledge_graph_icon.py</span></code> guards Domain ≠ Knowledge Graph and menu ≡ breadcrumb for <code class="docutils literal notranslate"><span class="pre">/dtwin/</span></code>.</p></li>
 <li><p><strong>JavaScript:</strong> under <code class="docutils literal notranslate"><span class="pre">src/front/static/global/js/</span></code> (sidebar, navbar, domain actions). Pages load shared layout partials from templates and drive <strong>in-page tabs</strong> via menu item IDs rather than full page loads for every interaction.</p></li>
 </ul>
 </section>
@@ -615,7 +615,7 @@
 <ul class="simple">
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">src/mcp-server/server/app.py</span></code></strong> — <code class="docutils literal notranslate"><span class="pre">FastMCP</span></code> server factory (<code class="docutils literal notranslate"><span class="pre">create_mcp_server</span></code>), tool/resource definitions, HTTP client helpers, response formatting; <strong><code class="docutils literal notranslate"><span class="pre">create_databricks_app</span></code></strong> builds a <strong>combined</strong> FastAPI app mounting MCP HTTP routes for Databricks App deployment.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">src/mcp-server/server/main.py</span></code></strong> — CLI entry (<code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">mcp-ontobricks</span></code>) running <strong><code class="docutils literal notranslate"><span class="pre">combined_app</span></code></strong> with Uvicorn.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></strong> / deploy scripts (see <code class="docutils literal notranslate"><span class="pre">docs/deployment.md</span></code>) wire env vars: <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code>, registry volume or catalog/schema/volume, warehouse ID, etc.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">app.yaml</span></code></strong> / deploy scripts (see <code class="docutils literal notranslate"><span class="pre">documentation/deployment.md</span></code>) wire env vars: <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_URL</span></code>, registry volume or catalog/schema/volume, warehouse ID, etc.</p></li>
 </ul>
 </section>
 <section id="operating-modes-from-module-docstring">
@@ -808,8 +808,8 @@
 <li><p>Review <code class="docutils literal notranslate"><span class="pre">/docs</span></code> and update it when refactoring changes structure or behaviour relevant to users.</p></li>
 <li><p>For each feature, ensure there is at least one concrete example in the docs.</p></li>
 <li><p>Update <code class="docutils literal notranslate"><span class="pre">README.md</span></code> to cover all features and capabilities.</p></li>
-<li><p><strong>Dependencies</strong>: Maintain the <strong>Dependencies</strong> section in <code class="docutils literal notranslate"><span class="pre">docs/development.md</span></code> describing all external dependencies (Python libs, JS frameworks, CSS libs) with short description, link, and license type.</p></li>
-<li><p>When adding or removing dependencies, update <code class="docutils literal notranslate"><span class="pre">docs/development.md</span></code> accordingly.</p></li>
+<li><p><strong>Dependencies</strong>: Maintain the <strong>Dependencies</strong> section in <code class="docutils literal notranslate"><span class="pre">documentation/development.md</span></code> describing all external dependencies (Python libs, JS frameworks, CSS libs) with short description, link, and license type.</p></li>
+<li><p>When adding or removing dependencies, update <code class="docutils literal notranslate"><span class="pre">documentation/development.md</span></code> accordingly.</p></li>
 </ul>
 </section>
 <section id="sphinx-api-documentation">
@@ -837,7 +837,7 @@
 <li><p><strong>Re-export</strong> all public symbols from <code class="docutils literal notranslate"><span class="pre">__init__.py</span></code>.</p></li>
 <li><p><strong>Update <code class="docutils literal notranslate"><span class="pre">back/core/__init__.py</span></code></strong> only if the new package is widely-used infrastructure.</p></li>
 <li><p><strong>Wire into routes</strong> via FastAPI dependencies or direct imports from the package.</p></li>
-<li><p><strong>Update Sphinx</strong> under <code class="docutils literal notranslate"><span class="pre">docs/sphinx/api/</span></code>.</p></li>
+<li><p><strong>Update Sphinx</strong> under <code class="docutils literal notranslate"><span class="pre">documentation/sphinx/api/</span></code>.</p></li>
 </ol>
 </section>
 </section>

@@ -417,8 +417,12 @@
         <span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Filter shapes by category (e.g. &#39;cardinality&#39;, &#39;value&#39;)&quot;</span>
     <span class="p">)</span>
     <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
-        <span class="s2">&quot;graph&quot;</span><span class="p">,</span>
-        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Backend to run checks against: &#39;view&#39; (SQL) or &#39;graph&#39; (in-memory)&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;view&quot;</span><span class="p">,</span>
+        <span class="n">deprecated</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;Deprecated and ignored. Checks always run as SQL against the &quot;</span>
+            <span class="s2">&quot;triple-store VIEW, which every graph engine builds.&quot;</span>
+        <span class="p">),</span>
     <span class="p">)</span></div>
 
 
@@ -1203,16 +1207,11 @@
             <span class="o">+</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot; (category=</span><span class="si">{</span><span class="n">body</span><span class="o">.</span><span class="n">category</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="k">if</span> <span class="n">body</span><span class="o">.</span><span class="n">category</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
         <span class="p">)</span>
 
-    <span class="n">view_table</span> <span class="o">=</span> <span class="n">effective_view_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-    <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_name</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
-    <span class="n">store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-    <span class="n">triplestore_table</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="n">effective_graph_query_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">body</span><span class="o">.</span><span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span> <span class="ow">and</span> <span class="n">store</span>
-        <span class="k">else</span> <span class="n">view_table</span>
-    <span class="p">)</span>
+    <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">effective_view_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">triplestore_table</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Triple store not configured&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;The triple-store VIEW is not available. Build the Knowledge Graph first.&quot;</span>
+        <span class="p">)</span>
 
     <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">)</span>
     <span class="n">domain_snap</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">make_snapshot</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
@@ -1224,8 +1223,6 @@
         <span class="n">steps</span><span class="o">=</span><span class="p">[{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;running&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Running </span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2"> quality checks&quot;</span><span class="p">}],</span>
     <span class="p">)</span>
 
-    <span class="n">requested_backend</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">backend</span>
-
     <span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">():</span>
         <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">run_data_quality_task</span><span class="p">(</span>
             <span class="n">tm</span><span class="p">,</span>
@@ -1234,7 +1231,6 @@
             <span class="n">domain_snap</span><span class="p">,</span>
             <span class="n">shapes</span><span class="p">,</span>
             <span class="n">triplestore_table</span><span class="p">,</span>
-            <span class="n">requested_backend</span><span class="p">,</span>
             <span class="n">total</span><span class="p">,</span>
             <span class="n">swrl_rules</span><span class="o">=</span><span class="n">swrl_rules</span><span class="p">,</span>
             <span class="n">ontology_dict</span><span class="o">=</span><span class="n">ontology_dict</span><span class="p">,</span>
@@ -1247,7 +1243,7 @@
         <span class="n">success</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="n">task_id</span><span class="o">=</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
         <span class="n">shape_count</span><span class="o">=</span><span class="n">total</span><span class="p">,</span>
-        <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Data quality checks started (</span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2"> shapes, backend=</span><span class="si">{</span><span class="n">body</span><span class="o">.</span><span class="n">backend</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+        <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Data quality checks started (</span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2"> shapes)&quot;</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 

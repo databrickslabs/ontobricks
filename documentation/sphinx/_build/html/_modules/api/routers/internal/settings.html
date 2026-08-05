@@ -1237,6 +1237,65 @@
 
 
 
+<div class="viewcode-block" id="get_graph_engine_neo4j_databases">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_graph_engine_neo4j_databases">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/graph-engine/neo4j-databases&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_graph_engine_neo4j_databases</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List Neo4j databases on the server for the Domain Info DB selector (P4).&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;graph engine Neo4j databases&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">graph_engine_neo4j_databases_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_graph_engine_neo4j_labels">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_graph_engine_neo4j_labels">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/graph-engine/neo4j-labels&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_graph_engine_neo4j_labels</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List materialised Neo4j graphs (marker labels) with node/edge counts (admin Objects tab, P5).&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;graph engine Neo4j labels&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">graph_engine_neo4j_labels_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_graph_engine_neo4j_health">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_graph_engine_neo4j_health">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/graph-engine/neo4j-health&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_graph_engine_neo4j_health</span><span class="p">(</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Bolt health probe for the Neo4j admin Health tab (P5).&quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;graph engine Neo4j health&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">graph_engine_neo4j_health_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="post_graph_engine_neo4j_drop_label">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.post_graph_engine_neo4j_drop_label">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/graph-engine/neo4j-drop-label&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">post_graph_engine_neo4j_drop_label</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop one Neo4j graph (marker label) and its schema map (admin, P5).</span>
+
+<span class="sd">    Body: ``{ &quot;label&quot;: &quot;&lt;marker label&gt;&quot; }``</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="n">map_route_errors</span><span class="p">(</span><span class="s2">&quot;graph engine Neo4j drop label&quot;</span><span class="p">,</span> <span class="n">logger</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">graph_engine_neo4j_drop_label_result</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
+        <span class="p">)</span></div>
+
+
+
 <div class="viewcode-block" id="get_graph_engine_uc_catalogs">
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_graph_engine_uc_catalogs">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/graph-engine/uc-catalogs&quot;</span><span class="p">)</span>
@@ -1503,7 +1562,10 @@
 
 
 <span class="c1"># ===========================================</span>
-<span class="c1"># Scheduled Builds</span>
+<span class="c1"># Scheduled tasks (builds, cohorts, analytics, inference)</span>
+<span class="c1">#</span>
+<span class="c1"># One generic surface for every task type: the type is a path/body</span>
+<span class="c1"># field, and its options travel in the ``config`` object.</span>
 <span class="c1"># ===========================================</span>
 
 
@@ -1514,7 +1576,7 @@
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return all per-domain build schedules.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return every schedule, of every task type, plus the type catalogue.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_schedules_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
 
 
@@ -1527,24 +1589,9 @@
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create or update a build schedule for a domain.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create or update a schedule of any task type.&quot;&quot;&quot;</span>
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">save_schedule_result</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="get_schedule_history">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_schedule_history">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{domain_name}</span><span class="s2">/history&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_schedule_history</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the run history for a single domain schedule.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_schedule_history_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-    <span class="p">)</span></div>
 
 
 
@@ -1554,6 +1601,115 @@
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">scheduler_status</span><span class="p">():</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Diagnostic: return the APScheduler internal state (running, jobs, next-run times).&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">scheduler_status_payload</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="list_cohort_rules_for_domain">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_cohort_rules_for_domain">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schedules/rules/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_cohort_rules_for_domain</span><span class="p">(</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List saved cohort rules for *domain_name* (used by the schedule modal).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_cohort_rules_for_domain_result</span><span class="p">(</span>
+        <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_schedule_history">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_schedule_history">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{task_type}</span><span class="s2">/</span><span class="si">{domain_name}</span><span class="s2">/history&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_schedule_history</span><span class="p">(</span>
+    <span class="n">task_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the run history for a single schedule.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_schedule_history_result</span><span class="p">(</span>
+        <span class="n">task_type</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">target_key</span><span class="o">=</span><span class="n">target</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="delete_schedule">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_schedule">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{task_type}</span><span class="s2">/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_schedule</span><span class="p">(</span>
+    <span class="n">task_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a schedule.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_schedule_result</span><span class="p">(</span>
+        <span class="n">task_type</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">target_key</span><span class="o">=</span><span class="n">target</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="run_schedule_now">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.run_schedule_now">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{task_type}</span><span class="s2">/</span><span class="si">{domain_name}</span><span class="s2">/run-now&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_schedule_now</span><span class="p">(</span>
+    <span class="n">task_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fire a schedule immediately (one-shot, off its own clock).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">trigger_schedule_now_result</span><span class="p">(</span>
+        <span class="n">task_type</span><span class="p">,</span> <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">target_key</span><span class="o">=</span><span class="n">target</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_all_build_runs">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_all_build_runs">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/runs/build&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_all_build_runs</span><span class="p">(</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">le</span><span class="o">=</span><span class="mi">200</span><span class="p">),</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One page of build runs across every domain (newest-first).</span>
+
+<span class="sd">    Backs the build tab of Settings → Automation → Runs. ``domain`` is</span>
+<span class="sd">    optional: absent or empty means every domain in the registry. Admin-only</span>
+<span class="sd">    by virtue of the ``/settings`` prefix.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_all_build_runs_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">folder</span><span class="o">=</span><span class="n">domain</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_all_analytics_runs">
+<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_all_analytics_runs">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/runs/analytics&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_all_analytics_runs</span><span class="p">(</span>
+    <span class="n">domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">le</span><span class="o">=</span><span class="mi">200</span><span class="p">),</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
+    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One page of analytics runs across every domain (newest-first).</span>
+
+<span class="sd">    The analytics tab&#39;s counterpart to :func:`get_all_build_runs`; spans every</span>
+<span class="sd">    version, since the Runs page has no version filter.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_all_analytics_runs_result</span><span class="p">(</span>
+        <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">folder</span><span class="o">=</span><span class="n">domain</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span>
+    <span class="p">)</span></div>
 
 
 
@@ -1586,34 +1742,6 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return aggregate build statistics for a domain (optional version).&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_build_analytics_result</span><span class="p">(</span>
         <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">version</span>
-    <span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="delete_schedule">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_schedule">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_schedule</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a build schedule for a domain.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_schedule_result</span><span class="p">(</span><span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="run_schedule_now">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.run_schedule_now">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/schedules/</span><span class="si">{domain_name}</span><span class="s2">/run-now&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_schedule_now</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fire the build schedule for *domain_name* immediately (one-shot).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">trigger_schedule_now_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
     <span class="p">)</span></div>
 
 
@@ -1787,98 +1915,6 @@
     <span class="p">)</span></div>
 
 
-
-<span class="c1"># ===========================================</span>
-<span class="c1"># Scheduled Cohort Materialisations</span>
-<span class="c1"># ===========================================</span>
-
-
-<div class="viewcode-block" id="list_cohort_schedules">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_cohort_schedules">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/cohort-schedules&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_cohort_schedules</span><span class="p">(</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return all per-(domain, rule) cohort schedules.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_cohort_schedules_result</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="list_cohort_rules_for_domain">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.list_cohort_rules_for_domain">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/cohort-schedules/rules/</span><span class="si">{domain_name}</span><span class="s2">&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">list_cohort_rules_for_domain</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List saved cohort rules for *domain_name* (used by the schedule modal).&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">list_cohort_rules_for_domain_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-    <span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="save_cohort_schedule">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.save_cohort_schedule">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohort-schedules&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">save_cohort_schedule</span><span class="p">(</span>
-    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create or update a cohort materialisation schedule.&quot;&quot;&quot;</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">save_cohort_schedule_result</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="get_cohort_schedule_history">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.get_cohort_schedule_history">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/cohort-schedules/</span><span class="si">{domain_name}</span><span class="s2">/</span><span class="si">{rule_id}</span><span class="s2">/history&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_cohort_schedule_history</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the run history for a single cohort schedule.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">get_cohort_schedule_history_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">,</span> <span class="n">rule_id</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-    <span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="delete_cohort_schedule">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.delete_cohort_schedule">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="s2">&quot;/cohort-schedules/</span><span class="si">{domain_name}</span><span class="s2">/</span><span class="si">{rule_id}</span><span class="s2">&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">delete_cohort_schedule</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Remove a cohort schedule for *(domain_name, rule_id)*.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">delete_cohort_schedule_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">,</span> <span class="n">rule_id</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-    <span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="run_cohort_schedule_now">
-<a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.settings.run_cohort_schedule_now">[docs]</a>
-<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cohort-schedules/</span><span class="si">{domain_name}</span><span class="s2">/</span><span class="si">{rule_id}</span><span class="s2">/run-now&quot;</span><span class="p">)</span>
-<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">run_cohort_schedule_now</span><span class="p">(</span>
-    <span class="n">domain_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">rule_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-    <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
-    <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
-<span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fire the cohort schedule for *(domain_name, rule_id)* immediately.&quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">config_service</span><span class="o">.</span><span class="n">trigger_cohort_schedule_now_result</span><span class="p">(</span>
-        <span class="n">domain_name</span><span class="p">,</span> <span class="n">rule_id</span><span class="p">,</span> <span class="n">session_mgr</span><span class="p">,</span> <span class="n">settings</span>
-    <span class="p">)</span></div>
 
 </pre></div>
 

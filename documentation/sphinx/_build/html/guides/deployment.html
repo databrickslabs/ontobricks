@@ -1451,7 +1451,7 @@ databricks<span class="w"> </span>bundle<span class="w"> </span>run<span class="
 <hr class="docutils" />
 <section id="triple-store-graph-db-backend-configuration">
 <h2>6. Triple Store &amp; Graph DB Backend Configuration<a class="headerlink" href="#triple-store-graph-db-backend-configuration" title="Link to this heading">¶</a></h2>
-<p>OntoBricks always materializes both a Delta view (Unity Catalog) and a Graph DB engine (Lakebase Postgres). Both layers are pluggable through their respective factories — see <code class="docutils literal notranslate"><span class="pre">docs/graphdb-integration.md</span></code> for adding a new Graph DB engine.</p>
+<p>OntoBricks always materializes both a Delta view (Unity Catalog) and a Graph DB engine (Lakebase Postgres). Both layers are pluggable through their respective factories — see <code class="docutils literal notranslate"><span class="pre">documentation/graphdb-integration.md</span></code> for adding a new Graph DB engine.</p>
 <section id="delta-view-view-no-extra-setup-required">
 <h3>Delta view (<code class="docutils literal notranslate"><span class="pre">view</span></code>) — No Extra Setup Required<a class="headerlink" href="#delta-view-view-no-extra-setup-required" title="Link to this heading">¶</a></h3>
 <p>The Delta view is created by R2RML on a Databricks SQL Warehouse and persists triples for governance and lineage. On Databricks Apps, the app’s service principal authenticates via OAuth automatically — the only requirement is the SQL Warehouse resource declared in <code class="docutils literal notranslate"><span class="pre">app.yaml</span></code> (already configured).</p>
@@ -1708,7 +1708,7 @@ python<span class="w"> </span>src/mcp-server/mcp_server.py<span class="w"> </spa
 ├── app.yaml                # Main app runtime config
 ├── src/mcp-server/
 │   └── app.yaml            # MCP server runtime config
-└── docs/dab-reference.md
+└── documentation/dab-reference.md
     └── README.md           # DAB-specific documentation
 </pre></div>
 </div>
@@ -1781,7 +1781,7 @@ make<span class="w"> </span>bootstrap-lakebase<span class="w">  </span><span cla
 </section>
 <section id="file-sync">
 <h3>File Sync<a class="headerlink" href="#file-sync" title="Link to this heading">¶</a></h3>
-<p>The <code class="docutils literal notranslate"><span class="pre">.databricksignore</span></code> at the project root excludes non-runtime files (tests, data, IDE config, Sphinx HTML build output, etc.) from the main app sync, but <strong>includes</strong> <code class="docutils literal notranslate"><span class="pre">docs/</span></code> so the in-app Help Center can serve <code class="docutils literal notranslate"><span class="pre">/api/help/docs/*</span></code> in production. The MCP server has its own <code class="docutils literal notranslate"><span class="pre">source_code_path</span></code> pointing directly to <code class="docutils literal notranslate"><span class="pre">src/mcp-server/</span></code>.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">.databricksignore</span></code> at the project root excludes non-runtime files (tests, data, IDE config, Sphinx HTML build output, etc.) from the main app sync, but <strong>includes</strong> <code class="docutils literal notranslate"><span class="pre">documentation/</span></code> so the in-app Help Center can serve <code class="docutils literal notranslate"><span class="pre">/api/help/docs/*</span></code> in production. The MCP server has its own <code class="docutils literal notranslate"><span class="pre">source_code_path</span></code> pointing directly to <code class="docutils literal notranslate"><span class="pre">src/mcp-server/</span></code>.</p>
 </section>
 <section id="binding-existing-apps">
 <h3>Binding existing apps<a class="headerlink" href="#binding-existing-apps" title="Link to this heading">¶</a></h3>

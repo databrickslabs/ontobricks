@@ -236,7 +236,7 @@ contain credentials (auth lives on the driver, not per-session).</p>
 <dt class="sig sig-object py">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.neo4j.</span></span><span class="sig-name descname"><span class="pre">Neo4jReadOps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Read queries against the flat-triple Neo4j backend.</p>
+<p>Read queries against the typed property-graph Neo4j backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>connection</strong> (<a class="reference internal" href="#back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection" title="back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection"><em>Neo4jConnection</em></a>)</p>
@@ -258,7 +258,8 @@ contain credentials (auth lives on the driver, not per-session).</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">count_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.count_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Count reconstructed triples: type-labels + name + literal props + rels.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -310,7 +311,8 @@ contain credentials (auth lives on the driver, not per-session).</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">get_type_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.get_type_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Count nodes per class label, mapped back to class URIs.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -323,7 +325,8 @@ contain credentials (auth lives on the driver, not per-session).</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">get_predicate_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.get_predicate_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Count per predicate: literal props + rel types + rdf:type, as URIs.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -574,22 +577,51 @@ contain credentials (auth lives on the driver, not per-session).</p>
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">list_labels</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.list_labels"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>List every materialised graph (marker label) with node/edge counts.</p>
+<p>A “graph” is a node label backed by a <code class="docutils literal notranslate"><span class="pre">node_&lt;label&gt;_uri</span></code> uniqueness
+constraint (created by <code class="xref py py-meth docutils literal notranslate"><span class="pre">Neo4jWriteOps.create_table()</span></code>). Returns one
+row per graph: <code class="docutils literal notranslate"><span class="pre">{label,</span> <span class="pre">nodes,</span> <span class="pre">edges}</span></code>. Powers the Settings → Neo4j
+→ Objects admin tab (list + delete), parity with Lakebase objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">list_databases</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.list_databases"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>List Neo4j databases available on the server (for the DB selector, P4).</p>
+<p>Uses <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">DATABASES</span></code>; filters out system/internal databases. On
+instances that disallow the call (e.g. some Aura tiers), returns an
+empty list so the caller falls back to the configured database name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.neo4j.</span></span><span class="sig-name descname"><span class="pre">Neo4jStore</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ontobricks'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jStore.html#Neo4jStore"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Bases: <a class="reference internal" href="app.core.graphdb.html#back.core.graphdb.GraphDBBackend.GraphDBBackend" title="back.core.graphdb.GraphDBBackend.GraphDBBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">GraphDBBackend</span></code></a></p>
-<p>Neo4j (Bolt / Cypher) graph database backend — flat triple model.</p>
+<p>Neo4j (Bolt / Cypher) graph database backend — typed property-graph model.</p>
 <p>Public façade composing <a class="reference internal" href="#module-back.core.graphdb.neo4j.Neo4jConnection" title="back.core.graphdb.neo4j.Neo4jConnection"><code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jConnection</span></code></a>, <a class="reference internal" href="#module-back.core.graphdb.neo4j.Neo4jWriteOps" title="back.core.graphdb.neo4j.Neo4jWriteOps"><code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jWriteOps</span></code></a>,
 and <a class="reference internal" href="#module-back.core.graphdb.neo4j.Neo4jReadOps" title="back.core.graphdb.neo4j.Neo4jReadOps"><code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jReadOps</span></code></a>. Implements both the <code class="docutils literal notranslate"><span class="pre">TripleStoreBackend</span></code>
 and <code class="docutils literal notranslate"><span class="pre">GraphDBBackend</span></code> contracts.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Logical name for the triple set, used as the <code class="docutils literal notranslate"><span class="pre">table</span></code> label in the
-Cypher schema (every triple node carries the single label
-<code class="docutils literal notranslate"><span class="pre">:&lt;sanitised_db_name&gt;</span></code>).</p></li>
+<li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Logical name for the graph, used as the per-graph <strong>marker label</strong>
+(every node of this graph carries <code class="docutils literal notranslate"><span class="pre">:&lt;sanitised_db_name&gt;</span></code>) so the
+whole domain graph is one <code class="docutils literal notranslate"><span class="pre">MATCH</span></code> away for counting/dropping.</p></li>
 <li><p><strong>engine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>) – <p>JSON dict from Settings &gt; Graph DB &gt; Engine Configuration. Keys:</p>
 <dl class="simple">
 <dt><code class="docutils literal notranslate"><span class="pre">uri</span></code> (required)</dt><dd><p>Bolt URI, e.g. <code class="docutils literal notranslate"><span class="pre">neo4j+s://b4810af7.databases.neo4j.io</span></code>.</p>
@@ -1279,7 +1311,7 @@ algorithms.</p>
 <dt class="sig sig-object py">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.neo4j.</span></span><span class="sig-name descname"><span class="pre">Neo4jWriteOps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Schema + CRUD writes for the flat-triple Neo4j backend.</p>
+<p>Schema + CRUD writes for the typed property-graph Neo4j backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>connection</strong> (<a class="reference internal" href="#back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection" title="back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection"><em>Neo4jConnection</em></a>)</p>
@@ -1288,7 +1320,10 @@ algorithms.</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">create_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.create_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Create a uniqueness constraint on node identity for this graph.</p>
+<p>One constraint per graph marker label enforces <code class="docutils literal notranslate"><span class="pre">uri</span></code> uniqueness and
+creates the backing index (fast MERGE + lookup).</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -1301,7 +1336,9 @@ algorithms.</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">drop_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.drop_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Drop the graph: all nodes of the marker label (+ their relationships),
+the uniqueness constraint, and the persisted schema map.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -1327,7 +1364,12 @@ algorithms.</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">insert_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.insert_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Write triples as a property graph. Returns the triple count consumed.</p>
+<p>Per batch, three phases keep the graph consistent regardless of triple
+ordering (a relationship may reference a node whose own triples arrive
+later): (1) MERGE all nodes + set labels/properties, (2) MERGE all
+relationships. The reverse schema maps are merged + persisted once.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -1345,7 +1387,12 @@ algorithms.</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">delete_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.delete_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Remove triples from the property graph. Returns the count consumed.</p>
+<p>Inverse of insert: for each triple, remove the matching relationship
+(URI object), unset the property (literal object), or remove the class
+label (rdf:type). Nodes that end up with only the marker label and no
+other class label are deleted (they no longer represent an entity).</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -1363,7 +1410,12 @@ algorithms.</p>
 <dl class="py method">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">delete_cohort_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cohort_uri_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_cohort_predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.delete_cohort_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Remove a cohort’s nodes + membership edges (idempotent).</p>
+<p>Cohort-entity nodes have a <code class="docutils literal notranslate"><span class="pre">uri</span></code> starting with <em>cohort_uri_prefix</em>;
+membership edges are relationships whose type derives from
+<em>in_cohort_predicate</em> pointing at such nodes. DETACH-deleting the cohort
+nodes removes both in one step.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -1398,12 +1450,23 @@ context can ask the question without instantiating a full store.</p>
 <p>Thin <a class="reference internal" href="app.core.graphdb.html#module-back.core.graphdb.GraphDBBackend" title="back.core.graphdb.GraphDBBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">GraphDBBackend</span></code></a> implementation composing the
 three services below.</p>
 <p id="module-back.core.graphdb.neo4j.Neo4jStore">Neo4j graph database backend — thin façade over three composed services.</p>
-<p>Bolt-based (Cypher) flat-triple store. Triples are persisted as
-<code class="docutils literal notranslate"><span class="pre">(:&lt;sanitised_table_name&gt;</span> <span class="pre">{subject,</span> <span class="pre">predicate,</span> <span class="pre">object})</span></code> nodes — a
-deliberately simple schema chosen so PR 1 demonstrates the Cypher
-integration shape without committing to a typed-node graph model (which
-lands in v2 / PR 3+). One label per logical store so Neo4j 5+ <code class="docutils literal notranslate"><span class="pre">CREATE</span>
-<span class="pre">CONSTRAINT</span></code> (which only accepts single-label patterns) works.</p>
+<p>Bolt-based (Cypher) <strong>typed property-graph</strong> store (Strategy A, confirmed with
+Benoit 2026-07-28). Each subject/object URI becomes a node MERGE-keyed on its
+full URI, <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> becomes a Neo4j label, <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code> becomes the
+<code class="docutils literal notranslate"><span class="pre">name</span></code> property, literal-object predicates become node properties, and
+URI-object predicates become real relationships <code class="docutils literal notranslate"><span class="pre">(s)-[:reltype]-&gt;(o)</span></code>. Every
+node also carries a per-graph <strong>marker label</strong> (the sanitised table name) so a
+whole domain graph is one <code class="docutils literal notranslate"><span class="pre">MATCH</span> <span class="pre">(n:&lt;marker&gt;)</span></code> away for counting, dropping,
+and isolation — Neo4j 5+ <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">CONSTRAINT</span></code> enforces <code class="docutils literal notranslate"><span class="pre">uri</span></code> uniqueness on
+that marker.</p>
+<p><strong>Contract preservation:</strong> reads still return the flat
+<code class="docutils literal notranslate"><span class="pre">{subject,</span> <span class="pre">predicate,</span> <span class="pre">object}</span></code> shapes the SQL backends return — triples are
+<em>reconstructed</em> from the graph using reverse maps persisted by
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jSchemaMap</span></code> (label→class URI, reltype→predicate URI,
+prop-key→predicate URI). So the KG view / GraphQL / reasoning layers see no
+behavioural change, while traversal/reasoning now run as native relationship
+patterns. The forward transform lives in the driver-free
+<code class="xref py py-mod docutils literal notranslate"><span class="pre">Neo4jGraphModel</span></code>.</p>
 <p>Implementation is split across three services (extracted during the PR
 #47 review — Benoit 2026-06-18 “la classe est trop grosse”):</p>
 <ul class="simple">
@@ -1412,13 +1475,16 @@ lands in v2 / PR 3+). One label per logical store so Neo4j 5+ <code class="docut
 hard refusal in the deployed app without a secret resource), and the
 single <code class="xref py py-meth docutils literal notranslate"><span class="pre">Neo4jConnection.run()</span></code> execution path that emits one INFO
 log line per Cypher statement.</p></li>
-<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jWriteOps</span></code> — schema (constraint create/drop), bulk writes
-(<code class="docutils literal notranslate"><span class="pre">UNWIND</span></code> + <code class="docutils literal notranslate"><span class="pre">MERGE</span></code> / <code class="docutils literal notranslate"><span class="pre">DETACH</span> <span class="pre">DELETE</span></code>), cohort wipes.</p></li>
+<li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jWriteOps</span></code> — schema (constraint create/drop), typed bulk writes
+(<code class="docutils literal notranslate"><span class="pre">UNWIND</span></code> + <code class="docutils literal notranslate"><span class="pre">MERGE</span></code> nodes/labels/props then batched relationship MERGE),
+deletes, cohort wipes, and reverse-schema-map persistence.</p></li>
 <li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jReadOps</span></code> — the 16+ named-query methods of the
-<code class="docutils literal notranslate"><span class="pre">TripleStoreBackend</span></code> contract: statistics, entity lookup, pagination,
-KG-filter primitives (<code class="docutils literal notranslate"><span class="pre">find_seed_subjects</span></code> / <code class="docutils literal notranslate"><span class="pre">bfs_traversal</span></code> /
-<code class="docutils literal notranslate"><span class="pre">expand_entity_neighbors</span></code>), and reasoning helpers (<code class="docutils literal notranslate"><span class="pre">transitive_closure</span></code>,
-<code class="docutils literal notranslate"><span class="pre">symmetric_expand</span></code>, <code class="docutils literal notranslate"><span class="pre">shortest_path</span></code>).</p></li>
+<code class="docutils literal notranslate"><span class="pre">TripleStoreBackend</span></code> contract: SPO reconstruction, statistics, entity
+lookup, pagination, KG-filter primitives (<code class="docutils literal notranslate"><span class="pre">find_seed_subjects</span></code> /
+<code class="docutils literal notranslate"><span class="pre">bfs_traversal</span></code> / <code class="docutils literal notranslate"><span class="pre">expand_entity_neighbors</span></code>), reasoning helpers
+(<code class="docutils literal notranslate"><span class="pre">transitive_closure</span></code>, <code class="docutils literal notranslate"><span class="pre">symmetric_expand</span></code>, <code class="docutils literal notranslate"><span class="pre">shortest_path</span></code>), and the
+admin inventory used by the Settings → Neo4j tabs (<code class="docutils literal notranslate"><span class="pre">list_labels</span></code> /
+<code class="docutils literal notranslate"><span class="pre">list_databases</span></code>).</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">execute_query</span></code> deliberately raises <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code> — no raw
 Cypher entry point. All writes go through <code class="docutils literal notranslate"><span class="pre">insert_triples</span></code> after
@@ -1431,16 +1497,16 @@ full SWRL → Cypher translation lands in a follow-up PR.</p>
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jStore.Neo4jStore">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.neo4j.Neo4jStore.</span></span><span class="sig-name descname"><span class="pre">Neo4jStore</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ontobricks'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">engine_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jStore.html#Neo4jStore"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jStore.Neo4jStore" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="app.core.graphdb.html#back.core.graphdb.GraphDBBackend.GraphDBBackend" title="back.core.graphdb.GraphDBBackend.GraphDBBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">GraphDBBackend</span></code></a></p>
-<p>Neo4j (Bolt / Cypher) graph database backend — flat triple model.</p>
+<p>Neo4j (Bolt / Cypher) graph database backend — typed property-graph model.</p>
 <p>Public façade composing <code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jConnection</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jWriteOps</span></code>,
 and <code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jReadOps</span></code>. Implements both the <code class="docutils literal notranslate"><span class="pre">TripleStoreBackend</span></code>
 and <code class="docutils literal notranslate"><span class="pre">GraphDBBackend</span></code> contracts.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Logical name for the triple set, used as the <code class="docutils literal notranslate"><span class="pre">table</span></code> label in the
-Cypher schema (every triple node carries the single label
-<code class="docutils literal notranslate"><span class="pre">:&lt;sanitised_db_name&gt;</span></code>).</p></li>
+<li><p><strong>db_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Logical name for the graph, used as the per-graph <strong>marker label</strong>
+(every node of this graph carries <code class="docutils literal notranslate"><span class="pre">:&lt;sanitised_db_name&gt;</span></code>) so the
+whole domain graph is one <code class="docutils literal notranslate"><span class="pre">MATCH</span></code> away for counting/dropping.</p></li>
 <li><p><strong>engine_config</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>] </em><em>| </em><em>None</em>) – <p>JSON dict from Settings &gt; Graph DB &gt; Engine Configuration. Keys:</p>
 <dl class="simple">
 <dt><code class="docutils literal notranslate"><span class="pre">uri</span></code> (required)</dt><dd><p>Bolt URI, e.g. <code class="docutils literal notranslate"><span class="pre">neo4j+s://b4810af7.databases.neo4j.io</span></code>.</p>
@@ -2274,20 +2340,26 @@ contain credentials (auth lives on the driver, not per-session).</p>
 <h2>Write operations<a class="headerlink" href="#write-operations" title="Link to this heading">¶</a></h2>
 <p>Schema (constraint create/drop) and bulk writes (<code class="docutils literal notranslate"><span class="pre">UNWIND</span></code> + <code class="docutils literal notranslate"><span class="pre">MERGE</span></code> /
 <code class="docutils literal notranslate"><span class="pre">DETACH</span> <span class="pre">DELETE</span></code>).</p>
-<p id="module-back.core.graphdb.neo4j.Neo4jWriteOps">Neo4j write/CRUD operations on the flat-triple model.</p>
-<p>Owns schema management (constraint create/drop), bulk write paths
-(<code class="docutils literal notranslate"><span class="pre">UNWIND</span></code> + <code class="docutils literal notranslate"><span class="pre">MERGE</span></code> for inserts, <code class="docutils literal notranslate"><span class="pre">UNWIND</span></code> + <code class="docutils literal notranslate"><span class="pre">MATCH</span></code> + <code class="docutils literal notranslate"><span class="pre">DETACH</span>
-<span class="pre">DELETE</span></code> for deletes), and cohort wipes. Receives a
-<code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jConnection</span></code> (composition) so all queries go through the
-shared logging / auth layer.</p>
-<p>Schema convention: one Cypher label per logical store (sanitised from
-the table name). Multi-label compound patterns (e.g. <code class="docutils literal notranslate"><span class="pre">:Triple:&lt;store&gt;</span></code>)
-are deliberately avoided because Neo4j 5+ rejects them in
-<code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">CONSTRAINT</span></code>.</p>
+<p id="module-back.core.graphdb.neo4j.Neo4jWriteOps">Neo4j write/CRUD operations on the <strong>typed property-graph</strong> model.</p>
+<p>Every subject/object URI is a node (MERGE-keyed on its full URI — the URI is a
+globally unique id, confirmed with Benoit 2026-07-28), <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code> becomes a
+Neo4j label, <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code> becomes the <code class="docutils literal notranslate"><span class="pre">name</span></code> property, literal-object
+predicates become node properties, and URI-object predicates become real
+relationships <code class="docutils literal notranslate"><span class="pre">(s)-[:reltype]-&gt;(o)</span></code>.</p>
+<p>Every node also carries a reserved <strong>marker label</strong> — the sanitised graph/table
+name — so a whole domain graph is one <code class="docutils literal notranslate"><span class="pre">MATCH</span> <span class="pre">(n:&lt;graph_label&gt;)</span></code> away for
+counting, dropping, and isolation. The forward transform is pure
+(<code class="xref py py-mod docutils literal notranslate"><span class="pre">Neo4jGraphModel</span></code>); the reverse maps needed to reconstruct exact SPO
+triples on read are persisted by <code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jSchemaMap</span></code>.</p>
+<p>Public method signatures are unchanged from the flat-triple version so the
+<code class="docutils literal notranslate"><span class="pre">GraphDBBackend</span></code> contract and all callers keep working.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jWriteOps.sanitise_label">
 <span class="sig-prename descclassname"><span class="pre">back.core.graphdb.neo4j.Neo4jWriteOps.</span></span><span class="sig-name descname"><span class="pre">sanitise_label</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#sanitise_label"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jWriteOps.sanitise_label" title="Link to this definition">¶</a></dt>
 <dd><p>Neo4j labels are case-sensitive identifiers; sanitise to <code class="docutils literal notranslate"><span class="pre">[A-Za-z0-9_]</span></code>.</p>
+<p>Also used for the per-graph <strong>marker label</strong> applied to every node of a
+graph. Retained (and re-exported) for <code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jReadOps</span></code> /
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jStore</span></code>, which key their queries on the same marker.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
@@ -2302,7 +2374,7 @@ are deliberately avoided because Neo4j 5+ rejects them in
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.neo4j.Neo4jWriteOps.</span></span><span class="sig-name descname"><span class="pre">Neo4jWriteOps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Schema + CRUD writes for the flat-triple Neo4j backend.</p>
+<p>Schema + CRUD writes for the typed property-graph Neo4j backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>connection</strong> (<a class="reference internal" href="#back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection" title="back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection"><em>Neo4jConnection</em></a>)</p>
@@ -2311,7 +2383,10 @@ are deliberately avoided because Neo4j 5+ rejects them in
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.create_table">
 <span class="sig-name descname"><span class="pre">create_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.create_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.create_table" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Create a uniqueness constraint on node identity for this graph.</p>
+<p>One constraint per graph marker label enforces <code class="docutils literal notranslate"><span class="pre">uri</span></code> uniqueness and
+creates the backing index (fast MERGE + lookup).</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -2324,7 +2399,9 @@ are deliberately avoided because Neo4j 5+ rejects them in
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.drop_table">
 <span class="sig-name descname"><span class="pre">drop_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.drop_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.drop_table" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Drop the graph: all nodes of the marker label (+ their relationships),
+the uniqueness constraint, and the persisted schema map.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -2350,7 +2427,12 @@ are deliberately avoided because Neo4j 5+ rejects them in
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.insert_triples">
 <span class="sig-name descname"><span class="pre">insert_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.insert_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.insert_triples" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Write triples as a property graph. Returns the triple count consumed.</p>
+<p>Per batch, three phases keep the graph consistent regardless of triple
+ordering (a relationship may reference a node whose own triples arrive
+later): (1) MERGE all nodes + set labels/properties, (2) MERGE all
+relationships. The reverse schema maps are merged + persisted once.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -2368,7 +2450,12 @@ are deliberately avoided because Neo4j 5+ rejects them in
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.delete_triples">
 <span class="sig-name descname"><span class="pre">delete_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">triples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.delete_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.delete_triples" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Remove triples from the property graph. Returns the count consumed.</p>
+<p>Inverse of insert: for each triple, remove the matching relationship
+(URI object), unset the property (literal object), or remove the class
+label (rdf:type). Nodes that end up with only the marker label and no
+other class label are deleted (they no longer represent an entity).</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -2386,7 +2473,12 @@ are deliberately avoided because Neo4j 5+ rejects them in
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.delete_cohort_triples">
 <span class="sig-name descname"><span class="pre">delete_cohort_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cohort_uri_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_cohort_predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jWriteOps.html#Neo4jWriteOps.delete_cohort_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jWriteOps.Neo4jWriteOps.delete_cohort_triples" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Remove a cohort’s nodes + membership edges (idempotent).</p>
+<p>Cohort-entity nodes have a <code class="docutils literal notranslate"><span class="pre">uri</span></code> starting with <em>cohort_uri_prefix</em>;
+membership edges are relationships whose type derives from
+<em>in_cohort_predicate</em> pointing at such nodes. DETACH-deleting the cohort
+nodes removes both in one step.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
@@ -2407,21 +2499,25 @@ are deliberately avoided because Neo4j 5+ rejects them in
 <h2>Read operations<a class="headerlink" href="#read-operations" title="Link to this heading">¶</a></h2>
 <p>Statistics, entity lookup, pagination, KG-filter primitives, and reasoning
 helpers.</p>
-<p id="module-back.core.graphdb.neo4j.Neo4jReadOps">Neo4j read-side queries: statistics, entity lookup, traversal, reasoning.</p>
-<p>Carved out of <code class="xref py py-mod docutils literal notranslate"><span class="pre">Neo4jStore</span></code> for readability (Benoit PR #47 review).
-Implements the 16+ named-query methods of the <code class="docutils literal notranslate"><span class="pre">TripleStoreBackend</span></code>
-contract using native Cypher over the flat-triple model — every triple
-is a <code class="docutils literal notranslate"><span class="pre">(:&lt;sanitised_label&gt;</span> <span class="pre">{subject,</span> <span class="pre">predicate,</span> <span class="pre">object})</span></code> node.</p>
-<p>Knowledge-Graph filter primitives (<code class="docutils literal notranslate"><span class="pre">find_seed_subjects</span></code>,
-<code class="docutils literal notranslate"><span class="pre">bfs_traversal</span></code>, <code class="docutils literal notranslate"><span class="pre">expand_entity_neighbors</span></code>) and reasoning helpers
-(<code class="docutils literal notranslate"><span class="pre">transitive_closure</span></code>, <code class="docutils literal notranslate"><span class="pre">symmetric_expand</span></code>, <code class="docutils literal notranslate"><span class="pre">shortest_path</span></code>) live
-here; a typed-relationship graph model would be faster but lands in a
-follow-up PR (will set <code class="docutils literal notranslate"><span class="pre">supports_graph_model=True</span></code>).</p>
+<p id="module-back.core.graphdb.neo4j.Neo4jReadOps">Neo4j read-side queries over the <strong>typed property-graph</strong> model.</p>
+<p>Implements the named-query methods of the <code class="docutils literal notranslate"><span class="pre">GraphDBBackend</span></code> contract against
+the property graph written by <code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jWriteOps</span></code>: nodes keyed on <code class="docutils literal notranslate"><span class="pre">uri</span></code>
+carry a graph <strong>marker label</strong>, class labels (from <code class="docutils literal notranslate"><span class="pre">rdf:type</span></code>), a <code class="docutils literal notranslate"><span class="pre">name</span></code>
+property (from <code class="docutils literal notranslate"><span class="pre">rdfs:label</span></code>), literal properties, and outgoing relationships.</p>
+<p><strong>Contract preservation:</strong> every method still returns the same
+<code class="docutils literal notranslate"><span class="pre">{subject,</span> <span class="pre">predicate,</span> <span class="pre">object}</span></code> / entity shapes the SQL backends return — the
+triples are <em>reconstructed</em> from the graph. Reverse mappings (label→class URI,
+reltype→predicate URI, property-key→predicate URI) come from
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Neo4jSchemaMap</span></code>.</p>
+<p>Traversal/reasoning (<code class="docutils literal notranslate"><span class="pre">bfs_traversal</span></code>, <code class="docutils literal notranslate"><span class="pre">transitive_closure</span></code>,
+<code class="docutils literal notranslate"><span class="pre">shortest_path</span></code>, <code class="docutils literal notranslate"><span class="pre">expand_entity_neighbors</span></code>) now use <strong>native relationship
+patterns</strong> — the whole point of the typed model — instead of self-joining flat
+triple nodes.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">back.core.graphdb.neo4j.Neo4jReadOps.</span></span><span class="sig-name descname"><span class="pre">Neo4jReadOps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
-<p>Read queries against the flat-triple Neo4j backend.</p>
+<p>Read queries against the typed property-graph Neo4j backend.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>connection</strong> (<a class="reference internal" href="#back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection" title="back.core.graphdb.neo4j.Neo4jConnection.Neo4jConnection"><em>Neo4jConnection</em></a>)</p>
@@ -2443,7 +2539,8 @@ follow-up PR (will set <code class="docutils literal notranslate"><span class="p
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.count_triples">
 <span class="sig-name descname"><span class="pre">count_triples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.count_triples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.count_triples" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Count reconstructed triples: type-labels + name + literal props + rels.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -2495,7 +2592,8 @@ follow-up PR (will set <code class="docutils literal notranslate"><span class="p
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.get_type_distribution">
 <span class="sig-name descname"><span class="pre">get_type_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.get_type_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.get_type_distribution" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Count nodes per class label, mapped back to class URIs.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -2508,7 +2606,8 @@ follow-up PR (will set <code class="docutils literal notranslate"><span class="p
 <dl class="py method">
 <dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.get_predicate_distribution">
 <span class="sig-name descname"><span class="pre">get_predicate_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">table_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.get_predicate_distribution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.get_predicate_distribution" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Count per predicate: literal props + rel types + rdf:type, as URIs.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>table_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
@@ -2755,6 +2854,35 @@ follow-up PR (will set <code class="docutils literal notranslate"><span class="p
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.list_labels">
+<span class="sig-name descname"><span class="pre">list_labels</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.list_labels"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.list_labels" title="Link to this definition">¶</a></dt>
+<dd><p>List every materialised graph (marker label) with node/edge counts.</p>
+<p>A “graph” is a node label backed by a <code class="docutils literal notranslate"><span class="pre">node_&lt;label&gt;_uri</span></code> uniqueness
+constraint (created by <code class="xref py py-meth docutils literal notranslate"><span class="pre">Neo4jWriteOps.create_table()</span></code>). Returns one
+row per graph: <code class="docutils literal notranslate"><span class="pre">{label,</span> <span class="pre">nodes,</span> <span class="pre">edges}</span></code>. Powers the Settings → Neo4j
+→ Objects admin tab (list + delete), parity with Lakebase objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.list_databases">
+<span class="sig-name descname"><span class="pre">list_databases</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/core/graphdb/neo4j/Neo4jReadOps.html#Neo4jReadOps.list_databases"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.core.graphdb.neo4j.Neo4jReadOps.Neo4jReadOps.list_databases" title="Link to this definition">¶</a></dt>
+<dd><p>List Neo4j databases available on the server (for the DB selector, P4).</p>
+<p>Uses <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">DATABASES</span></code>; filters out system/internal databases. On
+instances that disallow the call (e.g. some Aura tiers), returns an
+empty list so the caller falls back to the configured database name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.14)"><em>List</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
 </dd>
 </dl>
 </dd></dl>

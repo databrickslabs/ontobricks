@@ -131,7 +131,9 @@
 
 <span class="sd">Cross-domain bridges are handled server-side: the target domain is</span>
 <span class="sd">loaded into the session *before* the redirect, so the browser only</span>
-<span class="sd">needs a single page load to display the graph.</span>
+<span class="sd">needs a single page load to display the graph. Successful switches</span>
+<span class="sd">append ``domain_switched=1`` so the navbar busts its cached domain</span>
+<span class="sd">name/version before painting.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>

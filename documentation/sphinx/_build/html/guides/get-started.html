@@ -901,6 +901,10 @@ the workspace token (locally) or the SP token (in Apps).</p>
 <td><p>Source nodes sampled for the betweenness/closeness estimates. Dominant cost of the job — the intermediate search holds one row per (pivot, reachable node). <code class="docutils literal notranslate"><span class="pre">0</span></code> skips both metrics; a value at or above the node count makes them exact.</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">64</span></code></p></td>
 </tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH</span></code></p></td>
+<td><p>How many levels the pivot breadth-first search may explore. A runaway guard, not a tuning knob: the search stops as soon as it runs out of frontier, so headroom costs nothing on a shallow graph. Hitting the cap withholds betweenness and closeness rather than reporting truncated values, so raise this if the Analytics page reports them as unavailable.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">32</span></code></p></td>
+</tr>
 </tbody>
 </table>
 </section>

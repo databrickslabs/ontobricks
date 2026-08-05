@@ -119,37 +119,113 @@
           <div class="body" role="main">
             
   <h1>Source code for back.core.graphdb.neo4j.Neo4jReadOps</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Neo4j read-side queries: statistics, entity lookup, traversal, reasoning.</span>
+<span></span><span class="sd">&quot;&quot;&quot;Neo4j read-side queries over the **typed property-graph** model.</span>
 
-<span class="sd">Carved out of :mod:`Neo4jStore` for readability (Benoit PR #47 review).</span>
-<span class="sd">Implements the 16+ named-query methods of the ``TripleStoreBackend``</span>
-<span class="sd">contract using native Cypher over the flat-triple model — every triple</span>
-<span class="sd">is a ``(:&lt;sanitised_label&gt; {subject, predicate, object})`` node.</span>
+<span class="sd">Implements the named-query methods of the ``GraphDBBackend`` contract against</span>
+<span class="sd">the property graph written by :class:`Neo4jWriteOps`: nodes keyed on ``uri``</span>
+<span class="sd">carry a graph **marker label**, class labels (from ``rdf:type``), a ``name``</span>
+<span class="sd">property (from ``rdfs:label``), literal properties, and outgoing relationships.</span>
 
-<span class="sd">Knowledge-Graph filter primitives (``find_seed_subjects``,</span>
-<span class="sd">``bfs_traversal``, ``expand_entity_neighbors``) and reasoning helpers</span>
-<span class="sd">(``transitive_closure``, ``symmetric_expand``, ``shortest_path``) live</span>
-<span class="sd">here; a typed-relationship graph model would be faster but lands in a</span>
-<span class="sd">follow-up PR (will set ``supports_graph_model=True``).</span>
+<span class="sd">**Contract preservation:** every method still returns the same</span>
+<span class="sd">``{subject, predicate, object}`` / entity shapes the SQL backends return — the</span>
+<span class="sd">triples are *reconstructed* from the graph. Reverse mappings (label→class URI,</span>
+<span class="sd">reltype→predicate URI, property-key→predicate URI) come from</span>
+<span class="sd">:class:`Neo4jSchemaMap`.</span>
+
+<span class="sd">Traversal/reasoning (``bfs_traversal``, ``transitive_closure``,</span>
+<span class="sd">``shortest_path``, ``expand_entity_neighbors``) now use **native relationship</span>
+<span class="sd">patterns** — the whole point of the typed model — instead of self-joining flat</span>
+<span class="sd">triple nodes.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jConnection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jConnection</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jSchemaMap</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jSchemaMap</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jWriteOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">sanitise_label</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># Reserved node/label names that are never business predicates/properties.</span>
+<span class="n">_MARKER_INTERNAL_PROPS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;uri&quot;</span><span class="p">}</span>
+<span class="n">_SCHEMA_LABEL</span> <span class="o">=</span> <span class="s2">&quot;__GraphSchema&quot;</span>
 
 
 <div class="viewcode-block" id="Neo4jReadOps">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Neo4jReadOps</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read queries against the flat-triple Neo4j backend.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read queries against the typed property-graph Neo4j backend.&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">connection</span><span class="p">:</span> <span class="n">Neo4jConnection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span> <span class="o">=</span> <span class="n">connection</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span> <span class="o">=</span> <span class="n">Neo4jSchemaMap</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1">#  SPO reconstruction core</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reconstruct_triples_for_nodes</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">node_uris</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild flat SPO triples for the given node URIs (or the whole graph).</span>
+
+<span class="sd">        Emits, per node: one ``rdf:type`` triple per class label; one</span>
+<span class="sd">        ``rdfs:label`` triple if it has a ``name``; one triple per literal</span>
+<span class="sd">        property; and one triple per outgoing relationship (reversed to the</span>
+<span class="sd">        predicate URI via the schema map).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>        <span class="c1"># sanitised label → class URI</span>
+        <span class="n">reltype_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>    <span class="c1"># sanitised reltype → predicate URI</span>
+        <span class="n">prop_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;prop_map&quot;</span><span class="p">]</span>          <span class="c1"># sanitised prop key → predicate URI</span>
+
+        <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">node_uris</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;WHERE n.uri IN $uris &quot;</span>
+            <span class="n">params</span><span class="p">[</span><span class="s2">&quot;uris&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">node_uris</span>
+
+        <span class="c1"># Pull node identity, labels, properties.</span>
+        <span class="n">node_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS uri, labels(n) AS labels, properties(n) AS props&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">params</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">node_rows</span><span class="p">:</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;labels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+                <span class="k">if</span> <span class="n">lbl</span> <span class="o">==</span> <span class="n">label</span> <span class="ow">or</span> <span class="n">lbl</span> <span class="o">==</span> <span class="n">_SCHEMA_LABEL</span><span class="p">:</span>
+                    <span class="k">continue</span>  <span class="c1"># marker / schema labels are not rdf:type</span>
+                <span class="n">class_uri</span> <span class="o">=</span> <span class="n">label_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">class_uri</span><span class="p">:</span>
+                    <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">class_uri</span><span class="p">}</span>
+                    <span class="p">)</span>
+            <span class="n">props</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;props&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">props</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_MARKER_INTERNAL_PROPS</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">pred</span> <span class="o">=</span> <span class="n">Neo4jSchemaMap</span><span class="o">.</span><span class="n">predicate_for_property</span><span class="p">(</span><span class="n">prop_map</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+                <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">pred</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)}</span>
+                <span class="p">)</span>
+
+        <span class="c1"># Pull outgoing relationships → object-property triples.</span>
+        <span class="n">rel_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[rel]-&gt;(m:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="o">+</span> <span class="p">(</span><span class="s2">&quot;WHERE n.uri IN $uris &quot;</span> <span class="k">if</span> <span class="n">node_uris</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;RETURN n.uri AS subject, type(rel) AS reltype, m.uri AS object&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">params</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_rows</span><span class="p">:</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">reltype_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">])</span>
+            <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">pred</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;object&quot;</span><span class="p">]}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">triples</span>
 
     <span class="c1"># ======================================================================</span>
     <span class="c1">#  Basic CRUD reads</span>
@@ -158,24 +234,34 @@
 <div class="viewcode-block" id="Neo4jReadOps.query_triples">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.query_triples">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">query_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.subject AS subject, t.predicate AS predicate, t.object AS object&quot;</span>
-        <span class="p">)</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">)</span>
-        <span class="k">return</span> <span class="p">[</span>
-            <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;predicate&quot;</span><span class="p">],</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;object&quot;</span><span class="p">]}</span>
-            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span>
-        <span class="p">]</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruct_triples_for_nodes</span><span class="p">(</span><span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">))</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.count_triples">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.count_triples">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">count_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count reconstructed triples: type-labels + name + literal props + rels.&quot;&quot;&quot;</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(t) AS cnt&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;cnt&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">rows</span> <span class="k">else</span> <span class="mi">0</span></div>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH n, [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS classes &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size(classes)) AS type_triples, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size([k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;])) AS prop_triples, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  count(n) AS nodes&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">rel_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[r]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(r) AS rels&quot;</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">type_triples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type_triples&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">prop_triples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prop_triples&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># includes &#39;name&#39;</span>
+        <span class="n">rels</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rel_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">rel_rows</span> <span class="k">else</span> <span class="mi">0</span>
+        <span class="k">return</span> <span class="n">type_triples</span> <span class="o">+</span> <span class="n">prop_triples</span> <span class="o">+</span> <span class="n">rels</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.table_exists">
@@ -184,9 +270,16 @@
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
             <span class="s2">&quot;SHOW CONSTRAINTS YIELD name WHERE name = $cname RETURN name&quot;</span><span class="p">,</span>
-            <span class="n">cname</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;triple_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_spo&quot;</span><span class="p">,</span>
+            <span class="n">cname</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;node_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_uri&quot;</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span></div>
+        <span class="k">if</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="c1"># Fall back to node presence (constraint may have been created under a</span>
+        <span class="c1"># legacy name, or dropped while data remains).</span>
+        <span class="n">node_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(n) &gt; 0 AS present&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">node_rows</span> <span class="ow">and</span> <span class="n">node_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;present&quot;</span><span class="p">))</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.get_status">
@@ -208,47 +301,121 @@
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_aggregate_stats">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_aggregate_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN count(t) AS total, &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;count(DISTINCT t.subject) AS distinct_subjects, &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;count(DISTINCT t.predicate) AS distinct_predicates, &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;sum(CASE WHEN t.predicate = $rdf_type THEN 1 ELSE 0 END) AS type_assertion_count, &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;sum(CASE WHEN t.predicate = $rdfs_label THEN 1 ELSE 0 END) AS label_count&quot;</span>
+        <span class="c1"># Distinct subjects = nodes that carry at least one class label or a name</span>
+        <span class="c1"># or an outgoing rel (i.e. real triple subjects). Distinct predicates =</span>
+        <span class="c1"># distinct property keys + relationship types + (rdf:type if any labels).</span>
+        <span class="n">node_stats</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH n, [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS classes &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  count(n) AS distinct_subjects, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size(classes)) AS type_assertion_count, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(CASE WHEN n.name IS NULL THEN 0 ELSE 1 END) AS label_count, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size([k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;])) AS prop_triples, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  collect(DISTINCT [k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;]) AS prop_key_sets, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  size(collect(DISTINCT [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema])) AS _ignore&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">rdfs_label</span><span class="o">=</span><span class="n">RDFS_LABEL</span><span class="p">)</span>
-        <span class="n">row</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">rows</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="n">rel_stats</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[r]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN count(r) AS rels, collect(DISTINCT type(r)) AS rel_types&quot;</span>
+        <span class="p">)</span>
+        <span class="n">has_labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE any(x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN count(n) AS c&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">node_stats</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">node_stats</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="n">rel_row</span> <span class="o">=</span> <span class="n">rel_stats</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">rel_stats</span> <span class="k">else</span> <span class="p">{}</span>
+
+        <span class="n">type_assertions</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type_assertion_count&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">label_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label_count&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">prop_triples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prop_triples&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># includes name</span>
+        <span class="n">rels</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rel_row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="n">type_assertions</span> <span class="o">+</span> <span class="n">prop_triples</span> <span class="o">+</span> <span class="n">rels</span>
+
+        <span class="c1"># distinct predicate URIs: property keys + rel types + rdf:type-if-present</span>
+        <span class="n">prop_keys</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">ks</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prop_key_sets&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">prop_keys</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">ks</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">&quot;uri&quot;</span><span class="p">)</span>
+        <span class="n">rel_types</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">rel_row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rel_types&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])</span>
+        <span class="n">distinct_predicates</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">prop_keys</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">rel_types</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">int</span><span class="p">((</span><span class="n">has_labels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;c&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_labels</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">distinct_predicates</span> <span class="o">+=</span> <span class="mi">1</span>  <span class="c1"># rdf:type</span>
+
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;total&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
-            <span class="s2">&quot;distinct_subjects&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;distinct_subjects&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
-            <span class="s2">&quot;distinct_predicates&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;distinct_predicates&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
-            <span class="s2">&quot;type_assertion_count&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type_assertion_count&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
-            <span class="s2">&quot;label_count&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label_count&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="n">total</span><span class="p">,</span>
+            <span class="s2">&quot;distinct_subjects&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;distinct_subjects&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="s2">&quot;distinct_predicates&quot;</span><span class="p">:</span> <span class="n">distinct_predicates</span><span class="p">,</span>
+            <span class="s2">&quot;type_assertion_count&quot;</span><span class="p">:</span> <span class="n">type_assertions</span><span class="p">,</span>
+            <span class="s2">&quot;label_count&quot;</span><span class="p">:</span> <span class="n">label_count</span><span class="p">,</span>
         <span class="p">}</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.get_type_distribution">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_type_distribution">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_type_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count nodes per class label, mapped back to class URIs.&quot;&quot;&quot;</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE t.predicate = $rdf_type &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.object AS type_uri, count(*) AS cnt &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;ORDER BY cnt DESC&quot;</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;UNWIND [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS cls &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN cls AS class_label, count(*) AS cnt ORDER BY cnt DESC&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span></div>
+        <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="bp">cls</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;class_label&quot;</span><span class="p">]</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;type_uri&quot;</span><span class="p">:</span> <span class="n">label_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="bp">cls</span><span class="p">),</span> <span class="s2">&quot;cnt&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">])})</span>
+        <span class="k">return</span> <span class="n">out</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.get_predicate_distribution">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_predicate_distribution">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_predicate_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count per predicate: literal props + rel types + rdf:type, as URIs.&quot;&quot;&quot;</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.predicate AS predicate, count(*) AS cnt &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;ORDER BY cnt DESC&quot;</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">prop_map</span><span class="p">,</span> <span class="n">reltype_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;prop_map&quot;</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>
+        <span class="n">counts</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="n">prop_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) UNWIND [k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;] AS key &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN key, count(*) AS cnt&quot;</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span></div>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">prop_rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">Neo4jSchemaMap</span><span class="o">.</span><span class="n">predicate_for_property</span><span class="p">(</span><span class="n">prop_map</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;key&quot;</span><span class="p">])</span>
+            <span class="n">counts</span><span class="p">[</span><span class="n">pred</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">])</span>
+
+        <span class="n">rel_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[rel]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN type(rel) AS reltype, count(*) AS cnt&quot;</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">reltype_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">])</span>
+            <span class="n">counts</span><span class="p">[</span><span class="n">pred</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">])</span>
+
+        <span class="n">type_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH sum(size([x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema])) AS c &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN c&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">tc</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">type_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;c&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">type_rows</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">tc</span><span class="p">:</span>
+            <span class="n">counts</span><span class="p">[</span><span class="n">RDF_TYPE</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">tc</span>
+
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="p">({</span><span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s2">&quot;cnt&quot;</span><span class="p">:</span> <span class="n">v</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">counts</span><span class="o">.</span><span class="n">items</span><span class="p">()),</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">d</span><span class="p">:</span> <span class="n">d</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">],</span>
+            <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span></div>
 
 
     <span class="c1"># ======================================================================</span>
@@ -266,40 +433,24 @@
         <span class="n">search</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
         <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
             <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $type_uri &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;AND t.subject IN (&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;  MATCH (t2:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;  WHERE t2.predicate &lt;&gt; $rdf_type AND toLower(t2.object) CONTAINS toLower($search) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;  RETURN DISTINCT t2.subject&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject ORDER BY subject &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;SKIP $offset LIMIT $limit&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE any(k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39; AND toLower(toString(n[k])) CONTAINS toLower($search)) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS subject ORDER BY subject SKIP $offset LIMIT $limit&quot;</span>
             <span class="p">)</span>
             <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                <span class="n">cypher</span><span class="p">,</span>
-                <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span>
-                <span class="n">type_uri</span><span class="o">=</span><span class="n">type_uri</span><span class="p">,</span>
-                <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">,</span>
-                <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span>
-                <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">),</span>
+                <span class="n">cypher</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $type_uri &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject ORDER BY subject &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;SKIP $offset LIMIT $limit&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS subject ORDER BY subject SKIP $offset LIMIT $limit&quot;</span>
             <span class="p">)</span>
-            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                <span class="n">cypher</span><span class="p">,</span>
-                <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span>
-                <span class="n">type_uri</span><span class="o">=</span><span class="n">type_uri</span><span class="p">,</span>
-                <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span>
-                <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">),</span>
-            <span class="p">)</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">))</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])]</span></div>
 
 
@@ -309,15 +460,14 @@
         <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">id_fragment</span><span class="p">:</span> <span class="nb">str</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  AND t.object = $type_uri &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  AND (t.subject ENDS WITH (&#39;/&#39; + $idf) OR t.subject ENDS WITH (&#39;#&#39; + $idf)) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject LIMIT 1&quot;</span>
-        <span class="p">)</span>
+        <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-            <span class="n">cypher</span><span class="p">,</span> <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">type_uri</span><span class="o">=</span><span class="n">type_uri</span><span class="p">,</span> <span class="n">idf</span><span class="o">=</span><span class="n">id_fragment</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE n.uri ENDS WITH (&#39;/&#39; + $idf) OR n.uri ENDS WITH (&#39;#&#39; + $idf) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS subject LIMIT 1&quot;</span><span class="p">,</span>
+            <span class="n">idf</span><span class="o">=</span><span class="n">id_fragment</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">return</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">rows</span> <span class="k">else</span> <span class="kc">None</span></div>
 
@@ -330,31 +480,30 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">subjects</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[]</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher_type</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.subject IN $subjects &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.subject AS subject, t.object AS object&quot;</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE n.uri IN $subjects &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS uri, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS classes, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  n.name AS name&quot;</span><span class="p">,</span>
+            <span class="n">subjects</span><span class="o">=</span><span class="n">subjects</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="n">cypher_label</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdfs_label AND t.subject IN $subjects &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.subject AS subject, t.object AS object&quot;</span>
-        <span class="p">)</span>
-        <span class="n">type_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher_type</span><span class="p">,</span> <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">subjects</span><span class="o">=</span><span class="n">subjects</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-        <span class="n">label_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher_label</span><span class="p">,</span> <span class="n">rdfs_label</span><span class="o">=</span><span class="n">RDFS_LABEL</span><span class="p">,</span> <span class="n">subjects</span><span class="o">=</span><span class="n">subjects</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-
-        <span class="n">types</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">type_rows</span><span class="p">:</span>
-            <span class="n">types</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;object&quot;</span><span class="p">])</span>
-        <span class="n">labels</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">label_rows</span><span class="p">:</span>
-            <span class="n">labels</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;object&quot;</span><span class="p">])</span>
-
-        <span class="k">return</span> <span class="p">[</span>
-            <span class="p">{</span><span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">types</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">labels</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)}</span>
-            <span class="k">for</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">subjects</span>
-            <span class="k">if</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">types</span>
-        <span class="p">]</span></div>
+        <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">classes</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">classes</span><span class="p">:</span>
+                <span class="k">continue</span>  <span class="c1"># parity with SQL backend: only typed subjects returned</span>
+            <span class="n">first</span> <span class="o">=</span> <span class="n">classes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">label_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">first</span><span class="p">),</span>
+                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.get_triples_for_subjects">
@@ -364,27 +513,45 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">subjects</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[]</span>
-        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE t.subject IN $subjects &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.subject AS subject, t.predicate AS predicate, t.object AS object&quot;</span>
-        <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">subjects</span><span class="o">=</span><span class="n">subjects</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span></div>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruct_triples_for_nodes</span><span class="p">(</span>
+            <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span> <span class="n">node_uris</span><span class="o">=</span><span class="n">subjects</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.get_predicates_for_type">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_predicates_for_type">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_predicates_for_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (anchor:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE anchor.predicate = $rdf_type AND anchor.object = $type_uri &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WITH anchor.subject AS s LIMIT 1 &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE t.subject = s &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.predicate AS predicate&quot;</span>
+        <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">prop_map</span><span class="p">,</span> <span class="n">reltype_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;prop_map&quot;</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>
+        <span class="c1"># Sample one instance of the class; return its predicates (props + rels).</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH n LIMIT 1 &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;OPTIONAL MATCH (n)-[rel]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN [k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;] AS keys, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  collect(DISTINCT type(rel)) AS reltypes, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  size([x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema]) AS n_classes&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">type_uri</span><span class="o">=</span><span class="n">type_uri</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-        <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;predicate&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span></div>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">preds</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;n_classes&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RDF_TYPE</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;keys&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Neo4jSchemaMap</span><span class="o">.</span><span class="n">predicate_for_property</span><span class="p">(</span><span class="n">prop_map</span><span class="p">,</span> <span class="n">k</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">rt</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reltypes&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="k">if</span> <span class="n">rt</span><span class="p">:</span>
+                <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reltype_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rt</span><span class="p">,</span> <span class="n">rt</span><span class="p">))</span>
+        <span class="c1"># de-dup, preserve order</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">preds</span> <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">p</span> <span class="ow">in</span> <span class="n">seen</span> <span class="ow">or</span> <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">p</span><span class="p">))]</span></div>
 
 
     <span class="c1"># ======================================================================</span>
@@ -394,53 +561,43 @@
 <div class="viewcode-block" id="Neo4jReadOps.paginated_triples">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.paginated_triples">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">paginated_triples</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
-        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
-        <span class="c1"># *conditions* is a list of SQL WHERE fragments produced by the</span>
-        <span class="c1"># caller. Translating arbitrary SQL to Cypher is out of scope —</span>
-        <span class="c1"># only the empty-conditions case (return all triples, paginated) is</span>
-        <span class="c1"># supported in v1. When *conditions* is non-empty we degrade to</span>
-        <span class="c1"># returning the unfiltered page; callers that need filtered</span>
-        <span class="c1"># pagination should switch to find_subjects_by_type / find_seed_subjects.</span>
+        <span class="c1"># SQL WHERE fragments are not translated (parity with prior behaviour);</span>
+        <span class="c1"># paginate over nodes and reconstruct their triples.</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">conditions</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                <span class="s2">&quot;paginated_triples received </span><span class="si">%d</span><span class="s2"> SQL conditions; &quot;</span>
-                <span class="s2">&quot;Neo4j backend ignores them and returns the unfiltered page. &quot;</span>
-                <span class="s2">&quot;Use find_subjects_by_type / find_seed_subjects for filtered access.&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;paginated_triples received </span><span class="si">%d</span><span class="s2"> SQL conditions; Neo4j backend &quot;</span>
+                <span class="s2">&quot;ignores them. Use find_subjects_by_type / find_seed_subjects.&quot;</span><span class="p">,</span>
                 <span class="nb">len</span><span class="p">(</span><span class="n">conditions</span><span class="p">),</span>
             <span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.subject AS subject, t.predicate AS predicate, t.object AS object &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;SKIP $offset LIMIT $limit&quot;</span>
+        <span class="n">page</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN n.uri AS uri ORDER BY n.uri &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;SKIP $offset LIMIT $limit&quot;</span><span class="p">,</span>
+            <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span>
+            <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">),</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">))</span> <span class="ow">or</span> <span class="p">[]</span></div>
+        <span class="n">uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">page</span> <span class="ow">or</span> <span class="p">[])]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">uris</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruct_triples_for_nodes</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">node_uris</span><span class="o">=</span><span class="n">uris</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.paginated_count">
 <a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.paginated_count">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">paginated_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-        <span class="c1"># See paginated_triples — conditions are not honoured in v1.</span>
         <span class="k">if</span> <span class="n">conditions</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                <span class="s2">&quot;paginated_count received </span><span class="si">%d</span><span class="s2"> SQL conditions; &quot;</span>
-                <span class="s2">&quot;Neo4j backend returns the unfiltered count.&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;paginated_count received </span><span class="si">%d</span><span class="s2"> SQL conditions; Neo4j backend &quot;</span>
+                <span class="s2">&quot;returns the unfiltered count.&quot;</span><span class="p">,</span>
                 <span class="nb">len</span><span class="p">(</span><span class="n">conditions</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">count_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
 
 
     <span class="c1"># ======================================================================</span>
-    <span class="c1">#  Knowledge-Graph filter primitives (UI: KG filter modal, GraphQL,</span>
-    <span class="c1">#  API explorer &quot;triples/find&quot;). The Cypher logic for these three</span>
-    <span class="c1">#  methods is what Benoit asked to locate in the PR review — see</span>
-    <span class="c1">#  docs/pr47-neo4j-demo/secret-configuration.md and the OntoBricks</span>
-    <span class="c1">#  contributors thread on 2026-06-18.</span>
+    <span class="c1">#  Knowledge-Graph filter primitives — native relationship traversal</span>
     <span class="c1"># ======================================================================</span>
 
 <div class="viewcode-block" id="Neo4jReadOps.bfs_traversal">
@@ -453,16 +610,11 @@
         <span class="n">search</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-        <span class="c1"># *seed_where* is a SQL fragment. Cypher equivalent uses the</span>
-        <span class="c1"># structured *search* / *entity_type* parameters instead. When both</span>
-        <span class="c1"># structured params are empty and only seed_where is given, we</span>
-        <span class="c1"># cannot translate — log and return empty.</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">search</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">entity_type</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">seed_where</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                    <span class="s2">&quot;bfs_traversal: Neo4j backend requires structured search/entity_type &quot;</span>
-                    <span class="s2">&quot;parameters; SQL seed_where fragments are not translated. &quot;</span>
-                    <span class="s2">&quot;Returning empty result.&quot;</span>
+                    <span class="s2">&quot;bfs_traversal: Neo4j backend requires structured &quot;</span>
+                    <span class="s2">&quot;search/entity_type params; SQL seed_where is not translated.&quot;</span>
                 <span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span>
         <span class="n">seeds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find_seed_subjects</span><span class="p">(</span>
@@ -474,51 +626,16 @@
         <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">seeds</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[]</span>
-
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="c1"># Reachability via property-equality joins between Triple nodes:</span>
-        <span class="c1"># a Triple links its subject to its object; we walk over Triple</span>
-        <span class="c1"># nodes hop by hop, accumulating entities (subjects + objects).</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;WITH $seeds AS seeds &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;CALL </span><span class="se">{{</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  WITH seeds &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  UNWIND seeds AS s &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  RETURN s AS entity, 0 AS lvl &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  UNION ALL &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  WITH seeds &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  WHERE t.subject IN seeds &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;    AND t.predicate &lt;&gt; $rdf_type AND t.predicate &lt;&gt; $rdfs_label &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;    AND (t.object STARTS WITH &#39;http://&#39; OR t.object STARTS WITH &#39;https://&#39;) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  RETURN DISTINCT t.object AS entity, 1 AS lvl &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="se">}}</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WITH entity, min(lvl) AS lvl &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE lvl &lt;= $depth &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN entity, lvl AS min_lvl&quot;</span>
+        <span class="c1"># Native variable-length traversal over real relationships, both directions.</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (seed:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE seed.uri IN $seeds &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH path = (seed)-[*0..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">depth</span><span class="p">)</span><span class="si">}</span><span class="s2">]-(reached:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH reached.uri AS entity, min(length(path)) AS lvl &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN entity, lvl AS min_lvl&quot;</span><span class="p">,</span>
+            <span class="n">seeds</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">seeds</span><span class="p">),</span>
         <span class="p">)</span>
-        <span class="c1"># The query above only does 1-hop. Full BFS to *depth* &gt; 1 would</span>
-        <span class="c1"># require recursive traversal — Cypher&#39;s variable-length pattern</span>
-        <span class="c1"># can do this natively but with the flat-triple model needs a</span>
-        <span class="c1"># joined pattern across Triple nodes. We expand iteratively below</span>
-        <span class="c1"># for arbitrary *depth* while keeping each hop bounded.</span>
-        <span class="k">if</span> <span class="n">depth</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-                <span class="n">cypher</span><span class="p">,</span> <span class="n">seeds</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">seeds</span><span class="p">),</span> <span class="n">depth</span><span class="o">=</span><span class="n">depth</span><span class="p">,</span> <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">rdfs_label</span><span class="o">=</span><span class="n">RDFS_LABEL</span>
-            <span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-
-        <span class="c1"># Iterative expansion for depth &gt; 1.</span>
-        <span class="n">visited</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">uri</span><span class="p">:</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">seeds</span><span class="p">}</span>
-        <span class="n">frontier</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">seeds</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">lvl</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">frontier</span><span class="p">:</span>
-                <span class="k">break</span>
-            <span class="n">next_frontier</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expand_entity_neighbors</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">frontier</span><span class="p">)</span>
-            <span class="n">new_nodes</span> <span class="o">=</span> <span class="n">next_frontier</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">visited</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-            <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">new_nodes</span><span class="p">:</span>
-                <span class="n">visited</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">lvl</span>
-            <span class="n">frontier</span> <span class="o">=</span> <span class="n">new_nodes</span>
-        <span class="k">return</span> <span class="p">[{</span><span class="s2">&quot;entity&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;min_lvl&quot;</span><span class="p">:</span> <span class="n">lvl</span><span class="p">}</span> <span class="k">for</span> <span class="n">uri</span><span class="p">,</span> <span class="n">lvl</span> <span class="ow">in</span> <span class="n">visited</span><span class="o">.</span><span class="n">items</span><span class="p">()]</span></div>
+        <span class="k">return</span> <span class="n">rows</span> <span class="ow">or</span> <span class="p">[]</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.find_seed_subjects">
@@ -536,76 +653,47 @@
         <span class="n">search_label</span> <span class="o">=</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;any&quot;</span><span class="p">)</span>
         <span class="n">search_id</span> <span class="o">=</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;any&quot;</span><span class="p">)</span>
 
-        <span class="c1"># Build a Cypher predicate fragment for the chosen match_type.</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">_match_clause</span><span class="p">(</span><span class="n">column</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">param</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">_clause</span><span class="p">(</span><span class="n">expr</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">match_type</span> <span class="o">==</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span>
-                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">) = $</span><span class="si">{</span><span class="n">param</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) = $val&quot;</span>
             <span class="k">if</span> <span class="n">match_type</span> <span class="o">==</span> <span class="s2">&quot;starts&quot;</span><span class="p">:</span>
-                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">) STARTS WITH $</span><span class="si">{</span><span class="n">param</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) STARTS WITH $val&quot;</span>
             <span class="k">if</span> <span class="n">match_type</span> <span class="o">==</span> <span class="s2">&quot;ends&quot;</span><span class="p">:</span>
-                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">) ENDS WITH $</span><span class="si">{</span><span class="n">param</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2">) CONTAINS $</span><span class="si">{</span><span class="n">param</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) ENDS WITH $val&quot;</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) CONTAINS $val&quot;</span>
 
-        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="s2">&quot;rdf_type&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span>
-            <span class="s2">&quot;rdfs_label&quot;</span><span class="p">:</span> <span class="n">RDFS_LABEL</span><span class="p">,</span>
-        <span class="p">}</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
             <span class="n">params</span><span class="p">[</span><span class="s2">&quot;val&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+        <span class="n">class_label</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">entity_type</span><span class="p">:</span>
-            <span class="n">params</span><span class="p">[</span><span class="s2">&quot;etype&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">entity_type</span>
+            <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">entity_type</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
 
-        <span class="n">cyphers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">node_match</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`)&quot;</span> <span class="k">if</span> <span class="n">class_label</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;(n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)&quot;</span>
 
-        <span class="k">if</span> <span class="n">entity_type</span> <span class="ow">and</span> <span class="n">value</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">search_id</span><span class="p">:</span>
-                <span class="n">cyphers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $etype &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">_match_clause</span><span class="p">(</span><span class="s1">&#39;t.subject&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;val&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span>
-                <span class="p">)</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="n">conds</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">if</span> <span class="n">search_label</span><span class="p">:</span>
-                <span class="n">cyphers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;MATCH (lab:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;WHERE lab.predicate = $rdfs_label &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">_match_clause</span><span class="p">(</span><span class="s1">&#39;lab.object&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;val&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;WITH DISTINCT lab.subject AS s &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $etype AND t.subject = s &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT s AS subject&quot;</span>
-                <span class="p">)</span>
-        <span class="k">elif</span> <span class="n">entity_type</span><span class="p">:</span>
-            <span class="n">cyphers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type AND t.object = $etype &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span>
+                <span class="n">conds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_clause</span><span class="p">(</span><span class="s2">&quot;coalesce(n.name, &#39;&#39;)&quot;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">search_id</span><span class="p">:</span>
+                <span class="n">conds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_clause</span><span class="p">(</span><span class="s2">&quot;n.uri&quot;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">conds</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH </span><span class="si">{</span><span class="n">node_match</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="s1">&#39; OR &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">conds</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT n.uri AS subject&quot;</span>
             <span class="p">)</span>
-        <span class="k">elif</span> <span class="n">value</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">search_label</span><span class="p">:</span>
-                <span class="n">cyphers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdfs_label &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">_match_clause</span><span class="p">(</span><span class="s1">&#39;t.object&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;val&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span>
-                <span class="p">)</span>
-            <span class="k">if</span> <span class="n">search_id</span><span class="p">:</span>
-                <span class="n">cyphers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;WHERE t.predicate = $rdf_type &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;AND </span><span class="si">{</span><span class="n">_match_clause</span><span class="p">(</span><span class="s1">&#39;t.subject&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;val&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span>
-                <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">entity_type</span><span class="p">:</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;MATCH </span><span class="si">{</span><span class="n">node_match</span><span class="si">}</span><span class="s2"> RETURN DISTINCT n.uri AS subject&quot;</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">cyphers</span><span class="p">:</span>
-            <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
-
-        <span class="n">union_sql</span> <span class="o">=</span> <span class="s2">&quot; UNION &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cyphers</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">limit</span> <span class="ow">and</span> <span class="n">limit</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">union_sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;CALL </span><span class="se">{{</span><span class="s2"> </span><span class="si">{</span><span class="n">union_sql</span><span class="si">}</span><span class="s2"> </span><span class="se">}}</span><span class="s2"> RETURN subject LIMIT </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">union_sql</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="n">cypher</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; LIMIT </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">}</span></div>
 
 
@@ -617,22 +705,18 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">like_patterns</span><span class="p">:</span>
             <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-
-        <span class="c1"># SQL LIKE → Cypher: &#39;%&#39; wildcards translate to STARTS WITH / ENDS WITH</span>
-        <span class="c1"># / CONTAINS depending on placement. For arbitrary patterns we fall</span>
-        <span class="c1"># back to a regex match.</span>
         <span class="n">clauses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">raw</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">like_patterns</span><span class="p">):</span>
             <span class="n">pkey</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;p</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
             <span class="n">params</span><span class="p">[</span><span class="n">pkey</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">,</span> <span class="s2">&quot;.*&quot;</span><span class="p">)</span>
-            <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;t.subject =~ $</span><span class="si">{</span><span class="n">pkey</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE </span><span class="si">{</span><span class="s1">&#39; OR &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">clauses</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT t.subject AS subject&quot;</span>
+            <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;n.uri =~ $</span><span class="si">{</span><span class="n">pkey</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE </span><span class="si">{</span><span class="s1">&#39; OR &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">clauses</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT n.uri AS subject&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">params</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">}</span></div>
+        <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])}</span></div>
 
 
 <div class="viewcode-block" id="Neo4jReadOps.expand_entity_neighbors">
@@ -643,32 +727,22 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="n">entity_uris</span><span class="p">:</span>
             <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="c1"># Outgoing edges: where subject IN seeds AND object looks like an entity URI.</span>
-        <span class="c1"># Incoming edges: where object IN seeds.</span>
-        <span class="c1"># Both then filtered to entities that have an rdf:type assertion</span>
-        <span class="c1"># (real entity instances, not class or property URIs).</span>
-        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;WITH $seeds AS seeds &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE (t.subject IN seeds AND t.object STARTS WITH &#39;http&#39; &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;       AND t.predicate &lt;&gt; $rdf_type AND t.predicate &lt;&gt; $rdfs_label) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;   OR (t.object IN seeds AND t.predicate &lt;&gt; $rdf_type AND t.predicate &lt;&gt; $rdfs_label) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WITH DISTINCT (CASE WHEN t.subject IN seeds THEN t.object ELSE t.subject END) AS entity &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (ty:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE ty.subject = entity AND ty.predicate = $rdf_type &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT entity&quot;</span>
-        <span class="p">)</span>
+        <span class="c1"># One hop over real relationships (both directions); only typed nodes</span>
+        <span class="c1"># (carrying a class label) count as entity neighbours.</span>
         <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
-            <span class="n">cypher</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[]-(m:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE n.uri IN $seeds &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;AND any(x IN labels(m) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT m.uri AS entity&quot;</span><span class="p">,</span>
             <span class="n">seeds</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">entity_uris</span><span class="p">),</span>
-            <span class="n">rdf_type</span><span class="o">=</span><span class="n">RDF_TYPE</span><span class="p">,</span>
-            <span class="n">rdfs_label</span><span class="o">=</span><span class="n">RDFS_LABEL</span><span class="p">,</span>
-        <span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-        <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;entity&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">}</span></div>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;entity&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])}</span></div>
 
 
     <span class="c1"># ======================================================================</span>
-    <span class="c1">#  Reasoning (transitive closure, symmetric expansion, shortest path)</span>
+    <span class="c1">#  Reasoning — native relationship patterns</span>
     <span class="c1"># ======================================================================</span>
 
 <div class="viewcode-block" id="Neo4jReadOps.transitive_closure">
@@ -680,54 +754,29 @@
         <span class="n">start_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-        <span class="c1"># Compute transitive closure along *predicate_uri* and return triples</span>
-        <span class="c1"># NOT already present as direct assertions. With the flat-triple model</span>
-        <span class="c1"># we self-join Triple nodes hop by hop using property equality.</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
-        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;pred&quot;</span><span class="p">:</span> <span class="n">predicate_uri</span><span class="p">,</span> <span class="s2">&quot;max_depth&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)}</span>
+        <span class="n">reltype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reltype_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reltype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">start_clause</span> <span class="o">=</span> <span class="s2">&quot;WHERE a.uri = $start_uri &quot;</span> <span class="k">if</span> <span class="n">start_uri</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">if</span> <span class="n">start_uri</span><span class="p">:</span>
             <span class="n">params</span><span class="p">[</span><span class="s2">&quot;start_uri&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">start_uri</span>
-
-        <span class="c1"># Build a chain of MATCH clauses up to max_depth. This is verbose but</span>
-        <span class="c1"># explicit; Cypher does not have recursive CTEs.</span>
-        <span class="n">depth</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">max_depth</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>  <span class="c1"># hard cap for safety</span>
-        <span class="n">union_parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="c1"># depth=2 means start -&gt; mid -&gt; end (2 hops)</span>
-        <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-            <span class="n">chain</span> <span class="o">=</span> <span class="s2">&quot;MATCH (h0:`&quot;</span> <span class="o">+</span> <span class="n">label</span> <span class="o">+</span> <span class="s2">&quot;`)&quot;</span>
-            <span class="n">wheres</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;h0.predicate = $pred&quot;</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">start_uri</span><span class="p">:</span>
-                <span class="n">wheres</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;h0.subject = $start_uri&quot;</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
-                <span class="n">chain</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, (h</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)&quot;</span>
-                <span class="n">wheres</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;h</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">.predicate = $pred&quot;</span><span class="p">)</span>
-                <span class="n">wheres</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;h</span><span class="si">{</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">.object = h</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">.subject&quot;</span><span class="p">)</span>
-            <span class="n">union_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                <span class="n">chain</span> <span class="o">+</span> <span class="s2">&quot; WHERE &quot;</span> <span class="o">+</span> <span class="s2">&quot; AND &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">wheres</span><span class="p">)</span> <span class="o">+</span>
-                <span class="sa">f</span><span class="s2">&quot; RETURN h0.subject AS subject, h</span><span class="si">{</span><span class="n">d</span><span class="o">-</span><span class="mi">1</span><span class="si">}</span><span class="s2">.object AS object&quot;</span>
-            <span class="p">)</span>
-
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">union_parts</span><span class="p">:</span>
-            <span class="k">return</span> <span class="p">[]</span>
-
-        <span class="n">body</span> <span class="o">=</span> <span class="s2">&quot; UNION &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">union_parts</span><span class="p">)</span>
+        <span class="c1"># Reachable pairs 2..max_depth along the typed relationship that are not</span>
+        <span class="c1"># already directly connected.</span>
         <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;CALL </span><span class="se">{{</span><span class="s2"> </span><span class="si">{</span><span class="n">body</span><span class="si">}</span><span class="s2"> </span><span class="se">}}</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WITH DISTINCT subject, object &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;WHERE NOT EXISTS </span><span class="se">{{</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  MATCH (ex:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  WHERE ex.subject = subject AND ex.predicate = $pred AND ex.object = object &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="se">}}</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN subject, $pred AS predicate, object&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) </span><span class="si">{</span><span class="n">start_clause</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`*2..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)</span><span class="si">}</span><span class="s2">]-&gt;(b:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE NOT (a)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`]-&gt;(b) AND a &lt;&gt; b &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT a.uri AS subject, $pred AS predicate, b.uri AS object&quot;</span>
         <span class="p">)</span>
+        <span class="n">params</span><span class="p">[</span><span class="s2">&quot;pred&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">predicate_uri</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">&quot;transitive_closure failed on </span><span class="si">%s</span><span class="s2"> (predicate=</span><span class="si">%s</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">table_name</span><span class="p">,</span>
-                <span class="n">predicate_uri</span><span class="p">,</span>
-                <span class="n">exc</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span></div>
 
@@ -738,22 +787,20 @@
         <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
         <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">reltype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reltype_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reltype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
         <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;MATCH (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE t.predicate = $pred &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;AND NOT EXISTS </span><span class="se">{{</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  MATCH (inv:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;  WHERE inv.subject = t.object AND inv.predicate = $pred AND inv.object = t.subject &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="se">}}</span><span class="s2"> &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;RETURN t.object AS subject, $pred AS predicate, t.subject AS object&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`]-&gt;(b:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE NOT (b)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`]-&gt;(a) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT b.uri AS subject, $pred AS predicate, a.uri AS object&quot;</span>
         <span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">pred</span><span class="o">=</span><span class="n">predicate_uri</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
                 <span class="s2">&quot;symmetric_expand failed on </span><span class="si">%s</span><span class="s2"> (predicate=</span><span class="si">%s</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">table_name</span><span class="p">,</span>
-                <span class="n">predicate_uri</span><span class="p">,</span>
-                <span class="n">exc</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">return</span> <span class="p">[]</span></div>
 
@@ -767,37 +814,109 @@
         <span class="n">target_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
-        <span class="c1"># Native Cypher shortestPath would be ideal but requires a typed-</span>
-        <span class="c1"># relationship graph model. With the flat-triple model we do a</span>
-        <span class="c1"># bounded iterative BFS and return the first path found.</span>
         <span class="k">if</span> <span class="n">source_uri</span> <span class="o">==</span> <span class="n">target_uri</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">[{</span><span class="s2">&quot;hop&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">source_uri</span><span class="p">}]</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="c1"># Native shortestPath over real relationships — the typed-model win.</span>
+        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (s:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $src</span><span class="se">}}</span><span class="s2">), (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $tgt</span><span class="se">}}</span><span class="s2">), &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;p = shortestPath((s)-[*..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)</span><span class="si">}</span><span class="s2">]-(t)) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN [x IN nodes(p) | x.uri] AS uris&quot;</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="n">source_uri</span><span class="p">,</span> <span class="n">tgt</span><span class="o">=</span><span class="n">target_uri</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;shortest_path failed on </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uris&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="p">[{</span><span class="s2">&quot;hop&quot;</span><span class="p">:</span> <span class="n">i</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">u</span><span class="p">}</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">u</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;uris&quot;</span><span class="p">])]</span></div>
 
-        <span class="n">visited</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">source_uri</span><span class="p">}</span>
-        <span class="n">parent</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="n">frontier</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="n">source_uri</span><span class="p">}</span>
-        <span class="k">for</span> <span class="n">depth</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">max_depth</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
-            <span class="n">next_frontier</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">expand_entity_neighbors</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">frontier</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">next_frontier</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">visited</span><span class="p">:</span>
-                    <span class="k">continue</span>
-                <span class="k">for</span> <span class="n">prev</span> <span class="ow">in</span> <span class="n">frontier</span><span class="p">:</span>
-                    <span class="n">parent</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">prev</span><span class="p">)</span>
-            <span class="n">visited</span> <span class="o">|=</span> <span class="n">next_frontier</span>
-            <span class="k">if</span> <span class="n">target_uri</span> <span class="ow">in</span> <span class="n">next_frontier</span><span class="p">:</span>
-                <span class="c1"># Reconstruct the path.</span>
-                <span class="n">path_uris</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">target_uri</span><span class="p">]</span>
-                <span class="n">cur</span> <span class="o">=</span> <span class="n">target_uri</span>
-                <span class="k">while</span> <span class="n">cur</span> <span class="ow">in</span> <span class="n">parent</span> <span class="ow">and</span> <span class="n">cur</span> <span class="o">!=</span> <span class="n">source_uri</span><span class="p">:</span>
-                    <span class="n">cur</span> <span class="o">=</span> <span class="n">parent</span><span class="p">[</span><span class="n">cur</span><span class="p">]</span>
-                    <span class="n">path_uris</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span>
-                <span class="n">path_uris</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
-                <span class="k">return</span> <span class="p">[{</span><span class="s2">&quot;hop&quot;</span><span class="p">:</span> <span class="n">i</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">}</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">uri</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">path_uris</span><span class="p">)]</span>
-            <span class="n">frontier</span> <span class="o">=</span> <span class="n">next_frontier</span> <span class="o">-</span> <span class="n">visited</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">frontier</span><span class="p">:</span>
-                <span class="k">break</span>
-        <span class="k">return</span> <span class="p">[]</span></div>
-</div>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1">#  Admin: graph inventory + server databases (Settings UI, P5)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.list_labels">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.list_labels">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_labels</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List every materialised graph (marker label) with node/edge counts.</span>
+
+<span class="sd">        A &quot;graph&quot; is a node label backed by a ``node_&lt;label&gt;_uri`` uniqueness</span>
+<span class="sd">        constraint (created by :meth:`Neo4jWriteOps.create_table`). Returns one</span>
+<span class="sd">        row per graph: ``{label, nodes, edges}``. Powers the Settings → Neo4j</span>
+<span class="sd">        → Objects admin tab (list + delete), parity with Lakebase objects.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">constraint_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="s2">&quot;SHOW CONSTRAINTS YIELD name, labelsOrTypes &quot;</span>
+            <span class="s2">&quot;WHERE name STARTS WITH &#39;node_&#39; AND name ENDS WITH &#39;_uri&#39; &quot;</span>
+            <span class="s2">&quot;RETURN labelsOrTypes AS labels&quot;</span>
+        <span class="p">)</span>
+        <span class="n">labels</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">constraint_rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;labels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+                <span class="k">if</span> <span class="n">lbl</span> <span class="ow">and</span> <span class="n">lbl</span> <span class="o">!=</span> <span class="n">_SCHEMA_LABEL</span><span class="p">:</span>
+                    <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+
+        <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">labels</span><span class="p">)):</span>
+            <span class="n">node_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(n) AS nodes&quot;</span>
+            <span class="p">)</span>
+            <span class="n">edge_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[r]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(r) AS edges&quot;</span>
+            <span class="p">)</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
+                    <span class="s2">&quot;nodes&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">node_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;nodes&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">node_rows</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+                    <span class="s2">&quot;edges&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">edge_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;edges&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">edge_rows</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.list_databases">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.list_databases">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_databases</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List Neo4j databases available on the server (for the DB selector, P4).</span>
+
+<span class="sd">        Uses ``SHOW DATABASES``; filters out system/internal databases. On</span>
+<span class="sd">        instances that disallow the call (e.g. some Aura tiers), returns an</span>
+<span class="sd">        empty list so the caller falls back to the configured database name.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s2">&quot;SHOW DATABASES YIELD name RETURN DISTINCT name&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SHOW DATABASES unavailable (</span><span class="si">%s</span><span class="s2">); DB selector will fallback&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;system&quot;</span><span class="p">,))</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1">#  Reverse-map helpers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_class_label_for_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graph_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sanitised Neo4j label for a class URI (via schema map, else derive).&quot;&quot;&quot;</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">graph_label</span><span class="p">)[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">sanitised</span><span class="p">,</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">label_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">uri</span> <span class="o">==</span> <span class="n">class_uri</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">sanitised</span>
+        <span class="c1"># Fallback: derive from the URI&#39;s local name (schema map may lag).</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jGraphModel</span><span class="w"> </span><span class="kn">import</span> <span class="n">label_from_class_uri</span>
+
+        <span class="k">return</span> <span class="n">label_from_class_uri</span><span class="p">(</span><span class="n">class_uri</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reltype_for_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graph_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">reltype_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">graph_label</span><span class="p">)[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">sanitised</span><span class="p">,</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">reltype_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">uri</span> <span class="o">==</span> <span class="n">predicate_uri</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">sanitised</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jGraphModel</span><span class="w"> </span><span class="kn">import</span> <span class="n">reltype_from_predicate</span>
+
+        <span class="k">return</span> <span class="n">reltype_from_predicate</span><span class="p">(</span><span class="n">predicate_uri</span><span class="p">)</span></div>
 
 </pre></div>
 

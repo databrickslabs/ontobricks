@@ -134,6 +134,7 @@
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.rdf_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">uri_local_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl</span><span class="w"> </span><span class="kn">import</span> <span class="n">ShapeConditions</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DATATYPE_MAP</span><span class="p">,</span> <span class="n">SEVERITY_MAP</span><span class="p">,</span> <span class="n">SH</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -180,6 +181,8 @@
 
         <span class="n">by_class</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">enabled</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_conditional_shape</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">s</span><span class="p">):</span>
+                <span class="k">continue</span>
             <span class="n">by_class</span><span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">cls_uri</span><span class="p">,</span> <span class="n">cls_shapes</span> <span class="ow">in</span> <span class="n">by_class</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -199,6 +202,40 @@
 
         <span class="k">return</span> <span class="n">g</span><span class="o">.</span><span class="n">serialize</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;turtle&quot;</span><span class="p">)</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_add_conditional_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">shape</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Emit a guarded shape as its own node shape with a SPARQL target.</span>
+
+<span class="sd">        A conditional shape cannot join the shared per-class node shape: its</span>
+<span class="sd">        focus nodes are the subset matching the conditions, not every instance</span>
+<span class="sd">        of the class.  Returns ``False`` when *shape* carries no usable</span>
+<span class="sd">        conditions, leaving it to the normal grouping.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">conditions</span> <span class="o">=</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">get_conditions</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cls_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">conditions</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">query</span> <span class="o">=</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">sparql_target</span><span class="p">(</span>
+            <span class="n">conditions</span><span class="p">,</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">get_logic</span><span class="p">(</span><span class="n">shape</span><span class="p">),</span> <span class="n">cls_uri</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="n">node</span> <span class="o">=</span> <span class="n">URIRef</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ns</span><span class="p">)</span> <span class="o">+</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;ConditionalShape&quot;</span><span class="p">))</span>
+        <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">node</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">NodeShape</span><span class="p">))</span>
+
+        <span class="n">target</span> <span class="o">=</span> <span class="n">BNode</span><span class="p">()</span>
+        <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">node</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">target</span><span class="p">,</span> <span class="n">target</span><span class="p">))</span>
+        <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">target</span><span class="p">,</span> <span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">SPARQLTarget</span><span class="p">))</span>
+        <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">target</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">select</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">query</span><span class="p">)))</span>
+
+        <span class="n">label</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">label</span><span class="p">:</span>
+            <span class="n">g</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="n">node</span><span class="p">,</span> <span class="n">RDFS</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">Literal</span><span class="p">(</span><span class="n">label</span><span class="p">)))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_add_property_shape</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_node_shape_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">URIRef</span><span class="p">:</span>
         <span class="n">local</span> <span class="o">=</span> <span class="n">uri_local_name</span><span class="p">(</span><span class="n">cls_uri</span><span class="p">)</span>

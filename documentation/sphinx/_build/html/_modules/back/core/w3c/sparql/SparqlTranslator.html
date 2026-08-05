@@ -129,6 +129,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">sql_escape</span> <span class="k">as</span> <span class="n">_escape_sql</span><span class="p">,</span>
     <span class="n">extract_local_name</span> <span class="k">as</span> <span class="n">_extract_local</span><span class="p">,</span>
+    <span class="n">sql_cast</span> <span class="k">as</span> <span class="n">_sql_cast</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.sparql.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DIALECT_SPARK</span>
 
@@ -149,12 +150,12 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_cast_str</span><span class="p">(</span><span class="n">expr</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dialect</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DIALECT_SPARK</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;CAST(&lt;expr&gt; AS STRING) for Spark SQL.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;CAST(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2"> AS </span><span class="si">{</span><span class="n">SparqlTranslator</span><span class="o">.</span><span class="n">_string_type</span><span class="p">(</span><span class="n">dialect</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;TRY_CAST(&lt;expr&gt; AS STRING) for Spark SQL (ANSI-safe stringification).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">_sql_cast</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">SparqlTranslator</span><span class="o">.</span><span class="n">_string_type</span><span class="p">(</span><span class="n">dialect</span><span class="p">))</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_coalesce_cast_str</span><span class="p">(</span><span class="n">expr</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dialect</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DIALECT_SPARK</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;COALESCE(CAST(&lt;expr&gt; AS STRING), &#39;&#39;).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;COALESCE(TRY_CAST(&lt;expr&gt; AS STRING), &#39;&#39;).&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;COALESCE(</span><span class="si">{</span><span class="n">SparqlTranslator</span><span class="o">.</span><span class="n">_cast_str</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">dialect</span><span class="p">)</span><span class="si">}</span><span class="s2">, &#39;&#39;)&quot;</span>
 
     <span class="nd">@staticmethod</span>
@@ -191,7 +192,7 @@
         <span class="n">alias</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">dialect</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DIALECT_SPARK</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a subject expression from a URI template, like CONCAT(base, CAST(col AS STRING)).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a subject expression from a URI template, like CONCAT(base, TRY_CAST(col AS STRING)).&quot;&quot;&quot;</span>
         <span class="n">col_ref</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">id_column</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">alias</span> <span class="k">else</span> <span class="n">id_column</span>
         <span class="k">if</span> <span class="n">uri_template</span> <span class="ow">and</span> <span class="s2">&quot;{&quot;</span> <span class="ow">in</span> <span class="n">uri_template</span><span class="p">:</span>
             <span class="n">base_uri</span> <span class="o">=</span> <span class="n">uri_template</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;{&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>

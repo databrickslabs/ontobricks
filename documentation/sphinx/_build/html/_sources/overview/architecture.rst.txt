@@ -4,7 +4,7 @@ Architecture Overview
 .. seealso::
 
    Full architecture, OntoViz, agentic stack, and incremental sync design:
-   :doc:`../guides/architecture` (from ``docs/architecture.md``).
+   :doc:`../guides/architecture` (from ``documentation/architecture.md``).
 
 OntoBricks follows a layered FastAPI architecture with clear separation of
 concerns.

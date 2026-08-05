@@ -142,6 +142,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.rdf_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">uri_local_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">ValidationError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_valid_session_id</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -1332,6 +1333,13 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">session_id</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;save_mappings_to_session: no session_id — skipping&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid_session_id</span><span class="p">(</span><span class="n">session_id</span><span class="p">):</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;save_mappings_to_session: malformed session_id (</span><span class="si">%d</span><span class="s2"> chars, starts </span><span class="si">%r</span><span class="s2">) — skipping&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">session_id</span><span class="p">),</span>
+                <span class="n">session_id</span><span class="p">[:</span><span class="mi">8</span><span class="p">],</span>
+            <span class="p">)</span>
             <span class="k">return</span>
 
         <span class="n">settings</span> <span class="o">=</span> <span class="n">get_settings</span><span class="p">()</span>

@@ -277,7 +277,7 @@
 </ul>
 </li>
 <li><p><strong>Add Attributes</strong>: Use the attributes section to add data properties</p></li>
-<li><p>Click <strong>Add</strong> to save the class</p></li>
+<li><p>Click <strong>Apply</strong> to write the class into the session</p></li>
 </ol>
 <p><strong>Example Classes:</strong></p>
 <ul class="simple">
@@ -300,7 +300,7 @@
 </ul>
 </li>
 <li><p><strong>Add Attributes</strong>: Add relationship properties if needed</p></li>
-<li><p>Click <strong>Add</strong> to save</p></li>
+<li><p>Click <strong>Apply</strong> to write the relationship into the session</p></li>
 </ol>
 <p><strong>Example Relationships:</strong></p>
 <ul class="simple">
@@ -336,6 +336,11 @@
 <li><p>Enter a <strong>Rule Name</strong> and optional <strong>Description</strong></p></li>
 <li><p>Click <strong>Save Rule</strong></p></li>
 </ol>
+<p><strong>Import/Export</strong>: Click the header <strong>SWRL</strong> button to open a modal
+(same pattern as Data Quality → SHACL). Refresh shows the current rules as
+OntoBricks SWRL text (<code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">Rule:</span></code> / optional <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">Description:</span></code> /
+<code class="docutils literal notranslate"><span class="pre">antecedent</span> <span class="pre">-&gt;</span> <span class="pre">consequent</span></code>). Export downloads a <code class="docutils literal notranslate"><span class="pre">.swrl</span></code> file; Import appends
+parsed rules to the existing list (duplicate names are allowed).</p>
 <p><strong>Example SWRL Rules:</strong></p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Rule: InferGrandparent
 Antecedent: Person(?x) ∧ hasParent(?x, ?y) ∧ hasParent(?y, ?z)
@@ -427,7 +432,7 @@ Consequent: hasManager(?x, ?y)
 </tr>
 <tr class="row-even"><td><p><strong>Conformance</strong></p></td>
 <td><p>Format compliance</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">sh:pattern</span></code> — email must match regex</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sh:pattern</span></code> — email must match regex; <code class="docutils literal notranslate"><span class="pre">sh:minInclusive</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:maxInclusive</span></code> — monthly fee between 1 and 10; <code class="docutils literal notranslate"><span class="pre">sh:minLength</span></code> / <code class="docutils literal notranslate"><span class="pre">sh:maxLength</span></code> — code is 3 to 8 characters</p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>Structural</strong></p></td>
 <td><p>Graph structure rules</p></td>
@@ -439,11 +444,20 @@ Consequent: hasManager(?x, ?y)
 <li><p>Select the <strong>Target Class</strong> and <strong>Property</strong> to constrain</p></li>
 <li><p>Choose the <strong>SHACL Constraint Type</strong> (minCount, maxCount, pattern, datatype, class, hasValue, etc.)</p></li>
 <li><p>Configure constraint-specific parameters</p></li>
+<li><p>Optionally add <strong>conditions</strong> (conformance and consistency rules only) — see below</p></li>
 <li><p>Set <strong>Severity</strong> (Violation, Warning, Info) and an optional <strong>Message</strong></p></li>
 <li><p>Click <strong>Save</strong></p></li>
 </ol>
-<p><strong>Import/Export</strong>: Shapes can be exported as W3C-compliant SHACL Turtle and imported from existing SHACL files.</p>
-<p><strong>Validation</strong>: Shapes are executed against the triple store in the Knowledge Graph → Data Quality section, either via SQL compilation or PySHACL in-memory validation.</p>
+<p><strong>Conditional rules (the IF block)</strong>: a conformance or consistency rule can be
+guarded so it only applies to the instances matching a set of conditions —
+<em>IF <code class="docutils literal notranslate"><span class="pre">status</span></code> = active AND <code class="docutils literal notranslate"><span class="pre">amount</span></code> &gt; 1000, THEN <code class="docutils literal notranslate"><span class="pre">email</span></code> must match the pattern</em>.
+Each condition is a property, an operator and a value, built the same way as a
+decision-table condition in Business Rules. The <strong>All / Any</strong> toggle combines
+the rows with AND or OR. Conditions may reference any attribute of the target
+entity, or a relationship with the <code class="docutils literal notranslate"><span class="pre">exists</span></code> / <code class="docutils literal notranslate"><span class="pre">does</span> <span class="pre">not</span> <span class="pre">exist</span></code> operators. A rule
+with no conditions applies to every instance, exactly as before.</p>
+<p><strong>Import/Export</strong>: Shapes can be exported as W3C-compliant SHACL Turtle and imported from existing SHACL files. A guarded rule is exported as its own node shape with a SHACL-AF <code class="docutils literal notranslate"><span class="pre">sh:target</span> <span class="pre">[</span> <span class="pre">a</span> <span class="pre">sh:SPARQLTarget</span> <span class="pre">]</span></code>. Conditions are not reconstructed on import: the constraint comes back unguarded and the import result reports how many rules lost their conditions.</p>
+<p><strong>Validation</strong>: Shapes are executed in the Knowledge Graph → Data Quality section. Every check is compiled to SQL and run against the triple-store VIEW, which the build creates whatever graph engine the domain uses, so a rule gives the same answer on Lakebase, Delta and Neo4j domains. The VIEW carries the triples mapped from your source tables; triples added by reasoning live in the graph store and are deliberately outside the scope of data quality. A numeric-range rule also reports a value that is not a number at all, since SHACL treats a value it cannot compare as a violation. A rule that cannot be compiled to SQL is listed with an info icon and no pass rate rather than counted as passing.</p>
 </section>
 </section>
 <section id="dashboard-mapping">
@@ -461,7 +475,7 @@ Consequent: hasManager(?x, ?y)
 <li><p><strong>Attribute Name</strong>: Maps the parameter to a specific entity attribute</p></li>
 </ul>
 </li>
-<li><p>Click <strong>Save</strong></p></li>
+<li><p>Click <strong>Apply</strong> (writes into the session; publish the domain to persist)</p></li>
 </ol>
 <p><strong>Parameter Mapping:</strong>
 When a dashboard has filter parameters (e.g., customer_id, meter_id), you can map them to:</p>
@@ -482,7 +496,7 @@ or from an MCP client.</p>
 <li><p>Click <strong>Add</strong> to open the function picker, then choose a catalog and schema</p></li>
 <li><p>Pick a function and type a <strong>description</strong> — the description is what the LLM
 and the end user see, so make it explicit about what the action does</p></li>
-<li><p>Click <strong>Save</strong></p></li>
+<li><p>Click <strong>Apply</strong> (writes into the session; publish the domain to persist)</p></li>
 </ol>
 <blockquote>
 <div><p><strong>One-parameter contract</strong>: the selected Unity Catalog function must accept
@@ -608,10 +622,10 @@ documents only.</p>
 <li><p>Click <strong>Refresh</strong> to re-run the query with the current limit</p></li>
 </ul>
 </li>
-<li><p>Click <strong>Save</strong> in the panel footer</p></li>
+<li><p>Click <strong>Apply</strong> in the panel footer (writes into the session; publish the domain to persist)</p></li>
 </ol>
 <blockquote>
-<div><p><strong>Note</strong>: The SQL query is stored without a <code class="docutils literal notranslate"><span class="pre">LIMIT</span></code> clause. The preview limit only affects the grid display and is not part of the saved mapping.</p>
+<div><p><strong>Note</strong>: The SQL query is stored without a <code class="docutils literal notranslate"><span class="pre">LIMIT</span></code> clause. The preview limit only affects the grid display and is not part of the applied mapping.</p>
 </div></blockquote>
 <p><strong>Example SQL Query:</strong></p>
 <div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span><span class="w"> </span><span class="n">person_id</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">email</span><span class="p">,</span><span class="w"> </span><span class="n">salary</span>
@@ -625,7 +639,7 @@ documents only.</p>
 <li><p>Click on any relationship line in the graph</p></li>
 <li><p>The same panel opens with Wizard, SQL, and Mapping tabs</p></li>
 <li><p>Assign <strong>Source ID</strong> and <strong>Target ID</strong> columns from query results</p></li>
-<li><p>Click <strong>Save</strong></p></li>
+<li><p>Click <strong>Apply</strong></p></li>
 </ol>
 </section>
 <section id="writing-sql-queries-for-relationships">
@@ -664,7 +678,7 @@ documents only.</p>
 <li><p>Open an entity panel (click a node on the canvas).</p></li>
 <li><p>Select the <strong>Status</strong> tab.</p></li>
 <li><p>Uncheck any attributes you do not want to map.</p></li>
-<li><p>Click <strong>Save</strong> — exclusions are persisted immediately.</p></li>
+<li><p>Click <strong>Apply</strong> — exclusions are written into the session immediately.</p></li>
 </ol>
 <p>Two bulk-action buttons are available at the top of the attributes table:</p>
 <ul class="simple">
@@ -726,6 +740,19 @@ documents only.</p>
 <li><p><strong>Synchronize</strong>: Generates all triples from your mappings and writes them to the Delta view in Unity Catalog and to the configured Graph DB engine (Lakebase Postgres)</p></li>
 <li><p><strong>Last Updated</strong>: When the table contains data, the status area displays the last modification date and time (for Delta from Unity Catalog metadata; for Lakebase from the Postgres <code class="docutils literal notranslate"><span class="pre">count_triples</span></code> + table metadata)</p></li>
 </ul>
+</section>
+<section id="runs-sidebar">
+<h3>Runs (Sidebar)<a class="headerlink" href="#runs-sidebar" title="Link to this heading">¶</a></h3>
+<p>Click <strong>Runs</strong> in the sidebar (next to <strong>Build</strong>, in the <strong>Management</strong> group) to see the domain’s run history. The page has two tabs, each with its own table, newest first — <strong>neither has a version filter, so both always span every version of the domain</strong>:</p>
+<ul class="simple">
+<li><p><strong>Build runs</strong> (the tab shown first) — one row per synchronize (<code class="docutils literal notranslate"><span class="pre">Build</span></code>) run: ID, date &amp; time, version, status, triple count, and a <strong>Details</strong> button.</p></li>
+<li><p><strong>Analytics runs</strong> — one row per analysis launched from the <strong>Analytics</strong> page, with 11 columns: Date &amp; Time, Scope, Version, Status, Nodes, Edges, Components, Avg Degree, Density, Duration, and <strong>Details</strong>. <strong>Scope</strong> shows the entity type(s) the run was filtered to, or <em>All types</em>. <strong>Version</strong> is shown per row because, with no filter, rows from different domain versions interleave in the same list. A <strong>failed</strong> run shows a red <strong>Failed</strong> badge and dashes in its metric columns instead of the zeros it stored internally — a run that errored out is not the same thing as a graph with zero nodes.</p></li>
+</ul>
+<p>Click <strong>Details</strong> on an analytics row to open a modal with the full scope (entity-type local names plus their raw URIs), the graph metrics, the run duration, the background task ID, and any error text if the run failed.</p>
+<p>Both tabs are filled when you open the section, whichever one is showing, so switching between them never waits on a fetch. The two load independently: if one fails, the other still renders normally and only the failing tab shows an inline error. The <strong>Refresh</strong> button above the tabs reloads both.</p>
+<blockquote>
+<div><p><strong>Every domain at once.</strong> This page is scoped to the domain you have loaded. From <strong>Settings → Automation → Runs</strong> (admin only) an admin sees the same two tabs across <strong>every</strong> domain in the registry, with a <strong>Domain</strong> column, a <strong>Domain</strong> filter that defaults to <em>All domains</em>, and page controls (25 / 50 / 100 rows) — cross-domain history is far too long to show in one list. Both pages read the same registry tables, so a run shows up in both.</p>
+</div></blockquote>
 </section>
 <section id="data-quality-sidebar">
 <h3>Data Quality (Sidebar)<a class="headerlink" href="#data-quality-sidebar" title="Link to this heading">¶</a></h3>
@@ -812,23 +839,24 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 <li><p><strong>Domain built</strong> — the domain must have been built at least once after this version of OntoBricks was deployed. Build unconditionally materialises a Delta snapshot of the R2RML-mapped triples (<code class="docutils literal notranslate"><span class="pre">catalog.schema.triplestore_&lt;domain&gt;_V&lt;n&gt;_data</span></code>). If that snapshot is absent or empty, the panel names this requirement and the remedy is a rebuild. Domains built before upgrading to this version need one rebuild.</p></li>
 </ol>
 <p><strong>What the job scores.</strong> Analytics reads the mapped-triple snapshot — the same table regardless of whether your backend is Lakehouse, Lakebase or Neo4j. Inferred and cohort triples are out of scope; reasoning does not affect the KPIs.</p>
-<p><strong>Betweenness and closeness are estimates.</strong> The job samples <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_ANALYTICS_JOB_PIVOTS</span></code> source nodes (default <strong>64</strong>) and runs a breadth-first search from each (the Brandes–Pich approach). Both charts carry an “Estimate” note. Treat them as a ranking of the clear leaders, not as absolute values. If the BFS hits the depth cap (<code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH</span></code>, default <strong>32</strong>) before the graph is fully explored, betweenness and closeness are withheld entirely — reported as unavailable rather than as numbers — because truncated distance sums would be biased. Raise <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH</span></code> and re-run to resolve this. Set pivots to <code class="docutils literal notranslate"><span class="pre">0</span></code> to skip both metrics and make the job cheaper; setting pivots at or above the node count makes them exact.</p>
+<p><strong>Betweenness and closeness are estimates.</strong> The job samples <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_ANALYTICS_JOB_PIVOTS</span></code> source nodes (default <strong>64</strong>) and runs a breadth-first search from each (the Brandes–Pich approach). Both metrics carry an “Estimate” note on the ranking chart. Treat them as a ranking of the clear leaders, not as absolute values. If the BFS hits the depth cap (<code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH</span></code>, default <strong>32</strong>) before the graph is fully explored, betweenness and closeness are withheld entirely — reported as unavailable rather than as numbers — because truncated distance sums would be biased; their distribution tiles then read “Not computed for this run” and the ranking chart explains why. Raise <code class="docutils literal notranslate"><span class="pre">ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH</span></code> and re-run to resolve this. Set pivots to <code class="docutils literal notranslate"><span class="pre">0</span></code> to skip both metrics and make the job cheaper; setting pivots at or above the node count makes them exact.</p>
 <p><strong>Entity-type counts.</strong> The <em>Instances</em> column in the entity-type profile table shows the full population of each class in the mapped graph, including isolated nodes (instances with no relationships). This is a more complete number than earlier releases, which showed only the connected instances on unfiltered runs — types that have isolated nodes will show higher counts.</p>
 </div></blockquote>
 <section id="running-an-analysis">
 <h4>Running an Analysis<a class="headerlink" href="#running-an-analysis" title="Link to this heading">¶</a></h4>
 <ol class="arabic simple">
-<li><p>(Optional) Select an <strong>entity type</strong> from the dropdown to restrict the analysis to one class (e.g. “Customer”). Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is pushed down to the graph store, so it also reduces how much is read — this is how you get the full metric set on a graph that is over the in-memory limit. “All types (full graph)” includes every entity.</p></li>
-<li><p>Click <strong>Run Analysis</strong>. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically: six stat cards appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed) and five interactive charts render below. Each new run replaces the previous stored result for that domain version.</p></li>
+<li><p>Click <strong>Run Analysis</strong>. An <strong>Analysis scope</strong> dialog opens, because entity type only takes effect at launch — it is asked for here rather than left in the toolbar, where it could be changed after a run and no longer describe the result on screen.</p></li>
+<li><p>(Optional) Pick an <strong>entity type</strong> to restrict the analysis to one class (e.g. “Customer”). The scope resets to <strong>All types (full graph)</strong> every time the dialog opens, so each run is a deliberate choice. Selecting a type shows only instances of that type in the charts while still computing metrics on the full connected subgraph for accuracy. The filter is applied in SQL inside the Lakeflow job, against the Delta snapshot — not by the graph store — so there is no in-memory limit to work around. <strong>Cancel</strong> closes the dialog without running.</p></li>
+<li><p>Click <strong>Run Analysis</strong> in the dialog to launch. The analysis starts as a background task (tracked in the global task bell, top-right) and a spinner shows on the page behind while it runs — you can keep working elsewhere in the meantime. When it completes, the stored result loads automatically on the <strong>Dashboard</strong> tab: six KPI tiles appear (Nodes, Edges, Components, Avg Degree, Density, Elapsed), a distribution strip of five histogram tiles, and one full-width ranking chart for the selected metric. Each new run replaces the previous stored result for that domain version.</p></li>
 </ol>
+<blockquote>
+<div><p><strong>Looking for past runs?</strong> The Analytics page itself only ever shows the <strong>last</strong> result per domain version. The full run history — every analysis ever launched, across every version, including failed runs — lives on <strong>Knowledge Graph → Management → Runs</strong> as a second table below the build-runs table (see <strong>Runs (Sidebar)</strong> above).</p>
+</div></blockquote>
 </section>
-<section id="history">
-<h4>History<a class="headerlink" href="#history" title="Link to this heading">¶</a></h4>
-<p>The <strong>History</strong> tab (after <em>AI Insights</em>) lists every analysis launched for the current domain version — newest first — including failed runs. Each row shows when it ran, the scope (a single entity type or <em>All types</em>), its status, and the headline metrics (nodes, edges, components, average degree, density) plus the run duration. While the <strong>last</strong> full result is what the other tabs render, this tab keeps a lightweight audit trail of past runs so you can see how the graph evolved over time. The history is capped server-side per domain version.</p>
-</section>
-<section id="reading-the-charts">
-<h4>Reading the Charts<a class="headerlink" href="#reading-the-charts" title="Link to this heading">¶</a></h4>
-<p>One horizontal bar chart is generated for each metric:</p>
+<section id="reading-the-dashboard">
+<h4>Reading the Dashboard<a class="headerlink" href="#reading-the-dashboard" title="Link to this heading">¶</a></h4>
+<p>The <strong>Dashboard</strong> tab has three layers: KPI tiles, a <strong>distribution strip</strong>, and a <strong>ranking chart</strong>.</p>
+<p><strong>Distribution strip.</strong> Five small histogram tiles — PageRank, Betweenness, Degree, Closeness, Clustering — summarise the score distribution across <strong>every scored node in the graph</strong>, not just the top-N shown in the ranking chart. That is the key distinction: the strip answers “is this node’s score unusual for the graph as a whole?”, while the ranking chart below lists only the top-N leaders for the metric you have selected. Each histogram uses 20 linear bins; the median and p90 shown in the tile caption are <strong>interpolated approximations</strong> from those bin counts (labelled ≈ in the UI). Click a tile to select that metric and redraw the ranking chart; a segmented control in the ranking section header mirrors the selection. Use the <strong>Log scale</strong> switch in the section header toolbar — between the Top N input and the <strong>Run Analysis</strong> button — to redraw all five tiles on a logarithmic count axis — useful for heavy-tailed metrics; the caption notes when log scale is active because bar heights are no longer proportional to raw counts. If betweenness or closeness could not be computed for this run, that tile reads <strong>Not computed for this run</strong> instead of a histogram. Results computed before this redesign (legacy cached payloads) still show KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Metric</p></th>
@@ -853,12 +881,13 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </tr>
 </tbody>
 </table>
+<p><strong>Ranking chart.</strong> One full-width horizontal bar chart shows the top-N entities for whichever metric is selected (default PageRank). The ranking chart covers only the bounded top-N slice — unlike the distribution strip above, which spans the whole scored population.</p>
 <ul class="simple">
 <li><p><strong>Click a bar</strong> to jump directly to that entity in the Graph Viewer (the filter is pre-populated).</p></li>
 <li><p><strong>Hover a bar</strong> to see all five metric scores for that entity in the tooltip.</p></li>
-<li><p><strong>Click the <code class="docutils literal notranslate"><span class="pre">?</span></code> button</strong> on any chart card header to open an explanation popup with the formula, a worked example, and guidance on why the metric matters.</p></li>
+<li><p><strong>Click the <code class="docutils literal notranslate"><span class="pre">?</span></code> button</strong> on the ranking chart card header to open an explanation popup with the formula, a worked example, and guidance on why the metric matters.</p></li>
 </ul>
-<p>Below the charts, a <strong>PageRank Detail Table</strong> lists the top-N entities with all five metrics displayed as mini progress bars, providing full context for why a node ranks highly. Every row is clickable → Graph Viewer.</p>
+<p>Below the ranking chart, a <strong>PageRank Detail Table</strong> lists the top-N entities with all five metrics displayed as mini progress bars, providing full context for why a node ranks highly. Every row is clickable → Graph Viewer.</p>
 </section>
 <section id="data-model-health">
 <h4>Data Model Health<a class="headerlink" href="#data-model-health" title="Link to this heading">¶</a></h4>
@@ -896,7 +925,7 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology �
 </section>
 <section id="adjusting-the-top-n-and-resetting">
 <h4>Adjusting the Top-N and Resetting<a class="headerlink" href="#adjusting-the-top-n-and-resetting" title="Link to this heading">¶</a></h4>
-<p>Use the <strong>Top N</strong> input at the top of the results section to control how many entities each chart and table shows. Change the entity type dropdown to re-run the analysis on a different class.</p>
+<p>Use the <strong>Top N</strong> input at the top of the results section to control how many entities the ranking chart and detail table show. To analyse a different class, click <strong>Run Analysis</strong> again and pick the entity type in the <strong>Analysis scope</strong> dialog. The funnel line above the results names the scope the displayed result was computed with.</p>
 </section>
 <section id="ai-interpretation">
 <h4>AI Interpretation<a class="headerlink" href="#ai-interpretation" title="Link to this heading">¶</a></h4>
@@ -2012,7 +2041,7 @@ Step 7: Validate with quality checks
 </tr>
 </tbody>
 </table>
-<p>SHACL shapes are compiled to <strong>Spark SQL</strong> for Delta execution and to <strong>Postgres SQL</strong> for the Lakebase Graph DB. Results show violations, pass rates, and per-entity details.</p>
+<p>SHACL shapes are compiled to <strong>Spark SQL</strong> and executed on the SQL warehouse against the triple-store VIEW, whatever graph engine the domain uses. Results show violations, pass rates, and per-entity details.</p>
 <ol class="arabic simple">
 <li><p>Click <strong>Run All Checks</strong> to execute all applicable checks, or run individual checks.</p></li>
 <li><p>Results show pass/fail for each check with details on any violations.</p></li>

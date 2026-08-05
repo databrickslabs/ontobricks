@@ -127,9 +127,10 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">operator</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.rdf_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">uri_local_name</span>
@@ -139,10 +140,44 @@
     <span class="n">RDFS_LABEL</span><span class="p">,</span>
     <span class="n">XSD_TO_SPARK_TYPE</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl</span><span class="w"> </span><span class="kn">import</span> <span class="n">ShapeConditions</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.SHACLGenerator</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLGenerator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.SHACLParser</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLParser</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1">#: Value-range constraints, mapped to the comparison a conforming value passes.</span>
+<span class="n">RANGE_OPS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;sh:minInclusive&quot;</span><span class="p">:</span> <span class="s2">&quot;&gt;=&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sh:maxInclusive&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;=&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sh:minExclusive&quot;</span><span class="p">:</span> <span class="s2">&quot;&gt;&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;sh:maxExclusive&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1">#: String-length constraints, same convention.</span>
+<span class="n">LENGTH_OPS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;sh:minLength&quot;</span><span class="p">:</span> <span class="s2">&quot;&gt;=&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:maxLength&quot;</span><span class="p">:</span> <span class="s2">&quot;&lt;=&quot;</span><span class="p">}</span>
+
+<span class="n">BOUND_COMPARATORS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;&gt;=&quot;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">ge</span><span class="p">,</span>
+    <span class="s2">&quot;&lt;=&quot;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">le</span><span class="p">,</span>
+    <span class="s2">&quot;&gt;&quot;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">gt</span><span class="p">,</span>
+    <span class="s2">&quot;&lt;&quot;</span><span class="p">:</span> <span class="n">operator</span><span class="o">.</span><span class="n">lt</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1">#: Constraint kinds :meth:`SHACLService.evaluate_shape_in_memory` can check.</span>
+<span class="c1">#: A shape outside this set is reported as not evaluated rather than passing —</span>
+<span class="c1">#: an engine that cannot run a rule must not vouch for the data.</span>
+<span class="n">IN_MEMORY_TYPES</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+    <span class="p">{</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:pattern&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:class&quot;</span><span class="p">}</span>
+    <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">RANGE_OPS</span><span class="p">)</span>
+    <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">LENGTH_OPS</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="c1">#: Parameters that select an in-memory check on their own, for shapes whose</span>
+<span class="c1">#: ``shacl_type`` names only the first of several constraints.</span>
+<span class="n">IN_MEMORY_PARAMS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+    <span class="p">{</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">}</span> <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">RANGE_OPS</span><span class="p">)</span> <span class="o">|</span> <span class="nb">set</span><span class="p">(</span><span class="n">LENGTH_OPS</span><span class="p">)</span>
+<span class="p">)</span>
 
 
 <div class="viewcode-block" id="SHACLService">
@@ -179,6 +214,8 @@
         <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
         <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">shape_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">conditions</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">condition_logic</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;and&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Build a new shape dict (not yet persisted).</span>
 
@@ -186,6 +223,9 @@
 <span class="sd">        which is correct for user-created shapes.  Callers that need a</span>
 <span class="sd">        **deterministic** ID (e.g. legacy-constraint migration) should</span>
 <span class="sd">        pass an explicit *shape_id*.</span>
+
+<span class="sd">        *conditions* guards the constraint: the shape then only applies to the</span>
+<span class="sd">        instances matching them.  See :mod:`back.core.w3c.shacl.ShapeConditions`.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">cat</span> <span class="o">=</span> <span class="n">category</span> <span class="k">if</span> <span class="n">category</span> <span class="ow">in</span> <span class="n">QUALITY_CATEGORIES</span> <span class="k">else</span> <span class="s2">&quot;conformance&quot;</span>
         <span class="n">safe_cls</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^a-zA-Z0-9_]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">target_class</span> <span class="ow">or</span> <span class="s2">&quot;global&quot;</span><span class="p">)</span>
@@ -209,6 +249,10 @@
             <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="n">severity</span><span class="p">,</span>
             <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">message</span><span class="p">,</span>
             <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="n">enabled</span><span class="p">,</span>
+            <span class="s2">&quot;conditions&quot;</span><span class="p">:</span> <span class="n">conditions</span> <span class="ow">or</span> <span class="p">[],</span>
+            <span class="s2">&quot;condition_logic&quot;</span><span class="p">:</span> <span class="p">(</span>
+                <span class="n">condition_logic</span> <span class="k">if</span> <span class="n">condition_logic</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;and&quot;</span><span class="p">,</span> <span class="s2">&quot;or&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;and&quot;</span>
+            <span class="p">),</span>
         <span class="p">}</span></div>
 
 
@@ -285,6 +329,19 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">import_shapes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">turtle_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;turtle&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse SHACL Turtle and return shape dicts.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">turtle_content</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="n">fmt</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="SHACLService.import_shapes_with_report">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.import_shapes_with_report">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">import_shapes_with_report</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">turtle_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;turtle&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse SHACL Turtle, returning ``(shapes, report)``.</span>
+
+<span class="sd">        The report&#39;s ``conditions_dropped`` counts shapes whose guard could not</span>
+<span class="sd">        be reconstructed; see :meth:`SHACLParser.parse_with_report`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parser</span><span class="o">.</span><span class="n">parse_with_report</span><span class="p">(</span><span class="n">turtle_content</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="n">fmt</span><span class="p">)</span></div>
 
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -1187,6 +1244,90 @@
         <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_numeric_bounds</span><span class="p">(</span><span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;The ``(operator, limit)`` pairs a value must satisfy, in a stable order.&quot;&quot;&quot;</span>
+        <span class="n">bounds</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">RANGE_OPS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">raw</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">raw</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">raw</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">op</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">raw</span><span class="p">)))</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+                <span class="k">continue</span>
+        <span class="k">return</span> <span class="n">bounds</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_length_bounds</span><span class="p">(</span><span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+        <span class="n">bounds</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">LENGTH_OPS</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">raw</span> <span class="o">=</span> <span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">raw</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">raw</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">op</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">raw</span><span class="p">)))</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+                <span class="k">continue</span>
+        <span class="k">return</span> <span class="n">bounds</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sql_bounded</span><span class="p">(</span>
+        <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">bounds</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]],</span>
+        <span class="n">measure</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">rdf_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">esc</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find values whose *measure* falls outside *bounds*.</span>
+
+<span class="sd">        A value that cannot be measured — an unparseable number for a range</span>
+<span class="sd">        check — violates the constraint, which is what SHACL reports for a</span>
+<span class="sd">        non-comparable value node.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">bounds</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cls_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">satisfied</span> <span class="o">=</span> <span class="s2">&quot; AND &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">measure</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">op</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">limit</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">limit</span> <span class="ow">in</span> <span class="n">bounds</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;SELECT t1.subject AS s, t2.object AS val</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> t1</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> t2 ON t1.subject = t2.subject AND t2.predicate = &#39;</span><span class="si">{</span><span class="n">esc</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE t1.predicate = &#39;</span><span class="si">{</span><span class="n">rdf_type</span><span class="si">}</span><span class="s2">&#39; AND t1.object = &#39;</span><span class="si">{</span><span class="n">esc</span><span class="p">(</span><span class="n">cls_uri</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  AND NOT (</span><span class="si">{</span><span class="n">measure</span><span class="si">}</span><span class="s2"> IS NOT NULL AND </span><span class="si">{</span><span class="n">satisfied</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mem_bounded</span><span class="p">(</span>
+        <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">prop_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">bounds</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]],</span>
+        <span class="n">measure</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]],</span>
+        <span class="n">_class_instances</span><span class="p">,</span>
+        <span class="n">subj_by_pred</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;In-memory counterpart of :meth:`_sql_bounded`.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">bounds</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cls_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">prop_vals</span> <span class="o">=</span> <span class="n">subj_by_pred</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">violations</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">_class_instances</span><span class="p">(</span><span class="n">cls_uri</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">prop_vals</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="p">[]):</span>
+                <span class="n">measured</span> <span class="o">=</span> <span class="n">measure</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">measured</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span>
+                    <span class="n">BOUND_COMPARATORS</span><span class="p">[</span><span class="n">op</span><span class="p">](</span><span class="n">measured</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span> <span class="k">for</span> <span class="n">op</span><span class="p">,</span> <span class="n">limit</span> <span class="ow">in</span> <span class="n">bounds</span>
+                <span class="p">):</span>
+                    <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="n">s</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">violations</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_as_number</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_sql_datatype</span><span class="p">(</span>
         <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">cls_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -1279,9 +1420,36 @@
 <span class="sd">        The SQL checks against a triple store table with columns</span>
 <span class="sd">        ``(subject, predicate, object)``.</span>
 
+<span class="sd">        A shape carrying conditions keeps its constraint query unchanged and</span>
+<span class="sd">        has it restricted to the subjects matching the guard.</span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            SQL string, or ``None`` if the shape cannot be translated.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">base_sql</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_base_shape_sql</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">base_sql</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="n">conditions</span> <span class="o">=</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">get_conditions</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">conditions</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">base_sql</span>
+
+        <span class="n">condition_sql</span> <span class="o">=</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">subject_sql</span><span class="p">(</span>
+            <span class="n">conditions</span><span class="p">,</span>
+            <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">get_logic</span><span class="p">(</span><span class="n">shape</span><span class="p">),</span>
+            <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+            <span class="n">table</span><span class="p">,</span>
+            <span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&#39;&#39;&quot;</span><span class="p">),</span>
+            <span class="n">SHACLService</span><span class="o">.</span><span class="n">_normalize_prop_uri</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">condition_sql</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">base_sql</span>
+        <span class="k">return</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">wrap_sql</span><span class="p">(</span><span class="n">base_sql</span><span class="p">,</span> <span class="n">condition_sql</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_base_shape_sql</span><span class="p">(</span><span class="n">shape</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Translate the constraint half of a shape, ignoring its conditions.&quot;&quot;&quot;</span>
         <span class="n">shacl_type</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">params</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span>
         <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
@@ -1307,6 +1475,28 @@
                 <span class="sa">f</span><span class="s2">&quot;JOIN </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> t2 ON t1.subject = t2.subject AND t2.predicate = &#39;</span><span class="si">{</span><span class="n">esc</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;WHERE t1.predicate = &#39;</span><span class="si">{</span><span class="n">RDF_TYPE</span><span class="si">}</span><span class="s2">&#39; AND t1.object = &#39;</span><span class="si">{</span><span class="n">esc</span><span class="p">(</span><span class="n">cls_uri</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;  AND NOT t2.object RLIKE &#39;</span><span class="si">{</span><span class="n">esc</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">shacl_type</span> <span class="ow">in</span> <span class="n">RANGE_OPS</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">params</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">RANGE_OPS</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_sql_bounded</span><span class="p">(</span>
+                <span class="n">table</span><span class="p">,</span>
+                <span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">prop_uri</span><span class="p">,</span>
+                <span class="n">SHACLService</span><span class="o">.</span><span class="n">_numeric_bounds</span><span class="p">(</span><span class="n">params</span><span class="p">),</span>
+                <span class="s2">&quot;TRY_CAST(t2.object AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="n">RDF_TYPE</span><span class="p">,</span>
+                <span class="n">esc</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">shacl_type</span> <span class="ow">in</span> <span class="n">LENGTH_OPS</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">params</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">LENGTH_OPS</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_sql_bounded</span><span class="p">(</span>
+                <span class="n">table</span><span class="p">,</span>
+                <span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">prop_uri</span><span class="p">,</span>
+                <span class="n">SHACLService</span><span class="o">.</span><span class="n">_length_bounds</span><span class="p">(</span><span class="n">params</span><span class="p">),</span>
+                <span class="s2">&quot;LENGTH(t2.object)&quot;</span><span class="p">,</span>
+                <span class="n">RDF_TYPE</span><span class="p">,</span>
+                <span class="n">esc</span><span class="p">,</span>
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="o">==</span> <span class="s2">&quot;sh:hasValue&quot;</span><span class="p">:</span>
@@ -1347,7 +1537,22 @@
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="o">==</span> <span class="s2">&quot;sh:sparql&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_sql_sparql_wellknown</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">esc</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="kc">None</span></div>
+        <span class="k">return</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="SHACLService.supports_in_memory">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLService.SHACLService.supports_in_memory">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">supports_in_memory</span><span class="p">(</span><span class="n">shape</span><span class="p">:</span> <span class="n">Dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Whether :meth:`evaluate_shape_in_memory` can check *shape*.</span>
+
+<span class="sd">        An unsupported shape yields no violations, which is indistinguishable</span>
+<span class="sd">        from a clean result — callers must ask first and report the check as</span>
+<span class="sd">        not run.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">IN_MEMORY_TYPES</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">key</span> <span class="ow">in</span> <span class="n">params</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">IN_MEMORY_PARAMS</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="SHACLService.evaluate_shape_in_memory">
@@ -1361,12 +1566,10 @@
 
 <span class="sd">        Each triple is ``{&quot;subject&quot;: ..., &quot;predicate&quot;: ..., &quot;object&quot;: ...}``.</span>
 <span class="sd">        Returns a list of violation dicts (empty if no violations).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">shacl_type</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="n">params</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span>
-        <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
 
+<span class="sd">        A shape carrying conditions is evaluated exactly as an unconditional</span>
+<span class="sd">        one, then its violations are filtered down to the guarded subjects.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">subj_by_pred</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="n">type_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">set</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">triples</span><span class="p">:</span>
@@ -1377,12 +1580,44 @@
             <span class="k">if</span> <span class="n">p</span> <span class="o">==</span> <span class="n">RDF_TYPE</span><span class="p">:</span>
                 <span class="n">type_map</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="nb">set</span><span class="p">())</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">o</span><span class="p">)</span>
 
-        <span class="c1"># Resolve property URI against actual predicates in the graph</span>
-        <span class="c1"># (handles #/slash mismatch between ontology and triplestore)</span>
-        <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">resolve_prop_uri</span><span class="p">(</span><span class="n">prop_uri</span><span class="p">,</span> <span class="nb">set</span><span class="p">(</span><span class="n">subj_by_pred</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
-
         <span class="k">def</span><span class="w"> </span><span class="nf">_class_instances</span><span class="p">(</span><span class="n">c_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">types</span> <span class="ow">in</span> <span class="n">type_map</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">c_uri</span> <span class="ow">in</span> <span class="n">types</span><span class="p">}</span>
+
+        <span class="n">violations</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_base_shape_violations</span><span class="p">(</span>
+            <span class="n">shape</span><span class="p">,</span> <span class="n">subj_by_pred</span><span class="p">,</span> <span class="n">_class_instances</span>
+        <span class="p">)</span>
+
+        <span class="n">conditions</span> <span class="o">=</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">get_conditions</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">violations</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">conditions</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">violations</span>
+
+        <span class="n">predicates</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">subj_by_pred</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="n">guarded</span> <span class="o">=</span> <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">matching_subjects</span><span class="p">(</span>
+            <span class="n">conditions</span><span class="p">,</span>
+            <span class="n">ShapeConditions</span><span class="o">.</span><span class="n">get_logic</span><span class="p">(</span><span class="n">shape</span><span class="p">),</span>
+            <span class="p">{</span><span class="n">v</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;s&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">violations</span><span class="p">},</span>
+            <span class="n">subj_by_pred</span><span class="p">,</span>
+            <span class="k">lambda</span> <span class="n">u</span><span class="p">:</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">resolve_prop_uri</span><span class="p">(</span><span class="n">u</span><span class="p">,</span> <span class="n">predicates</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">v</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">violations</span> <span class="k">if</span> <span class="n">v</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;s&quot;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">guarded</span><span class="p">]</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_base_shape_violations</span><span class="p">(</span>
+        <span class="n">shape</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+        <span class="n">subj_by_pred</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]],</span>
+        <span class="n">_class_instances</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Evaluate the constraint half of a shape against indexed triples.&quot;&quot;&quot;</span>
+        <span class="n">shacl_type</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">cls_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Resolve property URI against actual predicates in the graph</span>
+        <span class="c1"># (handles #/slash mismatch between ontology and triplestore)</span>
+        <span class="n">prop_uri</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">resolve_prop_uri</span><span class="p">(</span>
+            <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span> <span class="nb">set</span><span class="p">(</span><span class="n">subj_by_pred</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;sh:minCount&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:maxCount&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
             <span class="s2">&quot;sh:minCount&quot;</span> <span class="ow">in</span> <span class="n">params</span> <span class="ow">or</span> <span class="s2">&quot;sh:maxCount&quot;</span> <span class="ow">in</span> <span class="n">params</span>
@@ -1412,6 +1647,26 @@
                         <span class="n">violations</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="n">s</span><span class="p">,</span> <span class="s2">&quot;val&quot;</span><span class="p">:</span> <span class="n">val</span><span class="p">})</span>
             <span class="k">return</span> <span class="n">violations</span>
 
+        <span class="k">if</span> <span class="n">shacl_type</span> <span class="ow">in</span> <span class="n">RANGE_OPS</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">params</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">RANGE_OPS</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_mem_bounded</span><span class="p">(</span>
+                <span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">prop_uri</span><span class="p">,</span>
+                <span class="n">SHACLService</span><span class="o">.</span><span class="n">_numeric_bounds</span><span class="p">(</span><span class="n">params</span><span class="p">),</span>
+                <span class="n">SHACLService</span><span class="o">.</span><span class="n">_as_number</span><span class="p">,</span>
+                <span class="n">_class_instances</span><span class="p">,</span>
+                <span class="n">subj_by_pred</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">shacl_type</span> <span class="ow">in</span> <span class="n">LENGTH_OPS</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span><span class="n">k</span> <span class="ow">in</span> <span class="n">params</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">LENGTH_OPS</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">_mem_bounded</span><span class="p">(</span>
+                <span class="n">cls_uri</span><span class="p">,</span>
+                <span class="n">prop_uri</span><span class="p">,</span>
+                <span class="n">SHACLService</span><span class="o">.</span><span class="n">_length_bounds</span><span class="p">(</span><span class="n">params</span><span class="p">),</span>
+                <span class="nb">len</span><span class="p">,</span>
+                <span class="n">_class_instances</span><span class="p">,</span>
+                <span class="n">subj_by_pred</span><span class="p">,</span>
+            <span class="p">)</span>
+
         <span class="k">if</span> <span class="n">shacl_type</span> <span class="o">==</span> <span class="s2">&quot;sh:hasValue&quot;</span><span class="p">:</span>
             <span class="n">expected</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sh:hasValue&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">expected</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">cls_uri</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">prop_uri</span><span class="p">:</span>
@@ -1435,7 +1690,6 @@
             <span class="k">return</span> <span class="n">violations</span>
 
         <span class="k">return</span> <span class="p">[]</span></div>
-</div>
 
 </pre></div>
 

@@ -258,6 +258,57 @@
 
 
 
+<span class="c1">#: Histogram bins per metric in a distribution. Fixed: not a Settings value.</span>
+<span class="n">DEFAULT_DISTRIBUTION_BINS</span> <span class="o">=</span> <span class="mi">20</span>
+
+
+<div class="viewcode-block" id="MetricDistribution">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.MetricDistribution">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MetricDistribution</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The distribution of one metric across **every** scored node.</span>
+
+<span class="sd">    This is the counterpart to :class:`NodeMetrics`, which describes a single</span>
+<span class="sd">    node, and it deliberately covers a different population than</span>
+<span class="sd">    ``MetricsResult.nodes``: ``nodes`` is a bounded top-N slice, while ``bins``</span>
+<span class="sd">    summarises the whole graph. Do not derive one from the other.</span>
+
+<span class="sd">    ``bins[i]`` is the number of nodes whose score falls in the *i*-th of</span>
+<span class="sd">    ``bin_count`` equal-width buckets spanning ``[lo, hi]``. Empty buckets are</span>
+<span class="sd">    present as ``0`` so the front end can index positionally.</span>
+
+<span class="sd">    ``median`` and ``p90`` are interpolated from the bin counts rather than</span>
+<span class="sd">    computed exactly — the read-back must run on engines without a percentile</span>
+<span class="sd">    function. They are accurate to within one bin width, which is why the UI</span>
+<span class="sd">    renders them as &quot;median ~&quot;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">bins</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">bin_count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">lo</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">hi</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">mean</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">median</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">p90</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+<div class="viewcode-block" id="MetricDistribution.to_dict">
+<a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.MetricDistribution.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="c1"># Copied: a shared list would let a caller mutate the payload that</span>
+            <span class="c1"># is about to be persisted.</span>
+            <span class="s2">&quot;bins&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">bins</span><span class="p">),</span>
+            <span class="s2">&quot;bin_count&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">bin_count</span><span class="p">,</span>
+            <span class="s2">&quot;lo&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">lo</span><span class="p">,</span>
+            <span class="s2">&quot;hi&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">hi</span><span class="p">,</span>
+            <span class="s2">&quot;mean&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span>
+            <span class="s2">&quot;median&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">median</span><span class="p">,</span>
+            <span class="s2">&quot;p90&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">p90</span><span class="p">,</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
 <div class="viewcode-block" id="EntityTypeProfile">
 <a class="viewcode-back" href="../../../../api/app.core.graph_analysis.html#back.core.graph_analysis.models.EntityTypeProfile">[docs]</a>
 <span class="nd">@dataclass</span>
@@ -329,6 +380,10 @@
     <span class="n">node_types</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>    <span class="c1"># node_uri → class_uri</span>
     <span class="n">node_labels</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>   <span class="c1"># node_uri → rdfs:label</span>
     <span class="n">entity_type_profiles</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;EntityTypeProfile&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>  <span class="c1"># class_uri → profile</span>
+    <span class="c1">#: metric name -&gt; distribution over every scored node. Absent for metrics</span>
+    <span class="c1">#: in ``unavailable_metrics``: those are stored as zeros, and a histogram of</span>
+    <span class="c1">#: fabricated zeros would read as a real measurement.</span>
+    <span class="n">distributions</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;MetricDistribution&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
     <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">MODE_JOB</span>
     <span class="n">unavailable_metrics</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">approximate_metrics</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
@@ -347,6 +402,9 @@
             <span class="s2">&quot;node_labels&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">node_labels</span><span class="p">,</span>
             <span class="s2">&quot;entity_type_profiles&quot;</span><span class="p">:</span> <span class="p">{</span>
                 <span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">entity_type_profiles</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">},</span>
+            <span class="s2">&quot;distributions&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">distributions</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
             <span class="p">},</span>
             <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">mode</span><span class="p">,</span>
             <span class="s2">&quot;unavailable_metrics&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">unavailable_metrics</span><span class="p">),</span>

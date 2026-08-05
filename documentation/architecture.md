@@ -250,7 +250,7 @@ OntoBricks separates configuration into several layers:
 |------|---------|---------|
 | `src/shared/config/settings.py` | **Environment-specific settings** loaded from `.env` / env vars via Pydantic `BaseSettings` | Databricks host, token, session directory |
 | `src/shared/config/constants.py` | **Static constants and defaults** that rarely change and are shared across modules | App name/version, OWL namespaces, LLM defaults, wizard quick-templates |
-| `src/front/config/menu_config.json` | **Sidebar navigation** for the Jinja2 UI | Page labels, menu structure |
+| `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Knowledge Graph `bi-radar`) and match `breadcrumb.js` `_ROUTE_MAP` |
 | `src/back/objects/session/global_config.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in a `.global_config.json` file on the UC Volume root, shared across all user sessions | SQL Warehouse ID, default base URI, default class icon (emoji) |
 | `src/back/objects/registry/permissions.py` | **`PermissionService`** — stores per-user permission levels in `.permissions.json` (app-wide) and per-domain overrides in `.domain_permissions.json` (per domain folder). Defines the role hierarchy: `admin > builder > editor > viewer > none`. | `CAN MANAGE` admin flag |
 

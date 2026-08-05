@@ -137,6 +137,12 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">sql_escape</span> <span class="k">as</span> <span class="n">escape_sql_value</span><span class="p">,</span> <span class="n">extract_local_name</span><span class="p">,</span> <span class="n">is_databricks_app</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.rdf_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">uri_local_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AGGREGATE_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">DECISION_TABLE_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">SWRL_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">rule_check_id</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">DomainSnapshot</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_domain</span>
@@ -866,15 +872,38 @@
 
 <div class="viewcode-block" id="DigitalTwin.get_or_fetch_graph_status">
 <a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.get_or_fetch_graph_status">[docs]</a>
-    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_or_fetch_graph_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return graph triplestore status from session cache, or fetch live and cache.&quot;&quot;&quot;</span>
-        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">cached</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;get_or_fetch_graph_status: serving from cache&quot;</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">cached</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;get_or_fetch_graph_status: cache miss — fetching live&quot;</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_or_fetch_graph_status</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">force_refresh</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return graph triplestore status from session cache, or fetch live and cache.</span>
+
+<span class="sd">        Inconclusive results (``has_data is None`` — the probe could not reach the</span>
+<span class="sd">        engine) are never cached, for the same reason as</span>
+<span class="sd">        :meth:`get_or_fetch_dt_existence`: this section drives the &quot;Graph not</span>
+<span class="sd">        built&quot; badge on every KG sub-page, so caching a transient engine timeout</span>
+<span class="sd">        as a confirmed absence contradicts the Build page — which force-refreshes</span>
+<span class="sd">        its own live probe — for the whole TTL.</span>
+
+<span class="sd">        ``force_refresh=True`` bypasses the cache so a page can re-establish the</span>
+<span class="sd">        truth without waiting the TTL out.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">force_refresh</span><span class="p">:</span>
+            <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ts_cache</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cached</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;get_or_fetch_graph_status: serving from cache&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">cached</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;get_or_fetch_graph_status: cache miss — fetching live&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;get_or_fetch_graph_status: force_refresh — fetching live&quot;</span><span class="p">)</span>
+
         <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">fetch_graph_triplestore_status</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;has_data&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">set_ts_cache</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="n">result</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;get_or_fetch_graph_status: probe inconclusive (</span><span class="si">%s</span><span class="s2">) — not caching&quot;</span><span class="p">,</span>
+                <span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph_check_error&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="k">return</span> <span class="n">result</span></div>
 
 
@@ -1053,7 +1082,15 @@
 <div class="viewcode-block" id="DigitalTwin.fetch_graph_triplestore_status">
 <a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.fetch_graph_triplestore_status">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">fetch_graph_triplestore_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Live graph backend row count and paths.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Live graph backend row count and paths.</span>
+
+<span class="sd">        ``has_data`` is tri-state: ``True``/``False`` once the probe has answered,</span>
+<span class="sd">        and ``None`` when the engine could not be reached. A failed probe must</span>
+<span class="sd">        never be reported as ``False`` — callers cache this answer and render the</span>
+<span class="sd">        KG readiness badge from it, so one timeout against a remote engine would</span>
+<span class="sd">        otherwise tell users to rebuild a graph they already have.</span>
+<span class="sd">        ``graph_check_error`` carries the reason when ``has_data`` is ``None``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
             <span class="n">effective_graph_name</span><span class="p">,</span>
             <span class="n">effective_graph_query_table</span><span class="p">,</span>
@@ -1067,20 +1104,24 @@
             <span class="n">graph_name</span> <span class="o">=</span> <span class="n">effective_graph_query_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
             <span class="n">view_table</span> <span class="o">=</span> <span class="n">effective_view_table</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
             <span class="n">graph_store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-            <span class="n">graph_ok</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">graph_exists</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="n">graph_count</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="n">graph_path</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">probe_error</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">graph_store</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
-                    <span class="n">exists</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">graph_store</span><span class="o">.</span><span class="n">table_exists</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">exists</span><span class="p">:</span>
+                    <span class="n">graph_exists</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span>
+                        <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">graph_store</span><span class="o">.</span><span class="n">table_exists</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
+                    <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">graph_exists</span><span class="p">:</span>
                         <span class="n">gs</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">graph_store</span><span class="o">.</span><span class="n">get_status</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
                         <span class="n">graph_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">gs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;count&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
-                        <span class="n">graph_ok</span> <span class="o">=</span> <span class="n">graph_count</span> <span class="o">&gt;</span> <span class="mi">0</span>
                         <span class="n">graph_path</span> <span class="o">=</span> <span class="n">gs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;path&quot;</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Graph status check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                    <span class="n">probe_error</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="ow">or</span> <span class="n">e</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
 
+            <span class="n">graph_ok</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">probe_error</span> <span class="k">else</span> <span class="p">(</span><span class="n">graph_exists</span> <span class="ow">and</span> <span class="n">graph_count</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
             <span class="n">build_stamp</span> <span class="o">=</span> <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">triplestore</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;build_last_update&quot;</span><span class="p">)</span>
             <span class="n">result</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
                 <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -1088,14 +1129,19 @@
                 <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="n">graph_count</span><span class="p">,</span>
                 <span class="s2">&quot;view_table&quot;</span><span class="p">:</span> <span class="n">view_table</span><span class="p">,</span>
                 <span class="s2">&quot;graph_name&quot;</span><span class="p">:</span> <span class="n">graph_name</span><span class="p">,</span>
+                <span class="s2">&quot;graph_check_error&quot;</span><span class="p">:</span> <span class="n">probe_error</span><span class="p">,</span>
             <span class="p">}</span>
             <span class="k">if</span> <span class="n">build_stamp</span> <span class="ow">and</span> <span class="n">graph_ok</span><span class="p">:</span>
                 <span class="n">result</span><span class="p">[</span><span class="s2">&quot;last_modified&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">build_stamp</span>
             <span class="k">if</span> <span class="n">graph_path</span><span class="p">:</span>
                 <span class="n">result</span><span class="p">[</span><span class="s2">&quot;path&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">graph_path</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_ok</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">graph_ok</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="s2">&quot;reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Could not check the graph status&quot;</span>
+            <span class="k">elif</span> <span class="ow">not</span> <span class="n">graph_ok</span><span class="p">:</span>
+                <span class="c1"># Keyed on existence, not on the count: an existing-but-empty</span>
+                <span class="c1"># graph used to be reported as never built.</span>
                 <span class="n">result</span><span class="p">[</span><span class="s2">&quot;reason&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="s2">&quot;Graph does not exist yet&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_count</span> <span class="k">else</span> <span class="s2">&quot;Graph is empty&quot;</span>
+                    <span class="s2">&quot;Graph is empty&quot;</span> <span class="k">if</span> <span class="n">graph_exists</span> <span class="k">else</span> <span class="s2">&quot;Graph does not exist yet&quot;</span>
                 <span class="p">)</span>
             <span class="k">return</span> <span class="n">result</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1167,6 +1213,16 @@
             <span class="s2">&quot;view_check_error&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
             <span class="s2">&quot;triple_count&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
         <span class="p">}</span>
+
+        <span class="c1"># --- Neo4j engine: no SQL VIEW / UC-sync / Postgres — probe the graph</span>
+        <span class="c1">#     directly over Bolt and return engine-specific fields. The Neo4j</span>
+        <span class="c1">#     path writes a typed property graph, so there is no view_table /</span>
+        <span class="c1">#     synced-UC bridge to check; the &quot;Triple Store&quot; card still shows the</span>
+        <span class="c1">#     source Delta view name for context but its existence is N/A. ---</span>
+        <span class="k">if</span> <span class="n">graph_engine</span> <span class="o">==</span> <span class="s2">&quot;neo4j&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fetch_neo4j_existence</span><span class="p">(</span>
+                <span class="n">settings</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">run_blocking</span>
+            <span class="p">)</span>
 
         <span class="c1"># --- Resolve config without needing a Postgres connection (sync) ---</span>
         <span class="n">lk_sync_mode</span> <span class="o">=</span> <span class="s2">&quot;app_managed&quot;</span>
@@ -1335,6 +1391,70 @@
 
         <span class="k">return</span> <span class="n">result</span></div>
 
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_fetch_neo4j_existence</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">graph_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">run_blocking</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Neo4j existence probe for the Build page (typed property graph).</span>
+
+<span class="sd">        Populates ``neo4j_*`` fields: whether the graph&#39;s marker label exists,</span>
+<span class="sd">        the reconstructed triple count, the configured database, and a display</span>
+<span class="sd">        FQN ``&lt;database&gt; · &lt;marker&gt;``. No SQL VIEW / UC-sync / Postgres probes</span>
+<span class="sd">        run on this path (Neo4j writes over Bolt at build time).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_graphdb</span>
+
+        <span class="n">domain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_graph_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">domain</span><span class="o">.</span><span class="n">info</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_check_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># The SQL VIEW existence is not part of the Neo4j path; mark N/A so the</span>
+        <span class="c1"># UI does not show a misleading &quot;Not found&quot;.</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;view_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Use the AUTO path (engine=None): it resolves the engine from the</span>
+            <span class="c1"># per-domain backend AND loads the saved connection config from</span>
+            <span class="c1"># GlobalConfigService. Passing engine=&quot;neo4j&quot; explicitly would hand</span>
+            <span class="c1"># _create_neo4j an empty engine_config (no URI) → None, which is why</span>
+            <span class="c1"># this previously reported &quot;Neo4j backend unavailable&quot; even though</span>
+            <span class="c1"># the connection (Settings → Neo4j → Test/Health) works.</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">store</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">store</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">!=</span> <span class="s2">&quot;Neo4jStore&quot;</span><span class="p">:</span>
+                <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_check_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="s2">&quot;Neo4j backend unavailable (check the connection in Settings → Neo4j).&quot;</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">result</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">exists</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">table_exists</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
+                <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_graph_exists&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">exists</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">]:</span>
+                    <span class="c1"># Fall back to the connection&#39;s effective database.</span>
+                    <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="s2">&quot;_database&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                <span class="k">if</span> <span class="n">exists</span><span class="p">:</span>
+                    <span class="n">cnt</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">count_triples</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
+                    <span class="n">result</span><span class="p">[</span><span class="s2">&quot;triple_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cnt</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+                    <span class="n">result</span><span class="p">[</span><span class="s2">&quot;graph_has_data&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;triple_count&quot;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">result</span><span class="p">[</span><span class="s2">&quot;graph_has_data&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">store</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+                    <span class="k">pass</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;DT existence: neo4j graph check failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_check_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jWriteOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">sanitise_label</span>
+
+        <span class="n">marker</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span> <span class="k">if</span> <span class="n">graph_name</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">db</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">]</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;neo4j_marker_label&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">marker</span>
+        <span class="n">result</span><span class="p">[</span><span class="s2">&quot;graph_display&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot; · &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="n">marker</span><span class="p">)</span> <span class="k">if</span> <span class="n">p</span><span class="p">])</span> <span class="ow">or</span> <span class="n">marker</span>
+        <span class="k">return</span> <span class="n">result</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
     <span class="c1"># SPARQL execution pipeline (instance method)</span>
@@ -1662,32 +1782,43 @@
             <span class="p">)</span>
         <span class="k">return</span> <span class="n">shape</span>
 
+    <span class="c1">#: A failed check used to report only that it failed, which left the reader</span>
+    <span class="c1">#: no way to tell a broken rule from a warehouse problem without the server</span>
+    <span class="c1">#: log. Long enough for the engine&#39;s error code and its first sentence.</span>
+    <span class="n">_SQL_ERROR_MAX_CHARS</span> <span class="o">=</span> <span class="mi">300</span>
+
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_count_class_population_graph</span><span class="p">(</span>
-        <span class="n">triples</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cache</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count distinct subjects of a given rdf:type class from in-memory triples.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">class_uri</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="n">cache</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">cache</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">if</span> <span class="n">class_uri</span> <span class="ow">in</span> <span class="n">cache</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">cache</span><span class="p">[</span><span class="n">class_uri</span><span class="p">]</span>
-        <span class="n">subjects</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
-        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">triples</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-                <span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">o</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;subject&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                    <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                    <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">s</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">o</span> <span class="o">=</span> <span class="n">t</span>
-            <span class="k">if</span> <span class="n">p</span> <span class="o">==</span> <span class="n">RDF_TYPE</span> <span class="ow">and</span> <span class="n">o</span> <span class="o">==</span> <span class="n">class_uri</span><span class="p">:</span>
-                <span class="n">subjects</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-        <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">subjects</span><span class="p">)</span>
-        <span class="n">cache</span><span class="p">[</span><span class="n">class_uri</span><span class="p">]</span> <span class="o">=</span> <span class="n">total</span>
-        <span class="k">return</span> <span class="n">total</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sql_error_detail</span><span class="p">(</span><span class="n">exc</span><span class="p">:</span> <span class="ne">Exception</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the engine&#39;s message as a single line fit for a result row.&quot;&quot;&quot;</span>
+        <span class="n">detail</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">detail</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_SQL_ERROR_MAX_CHARS</span><span class="p">:</span>
+            <span class="n">detail</span> <span class="o">=</span> <span class="n">detail</span><span class="p">[:</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_SQL_ERROR_MAX_CHARS</span><span class="p">]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">()</span> <span class="o">+</span> <span class="s2">&quot;…&quot;</span>
+        <span class="k">return</span> <span class="n">detail</span> <span class="ow">or</span> <span class="n">exc</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_failed_check_result</span><span class="p">(</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">check_id</span><span class="p">,</span> <span class="n">sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">exc</span><span class="p">:</span> <span class="ne">Exception</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Report a check whose query failed, carrying the cause and the SQL.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">name</span><span class="p">,</span>
+            <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">category</span><span class="p">,</span>
+            <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">,</span>
+            <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Query failed: </span><span class="si">{</span><span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_sql_error_detail</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
+            <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="n">sql</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_rule_check_id</span><span class="p">(</span><span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rule</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the check id for a non-SHACL *rule*.</span>
+
+<span class="sd">        A run that selects individual rules hands over a filtered list, which</span>
+<span class="sd">        renumbers it. The selector stamps ``check_id`` so a rule with no name</span>
+<span class="sd">        keeps the id it was picked by rather than picking up its neighbour&#39;s.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;check_id&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rule_check_id</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_swrl_target_class_uri</span><span class="p">(</span><span class="n">rule</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">):</span>
@@ -1810,15 +1941,9 @@
                     <span class="k">return</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;SQL DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">cat</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">),</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Query execution failed for this check.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="n">sql</span><span class="p">,</span>
-                    <span class="p">}</span>
+                    <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_failed_check_result</span><span class="p">(</span>
+                        <span class="n">label</span><span class="p">,</span> <span class="n">cat</span><span class="p">,</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">),</span> <span class="n">sql</span><span class="p">,</span> <span class="n">exc</span>
+                    <span class="p">)</span>
                 <span class="p">)</span>
 
         <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_run_swrl_sql_checks</span><span class="p">(</span>
@@ -1893,6 +2018,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
                 <span class="k">continue</span>
             <span class="n">label</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;SWRL Rule </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">check_id</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_rule_check_id</span><span class="p">(</span><span class="n">SWRL_ID_PREFIX</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span>
             <span class="n">progress</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(((</span><span class="n">shape_count</span> <span class="o">+</span> <span class="n">idx</span><span class="p">)</span> <span class="o">/</span> <span class="n">total</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
                 <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;SWRL </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -1909,7 +2035,7 @@
                     <span class="p">{</span>
                         <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
                         <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;swrl:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">,</span>
                         <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span>
                         <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Cannot translate to SQL&quot;</span><span class="p">,</span>
                         <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
@@ -1932,7 +2058,7 @@
                 <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
                     <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;swrl:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">,</span>
                     <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
                     <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
                     <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
@@ -1956,15 +2082,9 @@
             <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
                 <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;SWRL DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; SQL failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;swrl:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Query execution failed for this rule.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
+                    <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_failed_check_result</span><span class="p">(</span>
+                        <span class="n">label</span><span class="p">,</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span> <span class="n">check_id</span><span class="p">,</span> <span class="n">sql</span><span class="p">,</span> <span class="n">exc</span>
+                    <span class="p">)</span>
                 <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
@@ -1992,6 +2112,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
                 <span class="k">continue</span>
             <span class="n">dt_name</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Decision Table </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">check_id</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_rule_check_id</span><span class="p">(</span><span class="n">DECISION_TABLE_ID_PREFIX</span><span class="p">,</span> <span class="n">dt</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span>
             <span class="n">progress</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(((</span><span class="n">shape_count</span> <span class="o">+</span> <span class="n">idx</span><span class="p">)</span> <span class="o">/</span> <span class="n">total</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
                 <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;DT </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">decision_tables</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">dt_name</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -2003,7 +2124,7 @@
                     <span class="p">{</span>
                         <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">dt_name</span><span class="p">,</span>
                         <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dt:</span><span class="si">{</span><span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">,</span>
                         <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span>
                         <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Cannot translate to SQL&quot;</span><span class="p">,</span>
                         <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
@@ -2026,7 +2147,7 @@
                 <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">dt_name</span><span class="p">,</span>
                     <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dt:</span><span class="si">{</span><span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">,</span>
                     <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
                     <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
                     <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
@@ -2054,15 +2175,9 @@
                     <span class="s2">&quot;Decision table DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; SQL failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">dt_name</span><span class="p">,</span> <span class="n">exc</span>
                 <span class="p">)</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">dt_name</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dt:</span><span class="si">{</span><span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Query execution failed for this decision table.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
+                    <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_failed_check_result</span><span class="p">(</span>
+                        <span class="n">dt_name</span><span class="p">,</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span> <span class="n">check_id</span><span class="p">,</span> <span class="n">sql</span><span class="p">,</span> <span class="n">exc</span>
+                    <span class="p">)</span>
                 <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
@@ -2090,6 +2205,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
                 <span class="k">continue</span>
             <span class="n">agg_name</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Aggregate Rule </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">check_id</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_rule_check_id</span><span class="p">(</span><span class="n">AGGREGATE_ID_PREFIX</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span>
             <span class="n">progress</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(((</span><span class="n">shape_count</span> <span class="o">+</span> <span class="n">idx</span><span class="p">)</span> <span class="o">/</span> <span class="n">total</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
                 <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Agg </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">aggregate_rules</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">agg_name</span><span class="si">}</span><span class="s2">&quot;</span>
@@ -2101,7 +2217,7 @@
                     <span class="p">{</span>
                         <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">agg_name</span><span class="p">,</span>
                         <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;agg:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">,</span>
                         <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span>
                         <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Cannot translate to SQL&quot;</span><span class="p">,</span>
                         <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
@@ -2127,7 +2243,7 @@
                 <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
                     <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">agg_name</span><span class="p">,</span>
                     <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;agg:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">,</span>
                     <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
                     <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
                     <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
@@ -2154,515 +2270,9 @@
                     <span class="s2">&quot;Aggregate rule DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; SQL failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">agg_name</span><span class="p">,</span> <span class="n">exc</span>
                 <span class="p">)</span>
                 <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">agg_name</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;agg:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Query execution failed for this aggregate rule.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
-
-    <span class="c1"># ------------------------------------------------------------------</span>
-    <span class="c1"># Data quality: Graph checks (static -- runs in background thread)</span>
-    <span class="c1"># ------------------------------------------------------------------</span>
-
-<div class="viewcode-block" id="DigitalTwin.run_graph_checks">
-<a class="viewcode-back" href="../../../../api/app.objects.digitaltwin.html#back.objects.digitaltwin.DigitalTwin.DigitalTwin.run_graph_checks">[docs]</a>
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">run_graph_checks</span><span class="p">(</span>
-        <span class="n">tm</span><span class="p">,</span>
-        <span class="n">task</span><span class="p">,</span>
-        <span class="n">shapes</span><span class="p">,</span>
-        <span class="n">store</span><span class="p">,</span>
-        <span class="n">graph_name</span><span class="p">,</span>
-        <span class="n">domain_snap</span><span class="p">,</span>
-        <span class="n">t0</span><span class="p">,</span>
-        <span class="n">total</span><span class="p">,</span>
-        <span class="n">swrl_rules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">ontology</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">decision_tables</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">aggregate_rules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">violation_limit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute SHACL shapes, SWRL, decision tables and aggregate rules against the graph backend.&quot;&quot;&quot;</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLService</span>
-
-        <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="s2">&quot;Loading triples from graph...&quot;</span><span class="p">)</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">triples</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">query_triples</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
-        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-            <span class="n">err</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span>
-            <span class="k">if</span> <span class="s2">&quot;does not exist&quot;</span> <span class="ow">in</span> <span class="n">err</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
-                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span>
-                    <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Graph &#39;</span><span class="si">{</span><span class="n">graph_name</span><span class="si">}</span><span class="s2">&#39; does not exist. Run Build first.&quot;</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Error reading graph &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
-                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span>
-                    <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-                    <span class="s2">&quot;Error reading the graph. Run Build again or verify your connection settings.&quot;</span><span class="p">,</span>
-                <span class="p">)</span>
-            <span class="k">return</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
-            <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Graph &#39;</span><span class="si">{</span><span class="n">graph_name</span><span class="si">}</span><span class="s2">&#39; is empty. Run Build first.&quot;</span><span class="p">)</span>
-            <span class="k">return</span>
-        <span class="n">predicates_in_graph</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">triples</span> <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;predicate&quot;</span><span class="p">)</span>
-        <span class="p">}</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-            <span class="s2">&quot;Graph DQ: loaded </span><span class="si">%d</span><span class="s2"> triples from &#39;</span><span class="si">%s</span><span class="s2">&#39; — </span><span class="si">%d</span><span class="s2"> distinct predicates&quot;</span><span class="p">,</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">),</span>
-            <span class="n">graph_name</span><span class="p">,</span>
-            <span class="nb">len</span><span class="p">(</span><span class="n">predicates_in_graph</span><span class="p">),</span>
-        <span class="p">)</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Graph predicates: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">predicates_in_graph</span><span class="p">))</span>
-        <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
-            <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Loaded </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">triples</span><span class="p">)</span><span class="si">}</span><span class="s2"> triples, evaluating shapes...&quot;</span>
-        <span class="p">)</span>
-        <span class="n">pop_cache</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">shape</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">shapes</span><span class="p">):</span>
-            <span class="n">label</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Shape </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
-            <span class="n">cat</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span>
-            <span class="n">progress</span> <span class="o">=</span> <span class="mi">15</span> <span class="o">+</span> <span class="nb">int</span><span class="p">((</span><span class="n">idx</span> <span class="o">/</span> <span class="n">total</span><span class="p">)</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
-            <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Check </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="s2">&quot;DQ shape &#39;</span><span class="si">%s</span><span class="s2">&#39;: type=</span><span class="si">%s</span><span class="s2">, class_uri=&#39;</span><span class="si">%s</span><span class="s2">&#39;, prop_uri=&#39;</span><span class="si">%s</span><span class="s2">&#39;, params=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                <span class="n">label</span><span class="p">,</span>
-                <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shacl_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;property_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{}),</span>
-            <span class="p">)</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">violations</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">evaluate_shape_in_memory</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">triples</span><span class="p">)</span>
-                <span class="n">violation_total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">violation_limit</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">violation_limit</span><span class="p">:</span>
-                    <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="p">[:</span><span class="n">violation_limit</span><span class="p">]</span>
-                <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span> <span class="k">if</span> <span class="n">violation_total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;success&quot;</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">violation_total</span><span class="si">}</span><span class="s2"> violations found&quot;</span>
-                    <span class="k">if</span> <span class="n">violation_total</span>
-                    <span class="k">else</span> <span class="s2">&quot;No violations&quot;</span>
-                <span class="p">)</span>
-                <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
-                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
-                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">cat</span><span class="p">,</span>
-                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">),</span>
-                    <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
-                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
-                    <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
-                    <span class="s2">&quot;violation_total&quot;</span><span class="p">:</span> <span class="n">violation_total</span><span class="p">,</span>
-                    <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;severity&quot;</span><span class="p">,</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">),</span>
-                <span class="p">}</span>
-                <span class="n">class_uri</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                <span class="n">pop</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_count_class_population_graph</span><span class="p">(</span>
-                    <span class="n">triples</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">,</span> <span class="n">pop_cache</span>
-                <span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;DQ shape &#39;</span><span class="si">%s</span><span class="s2">&#39;: violations=</span><span class="si">%d</span><span class="s2"> (showing </span><span class="si">%d</span><span class="s2">), population=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">label</span><span class="p">,</span>
-                    <span class="n">violation_total</span><span class="p">,</span>
-                    <span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">),</span>
-                    <span class="n">pop</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_enrich_with_population</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pop</span><span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Graph DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="n">cat</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="n">shape</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">),</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Shape evaluation failed.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
-        <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_run_swrl_graph_checks</span><span class="p">(</span>
-            <span class="n">tm</span><span class="p">,</span>
-            <span class="n">task</span><span class="p">,</span>
-            <span class="n">results</span><span class="p">,</span>
-            <span class="n">swrl_rules</span><span class="p">,</span>
-            <span class="n">ontology</span><span class="p">,</span>
-            <span class="n">store</span><span class="p">,</span>
-            <span class="n">graph_name</span><span class="p">,</span>
-            <span class="n">total</span><span class="p">,</span>
-            <span class="n">triples</span><span class="p">,</span>
-            <span class="n">pop_cache</span><span class="p">,</span>
-            <span class="n">violation_limit</span><span class="o">=</span><span class="n">violation_limit</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">swrl_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">)</span> <span class="k">if</span> <span class="n">swrl_rules</span> <span class="k">else</span> <span class="mi">0</span>
-        <span class="n">dt_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">decision_tables</span><span class="p">)</span> <span class="k">if</span> <span class="n">decision_tables</span> <span class="k">else</span> <span class="mi">0</span>
-        <span class="n">dt_offset</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span> <span class="o">+</span> <span class="n">swrl_count</span>
-        <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_run_dt_graph_checks</span><span class="p">(</span>
-            <span class="n">tm</span><span class="p">,</span>
-            <span class="n">task</span><span class="p">,</span>
-            <span class="n">results</span><span class="p">,</span>
-            <span class="n">decision_tables</span><span class="p">,</span>
-            <span class="n">ontology</span><span class="p">,</span>
-            <span class="n">store</span><span class="p">,</span>
-            <span class="n">graph_name</span><span class="p">,</span>
-            <span class="n">total</span><span class="p">,</span>
-            <span class="n">dt_offset</span><span class="p">,</span>
-            <span class="n">triples</span><span class="p">,</span>
-            <span class="n">pop_cache</span><span class="p">,</span>
-            <span class="n">violation_limit</span><span class="o">=</span><span class="n">violation_limit</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">agg_offset</span> <span class="o">=</span> <span class="n">dt_offset</span> <span class="o">+</span> <span class="n">dt_count</span>
-        <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_run_agg_graph_checks</span><span class="p">(</span>
-            <span class="n">tm</span><span class="p">,</span>
-            <span class="n">task</span><span class="p">,</span>
-            <span class="n">results</span><span class="p">,</span>
-            <span class="n">aggregate_rules</span><span class="p">,</span>
-            <span class="n">ontology</span><span class="p">,</span>
-            <span class="n">store</span><span class="p">,</span>
-            <span class="n">graph_name</span><span class="p">,</span>
-            <span class="n">total</span><span class="p">,</span>
-            <span class="n">agg_offset</span><span class="p">,</span>
-            <span class="n">triples</span><span class="p">,</span>
-            <span class="n">pop_cache</span><span class="p">,</span>
-            <span class="n">violation_limit</span><span class="o">=</span><span class="n">violation_limit</span><span class="p">,</span>
-        <span class="p">)</span>
-        <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">complete_dq_task</span><span class="p">(</span><span class="n">tm</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span></div>
-
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_run_swrl_graph_checks</span><span class="p">(</span>
-        <span class="n">tm</span><span class="p">,</span>
-        <span class="n">task</span><span class="p">,</span>
-        <span class="n">results</span><span class="p">,</span>
-        <span class="n">swrl_rules</span><span class="p">,</span>
-        <span class="n">ontology</span><span class="p">,</span>
-        <span class="n">store</span><span class="p">,</span>
-        <span class="n">graph_name</span><span class="p">,</span>
-        <span class="n">total</span><span class="p">,</span>
-        <span class="n">triples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">pop_cache</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">violation_limit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">swrl_rules</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.SWRLEngine</span><span class="w"> </span><span class="kn">import</span> <span class="n">SWRLEngine</span>
-
-        <span class="n">ontology</span> <span class="o">=</span> <span class="n">ontology</span> <span class="ow">or</span> <span class="p">{}</span>
-        <span class="n">engine</span> <span class="o">=</span> <span class="n">SWRLEngine</span><span class="p">(</span><span class="n">ontology</span><span class="o">=</span><span class="n">ontology</span><span class="p">)</span>
-        <span class="n">translator</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">_get_translator</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
-        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="n">uri_map</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">_build_uri_map</span><span class="p">()</span>
-        <span class="n">tbl_sql</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">sql_table_reference</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
-        <span class="n">shape_count</span> <span class="o">=</span> <span class="n">total</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">pop_cache</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">pop_cache</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">rule</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">):</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="n">label</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;SWRL Rule </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="n">progress</span> <span class="o">=</span> <span class="mi">15</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(((</span><span class="n">shape_count</span> <span class="o">+</span> <span class="n">idx</span><span class="p">)</span> <span class="o">/</span> <span class="n">total</span><span class="p">)</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
-            <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
-                <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;SWRL </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="p">)</span>
-            <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
-                <span class="s2">&quot;antecedent&quot;</span><span class="p">:</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;antecedent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                <span class="s2">&quot;consequent&quot;</span><span class="p">:</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;consequent&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
-                <span class="s2">&quot;base_uri&quot;</span><span class="p">:</span> <span class="n">base_uri</span><span class="p">,</span>
-                <span class="s2">&quot;uri_map&quot;</span><span class="p">:</span> <span class="n">uri_map</span><span class="p">,</span>
-            <span class="p">}</span>
-            <span class="n">query</span> <span class="o">=</span> <span class="n">translator</span><span class="o">.</span><span class="n">build_violation_sql</span><span class="p">(</span><span class="n">tbl_sql</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;swrl:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Cannot translate to SQL&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
-                <span class="k">continue</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">t_rule</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-                <span class="n">raw_rows</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-                <span class="n">violations</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;s&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">raw_rows</span><span class="p">]</span>
-                <span class="n">violation_total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">violation_limit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">violation_total</span> <span class="o">&gt;</span> <span class="n">violation_limit</span><span class="p">:</span>
-                    <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="p">[:</span><span class="n">violation_limit</span><span class="p">]</span>
-                <span class="n">elapsed_rule</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t_rule</span>
-                <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span> <span class="k">if</span> <span class="n">violation_total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;success&quot;</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">violation_total</span><span class="si">}</span><span class="s2"> violations found&quot;</span>
-                    <span class="k">if</span> <span class="n">violation_total</span>
-                    <span class="k">else</span> <span class="s2">&quot;No violations&quot;</span>
-                <span class="p">)</span>
-                <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
-                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
-                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;swrl:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
-                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
-                    <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
-                    <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;violation_total&quot;</span><span class="p">:</span> <span class="n">violation_total</span><span class="p">,</span>
-                <span class="p">}</span>
-                <span class="n">pop</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="k">if</span> <span class="n">violations</span><span class="p">:</span>
-                    <span class="n">class_uri</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_swrl_target_class_uri</span><span class="p">(</span>
-                        <span class="n">rule</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">,</span> <span class="n">uri_map</span>
+                    <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_failed_check_result</span><span class="p">(</span>
+                        <span class="n">agg_name</span><span class="p">,</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span> <span class="n">check_id</span><span class="p">,</span> <span class="n">sql</span><span class="p">,</span> <span class="n">exc</span>
                     <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">triples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">class_uri</span><span class="p">:</span>
-                        <span class="n">pop</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_count_class_population_graph</span><span class="p">(</span>
-                            <span class="n">triples</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">,</span> <span class="n">pop_cache</span>
-                        <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">pop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pop</span> <span class="o">&lt;</span> <span class="n">violation_total</span><span class="p">:</span>
-                        <span class="n">pop</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_enrich_with_population</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pop</span><span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;SWRL rule &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%d</span><span class="s2"> violations (</span><span class="si">%.2f</span><span class="s2">s)&quot;</span><span class="p">,</span>
-                    <span class="n">label</span><span class="p">,</span>
-                    <span class="n">violation_total</span><span class="p">,</span>
-                    <span class="n">elapsed_rule</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;SWRL DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; graph failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;structural&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;swrl:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Graph query execution failed for this rule.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_run_dt_graph_checks</span><span class="p">(</span>
-        <span class="n">tm</span><span class="p">,</span>
-        <span class="n">task</span><span class="p">,</span>
-        <span class="n">results</span><span class="p">,</span>
-        <span class="n">decision_tables</span><span class="p">,</span>
-        <span class="n">ontology</span><span class="p">,</span>
-        <span class="n">store</span><span class="p">,</span>
-        <span class="n">graph_name</span><span class="p">,</span>
-        <span class="n">total</span><span class="p">,</span>
-        <span class="n">shape_count</span><span class="p">,</span>
-        <span class="n">triples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">pop_cache</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">violation_limit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">decision_tables</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.DecisionTableEngine</span><span class="w"> </span><span class="kn">import</span> <span class="n">DecisionTableEngine</span>
-
-        <span class="n">engine</span> <span class="o">=</span> <span class="n">DecisionTableEngine</span><span class="p">()</span>
-        <span class="n">ontology</span> <span class="o">=</span> <span class="n">ontology</span> <span class="ow">or</span> <span class="p">{}</span>
-        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="n">uri_map</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">_build_uri_map</span><span class="p">(</span><span class="n">ontology</span><span class="p">)</span>
-        <span class="n">tbl_sql</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">sql_table_reference</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">pop_cache</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">pop_cache</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">dt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">decision_tables</span><span class="p">):</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="n">dt_name</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Decision Table </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="n">progress</span> <span class="o">=</span> <span class="mi">15</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(((</span><span class="n">shape_count</span> <span class="o">+</span> <span class="n">idx</span><span class="p">)</span> <span class="o">/</span> <span class="n">total</span><span class="p">)</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
-            <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
-                <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;DT </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">decision_tables</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">dt_name</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="p">)</span>
-            <span class="n">resolved</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">_resolve_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">uri_map</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
-            <span class="n">query</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">build_violation_sql</span><span class="p">(</span><span class="n">resolved</span><span class="p">,</span> <span class="n">tbl_sql</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">dt_name</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dt:</span><span class="si">{</span><span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Cannot translate to SQL&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
-                <span class="k">continue</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">t_rule</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-                <span class="n">raw_rows</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-                <span class="n">violations</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;s&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">raw_rows</span><span class="p">]</span>
-                <span class="n">violation_total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">violation_limit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">violation_total</span> <span class="o">&gt;</span> <span class="n">violation_limit</span><span class="p">:</span>
-                    <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="p">[:</span><span class="n">violation_limit</span><span class="p">]</span>
-                <span class="n">elapsed_rule</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t_rule</span>
-                <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span> <span class="k">if</span> <span class="n">violation_total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;success&quot;</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">violation_total</span><span class="si">}</span><span class="s2"> violations found&quot;</span>
-                    <span class="k">if</span> <span class="n">violation_total</span>
-                    <span class="k">else</span> <span class="s2">&quot;No violations&quot;</span>
-                <span class="p">)</span>
-                <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
-                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">dt_name</span><span class="p">,</span>
-                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dt:</span><span class="si">{</span><span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
-                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
-                    <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
-                    <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;violation_total&quot;</span><span class="p">:</span> <span class="n">violation_total</span><span class="p">,</span>
-                <span class="p">}</span>
-                <span class="n">pop</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="k">if</span> <span class="n">violations</span><span class="p">:</span>
-                    <span class="n">class_uri</span> <span class="o">=</span> <span class="n">resolved</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">triples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">class_uri</span><span class="p">:</span>
-                        <span class="n">pop</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_count_class_population_graph</span><span class="p">(</span>
-                            <span class="n">triples</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">,</span> <span class="n">pop_cache</span>
-                        <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">pop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pop</span> <span class="o">&lt;</span> <span class="n">violation_total</span><span class="p">:</span>
-                        <span class="n">pop</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_enrich_with_population</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pop</span><span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;DT rule &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%d</span><span class="s2"> violations (</span><span class="si">%.2f</span><span class="s2">s)&quot;</span><span class="p">,</span>
-                    <span class="n">dt_name</span><span class="p">,</span>
-                    <span class="n">violation_total</span><span class="p">,</span>
-                    <span class="n">elapsed_rule</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
-                    <span class="s2">&quot;Decision table DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; graph failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">dt_name</span><span class="p">,</span> <span class="n">exc</span>
-                <span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">dt_name</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;dt:</span><span class="si">{</span><span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Graph query execution failed for this decision table.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_run_agg_graph_checks</span><span class="p">(</span>
-        <span class="n">tm</span><span class="p">,</span>
-        <span class="n">task</span><span class="p">,</span>
-        <span class="n">results</span><span class="p">,</span>
-        <span class="n">aggregate_rules</span><span class="p">,</span>
-        <span class="n">ontology</span><span class="p">,</span>
-        <span class="n">store</span><span class="p">,</span>
-        <span class="n">graph_name</span><span class="p">,</span>
-        <span class="n">total</span><span class="p">,</span>
-        <span class="n">shape_count</span><span class="p">,</span>
-        <span class="n">triples</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">pop_cache</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">violation_limit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-    <span class="p">):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">aggregate_rules</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.AggregateRuleEngine</span><span class="w"> </span><span class="kn">import</span> <span class="n">AggregateRuleEngine</span>
-
-        <span class="n">engine</span> <span class="o">=</span> <span class="n">AggregateRuleEngine</span><span class="p">()</span>
-        <span class="n">ontology</span> <span class="o">=</span> <span class="n">ontology</span> <span class="ow">or</span> <span class="p">{}</span>
-        <span class="n">base_uri</span> <span class="o">=</span> <span class="n">ontology</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;base_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="n">tbl_sql</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">sql_table_reference</span><span class="p">(</span><span class="n">graph_name</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">pop_cache</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">pop_cache</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">rule</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">aggregate_rules</span><span class="p">):</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="n">agg_name</span> <span class="o">=</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Aggregate Rule </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            <span class="n">progress</span> <span class="o">=</span> <span class="mi">15</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(((</span><span class="n">shape_count</span> <span class="o">+</span> <span class="n">idx</span><span class="p">)</span> <span class="o">/</span> <span class="n">total</span><span class="p">)</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
-            <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
-                <span class="n">task</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">progress</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Agg </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">aggregate_rules</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">agg_name</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="p">)</span>
-            <span class="n">resolved</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">_resolve_rule</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">rule</span><span class="p">),</span> <span class="n">ontology</span><span class="p">)</span>
-            <span class="n">query</span> <span class="o">=</span> <span class="n">engine</span><span class="o">.</span><span class="n">build_sql</span><span class="p">(</span><span class="n">resolved</span><span class="p">,</span> <span class="n">tbl_sql</span><span class="p">,</span> <span class="n">base_uri</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">query</span><span class="p">:</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">agg_name</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;agg:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Cannot translate to SQL&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
-                <span class="p">)</span>
-                <span class="k">continue</span>
-            <span class="k">try</span><span class="p">:</span>
-                <span class="n">t_rule</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-                <span class="n">raw_rows</span> <span class="o">=</span> <span class="n">store</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="n">query</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-                <span class="n">violations</span> <span class="o">=</span> <span class="p">[</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;s&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;s&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
-                        <span class="s2">&quot;agg_val&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;agg_val&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
-                    <span class="p">}</span>
-                    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">raw_rows</span>
-                <span class="p">]</span>
-                <span class="n">violation_total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">violation_limit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">violation_total</span> <span class="o">&gt;</span> <span class="n">violation_limit</span><span class="p">:</span>
-                    <span class="n">violations</span> <span class="o">=</span> <span class="n">violations</span><span class="p">[:</span><span class="n">violation_limit</span><span class="p">]</span>
-                <span class="n">elapsed_rule</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t_rule</span>
-                <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span> <span class="k">if</span> <span class="n">violation_total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;success&quot;</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">violation_total</span><span class="si">}</span><span class="s2"> violations found&quot;</span>
-                    <span class="k">if</span> <span class="n">violation_total</span>
-                    <span class="k">else</span> <span class="s2">&quot;No violations&quot;</span>
-                <span class="p">)</span>
-                <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
-                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">agg_name</span><span class="p">,</span>
-                    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;agg:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">,</span>
-                    <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="n">msg</span><span class="p">,</span>
-                    <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
-                    <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;severity&quot;</span><span class="p">:</span> <span class="s2">&quot;sh:Violation&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;violation_total&quot;</span><span class="p">:</span> <span class="n">violation_total</span><span class="p">,</span>
-                <span class="p">}</span>
-                <span class="n">pop</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="k">if</span> <span class="n">violations</span><span class="p">:</span>
-                    <span class="n">class_uri</span> <span class="o">=</span> <span class="n">resolved</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;target_class_uri&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">triples</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">class_uri</span><span class="p">:</span>
-                        <span class="n">pop</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_count_class_population_graph</span><span class="p">(</span>
-                            <span class="n">triples</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">,</span> <span class="n">pop_cache</span>
-                        <span class="p">)</span>
-                    <span class="k">if</span> <span class="n">pop</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pop</span> <span class="o">&lt;</span> <span class="n">violation_total</span><span class="p">:</span>
-                        <span class="n">pop</span> <span class="o">=</span> <span class="kc">None</span>
-                <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">_enrich_with_population</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">pop</span><span class="p">)</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;Agg rule &#39;</span><span class="si">%s</span><span class="s2">&#39;: </span><span class="si">%d</span><span class="s2"> violations (</span><span class="si">%.2f</span><span class="s2">s)&quot;</span><span class="p">,</span>
-                    <span class="n">agg_name</span><span class="p">,</span>
-                    <span class="n">violation_total</span><span class="p">,</span>
-                    <span class="n">elapsed_rule</span><span class="p">,</span>
-                <span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
-                    <span class="s2">&quot;Aggregate rule DQ check &#39;</span><span class="si">%s</span><span class="s2">&#39; graph failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">agg_name</span><span class="p">,</span> <span class="n">exc</span>
-                <span class="p">)</span>
-                <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="p">{</span>
-                        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">agg_name</span><span class="p">,</span>
-                        <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;conformance&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;shape_id&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;agg:</span><span class="si">{</span><span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;name&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;warning&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="s2">&quot;Graph query execution failed for this aggregate rule.&quot;</span><span class="p">,</span>
-                        <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="p">[],</span>
-                        <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                    <span class="p">}</span>
                 <span class="p">)</span>
 
     <span class="c1"># ------------------------------------------------------------------</span>
@@ -2766,7 +2376,6 @@
         <span class="n">domain_snap</span><span class="p">:</span> <span class="n">DomainSnapshot</span><span class="p">,</span>
         <span class="n">shapes</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
         <span class="n">triplestore_table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">requested_backend</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">total</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
         <span class="n">swrl_rules</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -2777,7 +2386,13 @@
         <span class="n">failure_message</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Data quality checks failed&quot;</span><span class="p">,</span>
         <span class="n">use_exception_message_on_failure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run SHACL / SWRL / DT / aggregate checks inside a worker thread.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run SHACL / SWRL / DT / aggregate checks inside a worker thread.</span>
+
+<span class="sd">        Every check is compiled to SQL and executed against the triple-store</span>
+<span class="sd">        VIEW on the SQL warehouse. The build creates that VIEW whatever graph</span>
+<span class="sd">        engine the domain uses, so it is the one target every domain has, and</span>
+<span class="sd">        one execution path means one answer per rule.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_graphdb</span> <span class="k">as</span> <span class="n">_get_graphdb</span>
@@ -2785,49 +2400,27 @@
         <span class="n">task_ref</span> <span class="o">=</span> <span class="n">SimpleNamespace</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">task_id</span><span class="p">)</span>
         <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="n">backend</span> <span class="o">=</span> <span class="n">requested_backend</span> <span class="ow">or</span> <span class="s2">&quot;view&quot;</span>
-            <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span>
-                <span class="n">task_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Running </span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2"> data quality checks (</span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2">)...&quot;</span>
-            <span class="p">)</span>
+            <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Running </span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2"> data quality checks...&quot;</span><span class="p">)</span>
 
-            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_graphdb</span><span class="p">(</span>
-                <span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span> <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span> <span class="k">else</span> <span class="n">backend</span><span class="p">)</span>
-            <span class="p">)</span>
+            <span class="n">store</span> <span class="o">=</span> <span class="n">_get_graphdb</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
-                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Could not initialize </span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2"> backend&quot;</span><span class="p">)</span>
+                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="s2">&quot;Could not reach the SQL warehouse&quot;</span><span class="p">)</span>
                 <span class="k">return</span>
 
-            <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-                <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">run_graph_checks</span><span class="p">(</span>
-                    <span class="n">tm</span><span class="p">,</span>
-                    <span class="n">task_ref</span><span class="p">,</span>
-                    <span class="n">shapes</span><span class="p">,</span>
-                    <span class="n">store</span><span class="p">,</span>
-                    <span class="n">triplestore_table</span><span class="p">,</span>
-                    <span class="n">domain_snap</span><span class="p">,</span>
-                    <span class="n">t0</span><span class="p">,</span>
-                    <span class="n">total</span><span class="p">,</span>
-                    <span class="n">swrl_rules</span><span class="o">=</span><span class="n">swrl_rules</span><span class="p">,</span>
-                    <span class="n">ontology</span><span class="o">=</span><span class="n">ontology_dict</span><span class="p">,</span>
-                    <span class="n">decision_tables</span><span class="o">=</span><span class="n">decision_tables</span><span class="p">,</span>
-                    <span class="n">aggregate_rules</span><span class="o">=</span><span class="n">aggregate_rules</span><span class="p">,</span>
-                    <span class="n">violation_limit</span><span class="o">=</span><span class="n">violation_limit</span><span class="p">,</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">run_sql_checks</span><span class="p">(</span>
-                    <span class="n">tm</span><span class="p">,</span>
-                    <span class="n">task_ref</span><span class="p">,</span>
-                    <span class="n">shapes</span><span class="p">,</span>
-                    <span class="n">triplestore_table</span><span class="p">,</span>
-                    <span class="n">store</span><span class="p">,</span>
-                    <span class="n">t0</span><span class="p">,</span>
-                    <span class="n">total</span><span class="p">,</span>
-                    <span class="n">swrl_rules</span><span class="o">=</span><span class="n">swrl_rules</span><span class="p">,</span>
-                    <span class="n">ontology</span><span class="o">=</span><span class="n">ontology_dict</span><span class="p">,</span>
-                    <span class="n">decision_tables</span><span class="o">=</span><span class="n">decision_tables</span><span class="p">,</span>
-                    <span class="n">aggregate_rules</span><span class="o">=</span><span class="n">aggregate_rules</span><span class="p">,</span>
-                    <span class="n">violation_limit</span><span class="o">=</span><span class="n">violation_limit</span><span class="p">,</span>
-                <span class="p">)</span>
+            <span class="n">DigitalTwin</span><span class="o">.</span><span class="n">run_sql_checks</span><span class="p">(</span>
+                <span class="n">tm</span><span class="p">,</span>
+                <span class="n">task_ref</span><span class="p">,</span>
+                <span class="n">shapes</span><span class="p">,</span>
+                <span class="n">triplestore_table</span><span class="p">,</span>
+                <span class="n">store</span><span class="p">,</span>
+                <span class="n">t0</span><span class="p">,</span>
+                <span class="n">total</span><span class="p">,</span>
+                <span class="n">swrl_rules</span><span class="o">=</span><span class="n">swrl_rules</span><span class="p">,</span>
+                <span class="n">ontology</span><span class="o">=</span><span class="n">ontology_dict</span><span class="p">,</span>
+                <span class="n">decision_tables</span><span class="o">=</span><span class="n">decision_tables</span><span class="p">,</span>
+                <span class="n">aggregate_rules</span><span class="o">=</span><span class="n">aggregate_rules</span><span class="p">,</span>
+                <span class="n">violation_limit</span><span class="o">=</span><span class="n">violation_limit</span><span class="p">,</span>
+            <span class="p">)</span>
 
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Data quality checks failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
@@ -2977,8 +2570,9 @@
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Graph metrics task failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
             <span class="c1"># Record the failed run in the history (best-effort) so users can</span>
-            <span class="c1"># see it in the Analytics History tab. The last good cached result</span>
-            <span class="c1"># is intentionally left untouched.</span>
+            <span class="c1"># see it in the analytics table on the Runs page (Knowledge</span>
+            <span class="c1"># Graph → Management → Runs). The last good cached result is</span>
+            <span class="c1"># intentionally left untouched.</span>
             <span class="k">if</span> <span class="n">folder</span> <span class="ow">and</span> <span class="n">version</span><span class="p">:</span>
                 <span class="k">try</span><span class="p">:</span>
                     <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span>
@@ -3012,7 +2606,7 @@
         <span class="o">*</span><span class="p">,</span>
         <span class="n">build_kind</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;session&quot;</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run ReasoningService phases; ``build_kind`` ``api`` enables append/materialize.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run ReasoningService phases; ``options`` drive append/materialize.&quot;&quot;&quot;</span>
         <span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">_dt</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_databricks_client</span><span class="p">,</span> <span class="n">is_uri</span>
@@ -3021,29 +2615,26 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_graphdb</span>
 
         <span class="n">is_api</span> <span class="o">=</span> <span class="n">build_kind</span> <span class="o">==</span> <span class="s2">&quot;api&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;api&quot;</span><span class="p">:</span> <span class="s2">&quot;API inference&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;scheduled&quot;</span><span class="p">:</span> <span class="s2">&quot;Scheduled inference&quot;</span><span class="p">,</span>
+        <span class="p">}</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">build_kind</span><span class="p">,</span> <span class="s2">&quot;Reasoning&quot;</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;API inference task </span><span class="si">%s</span><span class="s2">: starting&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: starting&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> task </span><span class="si">%s</span><span class="s2">: starting&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">task_id</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">start_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="s2">&quot;Initialising triple store&quot;</span><span class="p">)</span>
 
             <span class="n">store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                        <span class="s2">&quot;API inference task </span><span class="si">%s</span><span class="s2">: graph store unavailable, falling back to view&quot;</span><span class="p">,</span>
-                        <span class="n">task_id</span><span class="p">,</span>
-                    <span class="p">)</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                        <span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: graph store unavailable, falling back to view&quot;</span><span class="p">,</span>
-                        <span class="n">task_id</span><span class="p">,</span>
-                    <span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                    <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> task </span><span class="si">%s</span><span class="s2">: graph store unavailable, falling back to view&quot;</span><span class="p">,</span>
+                    <span class="n">label</span><span class="p">,</span>
+                    <span class="n">task_id</span><span class="p">,</span>
+                <span class="p">)</span>
                 <span class="n">store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: store=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> task </span><span class="si">%s</span><span class="s2">: store=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">label</span><span class="p">,</span>
                 <span class="n">task_id</span><span class="p">,</span>
                 <span class="nb">type</span><span class="p">(</span><span class="n">store</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span> <span class="k">if</span> <span class="n">store</span> <span class="k">else</span> <span class="s2">&quot;None&quot;</span><span class="p">,</span>
             <span class="p">)</span>
@@ -3051,50 +2642,33 @@
             <span class="n">svc</span> <span class="o">=</span> <span class="n">ReasoningService</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">store</span><span class="p">)</span>
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="s2">&quot;Running inference phases&quot;</span><span class="p">)</span>
 
-            <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;API inference task </span><span class="si">%s</span><span class="s2">: phases tbox=</span><span class="si">%s</span><span class="s2"> swrl=</span><span class="si">%s</span><span class="s2"> graph=</span><span class="si">%s</span><span class="s2"> constraints=</span><span class="si">%s</span><span class="s2"> &quot;</span>
-                    <span class="s2">&quot;decision_tables=</span><span class="si">%s</span><span class="s2"> sparql_rules=</span><span class="si">%s</span><span class="s2"> aggregate_rules=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">task_id</span><span class="p">,</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tbox&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;swrl&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;constraints&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sparql_rules&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">),</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: running phases (tbox=</span><span class="si">%s</span><span class="s2">, swrl=</span><span class="si">%s</span><span class="s2">, graph=</span><span class="si">%s</span><span class="s2">, &quot;</span>
-                    <span class="s2">&quot;decision_tables=</span><span class="si">%s</span><span class="s2">, sparql_rules=</span><span class="si">%s</span><span class="s2">, aggregate_rules=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
-                    <span class="n">task_id</span><span class="p">,</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tbox&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;swrl&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sparql_rules&quot;</span><span class="p">),</span>
-                    <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">),</span>
-                <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> task </span><span class="si">%s</span><span class="s2">: running phases (tbox=</span><span class="si">%s</span><span class="s2">, swrl=</span><span class="si">%s</span><span class="s2">, graph=</span><span class="si">%s</span><span class="s2">, &quot;</span>
+                <span class="s2">&quot;constraints=</span><span class="si">%s</span><span class="s2">, decision_tables=</span><span class="si">%s</span><span class="s2">, sparql_rules=</span><span class="si">%s</span><span class="s2">, &quot;</span>
+                <span class="s2">&quot;aggregate_rules=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+                <span class="n">label</span><span class="p">,</span>
+                <span class="n">task_id</span><span class="p">,</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;tbox&quot;</span><span class="p">),</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;swrl&quot;</span><span class="p">),</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph&quot;</span><span class="p">),</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;constraints&quot;</span><span class="p">),</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">),</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sparql_rules&quot;</span><span class="p">),</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">),</span>
+            <span class="p">)</span>
 
             <span class="k">def</span><span class="w"> </span><span class="nf">_swrl_progress</span><span class="p">(</span><span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">total</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">rule_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">pct</span> <span class="o">=</span> <span class="mi">30</span> <span class="o">+</span> <span class="nb">int</span><span class="p">((</span><span class="n">idx</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span>
                 <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="n">pct</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;SWRL </span><span class="si">{</span><span class="n">idx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">rule_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
             <span class="n">result</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">run_full_reasoning</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="n">progress_callback</span><span class="o">=</span><span class="n">_swrl_progress</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;API inference task </span><span class="si">%s</span><span class="s2">: done — </span><span class="si">%d</span><span class="s2"> inferred, </span><span class="si">%d</span><span class="s2"> violations&quot;</span><span class="p">,</span>
-                    <span class="n">task_id</span><span class="p">,</span>
-                    <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">),</span>
-                    <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">),</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                    <span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: phases done — </span><span class="si">%d</span><span class="s2"> inferred&quot;</span><span class="p">,</span>
-                    <span class="n">task_id</span><span class="p">,</span>
-                    <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">),</span>
-                <span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> task </span><span class="si">%s</span><span class="s2">: phases done — </span><span class="si">%d</span><span class="s2"> inferred, </span><span class="si">%d</span><span class="s2"> violations&quot;</span><span class="p">,</span>
+                <span class="n">label</span><span class="p">,</span>
+                <span class="n">task_id</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">),</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">),</span>
+            <span class="p">)</span>
 
             <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="s2">&quot;Finalising&quot;</span><span class="p">)</span>
 
@@ -3106,7 +2680,11 @@
             <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
                 <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;violations_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span>
 
-            <span class="k">if</span> <span class="n">is_api</span> <span class="ow">and</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;append_graph&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">:</span>
+            <span class="c1"># Materialisation is driven by the options, not by who asked:</span>
+            <span class="c1"># the interactive UI simply never sends them (it materialises</span>
+            <span class="c1"># through POST /dtwin/reasoning/materialize instead), while the</span>
+            <span class="c1"># external API and the scheduler both do.</span>
+            <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;append_graph&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">:</span>
                 <span class="n">tm</span><span class="o">.</span><span class="n">update_progress</span><span class="p">(</span>
                     <span class="n">task_id</span><span class="p">,</span> <span class="mi">92</span><span class="p">,</span> <span class="s2">&quot;Appending inferred triples to graph...&quot;</span>
                 <span class="p">)</span>
@@ -3114,7 +2692,8 @@
                     <span class="n">graph_store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">graph_store</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                            <span class="s2">&quot;API inference </span><span class="si">%s</span><span class="s2">: cannot append to graph — store unavailable&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">: cannot append to graph — store unavailable&quot;</span><span class="p">,</span>
+                            <span class="n">label</span><span class="p">,</span>
                             <span class="n">task_id</span><span class="p">,</span>
                         <span class="p">)</span>
                         <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;append_graph_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Graph store not available&quot;</span>
@@ -3126,20 +2705,20 @@
                         <span class="p">)</span>
                         <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;append_graph_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">append_count</span>
                         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                            <span class="s2">&quot;API inference </span><span class="si">%s</span><span class="s2">: appended </span><span class="si">%d</span><span class="s2"> triples to graph&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">: appended </span><span class="si">%d</span><span class="s2"> triples to graph&quot;</span><span class="p">,</span>
+                            <span class="n">label</span><span class="p">,</span>
                             <span class="n">task_id</span><span class="p">,</span>
                             <span class="n">append_count</span><span class="p">,</span>
                         <span class="p">)</span>
                 <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">ag_err</span><span class="p">:</span>
                     <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
-                        <span class="s2">&quot;API inference </span><span class="si">%s</span><span class="s2">: append to graph failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">ag_err</span>
+                        <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">: append to graph failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">ag_err</span>
                     <span class="p">)</span>
                     <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;append_graph_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ag_err</span><span class="p">)</span>
 
             <span class="n">mat_table</span> <span class="o">=</span> <span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;materialize_table&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
             <span class="k">if</span> <span class="p">(</span>
-                <span class="n">is_api</span>
-                <span class="ow">and</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;materialize&quot;</span><span class="p">)</span>
+                <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;materialize&quot;</span><span class="p">)</span>
                 <span class="ow">and</span> <span class="n">mat_table</span>
                 <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">mat_table</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">))</span> <span class="o">==</span> <span class="mi">3</span>
             <span class="p">):</span>
@@ -3155,7 +2734,8 @@
                         <span class="n">client</span> <span class="o">=</span> <span class="n">get_databricks_client</span><span class="p">(</span><span class="n">domain_snap</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
                         <span class="k">if</span> <span class="n">client</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                             <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-                                <span class="s2">&quot;API inference </span><span class="si">%s</span><span class="s2">: cannot materialise — no credentials&quot;</span><span class="p">,</span>
+                                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">: cannot materialise — no credentials&quot;</span><span class="p">,</span>
+                                <span class="n">label</span><span class="p">,</span>
                                 <span class="n">task_id</span><span class="p">,</span>
                             <span class="p">)</span>
                         <span class="k">else</span><span class="p">:</span>
@@ -3165,41 +2745,41 @@
                             <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;materialize_count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">count</span>
                             <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;materialize_table&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mat_table</span>
                             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                                <span class="s2">&quot;API inference </span><span class="si">%s</span><span class="s2">: materialised </span><span class="si">%d</span><span class="s2"> triples to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                                <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">: materialised </span><span class="si">%d</span><span class="s2"> triples to </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                                <span class="n">label</span><span class="p">,</span>
                                 <span class="n">task_id</span><span class="p">,</span>
                                 <span class="n">count</span><span class="p">,</span>
                                 <span class="n">mat_table</span><span class="p">,</span>
                             <span class="p">)</span>
                     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">mat_err</span><span class="p">:</span>
                         <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
-                            <span class="s2">&quot;API inference </span><span class="si">%s</span><span class="s2">: materialisation failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> </span><span class="si">%s</span><span class="s2">: materialisation failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                            <span class="n">label</span><span class="p">,</span>
                             <span class="n">task_id</span><span class="p">,</span>
                             <span class="n">mat_err</span><span class="p">,</span>
                         <span class="p">)</span>
                         <span class="n">result_dict</span><span class="p">[</span><span class="s2">&quot;materialize_error&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">mat_err</span><span class="p">)</span>
 
+            <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Inference complete: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span><span class="si">}</span><span class="s2"> inferred&quot;</span>
             <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;Inference complete: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span><span class="si">}</span><span class="s2"> inferred, &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span><span class="si">}</span><span class="s2"> violations&quot;</span>
-                <span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Inference complete: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">inferred_triples</span><span class="p">)</span><span class="si">}</span><span class="s2"> inferred&quot;</span>
+                <span class="n">msg</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">violations</span><span class="p">)</span><span class="si">}</span><span class="s2"> violations&quot;</span>
+            <span class="k">for</span> <span class="n">extra_key</span><span class="p">,</span> <span class="n">extra_label</span> <span class="ow">in</span> <span class="p">(</span>
+                <span class="p">(</span><span class="s2">&quot;append_graph_count&quot;</span><span class="p">,</span> <span class="s2">&quot;appended to graph&quot;</span><span class="p">),</span>
+                <span class="p">(</span><span class="s2">&quot;materialize_count&quot;</span><span class="p">,</span> <span class="s2">&quot;written to Delta&quot;</span><span class="p">),</span>
+            <span class="p">):</span>
+                <span class="k">if</span> <span class="n">extra_key</span> <span class="ow">in</span> <span class="n">result_dict</span><span class="p">:</span>
+                    <span class="n">msg</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="n">result_dict</span><span class="p">[</span><span class="n">extra_key</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">extra_label</span><span class="si">}</span><span class="s2">&quot;</span>
 
             <span class="n">tm</span><span class="o">.</span><span class="n">complete_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="n">result</span><span class="o">=</span><span class="n">result_dict</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">msg</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;API inference task </span><span class="si">%s</span><span class="s2">: completed&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2">: completed successfully&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">)</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> task </span><span class="si">%s</span><span class="s2">: completed&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">task_id</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;API inference task </span><span class="si">%s</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Reasoning task </span><span class="si">%s</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">is_api</span><span class="p">:</span>
-                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">,</span> <span class="s2">&quot;Inference failed&quot;</span><span class="p">)</span></div>
+            <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2"> task </span><span class="si">%s</span><span class="s2"> failed: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">task_id</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+            <span class="c1"># The interactive UI shows a generic message; the API and the</span>
+            <span class="c1"># scheduler need the real reason (it lands in the schedule&#39;s</span>
+            <span class="c1"># run history).</span>
+            <span class="n">tm</span><span class="o">.</span><span class="n">fail_task</span><span class="p">(</span>
+                <span class="n">task_id</span><span class="p">,</span> <span class="s2">&quot;Inference failed&quot;</span> <span class="k">if</span> <span class="n">build_kind</span> <span class="o">==</span> <span class="s2">&quot;session&quot;</span> <span class="k">else</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="p">)</span></div>
 
 
     <span class="c1"># ------------------------------------------------------------------</span>

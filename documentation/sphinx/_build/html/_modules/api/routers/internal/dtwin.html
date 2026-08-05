@@ -128,9 +128,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Depends</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">Query</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">InfrastructureError</span><span class="p">,</span>
@@ -142,11 +142,19 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">SessionManager</span><span class="p">,</span> <span class="n">get_session_manager</span><span class="p">,</span> <span class="n">get_domain</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_settings</span><span class="p">,</span> <span class="n">Settings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">sparql</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatabricksClient</span><span class="p">,</span> <span class="n">is_databricks_app</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AGGREGATE_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">DECISION_TABLE_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">RULE_FAMILY_CATEGORIES</span><span class="p">,</span>
+    <span class="n">SWRL_ID_PREFIX</span><span class="p">,</span>
+    <span class="n">rule_check_id</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_databricks_app</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_graphdb</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graph_analysis</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">MODE_JOB</span><span class="p">,</span>
-    <span class="n">resolve_analytics_source</span><span class="p">,</span>
+    <span class="n">analytics_job_configured</span><span class="p">,</span>
+    <span class="n">analytics_job_status</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.digitaltwin</span><span class="w"> </span><span class="kn">import</span> <span class="n">CohortService</span><span class="p">,</span> <span class="n">DigitalTwin</span><span class="p">,</span> <span class="n">DomainSnapshot</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.domain</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeService</span><span class="p">,</span> <span class="n">Domain</span>
@@ -160,8 +168,6 @@
     <span class="n">get_databricks_host_and_token</span><span class="p">,</span>
     <span class="n">make_volume_file_service</span><span class="p">,</span>
     <span class="n">is_uri</span><span class="p">,</span>
-    <span class="n">resolve_analytics_job_enabled</span><span class="p">,</span>
-    <span class="n">resolve_analytics_job_name</span><span class="p">,</span>
     <span class="n">run_blocking</span><span class="p">,</span>
 <span class="p">)</span>
 
@@ -184,6 +190,23 @@
         <span class="n">include_inferred</span><span class="o">=</span><span class="n">include_inferred</span><span class="p">,</span>
         <span class="n">store</span><span class="o">=</span><span class="n">store</span><span class="p">,</span>
     <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_dataquality_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the single execution target for data quality checks.</span>
+
+<span class="sd">    Checks always compile to SQL and run against the triple-store VIEW. The</span>
+<span class="sd">    build creates it whatever graph engine the domain uses, so it is the one</span>
+<span class="sd">    target that is guaranteed to exist. Note it carries the mapped source</span>
+<span class="sd">    triples only — triples added by reasoning live in the graph store and are</span>
+<span class="sd">    deliberately out of scope for data quality.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">effective_view_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">table</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+            <span class="s2">&quot;The triple-store VIEW is not available. Build the Knowledge Graph first.&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">table</span>
 
 <span class="c1"># Canonical rdf:type predicate. Neighbour expansion must preserve type</span>
 <span class="c1"># triples so the knowledge graph can group/colour expanded nodes by their</span>
@@ -606,91 +629,6 @@
 <span class="c1"># ===========================================</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_data_table_has_rows</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether the mapped snapshot exists and holds at least one triple.</span>
-
-<span class="sd">    A ``…_data`` that is absent and one that is empty have the same remedy —</span>
-<span class="sd">    build the domain — so they are one check. ``None`` means the probe could not</span>
-<span class="sd">    reach the warehouse at all, which is a different situation entirely: telling</span>
-<span class="sd">    someone to rebuild a domain because the warehouse was asleep sends them off</span>
-<span class="sd">    to fix something that was never broken.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-        <span class="n">get_databricks_host_and_token</span><span class="p">,</span>
-        <span class="n">resolve_delta_warehouse_id</span><span class="p">,</span>
-    <span class="p">)</span>
-
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">host</span><span class="p">,</span> <span class="n">token</span> <span class="o">=</span> <span class="n">get_databricks_host_and_token</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-        <span class="n">client</span> <span class="o">=</span> <span class="n">DatabricksClient</span><span class="p">(</span>
-            <span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span>
-            <span class="n">token</span><span class="o">=</span><span class="n">token</span><span class="p">,</span>
-            <span class="n">warehouse_id</span><span class="o">=</span><span class="n">resolve_delta_warehouse_id</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">),</span>
-        <span class="p">)</span>
-        <span class="n">rows</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">execute_query</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT 1 AS ok FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> LIMIT 1&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;mapped-snapshot probe failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
-        <span class="k">return</span> <span class="kc">None</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_analytics_job_configured</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``(configured, reason_it_is_not)`` without touching the warehouse.</span>
-
-<span class="sd">    The three checks that cost nothing: the admin toggle, a resolvable job name,</span>
-<span class="sd">    and a resolvable snapshot table. Callers that only need to know whether</span>
-<span class="sd">    analytics *could* run — the stats payload, which renders on every page —</span>
-<span class="sd">    stop here rather than paying a SQL round-trip on a possibly cold warehouse.</span>
-
-<span class="sd">    The reason is empty whenever the toggle is off, because then nothing is</span>
-<span class="sd">    broken: not using the job is the configured behaviour.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">resolve_analytics_job_enabled</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">):</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">resolve_analytics_job_name</span><span class="p">(</span><span class="n">settings</span><span class="p">):</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
-            <span class="s2">&quot;No Databricks job name could be determined. Set &quot;</span>
-            <span class="s2">&quot;ONTOBRICKS_ANALYTICS_JOB_NAME, or deploy the bundle so the name can &quot;</span>
-            <span class="s2">&quot;be derived from the app name.&quot;</span>
-        <span class="p">)</span>
-
-    <span class="n">source</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="n">resolve_analytics_source</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">source</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">reason</span> <span class="ow">or</span> <span class="p">(</span>
-            <span class="s2">&quot;No mapped-triples table could be resolved for this domain.&quot;</span>
-        <span class="p">)</span>
-
-    <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_analytics_job_status</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``(analytics_available, reason_it_is_not)`` for this domain.</span>
-
-<span class="sd">    :func:`_analytics_job_configured` plus a probe that the snapshot actually</span>
-<span class="sd">    holds triples. The probe costs a warehouse round-trip, so this is for the</span>
-<span class="sd">    caller about to spend far more than that on a job run.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">configured</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="n">_analytics_job_configured</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">configured</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">reason</span>
-
-    <span class="n">source</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">resolve_analytics_source</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-    <span class="n">has_rows</span> <span class="o">=</span> <span class="n">_data_table_has_rows</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">has_rows</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;The mapped-triples table </span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2"> could not be reached. The SQL &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;warehouse may be starting up — retry in a moment.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">has_rows</span><span class="p">:</span>
-        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;The mapped-triples table </span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2"> is missing or empty. Run &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Knowledge Graph → Build to materialise it, then retry.&quot;</span>
-        <span class="p">)</span>
-
-    <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
-
-
 <span class="k">def</span><span class="w"> </span><span class="nf">_load_stored_metrics</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the cached ``graph_analytics`` row for the active domain/version.</span>
 
@@ -747,7 +685,7 @@
 
         <span class="c1"># One compute path. When it cannot run, say why instead of quietly</span>
         <span class="c1"># returning a thinner metric set.</span>
-        <span class="n">job_available</span><span class="p">,</span> <span class="n">blocked_reason</span> <span class="o">=</span> <span class="n">_analytics_job_status</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">job_available</span><span class="p">,</span> <span class="n">blocked_reason</span> <span class="o">=</span> <span class="n">analytics_job_status</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">job_available</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
                 <span class="n">blocked_reason</span>
@@ -845,25 +783,29 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.dtwin.get_graph_metrics_history">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/metrics/history&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_graph_metrics_history</span><span class="p">(</span>
+    <span class="n">version</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">),</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">le</span><span class="o">=</span><span class="mi">1000</span><span class="p">),</span>
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the analytics run history (newest-first) for this domain/version.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the analytics run history (newest-first) for this domain.</span>
 
-<span class="sd">    Lightweight metadata per run from the ``graph_analytics_runs`` trace —</span>
-<span class="sd">    backs the Analytics page &quot;History&quot; tab.</span>
+<span class="sd">    Spans every version unless ``version`` scopes it. Backs the analytics</span>
+<span class="sd">    table on Knowledge Graph → Management → Runs, which has no version</span>
+<span class="sd">    filter. Guarding on a version here would report an empty history for a</span>
+<span class="sd">    domain whose current version is blank, even with rows on file for</span>
+<span class="sd">    earlier ones.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">back.objects.registry.RegistryService</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegistryService</span>
 
     <span class="k">try</span><span class="p">:</span>
         <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
         <span class="n">folder</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;uc_domain_folder&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
-        <span class="n">version</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;current_version&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">folder</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">version</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">folder</span><span class="p">:</span>
             <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;runs&quot;</span><span class="p">:</span> <span class="p">[]}</span>
 
         <span class="n">svc</span> <span class="o">=</span> <span class="n">RegistryService</span><span class="o">.</span><span class="n">from_context</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-        <span class="n">runs</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">load_graph_analytics_runs</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+        <span class="n">runs</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">load_graph_analytics_runs</span><span class="p">(</span><span class="n">folder</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">&quot;runs&quot;</span><span class="p">:</span> <span class="n">runs</span><span class="p">}</span>
 
     <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">):</span>
@@ -1424,16 +1366,16 @@
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Lightweight check: does the triple store table exist and contain data?</span>
 
-<span class="sd">    Returns session-cached status when available; falls back to a live</span>
-<span class="sd">    query and caches the result.  ``refresh`` is accepted for API</span>
-<span class="sd">    compatibility and ignored.</span>
+<span class="sd">    Returns session-cached status when available; falls back to a live query and</span>
+<span class="sd">    caches the result. ``refresh=true`` bypasses the cache, which is the escape</span>
+<span class="sd">    hatch the Build page&#39;s Refresh button needs when a stale entry disagrees with</span>
+<span class="sd">    the live graph.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">_</span> <span class="o">=</span> <span class="n">refresh</span>  <span class="c1"># query param kept for backward compatibility</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
         <span class="n">dt</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span>
         <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">dt</span><span class="o">.</span><span class="n">sync_last_build_from_schedule</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-        <span class="k">return</span> <span class="k">await</span> <span class="n">dt</span><span class="o">.</span><span class="n">get_or_fetch_graph_status</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="n">dt</span><span class="o">.</span><span class="n">get_or_fetch_graph_status</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">force_refresh</span><span class="o">=</span><span class="n">refresh</span><span class="p">)</span>
     <span class="k">except</span> <span class="p">(</span><span class="n">ValidationError</span><span class="p">,</span> <span class="n">InfrastructureError</span><span class="p">,</span> <span class="n">NotFoundError</span><span class="p">):</span>
         <span class="k">raise</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
@@ -1755,7 +1697,7 @@
 
         <span class="n">classified</span> <span class="o">=</span> <span class="n">DigitalTwin</span><span class="p">(</span><span class="n">domain</span><span class="p">)</span><span class="o">.</span><span class="n">classify_predicates</span><span class="p">(</span><span class="n">top_predicates</span><span class="p">)</span>
 
-        <span class="n">job_available</span><span class="p">,</span> <span class="n">job_blocked_reason</span> <span class="o">=</span> <span class="n">_analytics_job_configured</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
+        <span class="n">job_available</span><span class="p">,</span> <span class="n">job_blocked_reason</span> <span class="o">=</span> <span class="n">analytics_job_configured</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
         <span class="n">result</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
@@ -1803,43 +1745,21 @@
     <span class="n">session_mgr</span><span class="p">:</span> <span class="n">SessionManager</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_session_manager</span><span class="p">),</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Settings</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_settings</span><span class="p">),</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute a single SHACL shape check against the triple store.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Execute a single SHACL shape check against the triple-store VIEW.&quot;&quot;&quot;</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="p">{})</span>
-        <span class="n">backend</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;backend&quot;</span><span class="p">,</span> <span class="s2">&quot;view&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
         <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-            <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">_graph_query_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;triplestore_table&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">_dataquality_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">triplestore_table</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Triple store table is not specified.&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">shape</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;No shape was provided.&quot;</span><span class="p">)</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c</span><span class="w"> </span><span class="kn">import</span> <span class="n">SHACLService</span>
 
-        <span class="n">store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span>
-            <span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="p">(</span><span class="kc">None</span> <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span> <span class="k">else</span> <span class="n">backend</span><span class="p">)</span>
-        <span class="p">)</span>
+        <span class="n">store</span> <span class="o">=</span> <span class="n">get_graphdb</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">,</span> <span class="n">engine</span><span class="o">=</span><span class="s2">&quot;view&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">store</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Could not initialize </span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s2"> backend&quot;</span><span class="p">)</span>
-
-        <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-            <span class="n">graph_name</span> <span class="o">=</span> <span class="n">triplestore_table</span> <span class="ow">or</span> <span class="n">_graph_query_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
-            <span class="n">triples</span> <span class="o">=</span> <span class="k">await</span> <span class="n">run_blocking</span><span class="p">(</span><span class="n">store</span><span class="o">.</span><span class="n">query_triples</span><span class="p">,</span> <span class="n">graph_name</span><span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">triples</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Graph &#39;</span><span class="si">{</span><span class="n">graph_name</span><span class="si">}</span><span class="s2">&#39; is empty. Build first.&quot;</span><span class="p">)</span>
-            <span class="n">violations</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">evaluate_shape_in_memory</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">triples</span><span class="p">)</span>
-            <span class="k">return</span> <span class="p">{</span>
-                <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-                <span class="s2">&quot;violations&quot;</span><span class="p">:</span> <span class="n">violations</span><span class="p">,</span>
-                <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">violations</span><span class="p">),</span>
-                <span class="s2">&quot;sql&quot;</span><span class="p">:</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;engine&quot;</span><span class="p">:</span> <span class="s2">&quot;in-memory&quot;</span><span class="p">,</span>
-            <span class="p">}</span>
+            <span class="k">raise</span> <span class="n">InfrastructureError</span><span class="p">(</span><span class="s2">&quot;Could not reach the SQL warehouse&quot;</span><span class="p">)</span>
 
         <span class="n">sql</span> <span class="o">=</span> <span class="n">SHACLService</span><span class="o">.</span><span class="n">shape_to_sql</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">triplestore_table</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">sql</span><span class="p">:</span>
@@ -1876,19 +1796,12 @@
     <span class="n">data</span> <span class="o">=</span> <span class="k">await</span> <span class="n">request</span><span class="o">.</span><span class="n">json</span><span class="p">()</span>
     <span class="n">dimensions</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;dimensions&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
     <span class="n">shape_ids</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shape_ids&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
-    <span class="n">requested_backend</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;backend&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;view&quot;</span>
     <span class="n">violation_limit</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;violation_limit&quot;</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
     <span class="k">if</span> <span class="n">violation_limit</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">violation_limit</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">session_mgr</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">requested_backend</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span><span class="p">:</span>
-        <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">_graph_query_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;triplestore_table&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
-
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">triplestore_table</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Triple store table is not specified.&quot;</span><span class="p">)</span>
+    <span class="n">triplestore_table</span> <span class="o">=</span> <span class="n">_dataquality_table</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="n">settings</span><span class="p">)</span>
     <span class="n">shapes</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">shacl_shapes</span>
     <span class="k">if</span> <span class="n">shape_ids</span><span class="p">:</span>
         <span class="n">shape_ids_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">shape_ids</span><span class="p">)</span>
@@ -1897,22 +1810,47 @@
         <span class="n">shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;category&quot;</span><span class="p">)</span> <span class="ow">in</span> <span class="n">dimensions</span><span class="p">]</span>
     <span class="n">shapes</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)]</span>
 
-    <span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span> <span class="ow">or</span> <span class="p">[]</span>
     <span class="n">ontology_dict</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ontology_dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="n">ontology_dict</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">domain</span><span class="o">.</span><span class="n">_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ontology&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">domain</span><span class="p">,</span> <span class="s2">&quot;_data&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
         <span class="p">)</span>
-    <span class="n">decision_tables</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="n">dt</span> <span class="k">for</span> <span class="n">dt</span> <span class="ow">in</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">dt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-    <span class="p">]</span>
-    <span class="n">aggregate_rules</span> <span class="o">=</span> <span class="p">[</span>
-        <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-    <span class="p">]</span>
+
+    <span class="c1"># SWRL rules, decision tables and aggregate rules are selected the same way</span>
+    <span class="c1"># shapes are: by check id when the user picked individual rules, otherwise</span>
+    <span class="c1"># by the dimension their results are filed under.</span>
+    <span class="n">selected_ids</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">shape_ids</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_selected_rules</span><span class="p">(</span><span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">family</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="ow">not</span> <span class="n">selected_ids</span>
+            <span class="ow">and</span> <span class="n">dimensions</span>
+            <span class="ow">and</span> <span class="n">RULE_FAMILY_CATEGORIES</span><span class="p">[</span><span class="n">prefix</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">dimensions</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">rule</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">family</span> <span class="ow">or</span> <span class="p">[]):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">rule</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">check_id</span> <span class="o">=</span> <span class="n">rule_check_id</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">rule</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">selected_ids</span> <span class="ow">and</span> <span class="n">check_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">selected_ids</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">selected</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="o">**</span><span class="n">rule</span><span class="p">,</span> <span class="s2">&quot;check_id&quot;</span><span class="p">:</span> <span class="n">check_id</span><span class="p">})</span>
+        <span class="k">return</span> <span class="n">selected</span>
+
+    <span class="n">swrl_rules</span> <span class="o">=</span> <span class="n">_selected_rules</span><span class="p">(</span><span class="n">SWRL_ID_PREFIX</span><span class="p">,</span> <span class="n">domain</span><span class="o">.</span><span class="n">swrl_rules</span><span class="p">)</span>
+    <span class="n">decision_tables</span> <span class="o">=</span> <span class="n">_selected_rules</span><span class="p">(</span>
+        <span class="n">DECISION_TABLE_ID_PREFIX</span><span class="p">,</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;decision_tables&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="p">)</span>
+    <span class="n">aggregate_rules</span> <span class="o">=</span> <span class="n">_selected_rules</span><span class="p">(</span>
+        <span class="n">AGGREGATE_ID_PREFIX</span><span class="p">,</span> <span class="n">ontology_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;aggregate_rules&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">shapes</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">swrl_rules</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">decision_tables</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">aggregate_rules</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
-            <span class="s2">&quot;No enabled shapes, SWRL rules, decision tables or aggregate rules to check.&quot;</span>
+            <span class="s2">&quot;Nothing to check in the selected dimensions.&quot;</span>
+            <span class="k">if</span> <span class="n">dimensions</span> <span class="ow">or</span> <span class="n">shape_ids</span>
+            <span class="k">else</span> <span class="s2">&quot;No enabled shapes, SWRL rules, decision tables or aggregate rules to check.&quot;</span>
         <span class="p">)</span>
 
     <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shapes</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">swrl_rules</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">decision_tables</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">aggregate_rules</span><span class="p">)</span>
@@ -1932,7 +1870,6 @@
             <span class="n">domain_snap</span><span class="p">,</span>
             <span class="n">shapes</span><span class="p">,</span>
             <span class="n">triplestore_table</span><span class="p">,</span>
-            <span class="n">requested_backend</span><span class="p">,</span>
             <span class="n">total</span><span class="p">,</span>
             <span class="n">swrl_rules</span><span class="o">=</span><span class="n">swrl_rules</span><span class="p">,</span>
             <span class="n">ontology_dict</span><span class="o">=</span><span class="n">ontology_dict</span><span class="p">,</span>

@@ -187,7 +187,7 @@ Custom Jinja helpers include **`url_for`** (static + `request.url_for`), a **`ra
 
 ### 3.4 Menu and client-side navigation
 
-- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, …), **routes** (e.g. `/domain/`), groups, items, and `navbar_actions` (e.g. `projectSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs and default tabs.
+- **Declarative menu:** `src/front/config/menu_config.json` defines sections (Domain, Ontology, Mapping, Knowledge Graph, …), **routes** (e.g. `/domain/`), top-level Bootstrap Icons, groups, items, and `navbar_actions` (e.g. `domainSave`). The server can expose this to the client or the client can load it; either way it is the **source of truth** for section IDs, icons, and default tabs. When changing a top-level `icon`, also update `breadcrumb.js` `_ROUTE_MAP` (and any hardcoded labels such as the help walkthrough); `tests/units/front/test_knowledge_graph_icon.py` guards Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 - **JavaScript:** under `src/front/static/global/js/` (sidebar, navbar, domain actions). Pages load shared layout partials from templates and drive **in-page tabs** via menu item IDs rather than full page loads for every interaction.
 
 ### 3.5 Core UI concerns (conceptual)

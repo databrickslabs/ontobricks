@@ -176,7 +176,7 @@
                 <span class="s2">&quot;greaterThan&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt; TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -186,7 +186,7 @@
                 <span class="s2">&quot;lessThan&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt; TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt; CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -196,7 +196,7 @@
                 <span class="s2">&quot;greaterThanOrEqual&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt;= TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &gt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -206,7 +206,7 @@
                 <span class="s2">&quot;lessThanOrEqual&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;comparison&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt;= TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) &lt;= CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -220,7 +220,7 @@
                 <span class="s2">&quot;add&quot;</span><span class="p">,</span>
                 <span class="mi">3</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) + CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) + TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) + CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -230,7 +230,7 @@
                 <span class="s2">&quot;subtract&quot;</span><span class="p">,</span>
                 <span class="mi">3</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) - CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) - TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) - CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -240,7 +240,7 @@
                 <span class="s2">&quot;multiply&quot;</span><span class="p">,</span>
                 <span class="mi">3</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) * CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) * TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) * CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -250,7 +250,7 @@
                 <span class="s2">&quot;divide&quot;</span><span class="p">,</span>
                 <span class="mi">3</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) / NULLIF(CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE), 0)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) / NULLIF(TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE), 0)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CASE WHEN CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE) = 0 THEN null ELSE CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE) / CAST(</span><span class="si">{1}</span><span class="s2"> AS DOUBLE) END&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -260,7 +260,7 @@
                 <span class="s2">&quot;mod&quot;</span><span class="p">,</span>
                 <span class="mi">3</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;MOD(CAST(</span><span class="si">{0}</span><span class="s2"> AS BIGINT), CAST(</span><span class="si">{1}</span><span class="s2"> AS BIGINT))&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;MOD(TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS BIGINT), TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS BIGINT))&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS INT64) % CAST(</span><span class="si">{1}</span><span class="s2"> AS INT64)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -270,7 +270,7 @@
                 <span class="s2">&quot;abs&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;ABS(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;ABS(TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;abs(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -280,7 +280,7 @@
                 <span class="s2">&quot;round&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;ROUND(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;ROUND(TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;round(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE), 0)&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -290,7 +290,7 @@
                 <span class="s2">&quot;ceiling&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CEIL(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;CEIL(TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;ceil(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -300,7 +300,7 @@
                 <span class="s2">&quot;floor&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;math&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;FLOOR(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;FLOOR(TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;floor(CAST(</span><span class="si">{0}</span><span class="s2"> AS DOUBLE))&quot;</span><span class="p">,</span>
                 <span class="n">cast_numeric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
             <span class="p">)</span>
@@ -345,7 +345,7 @@
                 <span class="s2">&quot;before&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;date&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS TIMESTAMP) &lt; CAST(</span><span class="si">{1}</span><span class="s2"> AS TIMESTAMP)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS TIMESTAMP) &lt; TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS TIMESTAMP)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;datetime(</span><span class="si">{0}</span><span class="s2">) &lt; datetime(</span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>
@@ -354,7 +354,7 @@
                 <span class="s2">&quot;after&quot;</span><span class="p">,</span>
                 <span class="mi">2</span><span class="p">,</span>
                 <span class="s2">&quot;date&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;CAST(</span><span class="si">{0}</span><span class="s2"> AS TIMESTAMP) &gt; CAST(</span><span class="si">{1}</span><span class="s2"> AS TIMESTAMP)&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS TIMESTAMP) &gt; TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS TIMESTAMP)&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;datetime(</span><span class="si">{0}</span><span class="s2">) &gt; datetime(</span><span class="si">{1}</span><span class="s2">)&quot;</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>
@@ -363,7 +363,7 @@
                 <span class="s2">&quot;dateDiff&quot;</span><span class="p">,</span>
                 <span class="mi">3</span><span class="p">,</span>
                 <span class="s2">&quot;date&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;DATEDIFF(CAST(</span><span class="si">{0}</span><span class="s2"> AS DATE), CAST(</span><span class="si">{1}</span><span class="s2"> AS DATE))&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;DATEDIFF(TRY_CAST(</span><span class="si">{0}</span><span class="s2"> AS DATE), TRY_CAST(</span><span class="si">{1}</span><span class="s2"> AS DATE))&quot;</span><span class="p">,</span>
                 <span class="s2">&quot;duration.between(datetime(</span><span class="si">{1}</span><span class="s2">), datetime(</span><span class="si">{0}</span><span class="s2">)).days&quot;</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>

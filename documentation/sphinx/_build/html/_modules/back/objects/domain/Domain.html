@@ -302,6 +302,7 @@
             <span class="s2">&quot;graph_backend&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_coerce_graph_backend</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph_backend&quot;</span><span class="p">)</span>
             <span class="p">),</span>
+            <span class="s2">&quot;neo4j_database&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
             <span class="s2">&quot;view_table&quot;</span><span class="p">:</span> <span class="n">view_table</span><span class="p">,</span>
             <span class="s2">&quot;graph_name&quot;</span><span class="p">:</span> <span class="n">graph_name</span><span class="p">,</span>
         <span class="p">}</span>
@@ -443,6 +444,13 @@
                         <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph_backend&quot;</span><span class="p">),</span>
                     <span class="p">)</span>
                 <span class="p">),</span>
+                <span class="s2">&quot;neo4j_database&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span>
+                    <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                        <span class="s2">&quot;neo4j_database&quot;</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="p">)</span>
+                    <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
             <span class="p">}</span>
         <span class="p">)</span>
 
@@ -479,6 +487,7 @@
             <span class="s2">&quot;graph_backend&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_coerce_graph_backend</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph_backend&quot;</span><span class="p">)</span>
             <span class="p">),</span>
+            <span class="s2">&quot;neo4j_database&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
         <span class="p">}</span></div>
 
 
@@ -578,6 +587,7 @@
             <span class="s2">&quot;graph_backend&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_coerce_graph_backend</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;graph_backend&quot;</span><span class="p">)</span>
             <span class="p">),</span>
+            <span class="s2">&quot;neo4j_database&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;neo4j_database&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
             <span class="s2">&quot;delta&quot;</span><span class="p">:</span> <span class="n">delta</span><span class="p">,</span>
             <span class="s2">&quot;has_ontology&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">get_classes</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span>
             <span class="s2">&quot;has_mapping&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">get_entity_mappings</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span>
@@ -686,8 +696,6 @@
                 <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
                 <span class="s2">&quot;domain_folder&quot;</span><span class="p">:</span> <span class="n">folder</span><span class="p">,</span>
                 <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="n">version</span><span class="p">,</span>
-                <span class="s2">&quot;current_version&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_s</span><span class="o">.</span><span class="n">current_version</span><span class="p">,</span>
-                <span class="s2">&quot;versions&quot;</span><span class="p">:</span> <span class="n">svc</span><span class="o">.</span><span class="n">list_versions_sorted</span><span class="p">(</span><span class="n">folder</span><span class="p">),</span>
                 <span class="s2">&quot;runs&quot;</span><span class="p">:</span> <span class="n">runs</span><span class="p">,</span>
             <span class="p">}</span>
         <span class="k">except</span> <span class="n">OntoBricksError</span><span class="p">:</span>
@@ -787,12 +795,21 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">entity_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">bridge_domain</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">domain_switched</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build ``/dtwin/?section=sigmagraph&amp;focus=...`` URL for entity URI resolution.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build ``/dtwin/?section=sigmagraph&amp;focus=...`` URL for entity URI resolution.</span>
+
+<span class="sd">        ``domain_switched=True`` adds ``&amp;domain_switched=1`` so the navbar can</span>
+<span class="sd">        bust its sessionStorage ``/navbar/state`` cache after a server-side</span>
+<span class="sd">        domain load (cross-domain bridges). ``bridge_domain`` is the client</span>
+<span class="sd">        fallback when the server could not switch the session.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">encoded</span> <span class="o">=</span> <span class="n">quote</span><span class="p">(</span><span class="n">entity_uri</span><span class="p">,</span> <span class="n">safe</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
         <span class="n">target</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;/dtwin/?section=sigmagraph&amp;focus=</span><span class="si">{</span><span class="n">encoded</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="k">if</span> <span class="n">bridge_domain</span><span class="p">:</span>
             <span class="n">target</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;&amp;domain=</span><span class="si">{</span><span class="n">quote</span><span class="p">(</span><span class="n">bridge_domain</span><span class="p">,</span><span class="w"> </span><span class="n">safe</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="n">domain_switched</span><span class="p">:</span>
+            <span class="n">target</span> <span class="o">+=</span> <span class="s2">&quot;&amp;domain_switched=1&quot;</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Resolving entity URI </span><span class="si">%s</span><span class="s2"> -&gt; </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">entity_uri</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">target</span>
 
@@ -806,7 +823,8 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve owning domain, switch session when needed, return redirect URL path/query.</span>
 
 <span class="sd">        Used by the ``/resolve`` HTML routes: cross-domain bridges load the target</span>
-<span class="sd">        domain server-side; the redirect omits ``&amp;domain=`` when the switch succeeds.</span>
+<span class="sd">        domain server-side; the redirect omits ``&amp;domain=`` when the switch succeeds</span>
+<span class="sd">        and sets ``domain_switched=1`` so the client invalidates the navbar cache.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">target_domain</span> <span class="o">=</span> <span class="n">domain_hint</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">target_domain</span><span class="p">:</span>
@@ -815,7 +833,9 @@
         <span class="k">if</span> <span class="n">target_domain</span><span class="p">:</span>
             <span class="n">switched</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_switch_domain_if_needed_for_resolve</span><span class="p">(</span><span class="n">target_domain</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">switched</span><span class="p">:</span>
-                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_resolve_entity_redirect_url</span><span class="p">(</span><span class="n">entity_uri</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_resolve_entity_redirect_url</span><span class="p">(</span>
+                    <span class="n">entity_uri</span><span class="p">,</span> <span class="n">domain_switched</span><span class="o">=</span><span class="kc">True</span>
+                <span class="p">)</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_resolve_entity_redirect_url</span><span class="p">(</span>
             <span class="n">entity_uri</span><span class="p">,</span>

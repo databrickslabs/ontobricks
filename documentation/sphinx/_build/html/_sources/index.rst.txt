@@ -9,7 +9,7 @@ graph viewer. Design ontologies using OWL or import industry standards
 Delta-backed triple store mirrored on Lakebase Postgres, query them through a typed GraphQL API, and
 explore your graph viewer visually.
 
-**Topic guides** (Markdown in ``docs/``, included here via MyST) are the
+**Topic guides** (Markdown in ``documentation/``, included here via MyST) are the
 canonical narrative documentation. **Developer overviews** below are short
 RST summaries; see the architecture guide for the full design document.
 

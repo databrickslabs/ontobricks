@@ -331,3 +331,62 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 34.08s
+
+## Document top-level menu icon identities
+
+Context: After Registry/Domain/Knowledge Graph icon realignment, development
+and architecture docs still described the Registry control as an "archive
+icon", and there was no written map of which Bootstrap Icons own each
+top-level menu — the collision that forced the Knowledge Graph change.
+
+Changes:
+
+1. `documentation/development.md`
+   Registry modal test table: "archive icon" → boxes icon (`bi-boxes`).
+2. `documentation/architecture.md`
+   `menu_config.json` row: navbar+sidebar, with the distinct top-level
+   icon set and breadcrumb sync note.
+3. `documentation/code_organization.md`
+   Menu section: icons are part of the source of truth; changing them
+   requires breadcrumb/help updates and cites the KG icon contract test.
+4. `.cursor/11-frontend-design.mdc`
+   L1 navbar: top-level icon table + Domain≠KG rule.
+
+Modified files:
+- `documentation/development.md`
+- `documentation/architecture.md`
+- `documentation/code_organization.md`
+- `.cursor/11-frontend-design.mdc`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 33.25s
+
+## Rebuild Sphinx HTML for menu-icon doc updates
+
+Context: Source Markdown for development / architecture / code_organization
+was updated for the Registry/Domain/Knowledge Graph icon map. The tracked
+Sphinx site under `documentation/sphinx/_build/` still showed the old
+"archive icon" wording until rebuilt.
+
+Changes:
+
+1. `ci/build_docs.sh` (ran)
+   Regenerated Sphinx HTML so guides pick up the icon identity wording.
+2. `documentation/sphinx/_build/html/guides/development.html`
+   Registry row → Navbar boxes icon (`bi-boxes`).
+3. `documentation/sphinx/_build/html/guides/architecture.html`
+   `menu_config.json` row lists distinct top-level icons.
+4. `documentation/sphinx/_build/html/guides/code_organization.html`
+   Declarative-menu paragraph includes icon/breadcrumb sync + contract test.
+5. Remaining `documentation/sphinx/_build/html/**`
+   Full rebuild artifacts (doctrees, modules, search index) refreshed with
+   the same Sphinx run.
+
+Modified files:
+- `documentation/sphinx/_build/html/guides/development.html`
+- `documentation/sphinx/_build/html/guides/architecture.html`
+- `documentation/sphinx/_build/html/guides/code_organization.html`
+- `documentation/sphinx/_build/html/**` (Sphinx rebuild)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.97s

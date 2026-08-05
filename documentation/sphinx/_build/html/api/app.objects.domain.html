@@ -357,7 +357,8 @@ the version dropdown to <code class="docutils literal notranslate"><span class="
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resolve_entity_uri_redirect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">entity_uri</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_hint</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/Domain.html#Domain.resolve_entity_uri_redirect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.Domain.Domain.resolve_entity_uri_redirect" title="Link to this definition">¶</a></dt>
 <dd><p>Resolve owning domain, switch session when needed, return redirect URL path/query.</p>
 <p>Used by the <code class="docutils literal notranslate"><span class="pre">/resolve</span></code> HTML routes: cross-domain bridges load the target
-domain server-side; the redirect omits <code class="docutils literal notranslate"><span class="pre">&amp;domain=</span></code> when the switch succeeds.</p>
+domain server-side; the redirect omits <code class="docutils literal notranslate"><span class="pre">&amp;domain=</span></code> when the switch succeeds
+and sets <code class="docutils literal notranslate"><span class="pre">domain_switched=1</span></code> so the client invalidates the navbar cache.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1881,7 +1882,7 @@ Settings Delta panel.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.triple_store_databricks_objects_result">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">triple_store_databricks_objects_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.triple_store_databricks_objects_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.triple_store_databricks_objects_result" title="Link to this definition">¶</a></dt>
-<dd><p>List triple-store UC objects in the Registry schema, grouped by domain version.</p>
+<dd><p>List triple-store and analytics UC objects, grouped by domain version.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1978,6 +1979,75 @@ unresolvable, bad config) — it surfaces a friendly UI message without
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_databases_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">graph_engine_neo4j_databases_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.graph_engine_neo4j_databases_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_databases_result" title="Link to this definition">¶</a></dt>
+<dd><p>List Neo4j databases on the server for the Domain Info DB selector (P4).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_labels_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">graph_engine_neo4j_labels_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.graph_engine_neo4j_labels_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_labels_result" title="Link to this definition">¶</a></dt>
+<dd><p>List materialised Neo4j graphs (marker labels) + counts for the admin Objects tab (P5).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_health_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">graph_engine_neo4j_health_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.graph_engine_neo4j_health_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_health_result" title="Link to this definition">¶</a></dt>
+<dd><p>Bolt health probe for the Neo4j admin Health tab (P5).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_drop_label_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">graph_engine_neo4j_drop_label_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.graph_engine_neo4j_drop_label_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.graph_engine_neo4j_drop_label_result" title="Link to this definition">¶</a></dt>
+<dd><p>Drop one Neo4j graph (marker label): its nodes, rels, constraint, schema map (P5).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>
@@ -2521,7 +2591,11 @@ app-visible principals are returned.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.list_schedules_result">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_schedules_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.list_schedules_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.list_schedules_result" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Every schedule of every task type, plus the type catalogue.</p>
+<p>The catalogue lets the settings UI build its type selector and
+per-type columns from the backend registry instead of hardcoding
+the list a second time.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
@@ -2537,7 +2611,10 @@ app-visible principals are returned.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.save_schedule_result">
 <span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">save_schedule_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.save_schedule_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.save_schedule_result" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Create or update a schedule of any task type.</p>
+<p>Per-type options arrive in <code class="docutils literal notranslate"><span class="pre">config</span></code> and are validated by the
+task type itself, so this method never branches on the type.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
@@ -2553,13 +2630,15 @@ app-visible principals are returned.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.get_schedule_history_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_schedule_history_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.get_schedule_history_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.get_schedule_history_result" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_schedule_history_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.get_schedule_history_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.get_schedule_history_result" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>task_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+<li><p><strong>target_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -2580,6 +2659,46 @@ app-visible principals are returned.</p>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 <li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 <li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.get_all_build_runs_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_all_build_runs_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.get_all_build_runs_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.get_all_build_runs_result" title="Link to this definition">¶</a></dt>
+<dd><p>One page of build runs across every domain in the registry.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+<li><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.get_all_analytics_runs_result">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_all_analytics_runs_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.get_all_analytics_runs_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.get_all_analytics_runs_result" title="Link to this definition">¶</a></dt>
+<dd><p>One page of analytics runs across every domain in the registry.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
+<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+<li><p><strong>folder</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>limit</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -2619,13 +2738,15 @@ app-visible principals are returned.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.delete_schedule_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delete_schedule_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.delete_schedule_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.delete_schedule_result" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delete_schedule_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.delete_schedule_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.delete_schedule_result" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>task_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+<li><p><strong>target_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -2636,30 +2757,16 @@ app-visible principals are returned.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.trigger_schedule_now_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">trigger_schedule_now_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.trigger_schedule_now_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.trigger_schedule_now_result" title="Link to this definition">¶</a></dt>
-<dd><p>Fire the build schedule for <em>domain_name</em> immediately.</p>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">trigger_schedule_now_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.trigger_schedule_now_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.trigger_schedule_now_result" title="Link to this definition">¶</a></dt>
+<dd><p>Fire a schedule immediately, without touching its own clock.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
+<li><p><strong>task_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.list_cohort_schedules_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_cohort_schedules_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.list_cohort_schedules_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.list_cohort_schedules_result" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
-<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
+<li><p><strong>target_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
@@ -2679,78 +2786,6 @@ in the registry.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
-<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.save_cohort_schedule_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">save_cohort_schedule_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.save_cohort_schedule_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.save_cohort_schedule_result" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a><em>]</em>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
-<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.get_cohort_schedule_history_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_cohort_schedule_history_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.get_cohort_schedule_history_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.get_cohort_schedule_history_result" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
-<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.delete_cohort_schedule_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delete_cohort_schedule_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.delete_cohort_schedule_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.delete_cohort_schedule_result" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
-<li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="back.objects.domain.SettingsService.SettingsService.trigger_cohort_schedule_now_result">
-<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">trigger_cohort_schedule_now_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">domain_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rule_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">session_mgr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/back/objects/domain/SettingsService.html#SettingsService.trigger_cohort_schedule_now_result"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#back.objects.domain.SettingsService.SettingsService.trigger_cohort_schedule_now_result" title="Link to this definition">¶</a></dt>
-<dd><p>Fire the cohort materialisation schedule for <em>(domain, rule)</em> now.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>domain_name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
-<li><p><strong>rule_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
 <li><p><strong>session_mgr</strong> (<a class="reference internal" href="app.objects.session.html#back.objects.session.SessionManager.SessionManager" title="back.objects.session.SessionManager.SessionManager"><em>SessionManager</em></a>)</p></li>
 <li><p><strong>settings</strong> (<a class="reference internal" href="app.config.html#shared.config.settings.Settings" title="shared.config.settings.Settings"><em>Settings</em></a>)</p></li>
 </ul>

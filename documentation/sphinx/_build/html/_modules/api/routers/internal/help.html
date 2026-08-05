@@ -121,7 +121,7 @@
   <h1>Source code for api.routers.internal.help</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;In-app Help Center documentation endpoints (internal JSON API).</span>
 
-<span class="sd">Serves the Markdown files from the repository&#39;s ``docs/`` folder and their</span>
+<span class="sd">Serves the Markdown files from the repository&#39;s ``documentation/`` folder and their</span>
 <span class="sd">referenced images so the Help Center modal can render them client-side with</span>
 <span class="sd">marked.js. Markdown remains the single source of truth.</span>
 
@@ -132,7 +132,7 @@
 
 <span class="sd">- ``GET /api/help/docs``                → list of available docs, grouped by category</span>
 <span class="sd">- ``GET /api/help/docs/{slug}``         → ``{slug, title, markdown}``</span>
-<span class="sd">- ``GET /api/help/docs/images/{name}``  → raw image file from ``docs/images/``</span>
+<span class="sd">- ``GET /api/help/docs/images/{name}``  → raw image file from ``documentation/images/``</span>
 
 <span class="sd">Access is restricted by a hard-coded allow-list (slug → relative path + title</span>
 <span class="sd">+ category) and a strict filename regex on image names, to prevent any path</span>
@@ -226,32 +226,32 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_docs_dir</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the repository&#39;s ``docs/`` directory.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the repository&#39;s ``documentation/`` directory.</span>
 
 <span class="sd">    The Help Center is served from Markdown files bundled at the repo root.</span>
 <span class="sd">    This file lives at ``src/api/routers/internal/help.py`` so we climb</span>
-<span class="sd">    four ``dirname`` levels to reach ``&lt;repo&gt;/`` and then append ``docs/``.</span>
+<span class="sd">    four ``dirname`` levels to reach ``&lt;repo&gt;/`` and then append ``documentation/``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">here</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))</span>
     <span class="c1"># here = &lt;repo&gt;/src/api/routers/internal</span>
     <span class="n">repo_root</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span>
         <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">here</span><span class="p">)))</span>
     <span class="p">)</span>
-    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">repo_root</span><span class="p">,</span> <span class="s2">&quot;docs&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">repo_root</span><span class="p">,</span> <span class="s2">&quot;documentation&quot;</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_audit_docs_on_disk</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Log a loud warning at boot if any catalogued doc is missing on disk.</span>
 
 <span class="sd">    Prevents the class of bug where ``.databricksignore`` (or any other</span>
-<span class="sd">    deploy-time filter) silently drops the ``docs/`` folder and every</span>
+<span class="sd">    deploy-time filter) silently drops the ``documentation/`` folder and every</span>
 <span class="sd">    Help Center entry starts 404&#39;ing in production.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">docs_dir</span> <span class="o">=</span> <span class="n">_docs_dir</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">docs_dir</span><span class="p">):</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
             <span class="s2">&quot;Help Center docs directory is missing at </span><span class="si">%s</span><span class="s2"> — the deployed &quot;</span>
-            <span class="s2">&quot;bundle is likely excluding docs/*.md (check .databricksignore). &quot;</span>
+            <span class="s2">&quot;bundle is likely excluding documentation/*.md (check .databricksignore). &quot;</span>
             <span class="s2">&quot;All /api/help/docs/* endpoints will return 404.&quot;</span><span class="p">,</span>
             <span class="n">docs_dir</span><span class="p">,</span>
         <span class="p">)</span>
@@ -303,7 +303,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_serve_doc_asset</span><span class="p">(</span><span class="n">subdir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FileResponse</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serve a whitelisted asset file from ``docs/&lt;subdir&gt;/``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serve a whitelisted asset file from ``documentation/&lt;subdir&gt;/``.&quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="n">subdir</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ASSET_SUBDIRS</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="s2">&quot;Asset not found&quot;</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">_IMAGE_NAME_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
@@ -324,7 +324,7 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.help.get_doc_image">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/docs/images/</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_doc_image</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serve a whitelisted image file from ``docs/images/``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serve a whitelisted image file from ``documentation/images/``.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_serve_doc_asset</span><span class="p">(</span><span class="s2">&quot;images&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
 
 
@@ -333,7 +333,7 @@
 <a class="viewcode-back" href="../../../../api/app.frontend.html#api.routers.internal.help.get_doc_screenshot">[docs]</a>
 <span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/docs/screenshots/</span><span class="si">{name}</span><span class="s2">&quot;</span><span class="p">)</span>
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_doc_screenshot</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serve a whitelisted screenshot file from ``docs/screenshots/``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Serve a whitelisted screenshot file from ``documentation/screenshots/``.&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">_serve_doc_asset</span><span class="p">(</span><span class="s2">&quot;screenshots&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
 
 

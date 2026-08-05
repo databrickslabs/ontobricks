@@ -71,6 +71,11 @@ SHACL (Shapes Constraint Language)
    :undoc-members:
    :show-inheritance:
 
+.. automodule:: back.core.w3c.shacl.ShapeConditions
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. automodule:: back.core.w3c.shacl.constants
    :members:
    :undoc-members:

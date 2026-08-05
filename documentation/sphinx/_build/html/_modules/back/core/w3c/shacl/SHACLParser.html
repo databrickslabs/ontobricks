@@ -125,8 +125,9 @@
 <span class="sd">shape dicts compatible with ``SHACLService``.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Graph</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">rdflib.namespace</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF</span>
@@ -135,6 +136,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.w3c.shacl.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">PARAM_CATEGORY_HINTS</span><span class="p">,</span> <span class="n">SEVERITY_REVERSE</span><span class="p">,</span> <span class="n">SH</span>
 
 <span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1">#: Recovers the target class from the SPARQL target of a conditional shape.</span>
+<span class="n">_SPARQL_TARGET_CLASS_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\$this\s+a\s+&lt;([^&gt;]+)&gt;&quot;</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="SHACLParser">
@@ -151,23 +155,39 @@
 <div class="viewcode-block" id="SHACLParser.parse">
 <a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLParser.SHACLParser.parse">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">turtle_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;turtle&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse SHACL Turtle and return a list of shape dicts.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse SHACL Turtle and return a list of shape dicts.&quot;&quot;&quot;</span>
+        <span class="n">shapes</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_with_report</span><span class="p">(</span><span class="n">turtle_content</span><span class="p">,</span> <span class="nb">format</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">shapes</span></div>
+
+
+<div class="viewcode-block" id="SHACLParser.parse_with_report">
+<a class="viewcode-back" href="../../../../../api/app.core.w3c.html#back.core.w3c.shacl.SHACLParser.SHACLParser.parse_with_report">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">parse_with_report</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">turtle_content</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;turtle&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span> <span class="n">Dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Parse SHACL Turtle into shape dicts plus an import report.</span>
+
+<span class="sd">        The report carries ``conditions_dropped``: the number of shapes that</span>
+<span class="sd">        arrived with a SPARQL target.  Conditions are not reconstructed from</span>
+<span class="sd">        the query — the constraint is imported unguarded, so the caller must</span>
+<span class="sd">        surface the count to the user.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            turtle_content: SHACL serialised as Turtle (or another RDF format).</span>
 <span class="sd">            format: RDFLib parse format (default ``turtle``).</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            List of internal shape dicts.</span>
+<span class="sd">            ``(shapes, report)``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">g</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">g</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">turtle_content</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="nb">format</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;Failed to parse SHACL content: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
-            <span class="k">return</span> <span class="p">[]</span>
+            <span class="k">return</span> <span class="p">[],</span> <span class="p">{</span><span class="s2">&quot;conditions_dropped&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
 
         <span class="n">shapes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">conditions_dropped</span> <span class="o">=</span> <span class="mi">0</span>
 
         <span class="k">for</span> <span class="n">node_shape</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">subjects</span><span class="p">(</span><span class="n">RDF</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">NodeShape</span><span class="p">):</span>
             <span class="n">target_class_uri</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -176,6 +196,17 @@
                 <span class="n">target_class_uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">tc</span><span class="p">)</span>
                 <span class="n">target_class</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local_name</span><span class="p">(</span><span class="n">target_class_uri</span><span class="p">)</span>
                 <span class="k">break</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">target_class_uri</span><span class="p">:</span>
+                <span class="n">target_class_uri</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_class_from_sparql_target</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">node_shape</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">target_class_uri</span><span class="p">:</span>
+                    <span class="n">target_class</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_local_name</span><span class="p">(</span><span class="n">target_class_uri</span><span class="p">)</span>
+                    <span class="n">conditions_dropped</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                        <span class="s2">&quot;Shape </span><span class="si">%s</span><span class="s2"> has a SPARQL target; importing its constraint &quot;</span>
+                        <span class="s2">&quot;without the condition&quot;</span><span class="p">,</span>
+                        <span class="n">node_shape</span><span class="p">,</span>
+                    <span class="p">)</span>
 
             <span class="k">for</span> <span class="n">ps</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">property</span><span class="p">):</span>
                 <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_property_shape</span><span class="p">(</span>
@@ -213,8 +244,17 @@
                     <span class="p">}</span>
                 <span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">shapes</span></div>
+        <span class="k">return</span> <span class="n">shapes</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;conditions_dropped&quot;</span><span class="p">:</span> <span class="n">conditions_dropped</span><span class="p">}</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_target_class_from_sparql_target</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">g</span><span class="p">:</span> <span class="n">Graph</span><span class="p">,</span> <span class="n">node_shape</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Recover the focus class from a ``sh:target`` SPARQL query.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">node_shape</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">target</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">select</span> <span class="ow">in</span> <span class="n">g</span><span class="o">.</span><span class="n">objects</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">SH</span><span class="o">.</span><span class="n">select</span><span class="p">):</span>
+                <span class="n">match</span> <span class="o">=</span> <span class="n">_SPARQL_TARGET_CLASS_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">select</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_parse_property_shape</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
