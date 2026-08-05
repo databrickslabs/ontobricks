@@ -58,13 +58,18 @@ class OntologyGenerator:
         # used to drop stale domain-scoped DatatypeProperty shadows on export.
         self._class_attr_index = self._build_class_attr_index()
 
+        # Derive a clean lowercase prefix from the ontology name (e.g. "MyDomain" -> "mydomain").
+        # Fall back to the empty prefix only when no name is available.
+        _raw = re.sub(r"[^a-zA-Z0-9]", "", self.ontology_name or "").lower()
+        self._domain_prefix = _raw or ""
+
         # Bind namespaces
         self.graph.bind("owl", OWL)
         self.graph.bind("rdf", RDF)
         self.graph.bind("rdfs", RDFS)
         self.graph.bind("xsd", XSD)
         self.graph.bind("ontobricks", ONTOBRICKS_NS)
-        self.graph.bind("", self.ns)
+        self.graph.bind(self._domain_prefix, self.ns)
 
     def generate(self) -> str:
         """Generate OWL content.

@@ -32,6 +32,8 @@ instance/
 .pytest_cache/
 .coverage
 htmlcov/
+# Live scenario campaign reports (make scenario-campaign)
+artifacts/
 
 # OS
 .DS_Store

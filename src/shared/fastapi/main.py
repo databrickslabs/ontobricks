@@ -65,7 +65,7 @@ tags_metadata = [
 API_DESCRIPTION = """
 # OntoBricks API
 
-**Knowledge Graph Builder for Databricks**
+**Graph Viewer Builder for Databricks**
 
 OntoBricks enables you to build knowledge graphs from Databricks tables using ontologies 
 and R2RML mappings. Design an ontology, map it to your data, and materialize triples 
@@ -76,7 +76,7 @@ into a Delta triple store for visual exploration and quality validation.
 - 🏗️ **Ontology Design** - Visual ontology editor with OWL export
 - 🔗 **Data Mapping** - Map ontology concepts to Databricks tables
 - 🔍 **SPARQL Queries** - Query data using W3C standard SPARQL
-- 📊 **Digital Twin Knowledge Graph** - Interactive sigma.js WebGL graph exploration with SPARQL-based quality checks
+- 📊 **Knowledge Graph Graph Viewer** - Interactive sigma.js WebGL graph exploration with SPARQL-based quality checks
 - 📦 **Domain Management** - Save/load domains to Unity Catalog volumes
 - 🔮 **GraphQL API** - Auto-generated typed schema from ontology with nested entity traversal
 
@@ -189,16 +189,25 @@ _DOMAIN_SCOPED_EXCEPTIONS = (
     # handler (a Builder may manage status for a domain they have not
     # loaded), so it must not be gated by the *session* domain's role.
     "/domain/set-version-status",
+    # Closing only releases the caller's own edit lock and resets their
+    # session — any user with app access (viewers included) may close the
+    # domain they have open, so it is not gated by the session domain role.
+    "/domain/close",
 )
 
 # ----------------------------------------------------------------------
 # Lifecycle status edit-gate
 # ----------------------------------------------------------------------
-# A domain version's content is only editable while its lifecycle status
+# A domain version's *design* is only editable while its lifecycle status
 # is ``DRAFT``. Once it moves to ``IN-REVIEW`` or ``PUBLISHED`` the
-# mutating endpoints below are blocked server-side (authoritative) for
-# *all* roles. Read / query / generate / validate endpoints stay open so
-# a locked version can still be browsed, queried and inspected.
+# design-mutating endpoints below are blocked server-side (authoritative)
+# for *all* roles. Read / query / generate / validate endpoints stay open
+# so a locked version can still be browsed, queried and inspected.
+#
+# Data-refresh ops (KG build/sync, reasoning materialise) are NOT gated
+# on the lifecycle status: they re-materialise triples from source data
+# using the frozen design but do not change the design itself. A PUBLISHED
+# domain's graph can therefore be refreshed without reverting to DRAFT.
 
 # Write methods on these prefixes are pure model-editing surfaces.
 _STATUS_GATE_EDIT_PREFIXES = (
@@ -207,8 +216,14 @@ _STATUS_GATE_EDIT_PREFIXES = (
 )
 
 # Specific mutating endpoints outside the editing prefixes (domain
-# metadata/layout saves, document uploads, Digital-Twin build/sync, and
-# reasoning materialisation) that persist into the loaded version.
+# metadata/layout saves, document uploads) that persist into the loaded
+# version's *design*.
+# NOTE: KG data-refresh ops (/dtwin/sync/start, /dtwin/sync/load,
+# /dtwin/reasoning/materialize) are intentionally NOT listed here — they
+# re-materialise triples from source data using the frozen design but do
+# not mutate the design itself. They must remain usable on PUBLISHED /
+# IN-REVIEW versions so the graph can be refreshed without reverting to
+# DRAFT. They remain builder-gated via their endpoint role decorators.
 _STATUS_GATE_EDIT_PATHS = (
     "/domain/save",
     "/domain/info",
@@ -223,8 +238,6 @@ _STATUS_GATE_EDIT_PATHS = (
     "/domain/design-views/delete",
     "/domain/metadata/",
     "/domain/documents/",
-    "/dtwin/sync/",
-    "/dtwin/reasoning/materialize",
 )
 
 # Non-mutating POST endpoints that live under an editing prefix but only
@@ -239,6 +252,7 @@ _STATUS_GATE_OPEN_SUFFIXES = (
     "/parse-rdfs",
     "/parse-r2rml",
     "/load-owl-file",
+    "/analyze-import",
     "/validate",
     "/validate-sql",
     "/test-query",
@@ -422,8 +436,40 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                     request,
                     f"This version is {status}; set it back to DRAFT to edit.",
                 )
+            # Single-editor lock (authoritative): on an editable (DRAFT)
+            # version only the lock holder may mutate. Admins are NOT
+            # auto-exempt — they must "take over" the lock first, which
+            # preserves the single-writer invariant.
+            holder = self._session_edit_lock_holder(request)
+            if holder:
+                return self._forbidden_json(
+                    request,
+                    f"This version is being edited by {holder}; you have "
+                    "read-only access. Take over editing to make changes.",
+                )
 
         return await call_next(request)
+
+    @staticmethod
+    def _session_edit_lock_holder(request: Request) -> str:
+        """Name of *another* user editing the session's loaded version.
+
+        Returns ``""`` when the request must not be blocked (lock free /
+        held by this user / backend unavailable). Only invoked on the
+        already-gated mutating edit routes, so it adds no per-request
+        Lakebase cost to reads.
+        """
+        try:
+            from back.objects.session import SessionManager
+            from back.objects.registry.lockmgt import EditLockService
+
+            session_mgr = SessionManager(request)
+            return EditLockService.blocking_holder(
+                request, session_mgr, get_settings()
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("could not resolve edit-lock holder: %s", exc)
+            return ""
 
     @staticmethod
     def _session_version_status(request: Request) -> str:

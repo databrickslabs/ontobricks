@@ -25,6 +25,15 @@
         return prefix + (value || '' + Math.random()).replace(/[^a-zA-Z0-9_-]/g, '_');
     }
 
+    function _countBadge(rowCount) {
+        if (rowCount === null || rowCount === undefined) return '';
+        var n = Number(rowCount);
+        var label = n.toLocaleString() + (n === 1 ? ' row' : ' rows');
+        var cls = n > 0 ? 'diag-count-badge' : 'diag-count-badge diag-count-empty';
+        return '<span class="' + cls + '" title="Rows returned by the source query">' +
+            '<i class="bi bi-table"></i> ' + _escapeHtml(label) + '</span>';
+    }
+
     function _renderChecks(checks) {
         if (!checks || !checks.length) return '';
         var rows = checks.map(function (c) {
@@ -48,6 +57,7 @@
                 '<span class="diag-item-status">' + _icon(ent.status) + '</span>' +
                 '<span class="diag-item-label">' + _escapeHtml(ent.label) + '</span>' +
                 '<span class="diag-item-meta text-muted small ms-3">' + _escapeHtml(sourceDisplay) + '</span>' +
+                _countBadge(ent.row_count) +
                 '<i class="bi bi-chevron-down diag-chevron ms-auto"></i>' +
             '</div>' +
             '<div id="' + id + '" class="collapse diag-item-body">' +
@@ -105,6 +115,7 @@
                 '<span class="diag-item-meta text-muted small ms-3">' +
                     _escapeHtml(rel.source_class || '') + ' → ' + _escapeHtml(rel.target_class || '') +
                 '</span>' +
+                _countBadge(rel.row_count) +
                 '<i class="bi bi-chevron-down diag-chevron ms-auto"></i>' +
             '</div>' +
             '<div id="' + id + '" class="collapse diag-item-body">' +

@@ -1,0 +1,29 @@
+## Fix: last_build reset when switching domains (Issue reported by Chang Shi Lim)
+
+**Context:** After a manual UI build, `last_build` was only written to the server
+session — not to the Lakebase registry store (`domain_versions.last_build`). When
+the user switched to another domain and switched back, `load_domain_from_uc` reloaded
+the domain from the registry, found `last_build` empty, and reset the "Last Built"
+indicator. The Validation page still showed "Digital Twin built" because it checks
+live Lakebase table existence, while the "Submit for Review" button checks
+`last_build`, leaving users unable to submit for review after switching domains.
+The only workaround was triggering a scheduled run (which already persisted
+`last_build` to the store via `_persist_domain_metadata`).
+
+**Changes:**
+1. `src/back/objects/registry/store/base.py` — added `stamp_last_build(folder,
+   version, ts)` with a safe default fallback (read+write) so any store
+   implementation works without requiring an override.
+2. `src/back/objects/registry/store/lakebase/store.py` — overridden
+   `stamp_last_build` with a targeted single-column `UPDATE` on
+   `domain_versions.last_build` to avoid re-writing all JSONB blobs.
+3. `src/back/objects/digitaltwin/_build_pipeline.py` — in `_record_build_run`,
+   for `status == "success"` call `svc._store.stamp_last_build(...)` so every
+   successful UI/API build durably persists `last_build` to the registry.
+
+**Modified files:**
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+
+**Test result:** 2291 passed, 15 skipped (pre-existing psycopg skip unrelated to this change).

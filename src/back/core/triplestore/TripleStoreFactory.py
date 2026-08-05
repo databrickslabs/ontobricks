@@ -59,10 +59,19 @@ class TripleStoreFactory:
         return None
 
     @staticmethod
-    def _read_global_config(domain: Any, settings: Optional[Any], accessor):
+    def _read_global_config(domain: Any, settings: Optional[Any], accessor, *, force: bool = False):
         """Call *accessor(global_config_service, host, token, registry_cfg)*.
 
         Returns ``None`` on any error (registry not configured, etc.).
+
+        When *force* is ``True`` the ``GlobalConfigService`` in-memory cache is
+        bypassed and a fresh read is performed against the backing store.  This
+        is important for build-time resolution: the cache may hold the empty
+        template (``_empty()``) from a cold-start race where Lakebase was
+        briefly unavailable, while the Settings UI correctly shows the saved
+        value because it always uses ``force=True``.  Without bypassing the
+        cache the build would silently fall back to ``app_managed`` even though
+        ``managed_synced`` is configured.
         """
         try:
             from back.objects.session.GlobalConfigService import global_config_service
@@ -76,6 +85,8 @@ class TripleStoreFactory:
             from back.objects.registry import RegistryCfg
 
             registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
+            if force:
+                global_config_service.load(host, token, registry_cfg, force=True)
             return accessor(global_config_service, host, token, registry_cfg)
         except Exception as exc:
             logger.debug("Could not read global config: %s", exc)
@@ -110,16 +121,20 @@ class TripleStoreFactory:
             return None, {}
 
     @staticmethod
-    def _resolve_graph_engine(domain: Any, settings: Optional[Any]) -> Optional[str]:
+    def _resolve_graph_engine(domain: Any, settings: Optional[Any], *, force: bool = False) -> Optional[str]:
         """Read the configured graph engine from ``GlobalConfigService``.
 
         Falls back to the domain-level registry mirror when global resolution
         is unavailable (e.g. registry not yet wired up).
+
+        Pass *force=True* to bypass the in-memory cache (required for build-time
+        calls to avoid a cold-start race where the cache holds ``_empty()``).
         """
         gcs_val = TripleStoreFactory._read_global_config(
             domain,
             settings,
             lambda gcs, h, t, r: gcs.get_graph_engine(h, t, r),
+            force=force,
         )
         if gcs_val is not None:
             return gcs_val
@@ -128,13 +143,18 @@ class TripleStoreFactory:
 
     @staticmethod
     def _resolve_graph_engine_config(
-        domain: Any, settings: Optional[Any]
+        domain: Any, settings: Optional[Any], *, force: bool = False
     ) -> Optional[dict]:
-        """Read the engine-specific JSON config from ``GlobalConfigService``."""
+        """Read the engine-specific JSON config from ``GlobalConfigService``.
+
+        Pass *force=True* to bypass the in-memory cache (required for build-time
+        calls to avoid a cold-start race where the cache holds ``_empty()``).
+        """
         raw = TripleStoreFactory._read_global_config(
             domain,
             settings,
             lambda gcs, h, t, r: gcs.get_graph_engine_config(h, t, r),
+            force=force,
         )
         gcs_cfg: Dict[str, Any] = raw if isinstance(raw, dict) else {}
         _, mirrored_cfg = TripleStoreFactory._registry_graph_engine_mirror(domain)

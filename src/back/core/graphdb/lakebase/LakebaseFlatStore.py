@@ -17,8 +17,9 @@ Two operating modes are supported:
 
 from __future__ import annotations
 
+from collections import defaultdict
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.graphdb.lakebase import _companion_ddl
@@ -37,8 +38,42 @@ _BULK_DELETE_THRESHOLD = 50
 _COPY_INSERT_TEMP = "_ob_copy_stage"
 _COPY_DELETE_TEMP = "_ob_del_stage"
 
+# Postgres btree version-4 index entry limit (bytes).
+_PG_BTREE_INDEX_MAX_BYTES = 2704
+
 SYNC_MODE_APP = "app_managed"
 SYNC_MODE_MANAGED = "managed_synced"
+
+
+def _is_index_row_size_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    if "index row size" in msg and "btree" in msg:
+        return True
+    return exc.__class__.__name__ == "ProgramLimitExceeded"
+
+
+def _long_literal_detail(batch: List[Dict[str, str]]) -> str:
+    worst = max(
+        batch,
+        key=lambda t: len((t.get("object") or "").encode("utf-8")),
+    )
+    obj_bytes = len((worst.get("object") or "").encode("utf-8"))
+    predicate = worst.get("predicate") or "?"
+    return f"predicate={predicate!r}, object_size={obj_bytes} bytes"
+
+
+def _reraise_lakebase_index_limit(
+    exc: BaseException, batch: List[Dict[str, str]]
+) -> None:
+    if not _is_index_row_size_error(exc):
+        raise exc
+    detail = _long_literal_detail(batch)
+    raise InfrastructureError(
+        "Lakebase triple insert failed: a literal object exceeds the Postgres "
+        f"btree index size limit ({detail}). Run a full Knowledge Graph rebuild "
+        "to apply the object_hash schema, or exclude very long text columns "
+        "from mapping."
+    ) from exc
 
 
 class LakebaseFlatStore(LakebaseBase):
@@ -278,6 +313,17 @@ class LakebaseFlatStore(LakebaseBase):
             _time.sleep(min(poll_interval_s, remaining))
 
         with self._cursor() as cur:
+            # managed_synced: Lakeflow creates the _sync table. Re-apply index
+            # DDL idempotently so BFS and neighbour traversals stay performant
+            # even if the physical _sync table was recreated upstream.
+            try:
+                _companion_ddl.ensure_graph_indexes(cur, synced)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "ensure_synced_union_view: could not ensure indexes on %s: %s",
+                    synced,
+                    exc,
+                )
             _companion_ddl.ensure_union_view(cur, view, synced, companion)
 
     @staticmethod
@@ -346,6 +392,31 @@ class LakebaseFlatStore(LakebaseBase):
             f"ALTER TABLE {phy} ADD COLUMN IF NOT EXISTS datatype TEXT"
         )
         cur.execute(f"ALTER TABLE {phy} ADD COLUMN IF NOT EXISTS lang TEXT")
+        self._warn_legacy_object_pk(cur, phy)
+
+    @staticmethod
+    def _warn_legacy_object_pk(cur: Any, phy: str) -> None:
+        """Log when an existing table still keys on full ``object`` text."""
+        bare = phy.split(".")[-1].strip('"')
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = ANY(current_schemas(false))
+              AND table_name = %s
+              AND column_name = 'object_hash'
+            LIMIT 1
+            """,
+            (bare,),
+        )
+        if cur.fetchone() is None:
+            logger.warning(
+                "Lakebase table %s uses the legacy PRIMARY KEY (subject, predicate, object) "
+                "and cannot store literal objects longer than %d bytes. "
+                "Run a full Knowledge Graph rebuild to migrate to object_hash.",
+                phy,
+                _PG_BTREE_INDEX_MAX_BYTES,
+            )
 
     @staticmethod
     def _require_pg():
@@ -363,6 +434,66 @@ class LakebaseFlatStore(LakebaseBase):
                 if cur.description:
                     return [dict(row) for row in cur.fetchall()]
                 return []
+
+    def find_subjects_by_patterns(
+        self, table_name: str, like_patterns: List[str]
+    ) -> Set[str]:
+        """Optimized alias expansion for Lakebase Postgres.
+
+        ``describe_entity`` may pass hundreds or thousands of ``%/<local-id>``
+        patterns when expanding URI aliases. Building one giant OR-LIKE chain
+        performs poorly and can hit statement timeouts.
+
+        For fixed suffix patterns (``%/<id>``), group IDs by suffix length and
+        build a single SQL statement with one ``RIGHT(subject, k) = ANY(...)``
+        clause per distinct suffix length. This scales with distinct suffix
+        lengths (typically 1-3), not with total pattern count, while keeping
+        the lookup to a single round-trip.
+        """
+        if not like_patterns:
+            return set()
+
+        rel = self._sql_relation(table_name)
+        by_suffix_len: dict[int, list[str]] = defaultdict(list)
+        generic_patterns: list[str] = []
+
+        for raw in like_patterns:
+            p = (raw or "").strip()
+            if not p:
+                continue
+            if p.startswith("%/") and ("%" not in p[2:]) and ("_" not in p[2:]):
+                local_id = p[2:]
+                suffix_len = len(local_id) + 1
+                by_suffix_len[suffix_len].append(local_id)
+            else:
+                generic_patterns.append(p)
+
+        out: set[str] = set()
+
+        if by_suffix_len:
+            or_clauses = []
+            for suffix_len, ids in sorted(by_suffix_len.items()):
+                array_literals = ", ".join(
+                    f"'/{self._sql_escape(v)}'"
+                    for v in sorted({value for value in ids if value})
+                )
+                or_clauses.append(
+                    f"RIGHT(subject, {suffix_len}) = ANY(ARRAY[{array_literals}])"
+                )
+            rows = self.execute_query(
+                f"SELECT DISTINCT subject FROM {rel} WHERE {' OR '.join(or_clauses)}"
+            ) or []
+            out.update(r["subject"] for r in rows if r.get("subject"))
+
+        if generic_patterns:
+            like_clauses = " OR ".join(
+                f"subject LIKE '{self._sql_escape(p)}'" for p in generic_patterns
+            )
+            sql = f"SELECT DISTINCT subject FROM {rel} WHERE {like_clauses}"
+            rows = self.execute_query(sql) or []
+            out.update(r["subject"] for r in rows if r.get("subject"))
+
+        return out
 
     def create_table(self, table_name: str) -> None:
         validate_table_name(table_name)
@@ -384,7 +515,17 @@ class LakebaseFlatStore(LakebaseBase):
         view = self._readable_table_id(table_name)
         with self._cursor() as cur:
             _companion_ddl.ensure_synced(cur, self._schema, synced)
+            try:
+                self._ensure_legacy_columns(cur, synced)
+            except Exception as _col_err:
+                raise RuntimeError(
+                    f"Table '{synced}' exists but is owned by a different database role "
+                    f"— cannot add missing columns. "
+                    f"Fix: connect to Lakebase with a superuser and run: "
+                    f"DROP TABLE IF EXISTS \"{self._schema}\".\"{synced}\" CASCADE;"
+                ) from _col_err
             _companion_ddl.ensure_companion(cur, self._schema, companion)
+            self._ensure_legacy_columns(cur, companion)
             _companion_ddl.ensure_union_view(cur, view, synced, companion)
         logger.info(
             "Lakebase graph layout ready: %s.[%s | %s | view %s]",
@@ -463,33 +604,36 @@ class LakebaseFlatStore(LakebaseBase):
         """
         if not batch:
             return 0
-        with self._txn_cursor() as (_, cur):
-            cur.execute(
-                f"CREATE TEMP TABLE {_COPY_INSERT_TEMP} ("
-                "subject TEXT, predicate TEXT, object TEXT, "
-                "datatype TEXT, lang TEXT) ON COMMIT DROP"
-            )
-            copy_sql = (
-                f"COPY {_COPY_INSERT_TEMP} "
-                "(subject, predicate, object, datatype, lang) FROM STDIN"
-            )
-            with cur.copy(copy_sql) as cp:
-                for t in batch:
-                    dt, lg = self._literal_meta(t)
-                    cp.write_row(
-                        (
-                            (t.get("subject", "") or ""),
-                            (t.get("predicate", "") or ""),
-                            (t.get("object", "") or ""),
-                            dt,
-                            lg,
+        try:
+            with self._txn_cursor() as (_, cur):
+                cur.execute(
+                    f"CREATE TEMP TABLE {_COPY_INSERT_TEMP} ("
+                    "subject TEXT, predicate TEXT, object TEXT, "
+                    "datatype TEXT, lang TEXT) ON COMMIT DROP"
+                )
+                copy_sql = (
+                    f"COPY {_COPY_INSERT_TEMP} "
+                    "(subject, predicate, object, datatype, lang) FROM STDIN"
+                )
+                with cur.copy(copy_sql) as cp:
+                    for t in batch:
+                        dt, lg = self._literal_meta(t)
+                        cp.write_row(
+                            (
+                                (t.get("subject", "") or ""),
+                                (t.get("predicate", "") or ""),
+                                (t.get("object", "") or ""),
+                                dt,
+                                lg,
+                            )
                         )
-                    )
-            cur.execute(
-                f"INSERT INTO {phy} (subject, predicate, object, datatype, lang) "
-                f"SELECT subject, predicate, object, datatype, lang "
-                f"FROM {_COPY_INSERT_TEMP} ON CONFLICT DO NOTHING"
-            )
+                cur.execute(
+                    f"INSERT INTO {phy} (subject, predicate, object, datatype, lang) "
+                    f"SELECT subject, predicate, object, datatype, lang "
+                    f"FROM {_COPY_INSERT_TEMP} ON CONFLICT DO NOTHING"
+                )
+        except Exception as exc:
+            _reraise_lakebase_index_limit(exc, batch)
         return len(batch)
 
     def _copy_insert_batch(

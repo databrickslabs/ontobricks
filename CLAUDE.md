@@ -23,6 +23,7 @@ descriptive text and can be safely ignored when reading.
 @./.cursor/09-package-management.mdc
 @./.cursor/10-entity-panel-matrix.mdc
 @./.cursor/11-frontend-design.mdc
+@./.cursor/12-ai-feature-lifecycle.mdc
 @./src/.coding_rules.md
 
 ## Claude-only additions
@@ -40,6 +41,7 @@ own tooling (skills, mode switches) on top of those rules.
 | `changelog` | After **any** code change (mandatory post-step from `.cursorrules`) |
 | `deploy` | "deploy", "ship", "release" to Databricks |
 | `adding-subpackage` | New subdir under `back/core/`, `back/objects/`, or `agents/` |
+| `ai-feature` | Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool wrapping an agent — the orchestrator for the `.cursor/12-ai-feature-lifecycle.mdc` gate (SPEC.md → dataset → eval → impl → re-eval) |
 
 The skill files in `.claude/skills/<name>/SKILL.md` are themselves thin —
 they sequence the work and point back to the canonical rules. They do not

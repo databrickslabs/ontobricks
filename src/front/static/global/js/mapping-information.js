@@ -197,52 +197,67 @@ function updateMappingCompletionStatus() {
     const totalClasses = activeClasses.length;
     const totalProperties = activeProperties.length;
     
-    // Count entity mappings that match existing non-excluded ontology classes
-    let mappedClasses = 0;
+    // Build lookup maps (same pattern as Auto-Map page)
+    // Only count entities / relationships that have a real SQL query — stubs
+    // (excluded_attributes only, no sql_query) must not inflate the mapped count.
+    const entityMappings = MappingState.config.entities || [];
+    const relationshipMappings = MappingState.config.relationships || [];
+
+    const assignedEntityUris = new Set(
+        entityMappings.filter(m => m.sql_query).map(m => m.ontology_class || m.class_uri)
+    );
+    const assignedRelUris = new Set(
+        relationshipMappings.filter(m => m.sql_query).map(m => m.property)
+    );
+
+    // Build mappingByClass from ALL config entries (needed for attribute lookup)
     const mappingByClass = {};
-    if (MappingState.config.entities && activeClasses.length > 0) {
-        const classUris = new Set(activeClasses.map(c => c.uri));
-        MappingState.config.entities.forEach(m => {
-            const uri = m.ontology_class || m.class_uri;
-            if (classUris.has(uri)) {
-                mappedClasses++;
-                mappingByClass[uri] = m;
-            }
-        });
-    }
+    entityMappings.forEach(m => {
+        const uri = m.ontology_class || m.class_uri;
+        if (uri) mappingByClass[uri] = m;
+    });
+
+    // Count from the ONTOLOGY side (same direction as Auto-Map) so any URI
+    // mismatch or stub entry can't inflate the denominator.
+    const mappedClasses = activeClasses.filter(c => assignedEntityUris.has(c.uri)).length;
+    const mappedProperties = activeProperties.filter(p => assignedRelUris.has(p.uri)).length;
     
-    // Count relationship mappings that match existing non-excluded ObjectProperties
-    let mappedProperties = 0;
-    if (MappingState.config.relationships && activeProperties.length > 0) {
-        const propUris = new Set(activeProperties.map(p => p.uri));
-        mappedProperties = MappingState.config.relationships.filter(m => 
-            propUris.has(m.property)
-        ).length;
-    }
-    
-    // Count attribute mappings across all mapped non-excluded entities
+    // Count attribute mappings across all mapped non-excluded entities.
+    // Excluded attributes (excluded_attributes in the mapping) are not counted.
     let totalAttributes = 0;
     let mappedAttributes = 0;
+    let excludedAttrCount = 0;
     for (const cls of activeClasses) {
         const dataProps = cls.dataProperties || [];
         if (dataProps.length === 0) continue;
-        totalAttributes += dataProps.length;
         const em = mappingByClass[cls.uri];
-        if (em) {
-            const attrMap = em.attribute_mappings || {};
-            for (const dp of dataProps) {
-                const attrName = dp.name || dp.localName || '';
-                if (attrName && attrMap[attrName]) {
-                    mappedAttributes++;
-                }
-            }
+        const exclAttrs = new Set((em && em.excluded_attributes) || []);
+        excludedAttrCount += exclAttrs.size;
+        const attrMap = (em && em.attribute_mappings) || {};
+        for (const dp of dataProps) {
+            const attrName = dp.name || dp.localName || '';
+            if (!attrName) continue;
+            if (exclAttrs.has(attrName)) continue;   // excluded — skip
+            totalAttributes++;
+            if (attrMap[attrName]) mappedAttributes++;
         }
     }
-    
+
+    // Reusable helper: render "· N excl." badge
+    const _excl = (n) => n > 0
+        ? ` <span class="text-warning-emphasis" title="${n} excluded" style="font-size:0.72rem;">· ${n} excl.</span>`
+        : '';
+
+    // Count excluded entities / relationships for badges
+    const excludedEntityCount = allClasses.filter(c => c.excluded).length;
+    const excludedRelCount = allObjectProperties.filter(p =>
+        p.excluded || excludedClassNames.has(p.domain) || excludedClassNames.has(p.range)
+    ).length;
+
     // Update counts
-    entityCountEl.textContent = `${mappedClasses} / ${totalClasses}`;
-    relationshipCountEl.textContent = `${mappedProperties} / ${totalProperties}`;
-    if (attributeCountEl) attributeCountEl.textContent = `${mappedAttributes} / ${totalAttributes}`;
+    entityCountEl.innerHTML = `${mappedClasses} / ${totalClasses}${_excl(excludedEntityCount)}`;
+    relationshipCountEl.innerHTML = `${mappedProperties} / ${totalProperties}${_excl(excludedRelCount)}`;
+    if (attributeCountEl) attributeCountEl.innerHTML = `${mappedAttributes} / ${totalAttributes}${_excl(excludedAttrCount)}`;
 
     // Draw gauges
     const entityPct = totalClasses > 0 ? (mappedClasses / totalClasses) * 100 : null;
@@ -255,7 +270,7 @@ function updateMappingCompletionStatus() {
     // Populate entity/relationship detail lists
     renderSummaryDetailLists(mappingByClass, allObjectProperties, excludedClassNames);
     
-    // Determine status
+    // Determine status (only included attrs count towards completeness)
     const totalItems = totalClasses + totalProperties + totalAttributes;
     const mappedItems = mappedClasses + mappedProperties + mappedAttributes;
     const entitiesComplete = mappedClasses >= totalClasses;
@@ -308,23 +323,31 @@ function renderSummaryDetailLists(mappingByClass, objectProperties, excludedClas
             const isExcluded = !!cls.excluded;
             const em = mappingByClass[cls.uri];
             const dataProps = cls.dataProperties || [];
+            const exclAttrs = new Set((em && em.excluded_attributes) || []);
+            // Only count included attributes (same logic as gauges)
+            const includedProps = dataProps.filter(dp => {
+                const n = dp.name || dp.localName || '';
+                return n && !exclAttrs.has(n);
+            });
             let attrMapped = 0;
             if (em) {
                 const attrMap = em.attribute_mappings || {};
-                for (const dp of dataProps) {
+                for (const dp of includedProps) {
                     if (attrMap[dp.name || dp.localName || '']) attrMapped++;
                 }
             }
-            const isMapped = !!em;
+            const isMapped = !!(em && em.sql_query);
+            const exclCount = exclAttrs.size;
 
             const cbId = `excludeEntity_${idx}`;
             const checked = isExcluded ? '' : 'checked';
             const checkbox = `<input class="form-check-input exclude-cb" type="checkbox" id="${cbId}" ${checked} data-uri="${cls.uri}" data-type="entity" title="${isExcluded ? 'Include in mapping' : 'Exclude from mapping'}">`;
 
+            const exclBit = exclCount > 0 ? ` <span class="text-warning-emphasis" style="font-size:0.7rem;" title="${exclCount} attr(s) excluded">· ${exclCount} excl.</span>` : '';
             const badge = isExcluded
                 ? '<span class="badge bg-light text-secondary border">excluded</span>'
                 : isMapped
-                    ? `<span class="badge bg-success-subtle text-success">${attrMapped}/${dataProps.length} attr</span>`
+                    ? `<span class="badge bg-success-subtle text-success">${attrMapped}/${includedProps.length} attr${exclBit}</span>`
                     : '<span class="badge bg-secondary-subtle text-secondary">not mapped</span>';
 
             const rowClass = isExcluded ? 'summary-detail-row excluded' : 'summary-detail-row';
@@ -501,6 +524,14 @@ async function resetAllMappings() {
             entities: [],
             relationships: []
         };
+
+        // Re-stamp excluded flags so the ontology objects reflect the now-empty
+        // mapping config.  Without this the designer still shows previously
+        // excluded classes/properties as excluded because the flags live on the
+        // MappingState.loadedOntology objects and are only cleared by this call.
+        if (typeof _stampExcludedFlags === 'function') {
+            _stampExcludedFlags();
+        }
         
         await fetch('/mapping/save', {
             method: 'POST',

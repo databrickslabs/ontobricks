@@ -502,7 +502,7 @@ async def get_domain_ontology(
     if not owl_content:
         raise InfrastructureError("Could not generate OWL content")
 
-    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+    base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
     logger.info(
         "API: returning OWL for domain '%s' (%d classes, %d properties)",
         domain.domain_folder or "(session)",
@@ -570,7 +570,7 @@ async def get_domain_r2rml(
         try:
             from back.core.w3c import R2RMLGenerator
 
-            base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+            base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
             generator = R2RMLGenerator(base_uri)
             r2rml_content = generator.generate_mapping(
                 domain.assignment, domain.ontology
@@ -583,7 +583,7 @@ async def get_domain_r2rml(
     if not r2rml_content:
         raise InfrastructureError("Could not generate R2RML content")
 
-    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+    base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
     logger.info(
         "API: returning R2RML for domain '%s' (%d entities, %d relationships)",
         domain.domain_folder or "(session)",
@@ -647,7 +647,7 @@ async def get_domain_sparksql(
     if not r2rml_content:
         raise ValidationError("No R2RML mapping available. Configure mappings first.")
 
-    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+    base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
     try:
         entity_mappings, relationship_mappings = sparql.extract_r2rml_mappings(
             r2rml_content

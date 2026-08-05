@@ -52,3 +52,11 @@ cohort:
   latency_p95_seconds: 30.0
   cost_per_call_usd: 0.05
   aggregate: 0.82
+
+graph_interpreter:
+  section_completeness: 1.00
+  groundedness: 0.85
+  tool_selection: 0.70
+  latency_p95_seconds: 20.0
+  cost_per_call_usd: 0.02
+  aggregate: 0.82

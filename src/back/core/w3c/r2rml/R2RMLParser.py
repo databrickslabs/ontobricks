@@ -72,7 +72,7 @@ class R2RMLParser:
                 subject_template = str(template)
                 match = re.search(r"\{([^}]+)\}", subject_template)
                 if match:
-                    id_column = match.group(1)
+                    id_column = self._unquote_column(match.group(1))
 
             for cls in self.graph.objects(subject_map, self.RR["class"]):
                 subject_class = str(cls)
@@ -114,7 +114,7 @@ class R2RMLParser:
                 for template in self.graph.objects(obj_map, self.RR.template):
                     object_template = str(template)
                 for col in self.graph.objects(obj_map, self.RR.column):
-                    object_column = str(col)
+                    object_column = self._unquote_column(str(col))
 
             if not predicate:
                 continue
@@ -153,6 +153,16 @@ class R2RMLParser:
 
         return info
 
+    def _unquote_column(self, col: str) -> str:
+        """Strip surrounding double-quotes from a column name.
+
+        R2RMLGenerator always emits double-quoted column names. When parsing
+        back, we strip the quotes so callers receive the bare name.
+        """
+        if col and col.startswith('"') and col.endswith('"') and len(col) > 1:
+            return col[1:-1].replace('""', '"')
+        return col
+
     def _parse_table_name(self, table_name):
         """Parse table name into catalog, schema, table."""
         if not table_name:
@@ -175,7 +185,7 @@ class R2RMLParser:
             return None
 
         target_class = template_match.group(1)
-        target_id_column = template_match.group(2)
+        target_id_column = self._unquote_column(template_match.group(2))
         prop_name = (
             predicate.split("#")[-1] if "#" in predicate else predicate.split("/")[-1]
         )

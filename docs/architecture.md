@@ -2,12 +2,12 @@
 
 ## Overview
 
-OntoBricks is a web-based **Knowledge Graph Builder** that runs natively on Databricks. The core workflow is:
+OntoBricks is a web-based **Graph Viewer Builder** that runs natively on Databricks. The core workflow is:
 
 1. **Design** an ontology visually (or import one from OWL / industry standards).
 2. **Map** ontology entities to Unity Catalog tables using R2RML.
 3. **Materialize** a triple store (Delta table) and a graph backend (Lakebase Postgres).
-4. **Explore** the resulting knowledge graph — visual navigation, SPARQL, GraphQL, data-quality checks, and reasoning.
+4. **Explore** the resulting graph viewer — visual navigation, SPARQL, GraphQL, data-quality checks, and reasoning.
 
 Under the hood, SPARQL translates ontology mappings into Spark SQL — users never need to write SPARQL themselves.
 
@@ -29,7 +29,7 @@ Under the hood, SPARQL translates ontology mappings into Spark SQL — users nev
 
 ## Semantic Web Standards Stack
 
-OntoBricks leverages multiple W3C semantic web standards to bridge relational data and knowledge graphs:
+OntoBricks leverages multiple W3C semantic web standards to bridge relational data and graph viewers:
 
 ![Semantic Web Stack](images/semantic-web-stack.svg)
 
@@ -187,7 +187,7 @@ LIMIT 100
 6. **Generated Spark SQL** - Query with JOINs and UNION ALL
 7. **Triple Store Backend Dispatch** - The `TripleStoreFactory` returns a Delta-backed view client (`DeltaTripleStore`) and `GraphDBFactory` returns the active graph engine (`LakebaseFlatStore`). Both expose the same `(subject, predicate, object)` contract.
 8. **RDF-style Results** - Uniform (subject, predicate, object) triples from both backends
-9. **Knowledge Graph** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and data cluster detection (Louvain/Label Propagation/Greedy Modularity)
+9. **Graph Viewer** - Sigma.js WebGL-powered graph with entity details panel, search, filtering, and data cluster detection (Louvain/Label Propagation/Greedy Modularity)
 
 **Generated Spark SQL Example** (for generic triple query):
 ```sql
@@ -337,7 +337,7 @@ src/
 │   │   └── dependencies.py             # Jinja2 templates & shared dependencies for HTML routes
 │   ├── config/
 │   │   └── menu_config.json            # Sidebar navigation structure
-│   ├── routes/                         # HTML page routers (home, ontology, mapping, digital twin, project)
+│   ├── routes/                         # HTML page routers (home, ontology, mapping, graph viewer, project)
 │   ├── templates/                      # Consolidated Jinja2 templates (partials per feature area)
 │   └── static/                         # Static assets (css/, js/, img/, ontoviz/, per-area folders)
 │
@@ -421,7 +421,7 @@ src/
 │       ├── ontology/                   # Ontology domain (ontology.py, json_views.py)
 │       ├── mapping/                    # Mapping domain (mapping.py, json_views.py)
 │       ├── domain/                     # Saved domain / UC I/O (domain.py, payload.py, version_status.py)
-│       ├── digitaltwin/                # Digital Twin domain (DigitalTwin.py, models.py)
+│       ├── digitaltwin/                # Knowledge Graph domain (DigitalTwin.py, models.py)
 │       ├── session/                    # Session management
 │       │   ├── middleware.py           # File-based session middleware (cookie + ASGI)
 │       │   ├── SessionManager.py       # Request-scoped session get/set/delete wrapper
@@ -438,7 +438,7 @@ src/
 │   └── routers/
 │       ├── v1.py                       # /api/v1/* endpoints
 │       ├── domains.py                  # Domain registry & artifact endpoints (`/api/v1/domains`, `/api/v1/domain/...`)
-│       ├── digitaltwin.py              # Digital Twin REST API
+│       ├── digitaltwin.py              # Knowledge Graph REST API
 │       └── internal/                   # Session-aware JSON routes for the web UI
 │           ├── home.py, settings.py, domain.py, ontology.py, mapping.py, dtwin.py, tasks.py, …
 │
@@ -551,7 +551,7 @@ The UI uses a consistent **sidebar layout** across all main pages:
 
 ### Page Structure
 
-Each main page (Ontology, Mapping, Digital Twin) follows this pattern:
+Each main page (Ontology, Mapping, Knowledge Graph) follows this pattern:
 
 ```
 page.html
@@ -583,8 +583,8 @@ page.html
 | **Design** | Visual design → Auto-save → Session storage | `OntoViz`, Session middleware |
 | **Ontology** | Design/Configure → Save → Generate OWL | `OntologyGenerator`, Session middleware |
 | **Mapping** | Load ontology → Map/Auto-Map → Validate attributes → Generate R2RML | `R2RMLGenerator`, `SQLWizardService`, `TaskManager` |
-| **Digital Twin** | Build → Quality Check (async) → Auto-load Triples → Explore Knowledge Graph | `sparql_service`, `TaskManager`, Sigma.js graph |
-| **API/MCP** | REST → resolve domain → triple store query → formatted response | Digital Twin API, MCP Server, GraphQL |
+| **Knowledge Graph** | Build → Quality Check (async) → Auto-load Triples → Explore Graph Viewer | `sparql_service`, `TaskManager`, Sigma.js graph |
+| **API/MCP** | REST → resolve domain → triple store query → formatted response | Knowledge Graph API, MCP Server, GraphQL |
 
 ### Asynchronous Task Processing
 
@@ -592,10 +592,9 @@ Long-running operations use the **TaskManager** pattern (`src/back/core/task_man
 
 | Task Type | Triggered By | Description |
 |-----------|-------------|-------------|
-| `triplestore_sync` | Digital Twin → Build | Generates and writes triples to Delta and the configured Graph DB engine (Lakebase) |
-| `quality_checks` | Digital Twin → Quality | Runs all quality checks sequentially with per-check progress |
+| `triplestore_sync` | Knowledge Graph → Build | Generates and writes triples to Delta and the configured Graph DB engine (Lakebase) |
+| `quality_checks` | Knowledge Graph → Quality | Runs all quality checks sequentially with per-check progress |
 | `auto_assign` | Mapping → Auto-Map | Batch-maps entities and relationships via LLM; splits large jobs into chunks of `AUTO_ASSIGN_CHUNK_SIZE` with cooldown between chunks to avoid rate limits |
-
 **How it works:**
 1. Frontend sends a `POST` to start the task; backend creates a `TaskManager` task and spawns a `threading.Thread`
 2. Frontend stores the `task_id` in `sessionStorage` and polls `/tasks/{task_id}` for progress
@@ -708,6 +707,12 @@ relational tables:
 | `schedules` | Active scheduled-build configuration |
 | `schedule_runs` | Ring-buffered run history per domain |
 | `build_runs` | Append-only build-run trace (all paths) keyed by `(domain_id, version)` for analytics; active build = latest successful run |
+| `graph_analytics` | Cache of the LAST knowledge-graph metrics result (centrality/structure) keyed by `(domain_id, version)`; one row, replaced on every successful async recompute (UPSERT). Backs the KG Analytics page and the Domain Validation cockpit |
+| `graph_analytics_runs` | Append-only history of every analytics run launched (success or failure) keyed by `(domain_id, version)`; lightweight per-run metadata (node/edge counts, components, avg degree, density, duration, scope, status). Capped per tuple. Backs the KG Analytics "History" tab |
+| `domain_review_events` | Append-only review/validation audit log (submit / sign-off / publish / reopen / comment) keyed by `(domain_id, version)` |
+| `domain_change_events` | Append-only ontology/mapping change audit ("who changed what, and when") keyed by `(domain_id, version)`. Fine-grained edits (class/property/mapping add/update/remove, imports, resets) are buffered in the working session as they happen and flushed here in one batch on save-to-registry; `source` tags human vs AI-assistant edits; `occurred_at` is the real edit time, `created_at` the flush time |
+| `domain_comments` | Domain-wide threaded discussion keyed by `(domain_id, version)`; `parent_id` links replies, `resolved` closes a thread |
+| `domain_tasks` | Personalised work items assigned to a teammate (usually born from a comment); `status` walks `open → in_progress → done` (or `cancelled`), surfaced in the assignee's "My Tasks" worklist |
 
 Authentication is fully app-managed: the Databricks Apps runtime
 injects `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER` and OntoBricks mints a
@@ -759,7 +764,8 @@ For security and regeneration reasons, these are excluded from exports:
 |----------|--------|-------------|
 | `/domain/list-versions` | GET | List all versions of a domain |
 | `/domain/save-to-uc` | POST | Save domain to Unity Catalog |
-| `/domain/load-from-uc` | POST | Load specific version from UC |
+| `/domain/load-from-uc` | POST | Load a version from UC; on a domain switch closes the previously-open domain (releases its edit-lock) before loading, and returns a `lock` block |
+| `/domain/close` | POST | Release the loaded version's edit-lock and reset the session |
 | `/domain/create-version` | POST | Create new version (increment) |
 | `/domain/version-status` | GET | Get current version status |
 
@@ -783,7 +789,7 @@ User Action → OntoViz Event → Debounce → syncDesignToOntology → /ontolog
 OntoBricks separates two concerns:
 
 1. **Triple Store** — the persistent, governance-controlled view of the triples in **Unity Catalog Delta** (`triplestore_<domain>_V<n>`). Always present, never optional.
-2. **Graph DB** — the queryable graph engine used by the Digital Twin, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction.
+2. **Graph DB** — the queryable graph engine used by the Knowledge Graph, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
@@ -937,7 +943,7 @@ Validates instance data in the triple store against formal ontology constraints:
 
 **Execution**:
 - On Cypher-capable engines (none currently shipped): constraint checks would run as Cypher queries via `ReasoningService`. On the SQL-based engines that ship today the constraint phase short-circuits with a `skipped` reason.
-- On **Delta**: Quality checks run as SQL queries via the Digital Twin quality pipeline
+- On **Delta**: Quality checks run as SQL queries via the Knowledge Graph quality pipeline
 
 ### Reasoning Data Model
 
@@ -971,7 +977,7 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 
 ## Graph Analysis — Community Detection
 
-OntoBricks provides **data cluster detection** on the knowledge graph, allowing users to discover communities of densely connected entities. Detection is available at two levels:
+OntoBricks provides **data cluster detection** on the graph viewer, allowing users to discover communities of densely connected entities. Detection is available at two levels:
 
 ### Client-Side (Graphology)
 
@@ -1013,7 +1019,7 @@ Detected clusters can be visualized in several ways:
 
 ## SHACL Data Quality
 
-OntoBricks includes a **SHACL (Shapes Constraint Language)** module (`src/back/core/w3c/shacl/`) that provides W3C-standard data quality validation for the knowledge graph.
+OntoBricks includes a **SHACL (Shapes Constraint Language)** module (`src/back/core/w3c/shacl/`) that provides W3C-standard data quality validation for the graph viewer.
 
 ### Architecture
 
@@ -1061,7 +1067,7 @@ Shapes are organized into six data quality categories:
 ### UI Integration
 
 - **Ontology → Data Quality** sidebar section: Define, edit, and manage SHACL shapes visually with category-based organization
-- **Digital Twin → Data Quality** sidebar section: Run shapes against the triple store with violation reporting
+- **Knowledge Graph → Data Quality** sidebar section: Run shapes against the triple store with violation reporting
 
 ---
 
@@ -1089,7 +1095,7 @@ Shapes are organized into six data quality categories:
 |------------|---------|---------|
 | Bootstrap | 5.3 | UI framework |
 | Bootstrap Icons | 1.11 | Icon library |
-| Sigma.js | 3.0.2 | Knowledge Graph visualization (WebGL) |
+| Sigma.js | 3.0.2 | Graph Viewer visualization (WebGL) |
 | Graphology | 0.26.0 | Graph data model and algorithms |
 | D3.js | 7.x | Data-driven DOM manipulation |
 | Grid.js | latest | Advanced data tables |
@@ -1319,9 +1325,62 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 > — `DRAFT` → `IN-REVIEW` → `PUBLISHED` (transitions enforced server-side in
 > `back.objects.registry.version_lifecycle`). The external REST API, GraphQL
 > (`/api/v1/graphql`) and MCP only serve **PUBLISHED** versions and default to
-> the **numeric-latest PUBLISHED** version. Editing a version is only allowed
-> while it is `DRAFT` (gated in `PermissionMiddleware`). The lifecycle replaces
-> the old per-version "Active"/`mcp_enabled` toggle.
+> the **numeric-latest PUBLISHED** version.
+>
+> The `PermissionMiddleware` lifecycle gate distinguishes between **design
+> edits** and **data-refresh ops**:
+>
+> - **Design edits** (ontology/mapping changes, metadata saves, document
+>   uploads, design-view CRUD) are blocked on non-DRAFT versions for all
+>   roles — the design is frozen.
+> - **Data-refresh ops** (`/dtwin/sync/start`, `/dtwin/sync/load`,
+>   `/dtwin/reasoning/materialize`) are **not** status-gated. They
+>   re-materialise graph triples from source data using the frozen design and
+>   can be triggered on PUBLISHED / IN-REVIEW versions without reverting to
+>   DRAFT. They remain guarded by the builder role.
+> - **Read-only operations** (Explorer filter, stats, status, SPARQL, GraphQL)
+>   remain accessible on all statuses.
+>
+> On top of the lifecycle gate, a **single-editor lock** (`EditLockService` +
+> the Lakebase `domain_edit_locks` table) enforces that only one user edits a
+> given DRAFT `(domain, version)` at a time. The model is **renew-only lease**:
+> the first opener acquires the lock (on `POST /domain/load-from-uc`), later
+> openers are read-only, and the lock is held until the holder explicitly
+> closes the domain (`POST /domain/close` releases the lock then resets the
+> session), an admin **takes over** (`POST /domain/edit-lock/acquire` with
+> `force`), the version leaves DRAFT (`force_release`), or — when a lease TTL
+> is configured (**Settings → Global → Edit Lock Lease**, or the
+> `ONTOBRICKS_EDIT_LOCK_TTL_S` env var; the Settings value wins, seconds,
+> default `600`, `0` disables) — its lease lapses. The lease clock is the `heartbeat_at` column:
+> `acquire_edit_lock`'s `ON CONFLICT` reclaims a lock only when the current
+> holder has not renewed within the TTL, and the holder keeps it alive via
+> `POST /domain/edit-lock/renew` (a client timer pinging every ~TTL/3) plus the
+> per-page non-forcing acquire. The lock is **never released on unload**, so
+> ordinary multi-page navigation cannot free it mid-session — only the absence
+> of a renew for a full TTL can. `PermissionMiddleware` is authoritative — it
+> 403s a non-holder's mutating request on a DRAFT version (admins are not
+> exempt) but treats a **stale** lease as free (`blocking_holder` ignores it).
+>
+> **Opening a different domain closes the previous one first.** On a domain
+> switch, `load-from-uc` releases the prior domain's lock
+> (`EditLockService.release_prev`) **before** loading the new one, so a user
+> never holds two DRAFT locks at once. A same-domain **version** switch instead
+> releases the old version's lock **after** the new one loads
+> (`on_domain_loaded`), avoiding a needless release/re-acquire when reopening
+> the same version.
+>
+> Admins get a registry-wide view of every active lock via **Settings › Locks**
+> (`GET /settings/locks` → `EditLockService.list_all` →
+> `store.list_all_edit_locks`) and can force-unlock any `(folder, version)`
+> without opening that domain (`POST /settings/locks/release` →
+> `EditLockService.admin_release`); both endpoints are admin-only. When the lock
+> backend is unavailable (e.g. the table is missing) `EditLockService._shape`
+> degrades to permissive rather than presenting a phantom "another user" lock.
+> `domain_edit_locks` is provisioned as the schema owner by the deploy
+> migration (`scripts/bootstrap-lakebase-perms.sh`), because the app service
+> principal cannot self-heal the table's FK to `domains`.
+>
+> The lifecycle replaces the old per-version "Active"/`mcp_enabled` toggle.
 
 ### Available Endpoints
 
@@ -1336,7 +1395,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 | `/api/v1/domain/r2rml` | GET | Get R2RML mapping (Turtle) |
 | `/api/v1/domain/sparksql` | GET | Get generated Spark SQL |
 
-**Digital Twin API** (`/api/v1/digitaltwin/`):
+**Knowledge Graph API** (`/api/v1/digitaltwin/`):
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -1408,7 +1467,7 @@ See [API Documentation](api.md) for complete endpoint reference.
 2. **Custom R2RML Patterns**: Extend `R2RMLGenerator` in `src/back/core/w3c/r2rml/R2RMLGenerator.py`
 3. **New Output Formats**: Add serializers in mapping or ontology modules
 4. **Additional SPARQL Features**: Extend `SparqlTranslator` in `src/back/core/w3c/sparql/SparqlTranslator.py`
-5. **Custom Visualizations**: Extend Sigma.js knowledge graph in query template
+5. **Custom Visualizations**: Extend Sigma.js graph viewer in query template
 6. **Authentication Providers**: Add new auth methods in `DatabricksClient`
 7. **OntoViz Extensions**: Add new entity/relationship types, custom rendering
 8. **Graph DB Engines**: Implement `GraphDBBackend` in `src/back/core/graphdb/` (Lakebase Postgres ships today; the `_starter_kit/ExampleStore.py` template plus `GraphDBFactory` make it straightforward to add Neo4j, Memgraph, or other engines). The Delta-backed `TripleStoreBackend` is also extensible for new SQL views.

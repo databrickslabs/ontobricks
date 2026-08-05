@@ -10,6 +10,7 @@ engine transparently degrades to a single-shot generation (no tool calls).
 """
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,11 +39,34 @@ logger = get_logger(__name__)
 MAX_ITERATIONS = 10
 LLM_TIMEOUT = 180
 
+# Output-token budget per LLM call. Databricks-hosted models cap output at
+# ~8192 tokens (see agent_auto_icon_assign._ABSOLUTE_MAX_TOKENS); the full
+# ontology Turtle is emitted in one message, so budgeting below the cap risks
+# a length-truncated body that fails to parse downstream (→ empty ontology).
+_GEN_MAX_TOKENS = 8192
+
 _TRACE_NAME = "owl_generator"
 
 # Max pitfall-fix rounds the agent may consume (overridable via options dict).
 # The agent drives the quality loop itself via check_owl_pitfalls tool calls.
 _DEFAULT_MAX_FIX_ROUNDS = 5
+
+# Over-generation guard. An over-decomposed ontology (one class per column or
+# per attribute value) explodes the downstream auto-mapping cost — the mapper
+# chunks ~5 classes/chunk with cool-downs, so a 110-class ontology needs ~22
+# chunks and overruns the scenario budget. Cap the accepted class count; on
+# overflow, ask the model (bounded) to consolidate to the core entities.
+# Overridable via options["max_classes"]; <= 0 disables the guard.
+_DEFAULT_MAX_CLASSES = 40
+_MAX_CONSOLIDATE_ROUNDS = 2
+
+# Matches an owl:Class declaration: a subject typed via `a` or `rdf:type`.
+_OWL_CLASS_DECL_RE = re.compile(r"(?:\ba|\brdf:type)\s+owl:Class\b")
+
+
+def _count_owl_classes(turtle: str) -> int:
+    """Count owl:Class declarations in a Turtle string (declaration-only)."""
+    return len(_OWL_CLASS_DECL_RE.findall(turtle or ""))
 
 
 # =====================================================
@@ -153,7 +177,9 @@ If you cannot satisfy them with the given input, say so explicitly and ask for c
 2. Model only what is needed to answer the specified competency questions (CQs).  
    - Every class or property you introduce must support at least one CQ or explicit requirement.
 3. Size limits per iteration:  
-   - 30–60 classes.  
+   - Prefer the SMALLEST set of classes that covers the input: roughly one class per real-world entity named in the guidelines/tables (typically 8–25).  
+   - NEVER create a class per column or per attribute value — those are datatype properties (e.g. `status`, `vatAmount`, `readingDate`), not classes. Merge near-duplicates aggressively.  
+   - Hard limit: 40 classes. If you approach it, consolidate rather than add.  
    - At most 4 subclass levels (max depth = 4).  
    - At most 3 direct superclasses per class; default is a single superclass.
 If the user does not give CQs, propose a short list of candidate CQs first, get them confirmed, then model.
@@ -355,9 +381,11 @@ def run_agent(
     # The agent drives its own check_owl_pitfalls → fix loop; max_fix_rounds
     # is the Python-side budget cap after which we force a final text output.
     max_fix_rounds = int(options.get("generation_max_iterations", _DEFAULT_MAX_FIX_ROUNDS))
+    max_classes = int(options.get("max_classes", _DEFAULT_MAX_CLASSES))
     logger.info(
-        "run_agent: quality loop config — max_fix_rounds=%d",
+        "run_agent: quality loop config — max_fix_rounds=%d, max_classes=%d",
         max_fix_rounds,
+        max_classes,
     )
 
     # Narrow metadata to selected tables when a subset was chosen
@@ -442,7 +470,8 @@ def run_agent(
     # Agent loop
     # ------------------------------------------------------------------
     tools_supported = True
-    _owl_fix_rounds = 0   # pitfall-fix rounds consumed so far
+    _owl_fix_rounds = 0        # pitfall-fix rounds consumed so far
+    _consolidate_rounds = 0    # over-generation consolidation rounds consumed
 
     for iteration in range(MAX_ITERATIONS):
         logger.info(
@@ -477,7 +506,7 @@ def run_agent(
                 endpoint_name,
                 messages,
                 tools=send_tools,
-                max_tokens=4096,
+                max_tokens=_GEN_MAX_TOKENS,
                 temperature=0.1,
                 timeout=LLM_TIMEOUT,
                 trace_name=_TRACE_NAME,
@@ -509,7 +538,7 @@ def run_agent(
                         endpoint_name,
                         messages,
                         tools=None,
-                        max_tokens=4096,
+                        max_tokens=_GEN_MAX_TOKENS,
                         temperature=0.1,
                         timeout=LLM_TIMEOUT,
                         trace_name=_TRACE_NAME,
@@ -678,6 +707,48 @@ def run_agent(
                     content.strip(),
                 )
 
+            # ── Truncation guard ────────────────────────────────────────────
+            # A length-capped completion is Turtle cut off mid-statement: it
+            # fails to parse in every RDF syntax downstream and lands an empty
+            # ontology (silent success). Don't accept it — ask the model to
+            # re-emit the ontology in full and more concisely, or fail loudly
+            # when no iterations remain to recover.
+            if finish_reason == "length":
+                logger.warning(
+                    "Iteration %d: text answer truncated (finish_reason=length, "
+                    "%d chars) — not accepting as final OWL",
+                    iteration + 1,
+                    len(content),
+                )
+                if iteration < MAX_ITERATIONS - 1:
+                    notify(
+                        "Ontology output was truncated — asking the agent to "
+                        "re-emit it more concisely…"
+                    )
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "Your previous Turtle was cut off before it finished "
+                            "(output token limit). Re-emit the COMPLETE ontology, "
+                            "keeping every rdfs:comment to one short sentence. "
+                            "Output ONLY valid Turtle starting with @prefix — no "
+                            "prose, no code fences."
+                        ),
+                    })
+                    continue
+                result.error = (
+                    "LLM output was truncated (finish_reason=length) and could not "
+                    "be completed within the iteration budget — the generated "
+                    "ontology is incomplete."
+                )
+                logger.error(
+                    "Agent: truncated final answer at iteration %d with no budget "
+                    "to recover",
+                    iteration + 1,
+                )
+                return result
+
             result.steps.append(
                 AgentStep(
                     step_type="output",
@@ -685,6 +756,46 @@ def run_agent(
                     duration_ms=elapsed_ms,
                 )
             )
+
+            # ── Over-generation guard ───────────────────────────────────────
+            # An over-decomposed ontology (a class per column/value) is rarely
+            # what the guidelines asked for and balloons downstream auto-mapping
+            # cost. If the model emits far more classes than the cap, ask it once
+            # (bounded) to consolidate to the core entities before accepting.
+            if (
+                starts_with_prefix
+                and max_classes > 0
+                and _consolidate_rounds < _MAX_CONSOLIDATE_ROUNDS
+            ):
+                n_classes = _count_owl_classes(content)
+                if n_classes > max_classes:
+                    _consolidate_rounds += 1
+                    logger.warning(
+                        "Iteration %d: ontology declares %d owl:Class (cap=%d) — "
+                        "asking the agent to consolidate (round %d/%d)",
+                        iteration + 1, n_classes, max_classes,
+                        _consolidate_rounds, _MAX_CONSOLIDATE_ROUNDS,
+                    )
+                    notify(
+                        f"Ontology is over-detailed ({n_classes} classes) — asking "
+                        f"the agent to consolidate to the core entities "
+                        f"(≤{max_classes})…"
+                    )
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"Your ontology declares {n_classes} classes — far more "
+                            f"than this domain needs. Consolidate to AT MOST "
+                            f"{max_classes} core classes: keep the real-world "
+                            "entities from the guidelines, merge near-duplicates, "
+                            "and DO NOT create a class per column or per attribute "
+                            "value (those are datatype properties, not classes). "
+                            "Re-emit the COMPLETE ontology as valid Turtle starting "
+                            "with @prefix — no prose, no code fences."
+                        ),
+                    })
+                    continue
 
             # ── External pitfall check (fast, no extra LLM call) ─────────────
             if starts_with_prefix and _owl_fix_rounds < max_fix_rounds:

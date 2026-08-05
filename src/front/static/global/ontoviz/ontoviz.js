@@ -2163,8 +2163,20 @@
                     y: entityCenterY - loopSize * 0.7
                 };
             } else {
-                const dx = points.target.x - points.source.x;
-                const dy = points.target.y - points.source.y;
+                // Normalize the direction vector to a canonical ordering (smaller entity ID
+                // → larger entity ID) so that relationships in opposite directions between
+                // the same entity pair always receive perpendicular offsets that push them
+                // to *opposite* sides rather than the same side. Without this, the sign of
+                // dx/dy flips for a B→A relationship relative to A→B, and since the index
+                // offsets also flip (+15 vs -15), the two perpendicular displacements end up
+                // identical and the labels stack on top of each other.
+                const canonicalForward = relationship.sourceEntityId <= relationship.targetEntityId;
+                const dx = canonicalForward
+                    ? points.target.x - points.source.x
+                    : points.source.x - points.target.x;
+                const dy = canonicalForward
+                    ? points.target.y - points.source.y
+                    : points.source.y - points.target.y;
                 const distance = Math.sqrt(dx * dx + dy * dy) || 1;
                 const perpX = -dy / distance * offset;
                 const perpY = dx / distance * offset;

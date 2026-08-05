@@ -411,7 +411,7 @@ def _check_graphdb_lakebase(settings: Settings) -> Tuple[str, str]:
         return (
             _WARNING,
             f"Graph DB connected (db={cur_db}) but schema '{schema}' does not exist yet — "
-            "run a Digital Twin build to create it",
+            "run a Knowledge Graph build to create it",
         )
     except Exception as exc:  # noqa: BLE001
         return _ERROR, f"Graph DB probe failed (database={database or 'default'}, schema={schema}): {exc}"

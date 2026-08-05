@@ -240,7 +240,7 @@
 
 .map-context-divider {
     height: 1px;
-    background: #ffffff;
+    background: #e9ecef;
 }
 
 .map-context-item {
@@ -255,7 +255,12 @@
 }
 
 .map-context-item:hover {
-    background: #ffffff;
+    background: #e8f4fd;
+    color: #1a73e8;
+}
+
+.map-context-item:hover i {
+    color: #1a73e8;
 }
 
 .map-context-item i {
@@ -272,7 +277,60 @@
     background: #fff5f5;
 }
 
-/* Connection Mode Styles */
+/* ─── Neighborhood highlight (on node click) ─── */
+
+/* Dim everything that is not selected/neighbor/highlighted */
+.map-node.dimmed .map-node-icon {
+    opacity: 0.15;
+    filter: none;
+}
+.map-node.dimmed .map-node-label {
+    opacity: 0.15;
+}
+
+/* Neighbor nodes get a soft glow ring */
+.map-node.neighbor .map-node-hitarea {
+    fill: rgba(13, 110, 253, 0.08);
+    stroke: rgba(13, 110, 253, 0.35);
+    stroke-width: 2px;
+}
+.map-node.neighbor .map-node-icon {
+    filter: drop-shadow(0 0 8px rgba(13, 110, 253, 0.5));
+}
+
+/* Highlighted links (connected to selected node) */
+.map-link.highlighted {
+    stroke: #0d6efd;
+    stroke-opacity: 1;
+    stroke-width: 2.5px;
+}
+.map-link.highlighted.inheritance {
+    stroke: #6f42c1;
+    stroke-dasharray: 5, 5;
+}
+.map-link.dimmed {
+    stroke-opacity: 0.08;
+}
+
+/* Link labels */
+.map-link-label.highlighted {
+    fill: #0d6efd;
+    font-weight: 700;
+    opacity: 1;
+}
+.map-link-label.dimmed {
+    opacity: 0.08;
+}
+
+/* Hitarea dots */
+.map-link-hitarea.highlighted {
+    fill: #cfe2ff !important;
+    stroke: #0d6efd !important;
+    stroke-width: 2px !important;
+}
+.map-link-hitarea.dimmed {
+    opacity: 0.12;
+}
 .map-connecting {
     cursor: crosshair !important;
 }
@@ -371,4 +429,37 @@
 
 .map-node.inheritance-target .map-node-icon {
     filter: drop-shadow(0 0 12px rgba(253, 126, 20, 0.8));
+}
+
+/* ── Entity Search Popup ─────────────────────────────────────── */
+.map-search-popup {
+    position: absolute;
+    top: 56px;
+    right: 12px;
+    width: 240px;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.12);
+    z-index: 900;
+    animation: mapContextFadeIn 0.15s ease;
+}
+
+.map-search-popup--hidden {
+    display: none;
+}
+
+.map-search-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.map-search-popup-body {
+    padding: 12px 14px 14px;
 }

@@ -15,6 +15,11 @@
 command:
   - "uv"
   - "run"
+  # --frozen: use uv.lock verbatim — never re-resolve against the Apps base
+  # image's internal pypi-proxy (which cold-caches and times out on fresh
+  # wheels). The committed lock pins files.pythonhosted.org URLs (public CDN).
+  - "--frozen"
+  - "--no-dev"
   - "mcp-ontobricks"
 
 env:

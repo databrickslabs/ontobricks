@@ -1,0 +1,630 @@
+## Graph Analytics Metrics — centrality & structural analysis
+
+### Context
+Implements the feature described in `releasereq/graph_analytics_metrics_plan.md` (v0.6.0).
+Adds server-side PageRank, betweenness, degree, closeness, clustering, and connected-components
+metrics over the full knowledge graph, surfaced in a new "Analytics" tab in the KG Explorer
+and a "Graph Structure" cockpit card on the domain validation page.
+
+### Changes
+1. `src/back/core/graph_analysis/GraphBuilder.py` — **New**. Base class extracted from
+   `CommunityDetector`; owns `_load_triples()` and `_build_graph()` (predicate exclusion,
+   class filter, max-triples guard) so both services share the same logic without duplication.
+2. `src/back/core/graph_analysis/CommunityDetector.py` — Refactored to extend `GraphBuilder`;
+   removed the now-redundant `_load_triples`, `_build_graph`, `_DEFAULT_EXCLUDED_PREDICATES`
+   that have moved to the base class.
+3. `src/back/core/graph_analysis/GraphMetrics.py` — **New**. `GraphMetrics(GraphBuilder).compute()`
+   runs NetworkX `degree_centrality`, `pagerank` (scipy-free fallback), `betweenness_centrality`
+   (O(VE) cap + sampling for large graphs), `closeness_centrality`, `clustering`, and
+   `number_connected_components`. Returns `MetricsResult` with per-node scores + aggregate stats.
+4. `src/back/core/graph_analysis/models.py` — Appended `MetricsRequest`, `NodeMetrics`,
+   `MetricsStats`, `MetricsResult` dataclasses.
+5. `src/back/core/graph_analysis/__init__.py` — Exported `GraphBuilder`, `GraphMetrics` and all
+   four new model types.
+6. `src/back/objects/digitaltwin/DigitalTwin.py` — Added `compute_graph_metrics()` delegate
+   beside `detect_clusters`; JSON-serializable result.
+7. `src/api/routers/internal/dtwin.py` — Added `POST /dtwin/metrics/compute` (full per-node
+   result) and `GET /dtwin/metrics/summary` (stats + top-10 PageRank, for cockpit).
+8. `src/front/templates/partials/dtwin/_query_sigmagraph.html` — Added 4th "Analytics" tab with
+   Compute button, Size/Color-by selector (PageRank/Betweenness/Degree/Closeness/Clustering/None),
+   aggregate stats panel, and top-node ranking list.
+9. `src/front/static/query/js/query-sigmagraph.js` — Added `_metricMode`/`_nodeMetrics` state;
+   `computeMetrics()` action; `onMetricSelectorChange()` handler; metric-driven node sizing in
+   `_buildGraph`; 5-tier heatmap colour tinting in `_nodeReducer`; `_populateMetricRanking()`.
+10. `src/front/templates/partials/domain/_domain_validation.html` — Added "Graph Structure" card
+    showing node/edge count, connected components, avg degree, density, and top-5 PageRank nodes.
+11. `src/front/static/domain/js/domain-validation.js` — Added `loadGraphMetricsSummary()`,
+    called automatically alongside `loadPrecisionScore()` on page load.
+12. `tests/units/core/test_graph_metrics.py` — **New**. 20 unit tests covering model defaults,
+    hub-graph metric ordering, connected components, filter behaviour, betweenness sampling,
+    max-triples guard, and RDF-type predicate exclusion.
+
+### Modified files
+- `src/back/core/graph_analysis/GraphBuilder.py` (new)
+- `src/back/core/graph_analysis/GraphMetrics.py` (new)
+- `src/back/core/graph_analysis/CommunityDetector.py`
+- `src/back/core/graph_analysis/models.py`
+- `src/back/core/graph_analysis/__init__.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/templates/partials/domain/_domain_validation.html`
+- `src/front/static/domain/js/domain-validation.js`
+- `tests/units/core/test_graph_metrics.py` (new)
+
+### Test results
+36/36 passed (test_graph_metrics.py: 20, test_community_detector.py: 16).
+All existing CommunityDetector tests continue to pass after the GraphBuilder refactor.
+
+---
+
+## Graph Analytics — entity type filter transparency
+
+### Context
+User questioned whether the entity type filter (class_filter) actually affects the metric
+computations.  The filter was working correctly at the graph-construction level, but there was
+zero visual feedback, and "connected neighbors" of selected types were included without any
+indication.  This update makes the applied filter fully transparent and lets the user restrict
+chart display to only the selected entity type instances.
+
+### Changes
+1. `src/back/core/graph_analysis/models.py` — Added `node_types: Dict[str, str]` field to
+   `MetricsResult` (node_uri → class_uri map).
+2. `src/back/core/graph_analysis/GraphMetrics.py` — Imports `RDF_TYPE`; populates `node_types`
+   from the rdf:type triples after building the graph (only for nodes that are in the final graph).
+3. `src/back/objects/digitaltwin/DigitalTwin.py` — Exposes `node_types` in the JSON response
+   alongside `nodes`, `stats`, and `top_pagerank`.
+4. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Added filter info badge after Run Analysis: shows how many types were filtered, and explains
+     that connected neighbors may appear.
+   - Added "Show only selected types in charts" checkbox (`analyticsStrictFilter`) — client-side
+     post-filter that hides neighbors of other types from chart bars without re-running the API.
+   - Chart y-axis labels now include entity type suffix `[TypeName]`.
+   - Chart tooltips now show the full node URI plus its entity type (`Type: TypeName`).
+5. `tests/units/core/test_graph_metrics.py` — Added `test_node_types_populated` (21st test):
+   verifies that nodes with an rdf:type triple are mapped to their class URI, and nodes without
+   one are absent.
+
+### Modified files
+- `src/back/core/graph_analysis/models.py`
+- `src/back/core/graph_analysis/GraphMetrics.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `tests/units/core/test_graph_metrics.py`
+
+### Test results
+21/21 passed (test_graph_metrics.py). All 21 pass.
+
+---
+
+## Graph Builder — exclude literal (attribute) objects from graph edges
+
+### Context
+Metrics like PageRank and betweenness were inflated/distorted by attribute triples
+(e.g. `:Person1 :hasName "Alice"`). Plain-string literals were being added as graph
+nodes, creating false connections (every entity named "Alice" appeared linked via
+the "Alice" literal node). The fix drops any triple whose object is not an entity
+URI (`http://` or `https://`).
+
+### Changes
+1. `src/back/core/graph_analysis/GraphBuilder.py` — Added literal-filter guard in
+   `_build_graph`: triples where `object` does not start with `http://` or `https://`
+   are silently skipped before edges are added to the NetworkX graph. The fix applies
+   to both `CommunityDetector` and `GraphMetrics` (shared base class).
+2. `tests/units/core/test_graph_metrics.py` — Updated ALL test fixtures to use proper
+   `http://ex.org/` URIs for subjects and objects. Added `test_literal_objects_excluded`
+   (22nd test) explicitly asserting that plain-string objects never become graph nodes.
+3. `tests/units/core/test_community_detector.py` — Updated all fixture triples to use
+   `http://ex.org/` URIs; class/predicate filter URIs updated to match.
+
+### Modified files
+- `src/back/core/graph_analysis/GraphBuilder.py`
+- `tests/units/core/test_graph_metrics.py`
+- `tests/units/core/test_community_detector.py`
+
+### Test results
+38/38 passed (test_graph_metrics.py: 22, test_community_detector.py: 16).
+
+---
+
+## Graph Analytics — entity type filter → single-select dropdown + Reset
+
+### Context
+The multi-select listbox for entity type filtering was replaced with a standard
+single-select `<select>` dropdown. The "All" + "None" buttons are gone; a single
+Reset button sets the dropdown back to "All types (full graph)".
+
+### Changes
+1. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Replaced `<select multiple>` with a plain `<select>`. First option is always
+     `"All types (full graph)"` (value `""`), followed by one option per entity type.
+   - Replaced "All" / "None" buttons with a single `Reset` button (arrow-counterclockwise
+     icon) that sets `sel.value = ''`.
+   - `_populateTypeSelect` now always prepends the "All" sentinel option and restores
+     the previous single selection on reload.
+   - `_getSelectedTypes` returns `[uri]` when a specific type is chosen, or `null`
+     when "All types" is selected — backend contract unchanged.
+   - `analyticsResetType` (was `analyticsSelectAllTypes`/`analyticsClearTypes`) exposed
+     globally for the Reset button.
+   - Filter badge text updated: shows `"Filtered on: TypeName"` for single selection.
+
+### Modified files
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+No backend change; 38/38 tests still pass.
+
+---
+
+## Graph Analytics — click bar → navigate to Graph Viewer
+
+### Context
+Users can now click any bar in the analytics charts to jump directly to the Graph
+Viewer (Sigma.js), which auto-filters on the clicked entity's local name.
+
+### Changes
+1. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Added `_navigateToGraph(uri)` helper: clicks `[data-section="sigmagraph"]` nav
+     link, then after 400 ms sets `sgFilterValue` to the entity's local name and calls
+     `SigmaGraph.executeGraphFilter()` — same pattern used by data-quality and reasoning
+     pages.
+   - Chart `onClick` callback captures the `sorted` URI array at render time (IIFE
+     closure) and calls `_navigateToGraph` with the clicked bar's URI.
+   - Chart `onHover` switches canvas cursor to `pointer` when over a bar, `default`
+     otherwise.
+   - Tooltip `afterLabel` shows "Click to open in Graph Viewer" hint.
+
+### Modified files
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+<<<<<<< Updated upstream
+=======
+### Test result
+2420 passed, 15 skipped — all green.
+
+---
+
+## Graph Analytics — click bar → navigate to Graph Viewer
+
+### Context
+Users can now click any bar in the analytics charts to jump directly to the Graph
+Viewer (Sigma.js), which auto-filters on the clicked entity's local name.
+
+### Changes
+1. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Added `_navigateToGraph(uri)` helper: clicks `[data-section="sigmagraph"]` nav
+     link, then after 400 ms sets `sgFilterValue` to the entity's local name and calls
+     `SigmaGraph.executeGraphFilter()` — same pattern used by data-quality and reasoning
+     pages.
+   - Chart `onClick` callback captures the `sorted` URI array at render time (IIFE
+     closure) and calls `_navigateToGraph` with the clicked bar's URI.
+   - Chart `onHover` switches canvas cursor to `pointer` when over a bar, `default`
+     otherwise.
+   - Tooltip `afterLabel` shows "Click to open in Graph Viewer" hint.
+
+### Modified files
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+>>>>>>> Stashed changes
+### Test results
+No backend change; 38/38 tests still pass.
+
+---
+
+## Graph Analytics — PageRank detail table with all contributing metrics
+
+### Context
+The PageRank section now shows all metrics that feed into or correlate with the
+PageRank score (degree, betweenness, closeness, clustering) alongside the score
+itself, giving full context for why a node ranks highly.
+
+### Changes
+1. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - PageRank card is full-width with bar chart (left) + detail table (right).
+   - Card header shows the PageRank formula: PR(u) = (1−d)/N + d·Σ PR(v)/deg(v).
+   - `_renderPagerankTable`: columns #, Node (entity type badge), PageRank, Degree,
+     Betweenness, Closeness, Clustering. Each cell has numeric value + color-coded
+     relative mini-bar (width proportional to max value in top-N).
+   - Every table row is clickable → navigates to Graph Viewer.
+
+### Modified files
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+No backend change; 38/38 tests still pass.
+
+---
+
+## Graph Analytics — metric explanation popups
+
+### Context
+Each chart card header now has a ? button that opens a Bootstrap modal explaining
+the metric in plain language, with formula, worked example, and "why it matters".
+
+### Changes
+1. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Added `<button … onclick="_showMetricInfo('key')">` with bi-question-circle icon
+     to every chart card header (PageRank, Betweenness, Degree, Closeness, Clustering).
+   - Added shared `#analyticsMetricModal` Bootstrap modal (modal-lg, scrollable).
+   - Added `_METRIC_INFO` dictionary with per-metric content: What, Formula (rendered
+     as inline HTML with sub/sup), Formula variable descriptions, Example scenario,
+     Why it matters.
+   - Added `window._showMetricInfo(key)` that populates the modal title and body from
+     the dictionary and calls `bootstrap.Modal.getOrCreateInstance(...).show()`.
+
+### Modified files
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+No backend change; 38/38 tests still pass.
+
+---
+
+## Graph Analytics — class_filter restricts returned nodes to selected type only
+
+### Context
+Filtering by entity type "Customer" returned 1082 nodes instead of the expected ~200,
+because connected neighbors (Orders, Products…) were included in the result.
+The fix computes metrics on the full connected subgraph (for accuracy) but restricts
+the returned `nodes` dict — and thus the charts — to only instances of the selected type.
+
+### Changes
+1. `src/back/core/graph_analysis/models.py` — Added `graph_node_count: int = 0` to
+   `MetricsStats` (total nodes in the computation subgraph, separate from `node_count`
+   which is now the filtered count).
+2. `src/back/core/graph_analysis/GraphMetrics.py` — After computing metrics on the full
+   connected subgraph, when `request.class_filter` is set, filters `nodes` to only
+   include URIs whose `rdf:type` is in the filter set. Sets `stats.node_count` to the
+   filtered count and `stats.graph_node_count` to the full subgraph size.
+   `top_pagerank` also restricted to filtered nodes.
+3. `src/back/objects/digitaltwin/DigitalTwin.py` — Exposes `graph_node_count` in the
+   JSON stats response.
+4. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Nodes stat card shows filtered count as the main number and
+     "(N in subgraph)" as a sub-label when the two differ.
+   - Removed "Show only selected types in charts" checkbox (no longer needed).
+   - Simplified `analyticsRenderCharts` (strict-filter client logic removed).
+
+### Modified files
+- `src/back/core/graph_analysis/models.py`
+- `src/back/core/graph_analysis/GraphMetrics.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+38/38 passed.
+
+---
+
+## Graph Analytics — single-page layout (merge filter + results)
+
+### Context
+Users disliked the two-phase UX where the Analytics section initially showed only the entity
+type filter card and a "Click Run Analysis" placeholder, then the results appeared after
+clicking the button. The filter and results now form a single unified view.
+
+### Changes
+1. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Moved the Entity Type `<select>` inline into the section header toolbar (same row as
+     the action button). The separate filter card and filter-applied badge are removed.
+   - "Run Analysis" button replaced by "Refresh" (arrow-clockwise icon) — semantically
+     clearer now that results are always visible.
+   - "Reset" button removed (no longer needed — no empty state to return to).
+   - `#analyticsNoData` div is now hidden by default (`d-none`); only appears on API error.
+   - `#analyticsResults` div is visible by default (no `d-none`).
+   - `analyticsResetType()` function removed.
+   - Added `onchange` listener on the select: changing the entity type immediately
+     re-runs the analysis without requiring a button click.
+   - `_initObserver` now calls `analyticsCompute()` automatically when the section is
+     activated for the first time, so results appear on arrival.
+
+### Modified files
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+No backend change; 38/38 tests still pass.
+
+---
+
+## Graph Analytics — fix auto-run on section activation
+
+### Context
+The auto-run on first section visit wasn't firing. The inline `<script>` relied on a
+`sidebarSectionChanged` custom event listener registered at parse time, which is a weaker
+pattern than the canonical `onSectionChange` callback in `query.js` used by all other
+sections (sigmagraph, insight, dataquality, graphql).
+
+### Changes
+1. `src/front/static/query/js/query.js` — Added `analytics` branch to `onSectionChange`:
+   calls `window.analyticsCompute()` on first activation (guarded by `window._analyticsHasData`).
+2. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Removed `_initObserver` IIFE (the inline `sidebarSectionChanged` listener). Initialization
+     is now driven by `query.js` `onSectionChange`, which is the authoritative pattern.
+   - `analyticsCompute` now loads entity types inline (`await _loadEntityTypes()`) on first run
+     if not yet populated, removing the separate pre-load step.
+   - `window._analyticsHasData` flag exposed so `query.js` can guard against duplicate runs.
+   - `window._analyticsHasData = true` set on successful compute.
+
+### Modified files
+- `src/front/static/query/js/query.js`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+No backend change; 38/38 tests still pass.
+
+---
+
+## Graph Analytics — AI Interpretation
+
+### Context
+After running a graph analysis, users can now click an "Interpret" button to get
+AI-generated insights (key findings, notable entities, recommendations) derived
+from the computed centrality metrics, powered by the Databricks-hosted LLM already
+used by the Graph Chat feature.  No new agent module or ai-feature lifecycle was
+required — the call is a lightweight one-shot `call_serving_endpoint` invocation
+delegated directly from `DigitalTwin`.
+
+### Changes
+1. `src/back/objects/digitaltwin/DigitalTwin.py` — Added `interpret_graph_metrics()`
+   method. Builds a compact JSON summary (top-10 by PageRank, aggregate stats, zero-
+   metric flags, applied class filter) and calls `call_serving_endpoint` with a
+   structured system+user prompt. Parses the LLM JSON response and strips any
+   accidental markdown fences. Returns `{ success, sections: [{ title, body|items }] }`.
+2. `src/api/routers/internal/dtwin.py` — Added `POST /dtwin/metrics/interpret` endpoint.
+   Retrieves Databricks credentials and the active LLM endpoint (with the same
+   `_auto_discover_llm_endpoint` fallback used by GraphChat), then delegates to
+   `DigitalTwin.interpret_graph_metrics` in a worker thread via `run_blocking`.
+3. `src/front/templates/partials/dtwin/_query_analytics.html` —
+   - Renamed "Refresh" button label to "Run Analysis".
+   - Added "Interpret" button (bi-stars icon, hidden until analysis completes) in the
+     header button group.
+   - Added `#analyticsInsightsCard` Bootstrap card (hidden by default) between the stats
+     row and the top-N control, with a spinner state while awaiting the LLM response.
+   - Added `window.analyticsInterpret()` async JS function: POSTs the current
+     `_analyticsData` + `class_filter` to `/dtwin/metrics/interpret`, then renders each
+     returned section (Key Findings / Notable Entities / Recommendations) as HTML.
+   - "Notable Entities" items rendered as clickable links that call `_navigateToGraph`.
+   - Added `_esc()` HTML-escaping helper and `_findUriByLabel()` URI lookup helper.
+   - Insights card resets (hidden) when a new analysis is run.
+
+### Modified files
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+2442 passed, 15 skipped (full unit suite).
+
+---
+
+## Graph Analytics — Upgrade interpreter to a proper AI agent (agent_graph_interpreter)
+
+### Context
+The one-shot LLM call used for graph-metrics interpretation was replaced by a
+full tool-enabled agent (`agent_graph_interpreter`) that follows the standard
+OntoBricks ai-feature lifecycle (SPEC → eval dataset → eval harness → agent
+implementation → thresholds).  The agent can now call `get_entity_details` to
+look up specific entity attributes and relationships from the live knowledge
+graph before writing its insights, grounding its observations in real data
+rather than just the pre-computed numbers.
+
+The frontend rendering was also improved so that the AI insights are displayed
+as styled Bootstrap sub-cards (coloured icon badges per section) with basic
+markdown rendering (**bold**, *italic*, line-breaks) instead of plain escaped
+text.
+
+### Changes
+1. `.planning/agents/agent_graph_interpreter/SPEC.md` — **New**. Full SPEC:
+   purpose, identity, tool surface, success criteria, eval dimensions, failure
+   modes, MLflow tracing plan, and sign-off checklist.
+2. `tests/eval/datasets/agent_graph_interpreter/baseline.jsonl` — **New**.
+   20 eval examples (10 happy, 4 ambiguous, 4 adversarial, 2 edge-case) covering
+   hub graphs, isolated nodes, zero-metric states, extreme PageRank, misleading
+   labels, and filtered analysis.
+3. `tests/eval/run_agent_graph_interpreter.py` — **New**. First fully
+   implemented eval harness in the project. Rule-based judges for
+   `section_completeness`, `groundedness`, `does_not_invent`, and
+   `zero_metrics_mentioned`. Runs in `--dry-run` mode (CI) or `--live` mode
+   (live LLM, requires credentials). Baseline score: 0.900 ≥ threshold 0.82.
+4. `tests/eval/thresholds.yaml` — Added `graph_interpreter` entry
+   (aggregate: 0.82, section_completeness: 1.00, groundedness: 0.85,
+   tool_selection: 0.70, latency_p95: 20s, cost: 0.02 USD).
+5. `src/agents/agent_graph_interpreter/__init__.py` — **New**. Package init;
+   exports `run_agent` and `AgentResult`.
+6. `src/agents/agent_graph_interpreter/tools.py` — **New**. Single tool:
+   `get_entity_details(uri)` — loopback GET `/dtwin/triples/find`, decorated
+   with `@trace_tool`. Follows the same loopback-HTTP pattern as
+   `agent_dtwin_chat`.
+7. `src/agents/agent_graph_interpreter/engine.py` — **New**. `run_agent()`
+   decorated with `@trace_agent(name="graph_interpreter")`. Tool-dispatch loop
+   (max 8 iterations), `_build_user_message()` compacts the full metrics
+   payload into a structured JSON summary, `_parse_sections()` extracts the
+   LLM's structured JSON response (with markdown-fence stripping).
+8. `src/back/objects/digitaltwin/DigitalTwin.py` — `interpret_graph_metrics()`
+   rewritten: now delegates to `agent_graph_interpreter.run_agent` instead of a
+   raw `call_serving_endpoint` call. Signature extended with `base_url`,
+   `session_cookies`, `session_headers` for loopback tool calls.
+9. `src/api/routers/internal/dtwin.py` — `POST /dtwin/metrics/interpret`
+   updated to build the loopback `base_url` and forward session cookies +
+   identity headers to the agent, mirroring the GraphChat endpoint pattern.
+10. `src/front/templates/partials/dtwin/_query_analytics.html` — AI Insights
+    rendering improved: three Bootstrap sub-cards with coloured icon badges
+    (Key Findings=yellow, Notable Entities=blue, Recommendations=green).
+    Added `_md()` markdown-lite helper (`**bold**`, `*italic*`, `\n→<br>`).
+
+### Modified files
+- `.planning/agents/agent_graph_interpreter/SPEC.md` (new)
+- `tests/eval/datasets/agent_graph_interpreter/baseline.jsonl` (new)
+- `tests/eval/run_agent_graph_interpreter.py` (new)
+- `tests/eval/thresholds.yaml`
+- `src/agents/agent_graph_interpreter/__init__.py` (new)
+- `src/agents/agent_graph_interpreter/tools.py` (new)
+- `src/agents/agent_graph_interpreter/engine.py` (new)
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+2442 passed, 15 skipped (full unit suite).
+Eval harness dry-run: 20/20 ✓ — aggregate 0.900 ≥ threshold 0.82.
+
+---
+
+## Refactoring — analytics AI feature cleanup
+
+### Context
+Post-feature refactoring pass over the `agent_graph_interpreter` module, the `dtwin`
+router metrics endpoints, and the `_query_analytics.html` JS layer. No behaviour changes.
+
+### Changes (Fowler vocabulary)
+
+1. `src/agents/agent_graph_interpreter/engine.py` — **Replace Magic Number / Extract
+   Method**: replaced two ad-hoc URI parsing expressions (`split("/")[-1].split("#")[-1]`)
+   with `URIHelpers.extract_local_name()` (shared codebase utility). Tightened bare
+   `except Exception` in `_parse_sections` to `except json.JSONDecodeError` with a warning
+   log, so JSON parse errors are no longer silently swallowed.
+2. `src/agents/agent_graph_interpreter/tools.py` — Same `URIHelpers.extract_local_name`
+   replacement for the local-name extraction in `tool_get_entity_details`.
+3. `src/api/routers/internal/dtwin.py` — **Consolidate Imports**: moved `import os` to
+   module-level (was `import os as _os` inside the handler body). Promoted
+   `get_databricks_host_and_token` from inline import inside `interpret_graph_metrics` to
+   the top-level `from back.core.helpers import …` block. **Remove Parameter**: dropped the
+   unused `request: Request` parameter from `get_graph_metrics_summary` (it was never read).
+4. `src/front/templates/partials/dtwin/_query_analytics.html` — **Extract Function**:
+   - Added `_localName(uri)` helper consolidating all `uri.split(/[/#]/).pop()` calls
+     (previously repeated 6 times inline).
+   - Promoted `_displayName(uri)` to module scope (was defined identically inside both
+     `analyticsRenderCharts` and `_renderPagerankTable`).
+   - Extracted `_sectionsToMarkdown(sections)` helper shared by `_pushInterpretToChat`
+     and `analyticsAddToAuditTrail` (duplicate loop, ~20 lines each).
+   - **Remove Dead Code**: removed the `spinner` variable in `analyticsInterpret` that was
+     fetched via `getElementById` but never used (the spinner HTML was inlined directly into
+     `body.innerHTML`).
+
+### Modified files
+- `src/agents/agent_graph_interpreter/engine.py`
+- `src/agents/agent_graph_interpreter/tools.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+
+### Test results
+372 passed (test_graph_metrics.py, test_community_detector.py, all agent tests, all dtwin
+unit tests). Full suite: 0 regressions.
+
+---
+
+## Documentation update — Graph Analytics & AI Interpretation
+
+### Context
+User guide and feature list did not yet cover the Graph Analytics sidebar section,
+the AI Interpretation agent, or the Audit Trail integration that were added in v0.6.0.
+This entry documents the documentation-only change.
+
+### Changes
+
+1. `docs/user-guide.md`
+   - Added "Analytics (Sidebar)" section inside Step 3: Knowledge Graph, covering:
+     entity-type filter, Run Analysis, the five metric charts (PageRank, Betweenness,
+     Degree, Closeness, Clustering), PageRank Detail Table, metric explanation popups,
+     the AI Interpretation workflow, the Audit Trail integration button, and the
+     Discussion panel shortcut.
+   - Added two knowledge graph best-practice tips (Analytics for governance; saving
+     insights to the audit trail).
+2. `docs/features.md` — Knowledge Graph section:
+   - Added **Graph Analytics** feature bullet (metrics computed, charts, entity-type
+     filter, bar-click navigation, metric popups, detail table).
+   - Added **AI Graph Interpretation** bullet (agent_graph_interpreter, sections,
+     markdown rendering, clickable Notable Entities).
+   - Added **Audit Trail Integration** bullet (Add to audit trail button, discussion
+     panel auto-open).
+
+### Modified files
+- `docs/user-guide.md`
+- `docs/features.md`
+
+### Test results
+2937 passed, 58 pre-existing failures (Playwright timeouts + pytest-asyncio teardown
+errors, all unrelated to the analytics/agent changes), 17 skipped.
+
+---
+
+## Flat / Time-Series Entity Type Detection
+
+### Context
+Added a heuristic mechanism to detect entity types that behave like flat datasets
+or time series (e.g. `MeterReading`, `RawEvent`). The detection runs in a single
+extra pass over the triples already in memory inside `GraphMetrics.compute()` —
+no additional database query needed.
+
+### Changes
+1. `src/back/core/graph_analysis/models.py` — added `EntityTypeProfile` dataclass
+   (uri, count, avg_degree, avg_clustering, avg_betweenness, distinct_predicates,
+   has_temporal_predicates, is_flat, flat_reasons); extended `MetricsResult` with
+   `entity_type_profiles: Dict[str, EntityTypeProfile]`.
+2. `src/back/core/graph_analysis/__init__.py` — exported `EntityTypeProfile`.
+3. `src/back/core/graph_analysis/GraphMetrics.py` — added `_build_type_profiles()`
+   static method (single-pass predicate collection + per-type rollup with four
+   heuristic rules); added `_TEMPORAL_KEYWORDS` constant; wired into `compute()`.
+4. `src/back/objects/digitaltwin/DigitalTwin.py` — serialised `entity_type_profiles`
+   in `compute_graph_metrics()` JSON response.
+5. `src/front/templates/partials/dtwin/_query_analytics.html` — added "Data Model
+   Health" card (hidden on filtered analyses); `_renderTypeProfiles()` JS renders
+   per-type table with green/amber badges and expandable flat-reason chips.
+6. `src/agents/agent_graph_interpreter/engine.py` — `_build_user_message()` now
+   includes `flat_entity_types` list in the LLM prompt when flat types are detected;
+   system prompt extended with guidance to explain and recommend action on flat types.
+7. `tests/units/core/test_graph_metrics.py` — added `TestBuildTypeProfiles` class
+   with 8 new unit tests covering flat-detection, temporal-predicate detection,
+   well-connected types not flagged, count accuracy, and empty-graph edge case.
+
+### Modified files
+- `src/back/core/graph_analysis/models.py`
+- `src/back/core/graph_analysis/__init__.py`
+- `src/back/core/graph_analysis/GraphMetrics.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `src/agents/agent_graph_interpreter/engine.py`
+- `tests/units/core/test_graph_metrics.py`
+
+### Test results
+30/30 graph metrics unit tests passed (0 failures).
+
+---
+
+## Code Review — 2026-06-23
+
+### Context
+Mandatory post-change code review run per `.cursorrules`. Covers all changes merged in the graph analytics + AI interpreter + flat entity-type detection feature set.
+
+### Changes
+1. `src/back/core/graph_analysis/GraphMetrics.py` — Extracted inline `_local()` closure to module-level `_local_name()` function; eliminated stale comment block; cleaned heuristic section. Avoids closure re-creation per `_build_type_profiles` call. Aligns with `.coding_rules.md §2` (class-first, no module-level closures).
+2. `tests/units/core/test_graph_metrics.py` — Added `pytestmark = pytest.mark.unit` at module level to satisfy `--strict-markers` requirement (`.coding_rules.md §10`).
+3. `docs/user-guide.md` — Added **Data Model Health** card documentation under the Analytics section, covering column meanings, flat-detection heuristics, and recommendation guidance.
+
+### Modified files
+- `src/back/core/graph_analysis/GraphMetrics.py`
+- `tests/units/core/test_graph_metrics.py`
+- `docs/user-guide.md`
+
+### Test results
+2450 passed, 15 skipped in ~17s (0 regressions).
+<<<<<<< Updated upstream
+=======
+
+---
+
+## Remove Domain DESIGN menu — 2026-06-23
+
+### Context
+User request: remove the "Design" section from the domain left sidebar menu.
+
+### Changes
+1. `src/front/config/menu_config.json` — Removed the `domain-design` section (Ontology + Mapping quick-links). These pages remain accessible via their own top-level navigation items.
+
+### Modified files
+- `src/front/config/menu_config.json`
+
+### Test results
+2450 passed, 15 skipped (no regressions).
+>>>>>>> Stashed changes

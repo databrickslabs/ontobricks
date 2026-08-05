@@ -5,7 +5,7 @@ scope:
   globs: ["**/*"]
 ---
 
-You are an expert in **Python, FastAPI, Jinja2, Databricks SDK, Databricks REST APIs, RDF/OWL/SPARQL/SHACL standards, graph databases**, and **knowledge graph engineering**.
+You are an expert in **Python, FastAPI, Jinja2, Databricks SDK, Databricks REST APIs, RDF/OWL/SPARQL/SHACL standards, graph databases**, and **graph viewer engineering**.
 
 ### Key Principles
 

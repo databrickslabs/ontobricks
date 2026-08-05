@@ -18,68 +18,29 @@
     <p class="tagline">Explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
 </div>
 
-<!-- Current Domain - KPI / health band -->
-<div class="domain-panel" id="sessionPanel">
-    <div class="domain-header">
-        <h5><i class="bi bi-folder2-open"></i> Current Domain: <span id="homeDomainName">Loading...</span></h5>
-        <div class="quick-links-inline">
-            <a href="/settings" class="quick-link-sm" data-requires-app="admin"><i class="bi bi-gear"></i> Settings</a>
-            <a href="/about" class="quick-link-sm"><i class="bi bi-info-circle"></i> About</a>
-        </div>
-    </div>
-
-    <!-- KPI band -->
-    <div class="home-kpi-band">
-        <div class="ob-kpi-tile tile-muted" id="kpiEntitiesTile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-diagram-3"></i></div>
-            <div class="ob-kpi-tile-value" id="kpiEntities">-</div>
-            <div class="ob-kpi-tile-label">Entities</div>
-        </div>
-        <div class="ob-kpi-tile tile-muted" id="kpiRelationshipsTile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-arrow-left-right"></i></div>
-            <div class="ob-kpi-tile-value" id="kpiRelationships">-</div>
-            <div class="ob-kpi-tile-label">Relationships</div>
-        </div>
-        <div class="ob-kpi-tile tile-muted" id="kpiMappingsTile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-link-45deg"></i></div>
-            <div class="ob-kpi-tile-value" id="kpiMappings">-</div>
-            <div class="ob-kpi-tile-label">Mappings</div>
-        </div>
-        <div class="ob-kpi-tile tile-muted" id="kpiQualityTile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-patch-check"></i></div>
-            <div class="ob-kpi-tile-value" id="kpiQuality">-</div>
-            <div class="ob-kpi-tile-label">Quality</div>
-        </div>
-        <div class="ob-kpi-tile tile-muted" id="kpiStatusTile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-flag"></i></div>
-            <div class="ob-kpi-tile-value" id="kpiStatus">-</div>
-            <div class="ob-kpi-tile-label">Status</div>
-        </div>
-        <div class="ob-kpi-tile tile-muted" id="kpiVersionTile">
-            <div class="ob-kpi-tile-icon"><i class="bi bi-tag"></i></div>
-            <div class="ob-kpi-tile-value" id="kpiVersion">-</div>
-            <div class="ob-kpi-tile-label">Version</div>
-        </div>
-    </div>
-    <div id="domainStatus" class="domain-status hidden-initial"></div>
-</div>
-
-<!-- All Domains - the open door -->
-<div class="workflow-section">
-    <h5><i class="bi bi-grid-3x3-gap"></i> All Domains</h5>
-    <div id="domainGateway" class="ob-domain-grid">
-        <div class="ob-domain-grid-loading text-muted">
-            <div class="spinner-border" role="status" aria-hidden="true"></div>
-            <span>Loading domains...</span>
-        </div>
-    </div>
-</div>
+<div id="domainStatus" class="domain-status hidden-initial"></div>
 
 <!-- My Tasks (review worklist) -->
 <div class="workflow-section" id="homeTasksSection" style="display:none;">
     <h5><i class="bi bi-inbox"></i> My Tasks</h5>
     <div class="domain-panel">
         <div id="homeTasksContainer"></div>
+    </div>
+</div>
+
+<!-- All Domains - the open door -->
+<div class="workflow-section">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> All Domains</h5>
+        <button type="button" class="btn btn-sm btn-primary" onclick="domainNew()">
+            <i class="bi bi-file-earmark-plus me-1"></i>New Domain
+        </button>
+    </div>
+    <div id="domainGateway" class="ob-domain-grid">
+        <div class="ob-domain-grid-loading text-muted">
+            <div class="spinner-border" role="status" aria-hidden="true"></div>
+            <span>Loading domains...</span>
+        </div>
     </div>
 </div>
 

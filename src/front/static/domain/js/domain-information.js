@@ -425,3 +425,107 @@ function refreshDtNamesFromForm() {
 function updateGraphPaths() {
     refreshDtNamesFromForm();
 }
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Current-domain KPI / health band (moved here from the Home page).
+   Populates the #kpi* tiles rendered at the top of Domain → Information:
+   entities, relationships, mappings, quality, status, version.
+   Self-contained (IIFE) to avoid leaking generic helper names as globals.
+   ────────────────────────────────────────────────────────────────────────── */
+(function () {
+    function esc(text) {
+        return (typeof window.escapeHtml === 'function')
+            ? window.escapeHtml(text)
+            : String(text == null ? '' : text);
+    }
+
+    function setTile(valueId, tileId, value, active) {
+        const valueEl = document.getElementById(valueId);
+        const tileEl = document.getElementById(tileId);
+        if (valueEl) valueEl.textContent = value != null ? value : '-';
+        if (tileEl) tileEl.className = 'ob-kpi-tile ' + (active ? 'tile-success' : 'tile-muted');
+    }
+
+    function statusBadge(status) {
+        const map = {
+            'DRAFT': 'bg-warning-subtle text-dark border-warning',
+            'IN-REVIEW': 'bg-info-subtle text-dark border-info',
+            'PUBLISHED': 'bg-success-subtle text-dark border-success',
+        };
+        const key = (status || 'DRAFT').toUpperCase();
+        const cls = map[key] || map['DRAFT'];
+        const label = key === 'IN-REVIEW'
+            ? 'In Review'
+            : (key.charAt(0) + key.slice(1).toLowerCase());
+        return '<span class="badge border ' + cls + '">' + esc(label) + '</span>';
+    }
+
+    function renderQuality(score) {
+        const valueEl = document.getElementById('kpiQuality');
+        const tileEl = document.getElementById('kpiQualityTile');
+        if (!valueEl || !tileEl) return;
+        if (score == null) {
+            valueEl.textContent = '-';
+            tileEl.className = 'ob-kpi-tile tile-muted';
+            return;
+        }
+        valueEl.textContent = score;
+        let variant = 'tile-danger';
+        if (score >= 80) variant = 'tile-success';
+        else if (score >= 50) variant = 'tile-warning';
+        tileEl.className = 'ob-kpi-tile ' + variant;
+    }
+
+    function renderStatus(status) {
+        const valueEl = document.getElementById('kpiStatus');
+        const tileEl = document.getElementById('kpiStatusTile');
+        if (!valueEl || !tileEl) return;
+        valueEl.innerHTML = statusBadge(status);
+        tileEl.className = 'ob-kpi-tile tile-muted';
+    }
+
+    function renderVersion(version) {
+        const valueEl = document.getElementById('kpiVersion');
+        const tileEl = document.getElementById('kpiVersionTile');
+        if (!valueEl || !tileEl) return;
+        valueEl.textContent = 'v' + version;
+        tileEl.className = 'ob-kpi-tile tile-muted';
+    }
+
+    async function loadDomainKpis() {
+        // Only run when the KPI band is on the page.
+        if (!document.getElementById('domainKpiPanel')) return;
+        try {
+            // Reuse fetchOnce so /domain/info is shared with the page's
+            // main version-status loader (single network round-trip).
+            const [info, session] = await Promise.all([
+                fetchOnce('/domain/info').catch(() => ({})),
+                fetchOnce('/session-status').catch(() => ({})),
+            ]);
+
+            const stats = (info && info.stats) || {};
+            const meta = (info && info.info) || {};
+
+            const entityCount = stats.entities != null
+                ? stats.entities
+                : (session.class_count || 0);
+            const relationshipCount = stats.relationships != null
+                ? stats.relationships
+                : (session.property_count || 0);
+            const mappingCount = (stats.entity_mappings || 0) + (stats.relationship_mappings || 0)
+                || ((session.entities || 0) + (session.relationships || 0));
+
+            setTile('kpiEntities', 'kpiEntitiesTile', entityCount, entityCount > 0);
+            setTile('kpiRelationships', 'kpiRelationshipsTile', relationshipCount, relationshipCount > 0);
+            setTile('kpiMappings', 'kpiMappingsTile', mappingCount, mappingCount > 0);
+            renderQuality(info ? info.precision_score : null);
+            renderStatus(meta.status || 'DRAFT');
+            renderVersion(meta.version || session.version || '1');
+        } catch (error) {
+            console.error('Error loading domain KPIs:', error);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadDomainKpis);
+})();

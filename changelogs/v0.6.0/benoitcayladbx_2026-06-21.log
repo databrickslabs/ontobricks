@@ -1,0 +1,58 @@
+## Data Sources — missing description warning
+
+### Context
+Users editing Data Sources had no visibility into how many tables and columns were missing descriptions.
+Description completeness directly affects AI mapping accuracy. Added an inline warning banner (consistent
+with the one already present on the Mapping → Auto-Map page) that counts and surfaces missing descriptions
+as soon as data sources are loaded or edited.
+
+### Changes
+
+1. `src/front/templates/partials/domain/_domain_metadata.html`
+   - Added `<div id="metadataDescriptionWarning">` placeholder below the status banner
+
+2. `src/front/static/domain/js/domain-metadata.js`
+   - Added `checkMetadataDescriptions(metadata)` function: counts tables without `comment`, counts
+     columns without `comment`, renders a Bootstrap `alert-warning` with a collapsible table list
+   - Called from `loadMetadataStatus()` when metadata is present (shows/hides warning on page load)
+   - Called from `saveTableDetails()` so the warning updates immediately after editing a table
+   - Hides the warning div when no metadata is loaded
+
+### Modified files
+- `src/front/templates/partials/domain/_domain_metadata.html`
+- `src/front/static/domain/js/domain-metadata.js`
+
+### Test results
+2615 passed, 57 skipped — 5 pre-existing failures (lakebase dependency + SHACL service, unrelated)
+
+---
+
+# Mapping Information page: attribute KPI now honours excluded_attributes
+
+## Context
+
+The Mapping Information page (mapping-information.js) was computing
+totalAttributes/mappedAttributes across all dataProperties, ignoring
+excluded_attributes — showing wrong percentages and counts in the gauges.
+
+## Changes
+
+1. `src/front/static/global/js/mapping-information.js`
+   - `updateMappingCompletionStatus`: excluded attributes are now skipped
+     when computing totalAttributes/mappedAttributes, matching the Auto-Map
+     page logic.
+   - Added `· N excl.` badges on entity, relationship, and attribute count
+     spans when items are excluded (same pattern as mapping-autoassign.js).
+   - `renderSummaryDetailLists`: entity detail-list badge now shows
+     `attrMapped / includedProps.length` (excluded attrs stripped), and
+     appends `· N excl.` when the entity has excluded attributes.
+   - `isMapped` check now requires `em.sql_query` (a stub mapping with only
+     excluded_attributes no longer counts as "mapped").
+
+## Modified Files
+
+- `src/front/static/global/js/mapping-information.js`
+
+## Test Results
+
+2418 / 2418 passed — no regressions.

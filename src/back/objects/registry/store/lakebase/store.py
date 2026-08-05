@@ -11,7 +11,7 @@ Storage layout (one Postgres schema, default ``ontobricks_registry``):
 - ``schedules``         — one row per scheduled domain
 - ``schedule_runs``     — append-only, capped per domain
 - ``build_runs``        — append-only build-run trace, one row per
-                          Digital Twin build (all paths), keyed by
+                          Knowledge Graph build (all paths), keyed by
                           ``(domain_id, version)``
 
 Authentication:
@@ -62,7 +62,12 @@ from back.objects.registry.registry_cache import invalidate_registry_cache
 
 from ..base import (
     BuildRunEntry,
+    ChangeEvent,
+    DomainComment,
     DomainSummary,
+    DomainTask,
+    GraphAnalyticsResult,
+    GraphAnalyticsRun,
     RegistryStore,
     ReviewEvent,
     ScheduleHistoryEntry,
@@ -103,9 +108,22 @@ _KNOWN_TABLES = frozenset(
         "schedules",
         "schedule_runs",
         "build_runs",
+        "graph_analytics",
+        "graph_analytics_runs",
         "domain_review_events",
+        "domain_comments",
+        "domain_tasks",
+        "domain_edit_locks",
     }
 )
+
+# Single-editor lock for DRAFT (domain, version) versions. The lock is held
+# until the holder explicitly *closes* the domain (release), an admin *takes
+# over* (force), the version leaves DRAFT, or — when a lease TTL is configured
+# (``ttl_seconds``) — its ``heartbeat_at`` lease lapses, at which point the
+# next opener silently reclaims it. The holder keeps the lease alive by
+# renewing ``heartbeat_at`` (``renew_edit_lock`` + the per-page acquire). A
+# TTL of 0 disables the lease (held until explicit release / take-over).
 
 
 def _require_psycopg():
@@ -502,6 +520,13 @@ class LakebaseRegistryStore(RegistryStore):
         # self-heal deployments created before the build-run trace existed
         # (the full DDL only runs from the Settings "Initialize" action).
         self._build_runs_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics`` used
+        # to self-heal deployments created before the async graph-analytics
+        # cache existed (same pattern as ``_build_runs_ready``).
+        self._graph_analytics_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS graph_analytics_runs``
+        # (append-only analysis run history; same pattern as above).
+        self._graph_analytics_runs_ready = False
         # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS status``
         # used to self-heal deployments created before the lifecycle status
         # column existed (same pattern as ``_build_runs_ready``).
@@ -515,6 +540,19 @@ class LakebaseRegistryStore(RegistryStore):
         # used to self-heal deployments created before the review/validation
         # audit log existed (same pattern as ``_build_runs_ready``).
         self._review_events_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_change_events``
+        # used to self-heal deployments created before the ontology/mapping
+        # change audit log existed (same pattern as ``_review_events_ready``).
+        self._change_events_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_comments /
+        # domain_tasks`` used to self-heal deployments created before the
+        # collaborative comments + tasks feature existed (same pattern as
+        # ``_review_events_ready``).
+        self._collab_tables_ready = False
+        # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_edit_locks``
+        # used to self-heal deployments created before the single-editor
+        # lock feature existed (same pattern as ``_collab_tables_ready``).
+        self._edit_locks_ready = False
 
     # ------------------------------------------------------------------
     # Identity
@@ -663,6 +701,176 @@ class LakebaseRegistryStore(RegistryStore):
                 "error": f"Lakebase probe failed: {exc}",
             }
 
+    def check_permissions(self) -> Dict[str, Any]:
+        """Run a comprehensive permission diagnostic against the Lakebase registry.
+
+        Executes two lightweight queries in a single connection:
+
+        1. **Context + schema probe** — confirms the connection works and
+           checks ``USAGE`` + ``CREATE`` on the registry schema.
+        2. **Per-table privilege scan** — for every table that *exists* in
+           the schema, checks ``SELECT``, ``INSERT``, ``UPDATE``, ``DELETE``.
+           Tables from :data:`_KNOWN_TABLES` that are absent from the catalog
+           are reported as ``"missing"`` (expected before initialization, not
+           an error).
+
+        Return shape::
+
+            {
+              "success": True,
+              "database": str,
+              "user": str,
+              "schema": str,
+              "checks": [
+                {
+                  "id": str,          # stable token for the UI
+                  "label": str,       # human-readable label
+                  "status": "ok" | "warning" | "error" | "missing",
+                  "detail": str | None,
+                },
+                ...
+              ],
+            }
+        """
+        _require_psycopg()
+        checks: list = []
+
+        def _chk(id_: str, label: str, status: str, detail: str | None = None):
+            checks.append({"id": id_, "label": label, "status": status, "detail": detail})
+
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                # ── 1. Connection + database/user context ──────────────
+                cur.execute("SELECT current_database(), current_user")
+                row = cur.fetchone()
+                cur_db, cur_user = (row[0], row[1]) if row else (self._effective_database, "?")
+                _chk("connect", "Connect to Lakebase", "ok")
+
+                # ── 2. Schema existence + privileges ───────────────────
+                cur.execute(
+                    """
+                    SELECT
+                        EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = %s),
+                        has_schema_privilege(current_user, %s, 'USAGE'),
+                        has_schema_privilege(current_user, %s, 'CREATE')
+                    """,
+                    (self._schema, self._schema, self._schema),
+                )
+                row2 = cur.fetchone()
+                schema_exists = bool(row2[0]) if row2 else False
+                has_usage     = bool(row2[1]) if row2 else False
+                has_create    = bool(row2[2]) if row2 else False
+
+                if not schema_exists:
+                    _chk(
+                        "schema_exists",
+                        f"Schema '{self._schema}' exists",
+                        "error",
+                        f"Schema '{self._schema}' not found in database '{cur_db}'. "
+                        "Run *Initialize* from Settings → Registry to create it.",
+                    )
+                    # No point checking table privileges if the schema is absent
+                    for tbl in sorted(_KNOWN_TABLES):
+                        _chk(f"tbl_{tbl}", f"Table: {tbl}", "missing",
+                             "Schema does not exist — run Initialize first.")
+                    return {
+                        "success": True,
+                        "database": cur_db,
+                        "user": cur_user,
+                        "schema": self._schema,
+                        "checks": checks,
+                    }
+
+                _chk("schema_exists", f"Schema '{self._schema}' exists", "ok")
+                _chk(
+                    "schema_usage",
+                    f"USAGE on schema '{self._schema}'",
+                    "ok" if has_usage else "error",
+                    None if has_usage else (
+                        f"Role '{cur_user}' lacks USAGE on schema '{self._schema}' "
+                        f"in database '{cur_db}'. "
+                        f"Run: GRANT USAGE ON SCHEMA \"{self._schema}\" TO \"{cur_user}\";"
+                    ),
+                )
+                _chk(
+                    "schema_create",
+                    f"CREATE on schema '{self._schema}'",
+                    "ok" if has_create else "warning",
+                    None if has_create else (
+                        f"Role '{cur_user}' lacks CREATE on schema '{self._schema}' "
+                        "(needed to add new registry tables on upgrade). "
+                        f"Run: GRANT CREATE ON SCHEMA \"{self._schema}\" TO \"{cur_user}\";"
+                    ),
+                )
+
+                # ── 3. Per-table: existence + CRUD privileges ──────────
+                # Fetch all tables that actually exist in the schema
+                cur.execute(
+                    "SELECT relname FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = %s AND c.relkind = 'r'",
+                    (self._schema,),
+                )
+                existing_tables = {row[0] for row in cur.fetchall()}
+
+                for tbl in sorted(_KNOWN_TABLES):
+                    full = f"{self._schema}.{tbl}"
+                    if tbl not in existing_tables:
+                        _chk(f"tbl_{tbl}", f"Table: {tbl}", "missing",
+                             "Not yet created — run *Initialize* to create all registry tables.")
+                        continue
+                    # Check all four DML privileges at once
+                    cur.execute(
+                        """
+                        SELECT
+                            has_table_privilege(current_user, %s, 'SELECT'),
+                            has_table_privilege(current_user, %s, 'INSERT'),
+                            has_table_privilege(current_user, %s, 'UPDATE'),
+                            has_table_privilege(current_user, %s, 'DELETE')
+                        """,
+                        (full, full, full, full),
+                    )
+                    tp = cur.fetchone()
+                    missing_privs = []
+                    if tp:
+                        for priv, has in zip(["SELECT", "INSERT", "UPDATE", "DELETE"], tp):
+                            if not has:
+                                missing_privs.append(priv)
+
+                    if not missing_privs:
+                        _chk(f"tbl_{tbl}", f"Table: {tbl}", "ok")
+                    else:
+                        grants = ", ".join(missing_privs)
+                        _chk(
+                            f"tbl_{tbl}",
+                            f"Table: {tbl}",
+                            "error",
+                            f"Missing: {grants}. "
+                            f"Run: GRANT {grants} ON TABLE \"{self._schema}\".\"{tbl}\" "
+                            f"TO \"{cur_user}\";",
+                        )
+
+        except Exception as exc:
+            logger.warning("check_permissions failed: %s", exc)
+            if not checks:
+                _chk("connect", "Connect to Lakebase", "error", str(exc))
+            return {
+                "success": False,
+                "error": str(exc),
+                "database": self._effective_database,
+                "user": "?",
+                "schema": self._schema,
+                "checks": checks,
+            }
+
+        return {
+            "success": True,
+            "database": cur_db,
+            "user": cur_user,
+            "schema": self._schema,
+            "checks": checks,
+        }
+
     def initialize(self, *, client: Any = None) -> Tuple[bool, str]:
         del client  # not used: Lakebase instance is provisioned out of band
         try:
@@ -684,6 +892,106 @@ class LakebaseRegistryStore(RegistryStore):
         except Exception as exc:  # noqa: BLE001
             logger.exception("Lakebase initialise failed")
             return False, f"Failed to initialise Lakebase registry: {exc}"
+
+    def grant_app_permissions(
+        self, *, app_names: List[str], uc_catalog: str = ""
+    ) -> Dict[str, Any]:
+        """In-app port of ``scripts/bootstrap-lakebase-perms.sh`` (registry schema).
+
+        Runs as the app's own service principal, which **owns** the
+        registry schema after *Initialize* and can therefore ``GRANT`` to
+        the other app service principals (e.g. the MCP companion). Applies,
+        idempotently and best-effort (mirroring the bash script):
+
+        - ``CAN_USE`` on the Lakebase project (control-plane; needs manage
+          on the project),
+        - ``USAGE``/``CREATE``/DML + default privileges on the registry
+          schema (data-plane; needs schema ownership — which the SP has),
+        - ``ALL_PRIVILEGES`` on the Unity Catalog *uc_catalog* when set
+          (needs ``MANAGE`` on the catalog).
+
+        Returns ``{success, granted: [...], warnings: [...], error,
+        schema, apps}``. Control-plane failures degrade to warnings rather
+        than aborting, so the schema grants (the part the SP can always do)
+        still apply.
+        """
+        from back.core.databricks.lakebase_grants import (  # noqa: PLC0415
+            grant_can_use_on_project,
+            grant_schema_privileges,
+            grant_uc_catalog,
+            resolve_app_service_principals,
+        )
+
+        try:
+            from databricks.sdk import WorkspaceClient  # noqa: PLC0415
+
+            api = getattr(WorkspaceClient(), "api_client", None)
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "success": False,
+                "granted": [],
+                "warnings": [],
+                "error": f"Databricks SDK unavailable: {exc}",
+            }
+        if api is None or not hasattr(api, "do"):
+            return {
+                "success": False,
+                "granted": [],
+                "warnings": [],
+                "error": "Databricks api_client unavailable",
+            }
+
+        sp_ids, warnings = resolve_app_service_principals(api, app_names)
+        granted: List[str] = []
+        if not sp_ids:
+            return {
+                "success": False,
+                "granted": granted,
+                "warnings": warnings,
+                "error": (
+                    "Could not resolve any app service principal to grant — "
+                    "check the app name(s)."
+                ),
+            }
+
+        # ── CAN_USE on the Lakebase project (control-plane) ──────────────
+        try:
+            project_short = self._auth.instance_name
+        except Exception as exc:  # noqa: BLE001
+            project_short = ""
+            warnings.append(
+                f"Could not resolve the Lakebase project for the CAN_USE "
+                f"grant ({exc}); skipped."
+            )
+        if project_short:
+            g, w = grant_can_use_on_project(api, project_short, sp_ids)
+            granted.extend(g)
+            warnings.extend(w)
+
+        # ── Postgres schema grants (we own the schema) ───────────────────
+        try:
+            with self._connect() as conn:
+                g, w = grant_schema_privileges(conn, self._schema, sp_ids)
+            granted.extend(g)
+            warnings.extend(w)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Registry schema grants failed to run: %s", exc)
+            warnings.append(f"Schema grants could not run ({exc}).")
+
+        # ── Unity Catalog ALL_PRIVILEGES (managed_synced readback) ───────
+        if uc_catalog:
+            g, w = grant_uc_catalog(api, uc_catalog, sp_ids)
+            granted.extend(g)
+            warnings.extend(w)
+
+        return {
+            "success": True,
+            "granted": granted,
+            "warnings": warnings,
+            "error": None,
+            "schema": self._schema,
+            "apps": list(sp_ids.keys()),
+        }
 
     # ------------------------------------------------------------------
     # Domain listings
@@ -853,7 +1161,8 @@ class LakebaseRegistryStore(RegistryStore):
                     f"""
                     SELECT v.info, v.ontology, v.assignment, v.design_layout,
                            v.metadata, v.version, v.mcp_enabled, v.status,
-                           v.last_update, v.last_build, d.review_quorum
+                           v.last_update, v.last_build, d.review_quorum,
+                           d.base_uri AS domain_base_uri
                     FROM {self._q(self._schema)}.domain_versions v
                     JOIN {self._q(self._schema)}.domains d ON d.id = v.domain_id
                     WHERE d.registry_id = %s AND d.folder = %s AND v.version = %s
@@ -871,11 +1180,18 @@ class LakebaseRegistryStore(RegistryStore):
                 info["last_update"] = row["last_update"]
             if row["last_build"]:
                 info["last_build"] = row["last_build"]
+            # Merge: the domains.base_uri column is the canonical source of truth.
+            # If the ontology JSON has no base_uri (e.g. legacy data), fall back to
+            # the dedicated column so that generation always has the correct value.
+            ontology = row["ontology"] or {}
+            domain_base_uri = row.get("domain_base_uri") or ""
+            if not ontology.get("base_uri") and domain_base_uri:
+                ontology["base_uri"] = domain_base_uri
             doc = {
                 "info": info,
                 "versions": {
                     row["version"]: {
-                        "ontology": row["ontology"] or {},
+                        "ontology": ontology,
                         "assignment": row["assignment"] or {},
                         "design_layout": row["design_layout"] or {},
                         "metadata": row["metadata"] or {},
@@ -915,7 +1231,11 @@ class LakebaseRegistryStore(RegistryStore):
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (registry_id, folder)
                     DO UPDATE SET description   = EXCLUDED.description,
-                                  base_uri      = EXCLUDED.base_uri,
+                                  base_uri      = CASE
+                                                    WHEN EXCLUDED.base_uri != ''
+                                                    THEN EXCLUDED.base_uri
+                                                    ELSE {self._q(self._schema)}.domains.base_uri
+                                                  END,
                                   review_quorum = EXCLUDED.review_quorum,
                                   updated_at    = now()
                     RETURNING id
@@ -1024,6 +1344,32 @@ class LakebaseRegistryStore(RegistryStore):
                 "update_version_status failed for %s/%s", folder, version
             )
             return False, str(exc)
+
+    def get_version_status(
+        self, folder: str, version: str
+    ) -> Optional[str]:
+        """Cheap single-column lifecycle status lookup (no document read)."""
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT v.status
+                    FROM {self._q(self._schema)}.domain_versions v
+                    JOIN {self._q(self._schema)}.domains d
+                      ON d.id = v.domain_id
+                    WHERE d.registry_id = %s
+                      AND d.folder = %s
+                      AND v.version = %s
+                    """,
+                    (self._registry(), folder, version),
+                )
+                row = cur.fetchone()
+            return row[0] if row else None
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "get_version_status(%s/%s) failed: %s", folder, version, exc
+            )
+            return None
 
     # ------------------------------------------------------------------
     # Permissions
@@ -1501,6 +1847,32 @@ class LakebaseRegistryStore(RegistryStore):
             "stats": dict(r["stats"] or {}),
         }
 
+    def stamp_last_build(
+        self, folder: str, version: str, ts: str
+    ) -> Tuple[bool, str]:
+        """Targeted UPDATE for ``domain_versions.last_build``.
+
+        Avoids a full read + re-write of the JSONB blobs: only the scalar
+        ``last_build`` column is touched.  Returns ``(ok, message)``.
+        """
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE {self._q(self._schema)}.domain_versions v
+                       SET last_build = %s
+                      FROM {self._q(self._schema)}.domains d
+                     WHERE d.id         = v.domain_id
+                       AND d.registry_id = %s
+                       AND d.folder     = %s
+                       AND v.version    = %s
+                    """,
+                    (ts, self._registry(), folder, version),
+                )
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            return False, str(exc)
+
     def load_build_runs(
         self,
         folder: str,
@@ -1541,6 +1913,346 @@ class LakebaseRegistryStore(RegistryStore):
             return [self._build_run_row_to_entry(r) for r in rows]
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_build_runs(%s) failed: %s", folder, exc)
+            return []
+
+    # ------------------------------------------------------------------
+    # Graph analytics cache (one row per (domain_id, version), UPSERT)
+    # ------------------------------------------------------------------
+
+    def _ensure_graph_analytics_table(self) -> bool:
+        """Lazily create ``graph_analytics`` if it is missing.
+
+        Self-heals deployments created before the async graph-analytics
+        cache existed (the full DDL only runs from the Settings
+        *Initialize* action). Idempotent and guarded by a per-instance
+        flag so we only pay the round-trip once per store. Best-effort:
+        on failure (e.g. missing GRANT) it logs and returns ``False`` so
+        callers can no-op instead of breaking the analytics task. Mirrors
+        :meth:`_ensure_build_runs_table`.
+        """
+        if self._graph_analytics_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                # Check first: CREATE on an existing table we don't own
+                # would raise even with IF NOT EXISTS (see build_runs).
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = %s AND table_name = 'graph_analytics'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._graph_analytics_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.graph_analytics (
+                        domain_id    uuid NOT NULL
+                                     REFERENCES {sch}.domains(id)
+                                     ON DELETE CASCADE,
+                        version      text NOT NULL,
+                        status       text NOT NULL DEFAULT 'completed',
+                        graph_name   text NOT NULL DEFAULT '',
+                        class_filter jsonb NOT NULL DEFAULT '[]'::jsonb,
+                        stats        jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                        top_pagerank jsonb NOT NULL DEFAULT '[]'::jsonb,
+                        result       jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                        error        text NOT NULL DEFAULT '',
+                        task_id      text NOT NULL DEFAULT '',
+                        duration_ms  bigint NOT NULL DEFAULT 0,
+                        computed_at  timestamptz NOT NULL DEFAULT now(),
+                        PRIMARY KEY (domain_id, version)
+                    )
+                    """
+                )
+            self._graph_analytics_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not create graph_analytics table — "
+                "run `make bootstrap-lakebase` as the schema owner to apply "
+                "the migration: %s",
+                exc,
+            )
+            return False
+
+    def save_graph_analytics(
+        self, folder: str, version: str, entry: GraphAnalyticsResult
+    ) -> None:
+        if not self._ensure_graph_analytics_table():
+            return
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.graph_analytics
+                        (domain_id, version, status, graph_name, class_filter,
+                         stats, top_pagerank, result, error, task_id,
+                         duration_ms, computed_at)
+                    SELECT d.id, %s, %s, %s, %s::jsonb,
+                           %s::jsonb, %s::jsonb, %s::jsonb, %s, %s,
+                           %s, COALESCE(%s::timestamptz, now())
+                    FROM {sch}.domains d
+                    WHERE d.registry_id = %s AND d.folder = %s
+                    ON CONFLICT (domain_id, version) DO UPDATE SET
+                        status       = EXCLUDED.status,
+                        graph_name   = EXCLUDED.graph_name,
+                        class_filter = EXCLUDED.class_filter,
+                        stats        = EXCLUDED.stats,
+                        top_pagerank = EXCLUDED.top_pagerank,
+                        result       = EXCLUDED.result,
+                        error        = EXCLUDED.error,
+                        task_id      = EXCLUDED.task_id,
+                        duration_ms  = EXCLUDED.duration_ms,
+                        computed_at  = EXCLUDED.computed_at
+                    """,
+                    (
+                        str(version),
+                        str(entry.get("status", "completed")),
+                        str(entry.get("graph_name", "") or ""),
+                        json.dumps(entry.get("class_filter") or []),
+                        json.dumps(entry.get("stats") or {}),
+                        json.dumps(entry.get("top_pagerank") or []),
+                        json.dumps(entry.get("result") or {}),
+                        str(entry.get("error", "") or ""),
+                        str(entry.get("task_id", "") or ""),
+                        int(entry.get("duration_ms", 0) or 0),
+                        entry.get("computed_at"),
+                        self._registry(),
+                        folder,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    logger.warning(
+                        "save_graph_analytics(%s): no domain row matched — "
+                        "result not stored",
+                        folder,
+                    )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("save_graph_analytics(%s) failed: %s", folder, exc)
+
+    @staticmethod
+    def _graph_analytics_row_to_entry(r: Dict[str, Any]) -> GraphAnalyticsResult:
+        return {
+            "version": r["version"],
+            "status": r["status"] or "completed",
+            "graph_name": r["graph_name"] or "",
+            "class_filter": list(r.get("class_filter") or []),
+            "stats": dict(r.get("stats") or {}),
+            "top_pagerank": list(r.get("top_pagerank") or []),
+            "result": dict(r.get("result") or {}),
+            "error": r["error"] or "",
+            "task_id": r["task_id"] or "",
+            "duration_ms": int(r["duration_ms"] or 0),
+            "computed_at": (
+                r["computed_at"].isoformat() if r.get("computed_at") else ""
+            ),
+        }
+
+    def load_graph_analytics(
+        self, folder: str, version: str
+    ) -> Optional[GraphAnalyticsResult]:
+        if not self._ensure_graph_analytics_table():
+            return None
+        try:
+            _psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT g.version, g.status, g.graph_name, g.class_filter,
+                           g.stats, g.top_pagerank, g.result, g.error,
+                           g.task_id, g.duration_ms, g.computed_at
+                    FROM {sch}.graph_analytics g
+                    JOIN {sch}.domains d ON d.id = g.domain_id
+                    WHERE d.registry_id = %s AND d.folder = %s
+                      AND g.version = %s
+                    """,
+                    (self._registry(), folder, version),
+                )
+                row = cur.fetchone()
+            if not row:
+                return None
+            return self._graph_analytics_row_to_entry(row)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_graph_analytics(%s) failed: %s", folder, exc)
+            return None
+
+    # ------------------------------------------------------------------
+    # Graph analytics run history (append-only, capped per domain/version)
+    # ------------------------------------------------------------------
+
+    # Keep at most this many run-history rows per (domain, version); older
+    # rows are pruned on insert so the history list stays bounded.
+    _GRAPH_ANALYTICS_RUNS_CAP = 100
+
+    def _ensure_graph_analytics_runs_table(self) -> bool:
+        """Lazily create ``graph_analytics_runs`` (+ index) if missing.
+
+        Mirrors :meth:`_ensure_build_runs_table`: best-effort, idempotent,
+        guarded by a per-instance flag.
+        """
+        if self._graph_analytics_runs_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = %s AND table_name = 'graph_analytics_runs'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._graph_analytics_runs_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.graph_analytics_runs (
+                        id                  bigserial PRIMARY KEY,
+                        domain_id           uuid NOT NULL
+                                            REFERENCES {sch}.domains(id)
+                                            ON DELETE CASCADE,
+                        version             text NOT NULL,
+                        status              text NOT NULL DEFAULT 'completed',
+                        class_filter        jsonb NOT NULL DEFAULT '[]'::jsonb,
+                        node_count          bigint NOT NULL DEFAULT 0,
+                        edge_count          bigint NOT NULL DEFAULT 0,
+                        connected_components integer NOT NULL DEFAULT 0,
+                        avg_degree          double precision NOT NULL DEFAULT 0,
+                        density             double precision NOT NULL DEFAULT 0,
+                        duration_ms         bigint NOT NULL DEFAULT 0,
+                        task_id             text NOT NULL DEFAULT '',
+                        error               text NOT NULL DEFAULT '',
+                        computed_at         timestamptz NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_graph_analytics_runs_domain_version
+                        ON {sch}.graph_analytics_runs(domain_id, version, computed_at DESC)
+                    """
+                )
+            self._graph_analytics_runs_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not create graph_analytics_runs table — "
+                "run `make bootstrap-lakebase` as the schema owner to apply "
+                "the migration: %s",
+                exc,
+            )
+            return False
+
+    def record_graph_analytics_run(
+        self, folder: str, version: str, entry: GraphAnalyticsRun
+    ) -> None:
+        if not self._ensure_graph_analytics_runs_table():
+            return
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.graph_analytics_runs
+                        (domain_id, version, status, class_filter, node_count,
+                         edge_count, connected_components, avg_degree, density,
+                         duration_ms, task_id, error, computed_at)
+                    SELECT d.id, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s,
+                           COALESCE(%s::timestamptz, now())
+                    FROM {sch}.domains d
+                    WHERE d.registry_id = %s AND d.folder = %s
+                    """,
+                    (
+                        str(version),
+                        str(entry.get("status", "completed")),
+                        json.dumps(entry.get("class_filter") or []),
+                        int(entry.get("node_count", 0) or 0),
+                        int(entry.get("edge_count", 0) or 0),
+                        int(entry.get("connected_components", 0) or 0),
+                        float(entry.get("avg_degree", 0) or 0),
+                        float(entry.get("density", 0) or 0),
+                        int(entry.get("duration_ms", 0) or 0),
+                        str(entry.get("task_id", "") or ""),
+                        str(entry.get("error", "") or ""),
+                        entry.get("computed_at"),
+                        self._registry(),
+                        folder,
+                    ),
+                )
+                # Prune older rows beyond the cap for this (domain, version).
+                cur.execute(
+                    f"""
+                    DELETE FROM {sch}.graph_analytics_runs
+                    WHERE id IN (
+                        SELECT r.id
+                        FROM {sch}.graph_analytics_runs r
+                        JOIN {sch}.domains d ON d.id = r.domain_id
+                        WHERE d.registry_id = %s AND d.folder = %s
+                          AND r.version = %s
+                        ORDER BY r.computed_at DESC, r.id DESC
+                        OFFSET %s
+                    )
+                    """,
+                    (
+                        self._registry(),
+                        folder,
+                        str(version),
+                        int(self._GRAPH_ANALYTICS_RUNS_CAP),
+                    ),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("record_graph_analytics_run(%s) failed: %s", folder, exc)
+
+    @staticmethod
+    def _graph_analytics_run_row_to_entry(r: Dict[str, Any]) -> GraphAnalyticsRun:
+        return {
+            "id": int(r.get("id") or 0),
+            "version": r["version"],
+            "status": r["status"] or "completed",
+            "class_filter": list(r.get("class_filter") or []),
+            "node_count": int(r["node_count"] or 0),
+            "edge_count": int(r["edge_count"] or 0),
+            "connected_components": int(r["connected_components"] or 0),
+            "avg_degree": float(r["avg_degree"] or 0),
+            "density": float(r["density"] or 0),
+            "duration_ms": int(r["duration_ms"] or 0),
+            "task_id": r["task_id"] or "",
+            "error": r["error"] or "",
+            "computed_at": (
+                r["computed_at"].isoformat() if r.get("computed_at") else ""
+            ),
+        }
+
+    def load_graph_analytics_runs(
+        self, folder: str, version: str, *, limit: int = 100
+    ) -> List[GraphAnalyticsRun]:
+        if not self._ensure_graph_analytics_runs_table():
+            return []
+        try:
+            _psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT r.id, r.version, r.status, r.class_filter, r.node_count,
+                           r.edge_count, r.connected_components, r.avg_degree,
+                           r.density, r.duration_ms, r.task_id, r.error,
+                           r.computed_at
+                    FROM {sch}.graph_analytics_runs r
+                    JOIN {sch}.domains d ON d.id = r.domain_id
+                    WHERE d.registry_id = %s AND d.folder = %s AND r.version = %s
+                    ORDER BY r.computed_at DESC, r.id DESC
+                    LIMIT %s
+                    """,
+                    (self._registry(), folder, version, int(limit)),
+                )
+                rows = cur.fetchall()
+            return [self._graph_analytics_run_row_to_entry(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_graph_analytics_runs(%s) failed: %s", folder, exc)
             return []
 
     @staticmethod
@@ -1854,6 +2566,933 @@ class LakebaseRegistryStore(RegistryStore):
             return [self._review_row_to_event(r) for r in rows]
         except Exception as exc:  # noqa: BLE001
             logger.debug("list_all_review_events failed: %s", exc)
+            return []
+
+    # ------------------------------------------------------------------
+    # Ontology / mapping change audit
+    # ------------------------------------------------------------------
+
+    def _ensure_change_events_table(self) -> bool:
+        """Lazily create ``domain_change_events`` (+ index) if missing.
+
+        Self-heals deployments created before the ontology/mapping change
+        audit log existed — same ownership-safe pattern as
+        :meth:`_ensure_review_events_table`. Best-effort: on failure it
+        logs and returns ``False`` so callers no-op rather than breaking
+        a save.
+        """
+        if self._change_events_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = %s "
+                    "AND table_name = 'domain_change_events'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._change_events_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.domain_change_events (
+                        id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                        domain_id       uuid NOT NULL
+                                        REFERENCES {sch}.domains(id)
+                                        ON DELETE CASCADE,
+                        version         text NOT NULL,
+                        actor           text NOT NULL DEFAULT '',
+                        source          text NOT NULL DEFAULT 'user',
+                        action          text NOT NULL,
+                        entity_type     text NOT NULL DEFAULT '',
+                        entity_ref      text NOT NULL DEFAULT '',
+                        summary         text NOT NULL DEFAULT '',
+                        meta            jsonb NOT NULL DEFAULT '{{}}'::jsonb,
+                        occurred_at     timestamptz NOT NULL DEFAULT now(),
+                        created_at      timestamptz NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_change_events_domain_version
+                        ON {sch}.domain_change_events
+                           (domain_id, version, occurred_at)
+                    """
+                )
+            self._change_events_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not create domain_change_events table — "
+                "run `make bootstrap-lakebase` as the schema owner to "
+                "apply the migration: %s",
+                exc,
+            )
+            return False
+
+    def record_change_events(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        events: List[Dict[str, Any]],
+    ) -> Tuple[bool, str]:
+        if not events:
+            return True, ""
+        if not self._ensure_change_events_table():
+            return False, "change audit log unavailable"
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT id FROM {sch}.domains
+                    WHERE registry_id = %s AND folder = %s
+                    """,
+                    (self._registry(), folder),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return False, f"Domain '{folder}' not found"
+                domain_id = row[0]
+                params = [
+                    (
+                        domain_id,
+                        version,
+                        actor or "",
+                        (e.get("source") or "user"),
+                        (e.get("action") or ""),
+                        (e.get("entity_type") or ""),
+                        (e.get("entity_ref") or ""),
+                        (e.get("summary") or ""),
+                        json.dumps(e.get("meta") or {}),
+                        (e.get("ts") or e.get("occurred_at") or None),
+                    )
+                    for e in events
+                ]
+                cur.executemany(
+                    f"""
+                    INSERT INTO {sch}.domain_change_events
+                        (domain_id, version, actor, source, action,
+                         entity_type, entity_ref, summary, meta, occurred_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
+                            COALESCE(%s::timestamptz, now()))
+                    """,
+                    params,
+                )
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "record_change_events(%s/%s) failed: %s", folder, version, exc
+            )
+            return False, str(exc)
+
+    @staticmethod
+    def _change_row_to_event(r: Dict[str, Any]) -> ChangeEvent:
+        return {
+            "id": str(r.get("id") or ""),
+            "folder": r.get("folder", "") or "",
+            "version": r["version"],
+            "actor": r.get("actor") or "",
+            "source": r.get("source") or "user",
+            "action": r.get("action") or "",
+            "entity_type": r.get("entity_type") or "",
+            "entity_ref": r.get("entity_ref") or "",
+            "summary": r.get("summary") or "",
+            "meta": dict(r.get("meta") or {}),
+            "occurred_at": (
+                r["occurred_at"].isoformat() if r.get("occurred_at") else ""
+            ),
+            "created_at": (
+                r["created_at"].isoformat() if r.get("created_at") else ""
+            ),
+        }
+
+    def list_change_events(
+        self, folder: str, version: Optional[str] = None, limit: int = 500
+    ) -> List[ChangeEvent]:
+        if not self._ensure_change_events_table():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            clauses = ["d.registry_id = %s", "d.folder = %s"]
+            params: List[Any] = [self._registry(), folder]
+            if version:
+                clauses.append("e.version = %s")
+                params.append(version)
+            where = " AND ".join(clauses)
+            params.append(int(limit) if limit else 500)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT e.id, d.folder, e.version, e.actor, e.source,
+                           e.action, e.entity_type, e.entity_ref, e.summary,
+                           e.meta, e.occurred_at, e.created_at
+                    FROM {sch}.domain_change_events e
+                    JOIN {sch}.domains d ON d.id = e.domain_id
+                    WHERE {where}
+                    ORDER BY e.occurred_at ASC, e.id ASC
+                    LIMIT %s
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+            return [self._change_row_to_event(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("list_change_events(%s) failed: %s", folder, exc)
+            return []
+
+    # ------------------------------------------------------------------
+    # Collaborative comments + tasks
+    # ------------------------------------------------------------------
+
+    def _ensure_collab_tables(self) -> bool:
+        """Lazily create ``domain_comments`` + ``domain_tasks`` (+ indexes).
+
+        Self-heals deployments created before the collaborative comments
+        and tasks feature existed — same ownership-safe pattern as
+        :meth:`_ensure_review_events_table`. Best-effort: on failure it
+        logs and returns ``False`` so callers no-op rather than breaking.
+        """
+        if self._collab_tables_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = %s "
+                    "AND table_name = 'domain_comments'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._collab_tables_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.domain_comments (
+                        id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                        domain_id   uuid NOT NULL
+                                    REFERENCES {sch}.domains(id)
+                                    ON DELETE CASCADE,
+                        version     text NOT NULL,
+                        parent_id   uuid
+                                    REFERENCES {sch}.domain_comments(id)
+                                    ON DELETE CASCADE,
+                        author      text NOT NULL,
+                        body        text NOT NULL DEFAULT '',
+                        resolved    boolean NOT NULL DEFAULT false,
+                        created_at  timestamptz NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_domain_comments_lookup
+                        ON {sch}.domain_comments (domain_id, version, created_at)
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.domain_tasks (
+                        id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                        domain_id   uuid NOT NULL
+                                    REFERENCES {sch}.domains(id)
+                                    ON DELETE CASCADE,
+                        version     text NOT NULL,
+                        assignee    text NOT NULL,
+                        created_by  text NOT NULL,
+                        title       text NOT NULL,
+                        description text NOT NULL DEFAULT '',
+                        status      text NOT NULL DEFAULT 'open',
+                        due_date    date,
+                        comment_id  uuid
+                                    REFERENCES {sch}.domain_comments(id)
+                                    ON DELETE SET NULL,
+                        created_at  timestamptz NOT NULL DEFAULT now(),
+                        updated_at  timestamptz NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_domain_tasks_assignee
+                        ON {sch}.domain_tasks (lower(assignee), status)
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_domain_tasks_domain
+                        ON {sch}.domain_tasks (domain_id, version)
+                    """
+                )
+            self._collab_tables_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not create domain_comments/domain_tasks tables — "
+                "run `make bootstrap-lakebase` as the schema owner to "
+                "apply the migration: %s",
+                exc,
+            )
+            return False
+
+    @staticmethod
+    def _comment_row_to_dict(
+        r: Dict[str, Any], folder: str = ""
+    ) -> DomainComment:
+        return {
+            "id": str(r.get("id") or ""),
+            "folder": r.get("folder", folder) or folder,
+            "version": r["version"],
+            "parent_id": str(r["parent_id"]) if r.get("parent_id") else "",
+            "author": r["author"] or "",
+            "body": r["body"] or "",
+            "resolved": bool(r["resolved"]),
+            "created_at": (
+                r["created_at"].isoformat() if r.get("created_at") else ""
+            ),
+        }
+
+    def insert_comment(
+        self,
+        folder: str,
+        version: str,
+        *,
+        author: str,
+        body: str,
+        parent_id: Optional[str] = None,
+    ) -> Optional[DomainComment]:
+        if not self._ensure_collab_tables():
+            return None
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.domain_comments
+                        (domain_id, version, parent_id, author, body)
+                    SELECT d.id, %s, %s, %s, %s
+                    FROM {sch}.domains d
+                    WHERE d.registry_id = %s AND d.folder = %s
+                    RETURNING id, version, parent_id, author, body,
+                              resolved, created_at
+                    """,
+                    (
+                        version,
+                        parent_id or None,
+                        author or "",
+                        body or "",
+                        self._registry(),
+                        folder,
+                    ),
+                )
+                row = cur.fetchone()
+            if not row:
+                return None
+            return self._comment_row_to_dict(row, folder)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "insert_comment(%s/%s) failed: %s", folder, version, exc
+            )
+            return None
+
+    def list_comments(
+        self,
+        folder: str,
+        version: Optional[str] = None,
+        *,
+        include_resolved: bool = True,
+    ) -> List[DomainComment]:
+        if not self._ensure_collab_tables():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            clauses = ["d.registry_id = %s", "d.folder = %s"]
+            params: List[Any] = [self._registry(), folder]
+            if version:
+                clauses.append("c.version = %s")
+                params.append(version)
+            if not include_resolved:
+                clauses.append("c.resolved = false")
+            where = " AND ".join(clauses)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT c.id, d.folder, c.version, c.parent_id,
+                           c.author, c.body, c.resolved, c.created_at
+                    FROM {sch}.domain_comments c
+                    JOIN {sch}.domains d ON d.id = c.domain_id
+                    WHERE {where}
+                    ORDER BY c.created_at ASC, c.id ASC
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+            return [self._comment_row_to_dict(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("list_comments(%s) failed: %s", folder, exc)
+            return []
+
+    def resolve_comment(
+        self, folder: str, comment_id: str, *, resolved: bool = True
+    ) -> Tuple[bool, str]:
+        if not self._ensure_collab_tables():
+            return False, "comments backend unavailable"
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE {sch}.domain_comments c
+                    SET resolved = %s
+                    FROM {sch}.domains d
+                    WHERE c.domain_id = d.id
+                      AND d.registry_id = %s AND d.folder = %s
+                      AND c.id = %s
+                    """,
+                    (resolved, self._registry(), folder, comment_id),
+                )
+                if cur.rowcount == 0:
+                    return False, "Comment not found"
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "resolve_comment(%s/%s) failed: %s", folder, comment_id, exc
+            )
+            return False, str(exc)
+
+    @staticmethod
+    def _task_row_to_dict(r: Dict[str, Any], folder: str = "") -> DomainTask:
+        return {
+            "id": str(r.get("id") or ""),
+            "folder": r.get("folder", folder) or folder,
+            "version": r["version"],
+            "assignee": r["assignee"] or "",
+            "created_by": r["created_by"] or "",
+            "title": r["title"] or "",
+            "description": r["description"] or "",
+            "status": r["status"] or "open",
+            "due_date": r["due_date"].isoformat() if r.get("due_date") else "",
+            "comment_id": str(r["comment_id"]) if r.get("comment_id") else "",
+            "created_at": (
+                r["created_at"].isoformat() if r.get("created_at") else ""
+            ),
+            "updated_at": (
+                r["updated_at"].isoformat() if r.get("updated_at") else ""
+            ),
+        }
+
+    def insert_task(
+        self,
+        folder: str,
+        version: str,
+        *,
+        assignee: str,
+        created_by: str,
+        title: str,
+        description: str = "",
+        due_date: Optional[str] = None,
+        comment_id: Optional[str] = None,
+    ) -> Optional[DomainTask]:
+        if not self._ensure_collab_tables():
+            return None
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.domain_tasks
+                        (domain_id, version, assignee, created_by, title,
+                         description, due_date, comment_id)
+                    SELECT d.id, %s, %s, %s, %s, %s, %s, %s
+                    FROM {sch}.domains d
+                    WHERE d.registry_id = %s AND d.folder = %s
+                    RETURNING id, version, assignee, created_by, title,
+                              description, status, due_date, comment_id,
+                              created_at, updated_at
+                    """,
+                    (
+                        version,
+                        assignee or "",
+                        created_by or "",
+                        title or "",
+                        description or "",
+                        due_date or None,
+                        comment_id or None,
+                        self._registry(),
+                        folder,
+                    ),
+                )
+                row = cur.fetchone()
+            if not row:
+                return None
+            return self._task_row_to_dict(row, folder)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "insert_task(%s/%s) failed: %s", folder, version, exc
+            )
+            return None
+
+    def list_tasks(
+        self, folder: str, version: Optional[str] = None
+    ) -> List[DomainTask]:
+        if not self._ensure_collab_tables():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            clauses = ["d.registry_id = %s", "d.folder = %s"]
+            params: List[Any] = [self._registry(), folder]
+            if version:
+                clauses.append("t.version = %s")
+                params.append(version)
+            where = " AND ".join(clauses)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT t.id, d.folder, t.version, t.assignee, t.created_by,
+                           t.title, t.description, t.status, t.due_date,
+                           t.comment_id, t.created_at, t.updated_at
+                    FROM {sch}.domain_tasks t
+                    JOIN {sch}.domains d ON d.id = t.domain_id
+                    WHERE {where}
+                    ORDER BY t.created_at DESC, t.id DESC
+                    """,
+                    tuple(params),
+                )
+                rows = cur.fetchall()
+            return [self._task_row_to_dict(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("list_tasks(%s) failed: %s", folder, exc)
+            return []
+
+    def list_tasks_for_assignee(self, assignee: str) -> List[DomainTask]:
+        if not self._ensure_collab_tables():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT t.id, d.folder, t.version, t.assignee, t.created_by,
+                           t.title, t.description, t.status, t.due_date,
+                           t.comment_id, t.created_at, t.updated_at
+                    FROM {sch}.domain_tasks t
+                    JOIN {sch}.domains d ON d.id = t.domain_id
+                    WHERE d.registry_id = %s AND lower(t.assignee) = lower(%s)
+                    ORDER BY t.created_at DESC, t.id DESC
+                    """,
+                    (self._registry(), assignee or ""),
+                )
+                rows = cur.fetchall()
+            return [self._task_row_to_dict(r) for r in rows]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("list_tasks_for_assignee(%s) failed: %s", assignee, exc)
+            return []
+
+    def update_task_status(
+        self, folder: str, task_id: str, status: str
+    ) -> Tuple[bool, str]:
+        if not self._ensure_collab_tables():
+            return False, "tasks backend unavailable"
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE {sch}.domain_tasks t
+                    SET status = %s, updated_at = now()
+                    FROM {sch}.domains d
+                    WHERE t.domain_id = d.id
+                      AND d.registry_id = %s AND d.folder = %s
+                      AND t.id = %s
+                    """,
+                    (status, self._registry(), folder, task_id),
+                )
+                if cur.rowcount == 0:
+                    return False, "Task not found"
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "update_task_status(%s/%s) failed: %s", folder, task_id, exc
+            )
+            return False, str(exc)
+
+    # ------------------------------------------------------------------
+    # Domain edit locks (single-editor concurrency control)
+    # ------------------------------------------------------------------
+
+    def _ensure_domain_edit_locks_table(self) -> bool:
+        """Lazily create ``domain_edit_locks`` (self-heal old deployments).
+
+        Same ownership-safe pattern as :meth:`_ensure_collab_tables`:
+        probe ``information_schema``, create idempotently, and on failure
+        log + return ``False`` so callers no-op (the lock simply becomes a
+        no-op rather than breaking domain loads).
+        """
+        if self._edit_locks_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = %s "
+                    "AND table_name = 'domain_edit_locks'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._edit_locks_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {sch}.domain_edit_locks (
+                        domain_id      uuid NOT NULL
+                                       REFERENCES {sch}.domains(id)
+                                       ON DELETE CASCADE,
+                        version        text NOT NULL,
+                        holder_email   text NOT NULL,
+                        holder_name    text NOT NULL DEFAULT '',
+                        holder_session text NOT NULL DEFAULT '',
+                        acquired_at    timestamptz NOT NULL DEFAULT now(),
+                        heartbeat_at   timestamptz NOT NULL DEFAULT now(),
+                        PRIMARY KEY (domain_id, version)
+                    )
+                    """
+                )
+            self._edit_locks_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not create domain_edit_locks table — run "
+                "`make bootstrap-lakebase` as the schema owner to apply "
+                "the migration: %s",
+                exc,
+            )
+            return False
+
+    @staticmethod
+    def _edit_lock_row_to_dict(r: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "holder_email": r.get("holder_email") or "",
+            "holder_name": r.get("holder_name") or "",
+            "holder_session": r.get("holder_session") or "",
+            "acquired_at": (
+                r["acquired_at"].isoformat() if r.get("acquired_at") else ""
+            ),
+            "heartbeat_at": (
+                r["heartbeat_at"].isoformat() if r.get("heartbeat_at") else ""
+            ),
+            # Populated only by reads that pass a positive lease TTL (the
+            # ``is_stale`` SQL expression); absent/false otherwise.
+            "is_stale": bool(r.get("is_stale")),
+        }
+
+    def acquire_edit_lock(
+        self,
+        folder: str,
+        version: str,
+        *,
+        holder_email: str,
+        holder_name: str = "",
+        holder_session: str = "",
+        force: bool = False,
+        ttl_seconds: int = 0,
+    ) -> Dict[str, Any]:
+        """Atomically take the (domain, version) edit lock when available.
+
+        The lock is granted when it is free, already held by the **same**
+        ``holder_email`` (refresh), ``force`` (admin take-over), or its lease
+        has gone **stale** — ``ttl_seconds > 0`` and the current holder has
+        not renewed (``heartbeat_at``) within the TTL. A live lock held by
+        another user whose lease is still fresh is *never* reclaimed. With
+        ``ttl_seconds == 0`` the lease is disabled and the lock is held until
+        an explicit release / take-over (the pre-lease behaviour).
+
+        On a successful grant ``heartbeat_at`` is bumped to ``now()``;
+        ``acquired_at`` is reset only when the holder actually changes (a
+        same-holder refresh keeps the original session start).
+
+        Returns ``{acquired, is_self, holder_email, holder_name,
+        acquired_at}`` describing the *live* lock after the attempt.
+        ``acquired`` is ``True`` only when the caller now holds it.
+        """
+        if not self._ensure_domain_edit_locks_table():
+            return {"acquired": False, "is_self": False, "holder_email": ""}
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            ttl = max(0, int(ttl_seconds or 0))
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO {sch}.domain_edit_locks
+                        (domain_id, version, holder_email, holder_name,
+                         holder_session)
+                    SELECT d.id, %s, %s, %s, %s
+                    FROM {sch}.domains d
+                    WHERE d.registry_id = %s AND d.folder = %s
+                    ON CONFLICT (domain_id, version) DO UPDATE SET
+                        holder_email   = EXCLUDED.holder_email,
+                        holder_name    = EXCLUDED.holder_name,
+                        holder_session = EXCLUDED.holder_session,
+                        acquired_at    = CASE
+                            WHEN {sch}.domain_edit_locks.holder_email
+                                     = EXCLUDED.holder_email
+                            THEN {sch}.domain_edit_locks.acquired_at
+                            ELSE now()
+                        END,
+                        heartbeat_at   = now()
+                    WHERE {sch}.domain_edit_locks.holder_email
+                              = EXCLUDED.holder_email
+                       OR %s
+                       OR (%s > 0 AND now() - {sch}.domain_edit_locks.heartbeat_at
+                                     > make_interval(secs => %s))
+                    RETURNING holder_email
+                    """,
+                    (
+                        version,
+                        holder_email or "",
+                        holder_name or "",
+                        holder_session or "",
+                        self._registry(),
+                        folder,
+                        bool(force),
+                        ttl,
+                        ttl,
+                    ),
+                )
+                cur.fetchone()  # row present only when the upsert won
+                live = self._get_edit_lock_row(
+                    cur, sch, folder, version, ttl_seconds=ttl
+                )
+            if not live:
+                return {"acquired": False, "is_self": False, "holder_email": ""}
+            d = self._edit_lock_row_to_dict(live)
+            is_self = (d["holder_email"] or "").lower() == (
+                holder_email or ""
+            ).lower()
+            return {
+                "acquired": is_self,
+                "is_self": is_self,
+                "holder_email": d["holder_email"],
+                "holder_name": d["holder_name"],
+                "acquired_at": d["acquired_at"],
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "acquire_edit_lock(%s/%s) failed: %s", folder, version, exc
+            )
+            return {"acquired": False, "is_self": False, "holder_email": ""}
+
+    def _delete_edit_lock(
+        self,
+        cur,
+        sch: str,
+        folder: str,
+        version: str,
+        *,
+        holder_email: str | None = None,
+    ) -> int:
+        """Delete the ``(folder, version)`` lock row; return affected rowcount.
+
+        Holder-scoped (case-insensitive) when *holder_email* is provided;
+        unconditional when ``None`` (admin force-release). Shared execution
+        core for :meth:`release_edit_lock` / :meth:`force_release_edit_lock`.
+        """
+        where = (
+            "l.domain_id = d.id AND d.registry_id = %s "
+            "AND d.folder = %s AND l.version = %s"
+        )
+        params: list = [self._registry(), folder, version]
+        if holder_email is not None:
+            where += " AND lower(l.holder_email) = lower(%s)"
+            params.append(holder_email or "")
+        cur.execute(
+            f"DELETE FROM {sch}.domain_edit_locks l USING {sch}.domains d "
+            f"WHERE {where}",
+            tuple(params),
+        )
+        return cur.rowcount
+
+    def release_edit_lock(
+        self, folder: str, version: str, *, holder_email: str
+    ) -> bool:
+        """Release the lock iff the caller holds it. Idempotent no-op else."""
+        if not self._ensure_domain_edit_locks_table():
+            return False
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                return (
+                    self._delete_edit_lock(
+                        cur, sch, folder, version, holder_email=holder_email
+                    )
+                    > 0
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "release_edit_lock(%s/%s) failed: %s", folder, version, exc
+            )
+            return False
+
+    def force_release_edit_lock(self, folder: str, version: str) -> bool:
+        """Unconditionally drop the lock for (domain, version) — admin only."""
+        if not self._ensure_domain_edit_locks_table():
+            return False
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                return self._delete_edit_lock(cur, sch, folder, version) > 0
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "force_release_edit_lock(%s/%s) failed: %s",
+                folder,
+                version,
+                exc,
+            )
+            return False
+
+    def renew_edit_lock(
+        self, folder: str, version: str, *, holder_email: str
+    ) -> bool:
+        """Bump ``heartbeat_at`` iff the caller still holds the lock.
+
+        This is the lease keep-alive (called periodically by the holder's
+        browser). Returns ``False`` when the caller no longer holds the lock
+        — because someone reclaimed a stale lease or it was released/taken
+        over — which the client reads as "your editing session expired".
+        """
+        if not self._ensure_domain_edit_locks_table():
+            return False
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    UPDATE {sch}.domain_edit_locks l
+                    SET heartbeat_at = now()
+                    FROM {sch}.domains d
+                    WHERE l.domain_id = d.id
+                      AND d.registry_id = %s AND d.folder = %s
+                      AND l.version = %s
+                      AND lower(l.holder_email) = lower(%s)
+                    """,
+                    (self._registry(), folder, version, holder_email or ""),
+                )
+                return cur.rowcount > 0
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "renew_edit_lock(%s/%s) failed: %s", folder, version, exc
+            )
+            return False
+
+    def get_edit_lock(
+        self, folder: str, version: str, ttl_seconds: int = 0
+    ) -> Optional[Dict[str, Any]]:
+        """Return the live lock row or ``None`` when the lock is free.
+
+        When ``ttl_seconds > 0`` the returned dict carries ``is_stale`` — the
+        lease has lapsed (no renew within the TTL) and the lock is reclaimable
+        — so callers (e.g. the permission gate) can ignore an abandoned lock.
+        """
+        if not self._ensure_domain_edit_locks_table():
+            return None
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                row = self._get_edit_lock_row(
+                    cur, sch, folder, version, ttl_seconds=ttl_seconds
+                )
+            return self._edit_lock_row_to_dict(row) if row else None
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "get_edit_lock(%s/%s) failed: %s", folder, version, exc
+            )
+            return None
+
+    def _get_edit_lock_row(
+        self,
+        cur: Any,
+        sch: str,
+        folder: str,
+        version: str,
+        ttl_seconds: int = 0,
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch the live lock row for (folder, version) via an open cursor.
+
+        ``is_stale`` is computed server-side: true only when
+        ``ttl_seconds > 0`` and the lease has lapsed past the TTL.
+        """
+        ttl = max(0, int(ttl_seconds or 0))
+        cur.execute(
+            f"""
+            SELECT l.holder_email, l.holder_name, l.holder_session,
+                   l.acquired_at, l.heartbeat_at,
+                   (%s > 0 AND now() - l.heartbeat_at
+                             > make_interval(secs => %s)) AS is_stale
+            FROM {sch}.domain_edit_locks l
+            JOIN {sch}.domains d ON d.id = l.domain_id
+            WHERE d.registry_id = %s AND d.folder = %s AND l.version = %s
+            """,
+            (ttl, ttl, self._registry(), folder, version),
+        )
+        return cur.fetchone()
+
+    def list_all_edit_locks(self, ttl_seconds: int = 0) -> List[Dict[str, Any]]:
+        """List every active edit lock across the registry (admin overview).
+
+        Joins ``domains`` for the folder and ``domain_versions`` for the
+        current lifecycle status, newest lock first. When ``ttl_seconds > 0``
+        each row carries ``is_stale`` so the admin Locks panel can flag an
+        abandoned lease that will auto-reclaim. Returns ``[]`` when the lock
+        backend is unavailable so the admin UI degrades to "no locks".
+        """
+        if not self._ensure_domain_edit_locks_table():
+            return []
+        try:
+            psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            ttl = max(0, int(ttl_seconds or 0))
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT d.folder, l.version,
+                           l.holder_email, l.holder_name, l.holder_session,
+                           l.acquired_at, l.heartbeat_at, v.status,
+                           (%s > 0 AND now() - l.heartbeat_at
+                                     > make_interval(secs => %s)) AS is_stale
+                    FROM {sch}.domain_edit_locks l
+                    JOIN {sch}.domains d ON d.id = l.domain_id
+                    LEFT JOIN {sch}.domain_versions v
+                           ON v.domain_id = l.domain_id AND v.version = l.version
+                    WHERE d.registry_id = %s
+                    ORDER BY l.acquired_at DESC
+                    """,
+                    (ttl, ttl, self._registry()),
+                )
+                rows = cur.fetchall()
+            return [
+                {
+                    "folder": r.get("folder") or "",
+                    "version": r.get("version") or "",
+                    "status": (r.get("status") or "DRAFT"),
+                    **self._edit_lock_row_to_dict(r),
+                }
+                for r in rows
+            ]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("list_all_edit_locks failed: %s", exc)
             return []
 
     # ------------------------------------------------------------------

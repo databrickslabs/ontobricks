@@ -1,0 +1,11 @@
+## List Hugues Journeau by full name in CONTRIBUTORS.md
+
+**Context:** The contributor table in `CONTRIBUTORS.md` lists Benoit Cayla and Dermot Smyth with their full names in the **Name** column, but the third row used the GitHub handle `hourdays` instead of the contributor's full name. Aligns the table for consistency.
+
+**Changes:**
+1. `CONTRIBUTORS.md` — row 3, `Name` column: `hourdays` → `Hugues Journeau` (GitHub handle column unchanged).
+
+**Modified files:**
+- `CONTRIBUTORS.md`
+
+**Test result:** N/A — documentation-only change.

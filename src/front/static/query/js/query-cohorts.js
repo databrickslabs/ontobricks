@@ -188,7 +188,7 @@ const CohortModule = {
             if (empty) list.appendChild(empty);
             return;
         }
-        // Edit link is shown only on the run page (Digital Twin → Cohorts):
+        // Edit link is shown only on the run page (Knowledge Graph → Cohorts):
         // the design page is itself the editor, so an extra link there would
         // just reload the same view.
         const onRunPage = !document.getElementById('cohortRuleLabel');
@@ -286,7 +286,7 @@ const CohortModule = {
     /**
      * Render a compact read-only summary of the active rule.
      *
-     * Only used on the Digital Twin run page (#cohortRuleSummary lives
+     * Only used on the Knowledge Graph run page (#cohortRuleSummary lives
      * there). On the design page this is a no-op.
      */
     _renderRuleSummary() {
@@ -350,7 +350,7 @@ const CohortModule = {
 
     _hydrateForm() {
         // Build-form fields only exist on the Ontology design page.
-        // The Digital Twin run page has no form — skip per-field updates
+        // The Knowledge Graph run page has no form — skip per-field updates
         // there but still render the rule summary + saved rules list.
         const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
         const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
@@ -446,7 +446,7 @@ const CohortModule = {
 
     _collectFromForm() {
         // Only the design page (Ontology > Cohorts) has the build form.
-        // Run page (Digital Twin > Cohorts) is read-only — bail without
+        // Run page (Knowledge Graph > Cohorts) is read-only — bail without
         // touching ``this.rule`` so the loaded saved rule isn't corrupted.
         if (!document.getElementById('cohortRuleLabel')) return;
         if (!this.rule) this.rule = {};
@@ -1172,14 +1172,14 @@ const CohortModule = {
         // same deep-link pattern Domain.py mints for cross-domain entity
         // resolution and `query.js` uses for the bridge flow. We do an
         // in-page navigation (no ``target="_blank"``) so the user stays
-        // inside the Digital Twin shell rather than spawning a tab.
+        // inside the Knowledge Graph shell rather than spawning a tab.
         const graphHref = uri
             ? `/dtwin/?section=sigmagraph&focus=${encodeURIComponent(uri)}`
             : '';
         const badge = graphHref
             ? `<a class="cohort-preview-member-badge"
                   href="${this._esc(graphHref)}"
-                  title="Open ${this._esc(headline)} in the knowledge graph">
+                  title="Open ${this._esc(headline)} in the graph viewer">
                    <i class="bi bi-diagram-3 me-1"></i>${this._esc(headline)}
                    <i class="bi bi-arrow-right-short ms-1 cohort-preview-member-badge-arrow"></i>
                </a>`
@@ -1534,7 +1534,7 @@ const CohortModule = {
         }
         bootstrap.Modal.getInstance(document.getElementById('cohortOutputsModal')).hide();
 
-        // Outputs is configured from the Digital Twin run page where there is
+        // Outputs is configured from the Knowledge Graph run page where there is
         // no Save-rule button — persist the change to the registry directly so
         // it survives reloads. On the design page (with the Save form) we just
         // mark dirty; the user persists everything together via Save rule.

@@ -52,7 +52,12 @@ class _InMemoryStore(RegistryStore):
         self._schedules: Dict[str, Dict[str, Any]] = {}
         self._history: Dict[str, List[ScheduleHistoryEntry]] = {}
         self._build_runs: Dict[str, List[Dict[str, Any]]] = {}
+        self._graph_analytics: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        self._graph_analytics_runs: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
         self._review_events: List[Dict[str, Any]] = []
+        self._change_events: List[Dict[str, Any]] = []
+        self._comments: List[Dict[str, Any]] = []
+        self._tasks: List[Dict[str, Any]] = []
         self._global: Dict[str, Any] = {}
         self._initialized = False
 
@@ -196,6 +201,30 @@ class _InMemoryStore(RegistryStore):
             "per_version": [],
         }
 
+    def save_graph_analytics(
+        self, folder: str, version: str, entry: Dict[str, Any]
+    ) -> None:
+        # UPSERT: one row per (folder, version) — only the last survives.
+        self._graph_analytics[(folder, version)] = dict(entry)
+
+    def load_graph_analytics(self, folder: str, version: str):
+        row = self._graph_analytics.get((folder, version))
+        return dict(row) if row is not None else None
+
+    def record_graph_analytics_run(
+        self, folder: str, version: str, entry: Dict[str, Any]
+    ) -> None:
+        # Append-only run history (newest stored first on read).
+        self._graph_analytics_runs.setdefault((folder, version), []).append(
+            dict(entry)
+        )
+
+    def load_graph_analytics_runs(
+        self, folder: str, version: str, *, limit: int = 100
+    ):
+        rows = list(reversed(self._graph_analytics_runs.get((folder, version), [])))
+        return [dict(r) for r in rows[:limit]]
+
     def record_review_event(
         self,
         folder: str,
@@ -236,6 +265,147 @@ class _InMemoryStore(RegistryStore):
 
     def list_all_review_events(self) -> List[Dict[str, Any]]:
         return [dict(e) for e in self._review_events]
+
+    def record_change_events(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        events: List[Dict[str, Any]],
+    ) -> Tuple[bool, str]:
+        for e in events or []:
+            self._change_events.append(
+                {
+                    "id": str(len(self._change_events) + 1),
+                    "folder": folder,
+                    "version": version,
+                    "actor": actor,
+                    "source": e.get("source") or "user",
+                    "action": e.get("action") or "",
+                    "entity_type": e.get("entity_type") or "",
+                    "entity_ref": e.get("entity_ref") or "",
+                    "summary": e.get("summary") or "",
+                    "meta": dict(e.get("meta") or {}),
+                    "occurred_at": e.get("ts")
+                    or f"2026-01-01T00:00:{len(self._change_events):02d}",
+                    "created_at": f"2026-01-01T00:00:{len(self._change_events):02d}",
+                }
+            )
+        return True, "ok"
+
+    def list_change_events(
+        self, folder: str, version=None, limit: int = 500
+    ) -> List[Dict[str, Any]]:
+        rows = [
+            dict(e)
+            for e in self._change_events
+            if e["folder"] == folder
+            and (version is None or e["version"] == version)
+        ]
+        return rows[:limit]
+
+    def insert_comment(
+        self,
+        folder: str,
+        version: str,
+        *,
+        author: str,
+        body: str,
+        parent_id=None,
+    ):
+        row = {
+            "id": str(len(self._comments) + 1),
+            "folder": folder,
+            "version": version,
+            "parent_id": str(parent_id) if parent_id else "",
+            "author": author or "",
+            "body": body or "",
+            "resolved": False,
+            "created_at": f"2026-01-01T00:00:{len(self._comments):02d}",
+        }
+        self._comments.append(row)
+        return dict(row)
+
+    def list_comments(
+        self,
+        folder: str,
+        version=None,
+        *,
+        include_resolved: bool = True,
+    ) -> List[Dict[str, Any]]:
+        return [
+            dict(c)
+            for c in self._comments
+            if c["folder"] == folder
+            and (version is None or c["version"] == version)
+            and (include_resolved or not c["resolved"])
+        ]
+
+    def resolve_comment(
+        self, folder: str, comment_id: str, *, resolved: bool = True
+    ) -> Tuple[bool, str]:
+        for c in self._comments:
+            if c["folder"] == folder and c["id"] == str(comment_id):
+                c["resolved"] = resolved
+                return True, ""
+        return False, "Comment not found"
+
+    def insert_task(
+        self,
+        folder: str,
+        version: str,
+        *,
+        assignee: str,
+        created_by: str,
+        title: str,
+        description: str = "",
+        due_date=None,
+        comment_id=None,
+    ):
+        row = {
+            "id": str(len(self._tasks) + 1),
+            "folder": folder,
+            "version": version,
+            "assignee": assignee or "",
+            "created_by": created_by or "",
+            "title": title or "",
+            "description": description or "",
+            "status": "open",
+            "due_date": due_date or "",
+            "comment_id": str(comment_id) if comment_id else "",
+            "created_at": f"2026-01-01T00:00:{len(self._tasks):02d}",
+            "updated_at": f"2026-01-01T00:00:{len(self._tasks):02d}",
+        }
+        self._tasks.append(row)
+        return dict(row)
+
+    def list_tasks(self, folder: str, version=None) -> List[Dict[str, Any]]:
+        rows = [
+            dict(t)
+            for t in self._tasks
+            if t["folder"] == folder
+            and (version is None or t["version"] == version)
+        ]
+        rows.reverse()  # newest-first
+        return rows
+
+    def list_tasks_for_assignee(self, assignee: str) -> List[Dict[str, Any]]:
+        rows = [
+            dict(t)
+            for t in self._tasks
+            if t["assignee"].lower() == (assignee or "").lower()
+        ]
+        rows.reverse()
+        return rows
+
+    def update_task_status(
+        self, folder: str, task_id: str, status: str
+    ) -> Tuple[bool, str]:
+        for t in self._tasks:
+            if t["folder"] == folder and t["id"] == str(task_id):
+                t["status"] = status
+                return True, ""
+        return False, "Task not found"
 
     def load_global_config(self) -> Dict[str, Any]:
         return dict(self._global)
@@ -459,6 +629,76 @@ class TestStoreContract:
         assert a["active_build"] is None
         assert a["success_rate"] == 0.0
 
+    def test_graph_analytics_missing_returns_none(self, store):
+        assert store.load_graph_analytics("demo", "1") is None
+
+    def test_graph_analytics_round_trip(self, store):
+        store.save_graph_analytics(
+            "demo",
+            "1",
+            {
+                "status": "completed",
+                "graph_name": "g_demo_v1",
+                "class_filter": ["http://x/Person"],
+                "stats": {"node_count": 42},
+                "top_pagerank": ["http://x/a"],
+                "result": {"nodes": {"http://x/a": {"degree": 0.5}}},
+                "duration_ms": 1234,
+                "computed_at": "2026-01-01T00:00:00",
+            },
+        )
+        row = store.load_graph_analytics("demo", "1")
+        assert row is not None
+        assert row["stats"]["node_count"] == 42
+        assert row["class_filter"] == ["http://x/Person"]
+        assert row["result"]["nodes"]["http://x/a"]["degree"] == 0.5
+
+    def test_graph_analytics_upsert_keeps_only_last(self, store):
+        store.save_graph_analytics(
+            "demo", "1", {"stats": {"node_count": 1}, "duration_ms": 10}
+        )
+        store.save_graph_analytics(
+            "demo", "1", {"stats": {"node_count": 2}, "duration_ms": 20}
+        )
+        row = store.load_graph_analytics("demo", "1")
+        assert row["stats"]["node_count"] == 2
+        assert row["duration_ms"] == 20
+
+    def test_graph_analytics_scoped_by_version(self, store):
+        store.save_graph_analytics("demo", "1", {"stats": {"node_count": 1}})
+        store.save_graph_analytics("demo", "2", {"stats": {"node_count": 9}})
+        assert store.load_graph_analytics("demo", "1")["stats"]["node_count"] == 1
+        assert store.load_graph_analytics("demo", "2")["stats"]["node_count"] == 9
+
+    def test_graph_analytics_runs_empty_by_default(self, store):
+        assert store.load_graph_analytics_runs("demo", "1") == []
+
+    def test_graph_analytics_runs_newest_first(self, store):
+        store.record_graph_analytics_run(
+            "demo", "1", {"status": "completed", "node_count": 1}
+        )
+        store.record_graph_analytics_run(
+            "demo", "1", {"status": "failed", "error": "boom"}
+        )
+        runs = store.load_graph_analytics_runs("demo", "1")
+        assert [r["status"] for r in runs] == ["failed", "completed"]
+        assert runs[0]["error"] == "boom"
+
+    def test_graph_analytics_runs_limit(self, store):
+        for i in range(5):
+            store.record_graph_analytics_run(
+                "demo", "1", {"status": "completed", "node_count": i}
+            )
+        runs = store.load_graph_analytics_runs("demo", "1", limit=2)
+        assert len(runs) == 2
+        assert runs[0]["node_count"] == 4
+
+    def test_graph_analytics_runs_scoped_by_version(self, store):
+        store.record_graph_analytics_run("demo", "1", {"node_count": 1})
+        store.record_graph_analytics_run("demo", "2", {"node_count": 9})
+        assert len(store.load_graph_analytics_runs("demo", "1")) == 1
+        assert store.load_graph_analytics_runs("demo", "2")[0]["node_count"] == 9
+
     def test_review_events_round_trip_oldest_first(self, store):
         store.record_review_event(
             "demo", "1", "alice@a.com", "submitted",
@@ -486,6 +726,69 @@ class TestStoreContract:
         folders = {e["folder"] for e in allev}
         assert folders == {"demo", "other"}
 
+    def test_comments_round_trip_oldest_first(self, store):
+        store.insert_comment(
+            "demo", "1", author="a@a.com", body="first",
+        )
+        store.insert_comment(
+            "demo", "1", author="b@a.com", body="second",
+        )
+        comments = store.list_comments("demo", "1")
+        assert [c["body"] for c in comments] == ["first", "second"]
+        assert comments[0]["resolved"] is False
+
+    def test_resolve_comment_flips_flag_and_filters(self, store):
+        c = store.insert_comment(
+            "demo", "1", author="a@a.com", body="hi",
+        )
+        ok, _ = store.resolve_comment("demo", c["id"], resolved=True)
+        assert ok
+        assert store.list_comments("demo", "1", include_resolved=False) == []
+        assert len(store.list_comments("demo", "1")) == 1
+
+    def test_resolve_unknown_comment_returns_false(self, store):
+        ok, msg = store.resolve_comment("demo", "999")
+        assert ok is False and msg
+
+    def test_tasks_round_trip_newest_first(self, store):
+        store.insert_task(
+            "demo", "1", assignee="x@a.com", created_by="a@a.com",
+            title="task one",
+        )
+        store.insert_task(
+            "demo", "1", assignee="y@a.com", created_by="a@a.com",
+            title="task two",
+        )
+        tasks = store.list_tasks("demo", "1")
+        assert [t["title"] for t in tasks] == ["task two", "task one"]
+        assert tasks[0]["status"] == "open"
+
+    def test_tasks_for_assignee_is_case_insensitive_and_cross_domain(self, store):
+        store.insert_task(
+            "demo", "1", assignee="X@a.com", created_by="a@a.com", title="t1",
+        )
+        store.insert_task(
+            "other", "1", assignee="x@a.com", created_by="a@a.com", title="t2",
+        )
+        store.insert_task(
+            "demo", "1", assignee="z@a.com", created_by="a@a.com", title="t3",
+        )
+        mine = store.list_tasks_for_assignee("x@a.com")
+        assert {t["title"] for t in mine} == {"t1", "t2"}
+        assert {t["folder"] for t in mine} == {"demo", "other"}
+
+    def test_update_task_status_round_trip(self, store):
+        t = store.insert_task(
+            "demo", "1", assignee="x@a.com", created_by="a@a.com", title="t",
+        )
+        ok, _ = store.update_task_status("demo", t["id"], "done")
+        assert ok
+        assert store.list_tasks("demo", "1")[0]["status"] == "done"
+
+    def test_update_unknown_task_returns_false(self, store):
+        ok, msg = store.update_task_status("demo", "999", "done")
+        assert ok is False and msg
+
     def test_table_row_counts_defaults_to_zero(self, store):
         # The base class returns zero for every requested table — only
         # Lakebase overrides this. Ensures the admin UI can call the
@@ -510,11 +813,13 @@ class _ScriptedCursor:
     """
 
     def __init__(self, script):
-        # script: list of dicts with keys: contains, fetchone, fetchall
+        # script: list of dicts with keys: contains, fetchone, fetchall,
+        # rowcount
         self._script = list(script)
         self.executed = []  # captured (sql, params) tuples
         self._next_one = None
         self._next_all = []
+        self.rowcount = 0
 
     def __enter__(self):
         return self
@@ -529,11 +834,13 @@ class _ScriptedCursor:
                 entry["_used"] = True
                 self._next_one = entry.get("fetchone")
                 self._next_all = entry.get("fetchall", [])
+                self.rowcount = entry.get("rowcount", 0)
                 return
         # Default to "no row" so unscripted queries don't accidentally
         # return stale data from the previous script entry.
         self._next_one = None
         self._next_all = []
+        self.rowcount = 0
 
     def fetchone(self):
         return self._next_one
@@ -547,7 +854,9 @@ class _ScriptedConn:
         self._cursor = cursor
         self.closed = False
 
-    def cursor(self):
+    def cursor(self, *args, **kwargs):
+        # Accept ``row_factory=dict_row`` (used by the list/insert paths)
+        # while staying compatible with the no-arg callers.
         return self._cursor
 
     def close(self):
@@ -1068,3 +1377,205 @@ class TestFetchLakebaseRegistryTriplet:
 
         assert first == ("c1", "s1", "v1")
         assert second == ("c2", "s2", "v2")
+
+
+# ---------------------------------------------------------------------
+# Lakebase collaborative comments + tasks — real SQL code paths
+#
+# The in-memory fake above proves the *contract*; these tests drive the
+# concrete Lakebase implementation (row mappers, the lazy
+# ``_ensure_collab_tables`` short-circuit, and the rowcount-based
+# not-found handling) without a real Postgres, via the scripted cursor.
+# ---------------------------------------------------------------------
+
+
+from datetime import datetime  # noqa: E402
+
+
+def _collab_store(monkeypatch, cur):
+    """A Lakebase store whose ``_connect`` yields *cur* and whose collab
+    tables are already marked present (skips the lazy DDL probe).
+
+    Also stubs ``_require_psycopg`` so the tests pass without psycopg
+    installed: _ScriptedConn.cursor() already accepts and ignores the
+    ``row_factory`` kwarg, so (None, None) is a safe stub.
+    """
+    from contextlib import contextmanager
+    import back.objects.registry.store.lakebase.store as _store_mod
+
+    store = _make_lakebase_store(monkeypatch)
+    store._registry_id = "rid-1"          # skip registry-id resolution
+    store._collab_tables_ready = True     # skip the ensure/CREATE probe
+
+    @contextmanager
+    def fake_connect():
+        yield _ScriptedConn(cur)
+
+    monkeypatch.setattr(store, "_connect", fake_connect)
+    # Stub out the psycopg import guard — _ScriptedConn.cursor() ignores
+    # row_factory so None is a safe placeholder for dict_row.
+    monkeypatch.setattr(_store_mod, "_require_psycopg", lambda: (None, None))
+    return store
+
+
+class TestLakebaseCollab:
+    def test_ensure_collab_tables_short_circuits_when_present(self, monkeypatch):
+        from contextlib import contextmanager
+
+        store = _make_lakebase_store(monkeypatch)
+        store._registry_id = "rid-1"
+        cur = _ScriptedCursor(
+            [{"contains": "information_schema.tables", "fetchone": (1,)}]
+        )
+
+        @contextmanager
+        def fake_connect():
+            yield _ScriptedConn(cur)
+
+        monkeypatch.setattr(store, "_connect", fake_connect)
+
+        assert store._ensure_collab_tables() is True
+        assert store._collab_tables_ready is True
+        # Table already exists → must NOT issue any CREATE TABLE.
+        assert not any("CREATE TABLE" in s for s, _ in cur.executed)
+
+    def test_insert_comment_maps_returning_row(self, monkeypatch):
+        cur = _ScriptedCursor(
+            [
+                {
+                    "contains": "INSERT INTO",
+                    "fetchone": {
+                        "id": "c-1", "version": "2",
+                        "parent_id": None,
+                        "author": "a@a.com", "body": "rename",
+                        "resolved": False,
+                        "created_at": datetime(2026, 1, 1, 0, 0, 0),
+                    },
+                }
+            ]
+        )
+        store = _collab_store(monkeypatch, cur)
+        out = store.insert_comment(
+            "demo", "2", author="a@a.com", body="rename",
+        )
+        assert out["id"] == "c-1"
+        assert out["body"] == "rename"
+        assert out["folder"] == "demo"
+        assert out["resolved"] is False
+        assert out["created_at"].startswith("2026-01-01")
+
+    def test_insert_comment_returns_none_when_domain_missing(self, monkeypatch):
+        # No RETURNING row (unknown domain) → fetchone None → None.
+        cur = _ScriptedCursor([])
+        store = _collab_store(monkeypatch, cur)
+        assert store.insert_comment(
+            "ghost", "2", author="a@a.com", body="x",
+        ) is None
+
+    def test_list_comments_maps_rows_and_filters(self, monkeypatch):
+        cur = _ScriptedCursor(
+            [
+                {
+                    "contains": "FROM",
+                    "fetchall": [
+                        {
+                            "id": "c-1", "folder": "demo", "version": "2",
+                            "parent_id": None, "author": "a@a.com",
+                            "body": "hi", "resolved": False,
+                            "created_at": datetime(2026, 1, 1),
+                        }
+                    ],
+                }
+            ]
+        )
+        store = _collab_store(monkeypatch, cur)
+        rows = store.list_comments(
+            "demo", "2", include_resolved=False,
+        )
+        assert [c["body"] for c in rows] == ["hi"]
+        # The version + resolved filters must reach the SQL.
+        sql, params = cur.executed[-1]
+        assert "c.version = %s" in sql
+        assert "resolved = false" in sql
+        assert "2" in params
+
+    def test_resolve_comment_not_found_returns_false(self, monkeypatch):
+        cur = _ScriptedCursor([{"contains": "UPDATE", "rowcount": 0}])
+        store = _collab_store(monkeypatch, cur)
+        ok, msg = store.resolve_comment("demo", "c-9")
+        assert ok is False and msg == "Comment not found"
+
+    def test_resolve_comment_success(self, monkeypatch):
+        cur = _ScriptedCursor([{"contains": "UPDATE", "rowcount": 1}])
+        store = _collab_store(monkeypatch, cur)
+        ok, msg = store.resolve_comment("demo", "c-1", resolved=True)
+        assert ok is True and msg == ""
+        _, params = cur.executed[-1]
+        assert params[0] is True  # resolved flag forwarded
+
+    def test_insert_task_maps_returning_row(self, monkeypatch):
+        cur = _ScriptedCursor(
+            [
+                {
+                    "contains": "INSERT INTO",
+                    "fetchone": {
+                        "id": "t-1", "version": "2",
+                        "assignee": "bob@a.com", "created_by": "a@a.com",
+                        "title": "fix", "description": "", "status": "open",
+                        "due_date": None, "comment_id": "c-1",
+                        "created_at": datetime(2026, 1, 1),
+                        "updated_at": datetime(2026, 1, 1),
+                    },
+                }
+            ]
+        )
+        store = _collab_store(monkeypatch, cur)
+        out = store.insert_task(
+            "demo", "2", assignee="bob@a.com", created_by="a@a.com",
+            title="fix", comment_id="c-1",
+        )
+        assert out["id"] == "t-1"
+        assert out["assignee"] == "bob@a.com"
+        assert out["comment_id"] == "c-1"
+        assert out["status"] == "open"
+        assert out["due_date"] == ""
+
+    def test_list_tasks_for_assignee_maps_rows(self, monkeypatch):
+        cur = _ScriptedCursor(
+            [
+                {
+                    "contains": "lower(t.assignee) = lower(%s)",
+                    "fetchall": [
+                        {
+                            "id": "t-1", "folder": "demo", "version": "2",
+                            "assignee": "bob@a.com", "created_by": "a@a.com",
+                            "title": "fix", "description": "", "status": "open",
+                            "due_date": None, "comment_id": None,
+                            "created_at": datetime(2026, 1, 1),
+                            "updated_at": datetime(2026, 1, 1),
+                        }
+                    ],
+                }
+            ]
+        )
+        store = _collab_store(monkeypatch, cur)
+        rows = store.list_tasks_for_assignee("BOB@a.com")
+        assert [t["title"] for t in rows] == ["fix"]
+        assert rows[0]["folder"] == "demo"
+        _, params = cur.executed[-1]
+        assert params == ("rid-1", "BOB@a.com")
+
+    def test_update_task_status_not_found(self, monkeypatch):
+        cur = _ScriptedCursor([{"contains": "UPDATE", "rowcount": 0}])
+        store = _collab_store(monkeypatch, cur)
+        ok, msg = store.update_task_status("demo", "t-9", "done")
+        assert ok is False and msg == "Task not found"
+
+    def test_update_task_status_success(self, monkeypatch):
+        cur = _ScriptedCursor([{"contains": "UPDATE", "rowcount": 1}])
+        store = _collab_store(monkeypatch, cur)
+        ok, _ = store.update_task_status("demo", "t-1", "in_progress")
+        assert ok is True
+        sql, params = cur.executed[-1]
+        assert "SET status = %s" in sql
+        assert params[0] == "in_progress"

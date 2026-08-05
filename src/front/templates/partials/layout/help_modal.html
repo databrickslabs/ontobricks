@@ -51,7 +51,7 @@
                                 </div>
                                 <div>
                                     <h2>Welcome to OntoBricks</h2>
-                                    <p class="lead mb-0">The Digital Twin Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, and explore it visually.</p>
+                                    <p class="lead mb-0">The Knowledge Graph Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, and explore it visually.</p>
                                 </div>
                             </div>
 
@@ -60,7 +60,7 @@
                                     <div class="help-card">
                                         <div class="help-card-icon bg-soft-primary"><i class="bi bi-rocket-takeoff"></i></div>
                                         <h5>New here?</h5>
-                                        <p>Follow the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> &mdash; build a full knowledge graph in four clicks using the LLM-powered automation pipeline.</p>
+                                        <p>Follow the <a href="#help-starter" data-help-jump="starter">Starter Guide</a> &mdash; build a full graph viewer in four clicks using the LLM-powered automation pipeline.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -96,14 +96,14 @@
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">4</span><div><strong>Mapping</strong><br><small>Map ontology to UC tables (R2RML)</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
-                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Digital Twin</strong><br><small>Synchronize, explore, query</small></div></div>
+                                <div class="help-step"><span class="help-step-num">5</span><div><strong>Knowledge Graph</strong><br><small>Synchronize, explore, query</small></div></div>
                             </div>
                         </section>
 
                         <!-- STARTER GUIDE -->
                         <section class="help-section" id="help-starter" data-help-section-panel="starter">
-                            <h2><i class="bi bi-rocket-takeoff me-2"></i>Starter Guide &mdash; Build a Digital Twin in 4 Clicks</h2>
-                            <p class="text-muted">OntoBricks can generate an end-to-end knowledge graph from your Databricks tables using LLM-powered automation. Here is the fastest path from zero to a queryable graph.</p>
+                            <h2><i class="bi bi-rocket-takeoff me-2"></i>Starter Guide &mdash; Build a Knowledge Graph in 4 Clicks</h2>
+                            <p class="text-muted">OntoBricks can generate an end-to-end graph viewer from your Databricks tables using LLM-powered automation. Here is the fastest path from zero to a queryable graph.</p>
 
                             <h5 class="mt-4"><i class="bi bi-check2-circle me-2"></i>Prerequisites</h5>
                             <ul>
@@ -146,14 +146,14 @@
                                     <div class="help-step-badge">4</div>
                                     <div>
                                         <h5><i class="bi bi-shuffle me-2"></i>Map your data &amp; Sync</h5>
-                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Designer</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Digital Twin &rarr; Sync</strong> and click <em>Synchronize</em> &mdash; triples are materialized into your triple store.</p>
+                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Designer</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Knowledge Graph &rarr; Sync</strong> and click <em>Synchronize</em> &mdash; triples are materialized into your triple store.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
                                     <div class="help-step-badge"><i class="bi bi-check2"></i></div>
                                     <div>
                                         <h5><i class="bi bi-eye me-2"></i>Explore</h5>
-                                        <p>Head to <strong>Digital Twin &rarr; Knowledge Graph</strong> to browse your data as an interactive graph, or use <strong>GraphQL</strong> for programmatic access.</p>
+                                        <p>Head to <strong>Knowledge Graph &rarr; Graph Viewer</strong> to browse your data as an interactive graph, or use <strong>GraphQL</strong> for programmatic access.</p>
                                     </div>
                                 </div>
                             </div>
@@ -183,7 +183,7 @@
                                                 <li><strong>Browse</strong> &mdash; list and open existing domains</li>
                                                 <li><strong>New Domain</strong> (navbar) &mdash; create a fresh domain</li>
                                                 <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from UC</li>
-                                                <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one knowledge graph to another</li>
+                                                <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one graph viewer to another</li>
                                                 <li><strong>Schedule</strong> &mdash; automation / recurring sync jobs</li>
                                                 <li><strong>API</strong> &mdash; REST API reference for developers</li>
                                                 <li><strong>Registry Location</strong> &mdash; UC Volume where domains are persisted</li>
@@ -266,18 +266,18 @@
                                     </div>
                                 </div>
 
-                                <!-- Digital Twin -->
+                                <!-- Knowledge Graph -->
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw5">
-                                            <i class="bi bi-box-fill me-2"></i><strong>5. Digital Twin</strong> &mdash; materialize &amp; explore
+                                            <i class="bi bi-box-fill me-2"></i><strong>5. Knowledge Graph</strong> &mdash; materialize &amp; explore
                                         </button>
                                     </h2>
                                     <div id="hw5" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
                                             <ul>
                                                 <li><strong>Overview</strong> &mdash; insight dashboard: entity counts, relationship counts, last sync timestamp, quality status</li>
-                                                <li><strong>Knowledge Graph</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
+                                                <li><strong>Graph Viewer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
                                                 <li><strong>GraphQL</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
                                                 <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning on Delta / Lakebase (SQL)</li>
@@ -304,7 +304,7 @@
                                 <div class="col-md-6">
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-layers-half"></i></div>
-                                        <h5>Interactive Knowledge Graph</h5>
+                                        <h5>Interactive Graph Viewer</h5>
                                         <p>Two-phase search, configurable depth, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
                                     </div>
                                 </div>
@@ -312,7 +312,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-bar-chart-line"></i></div>
                                         <h5>Dashboard embedding</h5>
-                                        <p>Assign a Databricks dashboard to an entity type; parameters are auto-populated from entity attributes when viewed in the Digital Twin.</p>
+                                        <p>Assign a Databricks dashboard to an entity type; parameters are auto-populated from entity attributes when viewed in the Knowledge Graph.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -340,7 +340,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-plug"></i></div>
                                         <h5>MCP Integration</h5>
-                                        <p>Expose the knowledge graph to LLM agents through the Model Context Protocol. Deploy the companion <code>mcp-ontobricks</code> app and connect from Cursor, Claude Desktop or the Databricks Playground.</p>
+                                        <p>Expose the graph viewer to LLM agents through the Model Context Protocol. Deploy the companion <code>mcp-ontobricks</code> app and connect from Cursor, Claude Desktop or the Databricks Playground.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -364,7 +364,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">Do I have to write OWL or SPARQL by hand?</button></h2>
-                                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">No. The visual <em>Model</em> designer and the <em>AI Wizard</em> generate OWL automatically. For querying, use the <strong>GraphQL</strong> endpoint or the interactive Knowledge Graph &mdash; SPARQL is optional.</div></div>
+                                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">No. The visual <em>Model</em> designer and the <em>AI Wizard</em> generate OWL automatically. For querying, use the <strong>GraphQL</strong> endpoint or the interactive Graph Viewer &mdash; SPARQL is optional.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>
@@ -372,7 +372,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
-                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry, then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Digital Twin then become enabled.</div></div>
+                                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Many features require a <em>saved domain</em>. Create/load a domain from the Registry, then save it (<kbd>Cmd/Ctrl+S</kbd>). Ontology, Mapping and Knowledge Graph then become enabled.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">Auto-Map is running &mdash; can I leave the page?</button></h2>
@@ -392,7 +392,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq9">How are bridges between domains defined?</button></h2>
-                                    <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Go to <strong>Registry &rarr; Bridges</strong> to declare cross-domain links. In the Knowledge Graph, right-clicking an entity exposes available bridges; clicking one switches domains and focuses the target entity.</div></div>
+                                    <div id="faq9" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Go to <strong>Registry &rarr; Bridges</strong> to declare cross-domain links. In the Graph Viewer, right-clicking an entity exposes available bridges; clicking one switches domains and focuses the target entity.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq10">Is CSRF protection enabled?</button></h2>
@@ -445,7 +445,7 @@
                                     <tr><td><kbd>&larr;</kbd> / <kbd>&rarr;</kbd></td><td>Back / Forward in breadcrumb navigation</td></tr>
                                 </tbody>
                             </table>
-                            <h5 class="mt-4">Graph interactions (Knowledge Graph / Model)</h5>
+                            <h5 class="mt-4">Graph interactions (Graph Viewer / Model)</h5>
                             <table class="table table-sm table-striped help-table">
                                 <tbody>
                                     <tr><td>Scroll</td><td>Zoom in/out</td></tr>
@@ -470,12 +470,12 @@
                                 <dt>R2RML</dt><dd>W3C standard for mapping relational data (SQL tables) to RDF triples.</dd>
                                 <dt>SHACL</dt><dd>W3C Shapes Constraint Language &mdash; used for data quality validation.</dd>
                                 <dt>SWRL</dt><dd>Semantic Web Rule Language &mdash; &ldquo;IF ... THEN ...&rdquo; inference rules.</dd>
-                                <dt>Digital Twin</dt><dd>A materialized, queryable knowledge graph representation of your Databricks data.</dd>
+                                <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
                                 <dt>Triple Store</dt><dd>Backend where triples are physically stored (Delta tables in Unity Catalog).</dd>
                                 <dt>Graph DB</dt><dd>Engine that exposes the triples for graph queries and reasoning (currently Lakebase Postgres).</dd>
                                 <dt>Unity Catalog (UC)</dt><dd>Databricks unified governance for catalogs, schemas, tables and volumes.</dd>
-                                <dt>MCP</dt><dd>Model Context Protocol &mdash; exposes the knowledge graph to LLM agents.</dd>
+                                <dt>MCP</dt><dd>Model Context Protocol &mdash; exposes the graph viewer to LLM agents.</dd>
                             </dl>
                         </section>
 

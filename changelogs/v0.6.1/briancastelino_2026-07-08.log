@@ -1,0 +1,13 @@
+## Add regression test for KG filtering on non-DRAFT versions
+
+### Context
+While using the Knowledge Graph explorer, I ran into a `403` ("This version is PUBLISHED; set it back to DRAFT to edit") when filtering the graph on a locked version. On investigation, that bug was already fixed upstream in commit 9d9c120, which replaced the broad `/dtwin/sync/` entry in `_STATUS_GATE_EDIT_PATHS` with the explicit write paths `/dtwin/sync/start` and `/dtwin/sync/load`, so the read-only `POST /dtwin/sync/filter` is no longer status-gated. To guard against a future regression, I am adding an end-to-end middleware dispatch test that locks in the correct behaviour.
+
+### Changes
+1. `tests/units/auth/test_permission_middleware.py`: I added `test_kg_filter_allowed_on_non_draft`, an end-to-end middleware dispatch test verifying `POST /dtwin/sync/filter` is allowed on `PUBLISHED` and `IN-REVIEW` versions. This complements the existing function-level test `test_dtwin_non_gated_paths_remain_open` by exercising the full dispatch path.
+
+### Modified files
+- `tests/units/auth/test_permission_middleware.py`
+
+### Test results
+I ran `tests/units/auth/test_permission_middleware.py` and got 255 passed, including the new regression test.

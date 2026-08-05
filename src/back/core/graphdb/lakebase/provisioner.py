@@ -13,7 +13,7 @@ the only way to stand up the graph store:
 
 The whole flow runs in a worker thread and reports progress through the
 shared :class:`~back.core.task_manager.TaskManager`, so the UI can poll
-``GET /tasks/{id}`` exactly like the Digital Twin build.
+``GET /tasks/{id}`` exactly like the Knowledge Graph build.
 
 Permission model (unchanged from the scripts -- only automated):
 
@@ -37,6 +37,12 @@ import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+from back.core.databricks.lakebase_grants import (
+    grant_can_use_on_project,
+    grant_schema_privileges,
+    grant_uc_catalog,
+    resolve_app_service_principals,
+)
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -529,101 +535,24 @@ class LakebaseGraphProvisioner:
         )
 
     def _step_grant_can_use(self, api: Any, sp_ids: Dict[str, str]) -> None:
-        for app_name, sp_id in sp_ids.items():
-            ok = False
-            for securable in ("database-projects", "database-instances"):
-                try:
-                    api.do(
-                        "PATCH",
-                        f"/api/2.0/permissions/{securable}/{self._project_short}",
-                        body={
-                            "access_control_list": [
-                                {
-                                    "service_principal_name": sp_id,
-                                    "permission_level": "CAN_USE",
-                                }
-                            ]
-                        },
-                    )
-                    ok = True
-                except Exception as exc:  # noqa: BLE001
-                    logger.debug(
-                        "CAN_USE grant via %s for %s failed: %s",
-                        securable,
-                        app_name,
-                        exc,
-                    )
-            if ok:
-                self._granted.append(f"{app_name}: CAN_USE on project")
-            else:
-                self._warnings.append(
-                    f"{app_name}: could not grant CAN_USE on project (need "
-                    f"manage permission on the Lakebase project)"
-                )
+        granted, warnings = grant_can_use_on_project(
+            api, self._project_short, sp_ids
+        )
+        self._granted.extend(granted)
+        self._warnings.extend(warnings)
         self._tm.update_progress(self._task_id, 75, "CAN_USE grants applied")
 
     def _step_grant_schema(self, api: Any, sp_ids: Dict[str, str]) -> None:
-        sch = self._schema
         with self._connect() as conn:
-            for app_name, sp_id in sp_ids.items():
-                try:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            f'GRANT USAGE, CREATE ON SCHEMA "{sch}" TO "{sp_id}"'
-                        )
-                        cur.execute(
-                            f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES "
-                            f'IN SCHEMA "{sch}" TO "{sp_id}"'
-                        )
-                        cur.execute(
-                            f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES "
-                            f'IN SCHEMA "{sch}" TO "{sp_id}"'
-                        )
-                        cur.execute(
-                            f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{sch}" '
-                            f'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES '
-                            f'TO "{sp_id}"'
-                        )
-                        cur.execute(
-                            f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{sch}" '
-                            f'GRANT USAGE, SELECT, UPDATE ON SEQUENCES '
-                            f'TO "{sp_id}"'
-                        )
-                    self._granted.append(f"{app_name}: USAGE + DML on schema {sch}")
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        "Schema grant for %s (%s) failed: %s", app_name, sp_id, exc
-                    )
-                    self._warnings.append(
-                        f"{app_name}: schema grant failed ({exc}). The Postgres "
-                        f"role may not exist yet — re-run after the app has "
-                        f"connected once, or use scripts/bootstrap-lakebase-perms.sh."
-                    )
+            granted, warnings = grant_schema_privileges(conn, self._schema, sp_ids)
+        self._granted.extend(granted)
+        self._warnings.extend(warnings)
         self._tm.update_progress(self._task_id, 90, "Schema grants applied")
 
     def _step_grant_uc(self, api: Any, sp_ids: Dict[str, str]) -> None:
-        for app_name, sp_id in sp_ids.items():
-            try:
-                api.do(
-                    "PATCH",
-                    f"/api/2.1/unity-catalog/permissions/catalog/{self._uc_catalog}",
-                    body={
-                        "changes": [
-                            {"principal": sp_id, "add": ["ALL_PRIVILEGES"]}
-                        ]
-                    },
-                )
-                self._granted.append(
-                    f"{app_name}: ALL_PRIVILEGES on catalog {self._uc_catalog}"
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "UC catalog grant for %s failed: %s", app_name, exc
-                )
-                self._warnings.append(
-                    f"{app_name}: UC catalog grant on {self._uc_catalog} failed "
-                    f"({exc}). You may lack MANAGE on the catalog."
-                )
+        granted, warnings = grant_uc_catalog(api, self._uc_catalog, sp_ids)
+        self._granted.extend(granted)
+        self._warnings.extend(warnings)
         self._tm.update_progress(self._task_id, 98, "Unity Catalog grants applied")
 
     def _step_grant_superuser_to_managers(self, api: Any) -> None:
@@ -826,31 +755,14 @@ class LakebaseGraphProvisioner:
         Missing apps are skipped with a warning (mirrors the bash ``SKIP``
         path). Returns an ordered ``{app_name: sp_client_id}`` mapping.
         """
-        out: Dict[str, str] = {}
-        for app_name in self._app_names:
-            sp_id = self._app_service_principal(api, app_name)
-            if sp_id:
-                out[app_name] = sp_id
-            else:
-                self._warnings.append(
-                    f"{app_name}: could not resolve service principal "
-                    f"(app may not exist) — grants skipped"
-                )
+        out, warnings = resolve_app_service_principals(api, self._app_names)
+        self._warnings.extend(warnings)
         if not out:
             raise ProvisionError(
                 "Could not resolve any app service principal; nothing to grant. "
                 "Check the app names."
             )
         return out
-
-    @staticmethod
-    def _app_service_principal(api: Any, app_name: str) -> str:
-        try:
-            resp = api.do("GET", f"/api/2.0/apps/{app_name}") or {}
-            return resp.get("service_principal_client_id") or ""
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("apps get %s failed: %s", app_name, exc)
-            return ""
 
     # ------------------------------------------------------------------
     # Helpers

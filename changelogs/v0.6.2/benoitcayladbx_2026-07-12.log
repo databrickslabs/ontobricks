@@ -1,0 +1,22 @@
+## Move expired-session resume control into L2 subnav
+
+Context: When an editing session expired through inactivity, the app showed a
+yellow top banner with the expiry message and a "Resume editing" button. The
+banner competed with the navbar for vertical space; the control now lives in the
+second-level subnav beside Save, with the full message on hover.
+
+Changes:
+
+1. src/front/static/global/js/edit-lock.js
+   Replaced `renderExpiredBanner()` with `renderResumeEditingButton()` — injects
+   a yellow Resume editing button left of Save and shows the expiry text as a
+   Bootstrap tooltip.
+2. src/front/static/global/css/main.css
+   Added `.ob-subnav-resume-btn` styles (warning yellow, aligned with subnav
+   action buttons).
+
+Modified files:
+- src/front/static/global/js/edit-lock.js
+- src/front/static/global/css/main.css
+
+Tests: uv run pytest -q -m "not scenario" → 3003 passed, 275 skipped, 5 deselected, 23 warnings in 22.29s

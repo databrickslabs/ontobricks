@@ -676,6 +676,10 @@ class RegistryService:
         logger.info("recursive_delete: listing %s", dir_path)
         ok, items, msg = self._uc.list_directory(dir_path)
         if not ok:
+            # Directory doesn't exist — nothing to delete, not an error.
+            if "not found" in msg.lower() or "404" in msg:
+                logger.info("recursive_delete: %s does not exist, skipping", dir_path)
+                return errors
             logger.warning("recursive_delete: cannot list %s: %s", dir_path, msg)
             errors.append(f"Cannot list {dir_path}: {msg}")
             return errors
@@ -796,6 +800,56 @@ class RegistryService:
         """Aggregate build statistics for *folder* (optionally one version)."""
         return self._store.build_analytics(folder, version=version)
 
+    # -- graph analytics cache (last result per folder/version) ------
+
+    def save_graph_analytics(
+        self, folder: str, version: str, entry: dict
+    ) -> None:
+        """UPSERT the latest KG analytics result for *folder*/*version*.
+
+        Never raises — a failed cache write must not break the background
+        analytics task. See :meth:`RegistryStore.save_graph_analytics`.
+        """
+        try:
+            self._store.save_graph_analytics(folder, version, entry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("save_graph_analytics(%s) raised: %s", folder, exc)
+
+    def load_graph_analytics(self, folder: str, version: str) -> Optional[dict]:
+        """Return the stored KG analytics result for *folder*/*version*
+        (or ``None`` when none exists). Never raises.
+        """
+        try:
+            return self._store.load_graph_analytics(folder, version)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_graph_analytics(%s) raised: %s", folder, exc)
+            return None
+
+    def record_graph_analytics_run(
+        self, folder: str, version: str, entry: dict
+    ) -> None:
+        """Append an analytics run-history row for *folder*/*version*.
+
+        Never raises — history is best-effort. See
+        :meth:`RegistryStore.record_graph_analytics_run`.
+        """
+        try:
+            self._store.record_graph_analytics_run(folder, version, entry)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("record_graph_analytics_run(%s) raised: %s", folder, exc)
+
+    def load_graph_analytics_runs(
+        self, folder: str, version: str, *, limit: int = 100
+    ) -> list:
+        """Newest-first analytics run history for *folder*/*version*."""
+        try:
+            return self._store.load_graph_analytics_runs(
+                folder, version, limit=limit
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_graph_analytics_runs(%s) raised: %s", folder, exc)
+            return []
+
     # -- load domain from registry (stateless) -----------------------
 
     def load_latest_domain_data(self, folder: str) -> Tuple[bool, dict, str, str]:
@@ -865,6 +919,12 @@ class RegistryService:
             invalidate_registry_cache(self.cache_key)
         return ok, msg
 
+    def get_version_status(
+        self, folder: str, version: str
+    ) -> Optional[str]:
+        """Live lifecycle status of one version (``None`` when absent)."""
+        return self._store.get_version_status(folder, version)
+
     # -- review / validation audit log -------------------------------
 
     def record_review_event(
@@ -900,6 +960,102 @@ class RegistryService:
     def list_all_review_events(self) -> list:
         """All review events across the registry (oldest-first)."""
         return self._store.list_all_review_events()
+
+    # -- ontology / mapping change audit log -------------------------
+
+    def record_change_events(
+        self,
+        folder: str,
+        version: str,
+        actor: str,
+        events: list,
+    ) -> Tuple[bool, str]:
+        """Append a batch of ontology/mapping change rows (best-effort)."""
+        return self._store.record_change_events(folder, version, actor, events)
+
+    def list_change_events(
+        self, folder: str, version: Optional[str] = None, limit: int = 500
+    ) -> list:
+        """Oldest-first change events for *folder* (optionally one version)."""
+        return self._store.list_change_events(folder, version, limit)
+
+    # -- collaborative comments + tasks ------------------------------
+
+    def insert_comment(
+        self,
+        folder: str,
+        version: str,
+        *,
+        author: str,
+        body: str,
+        parent_id: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Append a discussion comment; return the created row or None."""
+        return self._store.insert_comment(
+            folder,
+            version,
+            author=author,
+            body=body,
+            parent_id=parent_id,
+        )
+
+    def list_comments(
+        self,
+        folder: str,
+        version: Optional[str] = None,
+        *,
+        include_resolved: bool = True,
+    ) -> list:
+        """Oldest-first comments for *folder* (optionally scoped to version)."""
+        return self._store.list_comments(
+            folder,
+            version,
+            include_resolved=include_resolved,
+        )
+
+    def resolve_comment(
+        self, folder: str, comment_id: str, *, resolved: bool = True
+    ) -> Tuple[bool, str]:
+        """Flip a comment's ``resolved`` flag."""
+        return self._store.resolve_comment(folder, comment_id, resolved=resolved)
+
+    def insert_task(
+        self,
+        folder: str,
+        version: str,
+        *,
+        assignee: str,
+        created_by: str,
+        title: str,
+        description: str = "",
+        due_date: Optional[str] = None,
+        comment_id: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Create a task; return the created row or None."""
+        return self._store.insert_task(
+            folder,
+            version,
+            assignee=assignee,
+            created_by=created_by,
+            title=title,
+            description=description,
+            due_date=due_date,
+            comment_id=comment_id,
+        )
+
+    def list_tasks(self, folder: str, version: Optional[str] = None) -> list:
+        """Newest-first tasks for *folder* (optionally one *version*)."""
+        return self._store.list_tasks(folder, version)
+
+    def list_tasks_for_assignee(self, assignee: str) -> list:
+        """All tasks across the registry assigned to *assignee*."""
+        return self._store.list_tasks_for_assignee(assignee)
+
+    def update_task_status(
+        self, folder: str, task_id: str, status: str
+    ) -> Tuple[bool, str]:
+        """Set a task's ``status``."""
+        return self._store.update_task_status(folder, task_id, status)
 
     # -- document operations -------------------------------------------
 

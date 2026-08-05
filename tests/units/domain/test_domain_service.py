@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import MagicMock
 from back.objects.domain import Domain
-from back.core.errors import ValidationError
+from back.core.errors import ConflictError, ValidationError
 
 
 def _mock_domain(
@@ -93,6 +93,31 @@ class TestSaveDomainInfo:
         Domain(domain).save_domain_info({"base_uri": "http://new.org#"})
         assert domain.ontology["base_uri"] == "http://new.org#"
 
+    def test_auto_base_uri_generated_from_name(self):
+        """Auto mode (no custom URI) generates {default}/{Name}# — never empty."""
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"name": "AcmeSales"})
+        assert result["base_uri"].endswith("/AcmeSales#")
+        assert result["base_uri"] != "Unknown"
+        assert result["base_uri_auto"] is True
+
+    def test_custom_base_uri_preserved_over_auto(self):
+        """A custom URI with base_uri_auto=False is kept verbatim."""
+        domain = _mock_domain()
+        Domain(domain).save_domain_info(
+            {"name": "AcmeSales", "base_uri": "http://acme.example/#", "base_uri_auto": False}
+        )
+        assert domain.ontology["base_uri"] == "http://acme.example/#"
+        assert domain.ontology["base_uri_auto"] is False
+
+    def test_empty_custom_base_uri_falls_back_to_generated(self):
+        """A blank custom URI is never stored — it regenerates from the name."""
+        domain = _mock_domain()
+        Domain(domain).save_domain_info(
+            {"name": "AcmeSales", "base_uri": "", "base_uri_auto": False}
+        )
+        assert domain.ontology["base_uri"].endswith("/AcmeSales#")
+
     def test_save_review_quorum(self):
         domain = _mock_domain()
         result = Domain(domain).save_domain_info({"review_quorum": 3})
@@ -175,3 +200,75 @@ class TestAuditTrail:
         domain.uc_domain_folder = ""
         with pytest.raises(ValidationError):
             Domain(domain).audit_trail_result(self._svc([], []))
+
+
+class TestGetVersionStatusAuthoritative:
+    """The lifecycle status is sourced from the registry, not the stale
+    in-session snapshot, so an out-of-band publish/reopen is reflected
+    without requiring a reload."""
+
+    def _svc(self, live_status, versions=("1",)):
+        svc = MagicMock()
+        svc.cfg.is_configured = True
+        svc.list_versions_sorted.return_value = list(versions)
+        svc.find_mcp_version.return_value = (None, {})
+        svc.get_version_status.return_value = live_status
+        return svc
+
+    def test_self_heals_session_from_registry(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        domain.info["status"] = "DRAFT"  # stale snapshot
+        d = Domain(domain)
+        d.build_registry_service = MagicMock(
+            return_value=self._svc("PUBLISHED")
+        )
+        result = d.get_version_status(refresh=True)
+        assert result["status"] == "PUBLISHED"
+        assert domain.info["status"] == "PUBLISHED"
+        domain.save.assert_called()
+
+    def test_keeps_session_status_when_registry_silent(self):
+        domain = _mock_domain()
+        domain.uc_domain_folder = "test_domain"
+        domain.info["status"] = "IN-REVIEW"
+        d = Domain(domain)
+        d.build_registry_service = MagicMock(return_value=self._svc(None))
+        result = d.get_version_status(refresh=True)
+        assert result["status"] == "IN-REVIEW"
+
+
+class TestSaveDomainToUcLifecycleLock:
+    """``save_domain_to_uc`` must refuse to overwrite a version that is no
+    longer a DRAFT — the server-side mirror of the UI read-only gate."""
+
+    def _svc(self, live_status):
+        svc = MagicMock()
+        svc.cfg.is_configured = True
+        svc.get_version_status.return_value = live_status
+        svc.write_version.return_value = (True, "")
+        return svc
+
+    def test_rejects_overwrite_of_published(self):
+        domain = _mock_domain()
+        domain.export_for_save = MagicMock(return_value={"info": {}})
+        with pytest.raises(ConflictError):
+            Domain(domain).save_domain_to_uc(self._svc("PUBLISHED"))
+
+    def test_rejects_overwrite_of_in_review(self):
+        domain = _mock_domain()
+        domain.export_for_save = MagicMock(return_value={"info": {}})
+        with pytest.raises(ConflictError):
+            Domain(domain).save_domain_to_uc(self._svc("IN-REVIEW"))
+
+    def test_allows_overwrite_of_draft(self):
+        domain = _mock_domain()
+        domain.export_for_save = MagicMock(return_value={"info": {}})
+        domain.clear_change_flags = MagicMock()
+        domain.settings = {
+            "registry": {"catalog": "c", "schema": "s", "volume": "v"}
+        }
+        svc = self._svc("DRAFT")
+        result = Domain(domain).save_domain_to_uc(svc)
+        assert result["success"] is True
+        svc.write_version.assert_called_once()

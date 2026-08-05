@@ -23,6 +23,18 @@
             <button class="btn btn-sm btn-outline-secondary" id="mapAutoAssignIcons" title="Auto-map icons based on entity names">
                 <i class="bi bi-emoji-smile"></i>
             </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-sm btn-outline-secondary active" id="mapToggleInheritance" title="Show/hide inheritance links" aria-pressed="true">
+                <i class="bi bi-diagram-3"></i>
+            </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-sm btn-outline-secondary" id="mapSearchBtn" title="Search entity">
+                <i class="bi bi-search"></i>
+            </button>
+            <div class="vr mx-1"></div>
+            <button class="btn btn-sm btn-outline-primary" id="mapDiscuss" title="Open the ontology discussion (optionally tag an entity/relationship)">
+                <i class="bi bi-chat-dots"></i>
+            </button>
         </div>
 </div>
 <div class="card border-0 shadow-sm h-100">
@@ -69,6 +81,22 @@
                 <path d="M18 2 l.4-1.2.4 1.2 1.2.4-1.2.4-.4 1.2-.4-1.2-1.2-.4Z" fill="#fff" opacity=".6"/>
             </svg>
         </button>
+        <!-- Entity Search Popup -->
+        <div id="mapSearchPopup" class="map-search-popup map-search-popup--hidden">
+            <div class="map-search-popup-header">
+                <span><i class="bi bi-search me-1"></i>Find Entity</span>
+                <button type="button" class="btn-close btn-close-sm" id="mapSearchClose" title="Close"></button>
+            </div>
+            <div class="map-search-popup-body">
+                <select id="mapSearchSelect" class="form-select form-select-sm">
+                    <option value="" disabled selected>Select an entity…</option>
+                </select>
+                <button class="btn btn-sm btn-primary w-100 mt-2" id="mapSearchGo">
+                    <i class="bi bi-search me-1"></i>Focus
+                </button>
+            </div>
+        </div>
+
         <!-- Floating AI Assistant Popup -->
         <div id="assistantPopup" class="assistant-popup">
             <div class="assistant-popup-header">

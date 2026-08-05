@@ -1,9 +1,9 @@
 /**
  * OntoBricks – query-graphql.js
  *
- * Manages the embedded GraphiQL playground inside the Digital Twin
+ * Manages the embedded GraphiQL playground inside the Knowledge Graph
  * "GraphQL" sidebar section.  Relies on the same readiness gating
- * (sync-requires-ready) as the Triples and Knowledge Graph sections.
+ * (sync-requires-ready) as the Triples and Graph Viewer sections.
  */
 
 /* global React, ReactDOM, GraphiQL */

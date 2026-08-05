@@ -11,11 +11,17 @@
 
 CONFIG := scripts/deploy.config.sh
 
-.PHONY: help install test test-cov run dev prod setup format lint clean \
+.PHONY: help install test test-cov scenario-campaign run dev prod setup format lint clean \
         deploy deploy-dry-run deploy-volume deploy-no-run \
         bootstrap-perms bootstrap-lakebase \
         bundle-validate bundle-summary deploy-check \
         render-app-yaml
+
+# Output dir for the live scenario campaign reports (JUnit + HTML).
+SCENARIO_ARTIFACTS := artifacts/scenarios
+# Target app for the campaign; override to hit a deployed instance:
+#   make scenario-campaign ONTOBRICKS_LIVE_BASE=https://<app-url>
+ONTOBRICKS_LIVE_BASE ?= http://localhost:8000
 
 help:
 	@echo "OntoBricks (FastAPI) - Available commands:"
@@ -27,8 +33,12 @@ help:
 	@echo "    make setup        - Complete setup (install + configure)"
 	@echo ""
 	@echo "  Testing:"
-	@echo "    make test         - Run tests"
-	@echo "    make test-cov     - Run tests with coverage"
+	@echo "    make test              - Run tests"
+	@echo "    make test-cov          - Run tests with coverage"
+	@echo "    make scenario-campaign - Run the live E2E scenario campaign (opt-in, billable)"
+	@echo "                             → JUnit + HTML reports in $(SCENARIO_ARTIFACTS)/"
+	@echo "                             App must be running (make dev); override target with"
+	@echo "                             ONTOBRICKS_LIVE_BASE=<url>"
 	@echo ""
 	@echo "  Code Quality:"
 	@echo "    make format       - Format code with black"
@@ -53,7 +63,7 @@ help:
 install:
 	@echo "Installing dependencies..."
 	uv venv
-	uv sync --extra lakebase --extra pitfalls
+	uv sync --frozen --extra lakebase --extra pitfalls
 
 setup:
 	@echo "Running setup..."
@@ -72,6 +82,32 @@ test-cov:
 	@echo "Running tests with coverage..."
 	. .venv/bin/activate && pytest --cov=src --cov-report=html --cov-report=term
 
+# ── Integration test campaign (live, opt-in scenario suites) ─────────────
+# Runs every `scenario`-marked suite under tests/e2e/scenarios/ end-to-end,
+# in filename order (test_scenario_1 → 2 → 3 → … → test_scenario_validation),
+# against a RUNNING app and writes machine + human reports to
+# $(SCENARIO_ARTIFACTS)/ (campaign.xml for CI, campaign.html to open).
+#
+# These are billable (warehouse + LLM) and mutate the registry the app reads,
+# so they stay opt-in: this target sets ONTOBRICKS_SCENARIO_LIVE=1 for you.
+# Point at another instance with `ONTOBRICKS_LIVE_BASE=<url>`. Preflight the
+# app health before spending money.
+scenario-campaign:
+	@echo "Scenario campaign → $(ONTOBRICKS_LIVE_BASE)"
+	@curl -sf "$(ONTOBRICKS_LIVE_BASE)/health" >/dev/null 2>&1 \
+	  || curl -sf "$(ONTOBRICKS_LIVE_BASE)/healthz" >/dev/null 2>&1 \
+	  || { echo "ERROR: no app reachable at $(ONTOBRICKS_LIVE_BASE) — start it (make dev) or set ONTOBRICKS_LIVE_BASE"; exit 1; }
+	@mkdir -p $(SCENARIO_ARTIFACTS)
+	@echo "Running live scenarios (JUnit + HTML → $(SCENARIO_ARTIFACTS)/)..."
+	. .venv/bin/activate && \
+	  ONTOBRICKS_SCENARIO_LIVE=1 ONTOBRICKS_SCENARIO_CHAIN=1 \
+	  ONTOBRICKS_LIVE_BASE="$(ONTOBRICKS_LIVE_BASE)" \
+	  pytest tests/e2e/scenarios -m scenario -v -s --no-cov -p no:randomly \
+	    --junitxml=$(SCENARIO_ARTIFACTS)/campaign.xml \
+	    --html=$(SCENARIO_ARTIFACTS)/campaign.html --self-contained-html
+	@echo "Reports: $(SCENARIO_ARTIFACTS)/campaign.html  (JUnit: $(SCENARIO_ARTIFACTS)/campaign.xml)"
+	@echo "         $(SCENARIO_ARTIFACTS)/campaign_report.md  (validation summary, if it ran)"
+
 format:
 	@echo "Formatting code..."
 	. .venv/bin/activate && black src/ tests/
@@ -86,6 +122,7 @@ clean:
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache htmlcov .coverage
+	rm -rf $(SCENARIO_ARTIFACTS) artifacts
 	rm -rf flask_session fastapi_session
 	@echo "Clean complete!"
 
@@ -107,19 +144,19 @@ prod:
 
 deploy:
 	chmod +x scripts/deploy.sh
-	scripts/deploy.sh
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh
 
 deploy-dry-run:
 	chmod +x scripts/deploy.sh
-	scripts/deploy.sh --dry-run
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh --dry-run
 
 deploy-volume:
 	chmod +x scripts/deploy.sh
-	scripts/deploy.sh -t dev
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh -t dev
 
 deploy-no-run:
 	chmod +x scripts/deploy.sh
-	scripts/deploy.sh --no-run
+	unset APP_NAME MCP_APP_NAME REGISTRY_SCHEMA LAKEBASE_REGISTRY_SCHEMA LAKEBASE_REGISTRY_DATABASE APP_LAKEBASE_SCHEMA APP_LAKEBASE_DATABASE; scripts/deploy.sh --no-run
 
 render-app-yaml:
 	@echo "Rendering app.yaml from app.yaml.template + $(CONFIG)..."

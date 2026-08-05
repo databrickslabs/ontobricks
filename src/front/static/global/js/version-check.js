@@ -2,18 +2,24 @@
 // VERSION STATUS CHECK
 //
 // On every page load we ask the backend for the loaded version's
-// lifecycle status. Editing is allowed only while the status is DRAFT —
-// regardless of whether the loaded version is the latest one. An older
-// DRAFT version is fully editable; an IN-REVIEW / PUBLISHED version is
-// read-only. When the version is not editable we:
+// lifecycle status. Design editing is allowed only while the status is
+// DRAFT — regardless of whether the loaded version is the latest one.
+// An older DRAFT version is fully editable; an IN-REVIEW / PUBLISHED
+// version is read-only for design changes. When the version is not
+// editable we:
 //   1. annotate the navbar role pill (rendered by ``permissions.js``)
 //      with a "read-only" note via ``window.OB.annotateRoleNavBadge``,
-//   2. add ``read-only-version`` (+ ``read-only-status``) to <body> —
-//      every gate in permissions.css (form fields, write buttons,
-//      OntoViz controls, …) keys off ``:is(.read-only-version,
-//      .role-viewer)``, so we no longer need a per-button JS sweep,
+//   2. add ``read-only-version`` to <body> — every design-editing gate
+//      in permissions.css (form fields, write buttons, OntoViz
+//      controls, …) keys off ``:is(.read-only-version, .role-viewer)``,
+//      so we no longer need a per-button JS sweep,
 //   3. install the shared capture-phase contextmenu blocker for
 //      D3/Canvas design surfaces (defined once in ``permissions.js``).
+//
+// KG Build/sync and reasoning materialise are data-refresh ops (they
+// re-materialise triples using the frozen design) and are NOT gated on
+// the lifecycle status — they remain usable on PUBLISHED / IN-REVIEW
+// versions, still guarded by the builder role.
 //
 // Domain-role gating (viewer vs editor vs builder) is also done
 // declaratively now — viewers get ``body.role-viewer`` from
@@ -71,11 +77,9 @@ async function checkVersionStatus() {
             renderVersionStatusBadges(window.versionStatus);
 
             if (!editable) {
-                // ``read-only-status`` blocks status-specific surfaces (e.g.
-                // the Digital-Twin build button); ``read-only-version`` is the
-                // generic gate every selector in permissions.css / ontoviz.css
-                // keys off, disabling all write surfaces with no duplication.
-                document.body.classList.add('read-only-status');
+                // ``read-only-version`` is the generic gate every selector
+                // in permissions.css / ontoviz.css keys off, disabling all
+                // design-editing surfaces with no duplication.
                 document.body.classList.add('read-only-version');
                 if (window.OB && typeof window.OB.annotateRoleNavBadge === 'function') {
                     window.OB.annotateRoleNavBadge(

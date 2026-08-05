@@ -1,0 +1,729 @@
+## Analytics — refactor pass + full verification
+
+Context: Post-change cleanup of this session's analytics work, plus a full test
+run, docs sweep, and deployment/SQL verification (no behaviour change).
+
+Changes:
+
+1. src/back/objects/digitaltwin/DigitalTwin.py
+   - Extract Function: new `DigitalTwin._analytics_run_entry(...)` builds a
+     `graph_analytics_runs` history row in one place; `run_metrics_task` success
+     and failure paths now call it instead of duplicating the dict literal.
+2. docs/get-started.md
+   - Documented `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` (new env var table row +
+     `.env` example).
+
+Deployment / SQL verification (no code change):
+- `scripts/deploy.sh` runs `scripts/bootstrap-lakebase-perms.sh` on every
+  Lakebase-target deploy; its inline migration block now creates
+  `graph_analytics` and `graph_analytics_runs` (idempotent, ON_ERROR_STOP),
+  and the subsequent GRANT step covers ALL TABLES + ALL SEQUENCES (so the app
+  SP can INSERT into the bigserial-keyed run-history table). `schema.sql` and
+  `scripts/upgrade_lakebase_0.6_add_graph_analytics.sql` carry the same DDL.
+- `make bundle-validate` → OK (only pre-existing benign sync.exclude warnings).
+- `uv.lock` verified deploy-safe (restored to public CDN; 0 proxy URLs).
+
+Modified files:
+- src/back/objects/digitaltwin/DigitalTwin.py
+- docs/get-started.md
+
+Tests: full `uv run pytest -q -m "not scenario"` → 3021 passed, 58 failed,
+17 skipped. The 58 are the pre-existing full-suite event-loop/test-isolation
+flakes (test_comment_endpoints / test_review_endpoints /
+test_set_version_status_endpoint / test_domain_current_user_endpoint) —
+confirmed unrelated: they pass when run in isolation.
+
+
+## Analytics — warn up-front when the graph exceeds the triple limit
+
+Context: On a large store, Run Analysis failed only after the background task
+loaded everything: "Triple count (7641879) exceeds max_triples (500000)". The
+500k limit was a hardcoded default (`MetricsRequest.max_triples`, read by the
+compute endpoints as `data.get("max_triples", 500_000)`, enforced in
+`GraphBuilder._load_triples`). Two problems: (1) the triple count is already
+known via `/dtwin/sync/stats`, so the user should be warned *before* running;
+(2) the error advised "use a predicate or class filter", but the guard runs on
+the FULL load — filters are applied later in `_build_graph` and do not reduce
+what is read, so they never lift the limit.
+
+Fix:
+- Made the limit a configurable setting `analytics_max_triples`
+  (env `ONTOBRICKS_ANALYTICS_MAX_TRIPLES`, default 500_000); both compute
+  endpoints now default to it.
+- `/dtwin/sync/stats` returns `analytics_max_triples`; the Analytics page reads
+  it alongside `total_triples` and, when over the limit, shows a red banner and
+  disables Run Analysis up-front (with a backstop check on click).
+- The async compute endpoint fails fast (clear `ValidationError`) when the known
+  triple count already exceeds the limit, instead of spawning a doomed task.
+- Corrected the `GraphBuilder._load_triples` message (and added a code comment)
+  to advise reducing the synced graph or raising the limit — not filtering.
+
+Changes:
+
+1. src/shared/config/settings.py
+   New `analytics_max_triples` setting (env `ONTOBRICKS_ANALYTICS_MAX_TRIPLES`).
+2. src/api/routers/internal/dtwin.py
+   Both `max_triples` defaults now use `settings.analytics_max_triples`;
+   `/metrics/compute` pre-checks `get_aggregate_stats().total` and raises a
+   clear `ValidationError` when over the limit; `/sync/stats` returns
+   `analytics_max_triples`.
+3. src/back/core/graph_analysis/GraphBuilder.py
+   Accurate over-limit message + clarifying comment (filters don't reduce the
+   load).
+4. src/front/templates/partials/dtwin/_query_analytics.html
+   `_loadEntityTypes()` captures `total_triples` / `analytics_max_triples`,
+   shows `_showOverLimitBanner()` and disables Run Analysis when over the limit;
+   `analyticsCompute()` backstop blocks a doomed run.
+5. docs/user-guide.md
+   Documented the graph-size limit and the up-front warning.
+
+Modified files:
+- src/shared/config/settings.py
+- src/api/routers/internal/dtwin.py
+- src/back/core/graph_analysis/GraphBuilder.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- docs/user-guide.md
+
+Tests: `uv run pytest -q -m "not scenario" tests/units/core/test_graph_metrics.py
+tests/units/core/test_community_detector.py tests/units/dtwin/test_digitaltwin_api.py`
+→ 89 passed.
+
+
+## Analytics — always render the last run in the result tabs on open
+
+Context: Opening the Analytics section should immediately populate the result
+tabs (PageRank, Betweenness, Degree, Closeness, Clustering, Data Model Health)
+with the last stored analysis. `analyticsResume()` checked for an in-flight
+`graph_analytics` task *first* and only rendered the stored result in the `else`
+branch — so a running (or stale/leftover) background task delayed or blocked the
+last run from showing in the tabs.
+
+Fix: `analyticsResume()` now calls `analyticsLoadLatest()` unconditionally first
+(so the tabs are populated right away from the `graph_analytics` cache),
+then checks for a running task and, if present, re-shows the spinner and resumes
+waiting — the last result stays visible underneath until the new one lands.
+`analyticsLoadLatest()` shows the spinner (with a "Loading the last analysis…"
+message) while it fetches/renders the stored result.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_analytics.html
+   - `analyticsResume()` reordered: render last stored run first, resume any
+     in-flight task afterwards.
+   - `analyticsLoadLatest()` toggles `#analyticsSpinner` (temporary "Loading the
+     last analysis…" message) around the fetch/render.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_analytics.html
+
+Tests: not run — frontend-only change (no Python touched); no unit tests cover
+this inline template script.
+
+
+## Analytics — add a "History" tab listing every analysis run
+
+Context: With analytics now persisting only the LAST result per
+`(domain, version)`, there was no way to see how many analyses had been run, when,
+with what scope, or whether any failed. Requested a new tab (after AI Insights)
+that lists all analyses ran (history).
+
+Design: added an append-only `graph_analytics_runs` trace (one immutable,
+lightweight row per launch — success or failure) alongside the existing
+`graph_analytics` cache. The cache still backs the result tabs and the cockpit;
+the new trace backs the History tab only. Capped server-side at 100 rows per
+`(domain, version)` (oldest pruned on insert) to stay bounded. Mirrors the
+`build_runs` store conventions (lazy `_ensure_*` self-heal DDL, best-effort
+writes, `_KNOWN_TABLES`).
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   New `graph_analytics_runs` table DDL + `(domain_id, version, computed_at DESC)`
+   index.
+2. scripts/upgrade_lakebase_0.6_add_graph_analytics.sql,
+   scripts/bootstrap-lakebase-perms.sh
+   Added the `graph_analytics_runs` table (+ index) to the migration and the
+   deploy-time inline migrations block.
+3. src/back/objects/registry/store/base.py
+   New `GraphAnalyticsRun` TypedDict + default-no-op `record_graph_analytics_run`
+   / empty-list `load_graph_analytics_runs` on the `RegistryStore` ABC.
+4. src/back/objects/registry/store/lakebase/store.py
+   `_graph_analytics_runs_ready` guard, `_ensure_graph_analytics_runs_table`,
+   `record_graph_analytics_run` (INSERT … SELECT from domains + cap prune),
+   `load_graph_analytics_runs`, `_graph_analytics_run_row_to_entry`; added
+   `graph_analytics_runs` to `_KNOWN_TABLES`.
+5. src/back/objects/registry/RegistryService.py
+   `record_graph_analytics_run` / `load_graph_analytics_runs` delegation
+   (best-effort).
+6. src/back/objects/digitaltwin/DigitalTwin.py
+   `run_metrics_task` now records a history row on success AND on failure (the
+   failed-run row is best-effort and leaves the last good cached result intact).
+7. src/api/routers/internal/dtwin.py
+   New `GET /dtwin/metrics/history` returns the newest-first run list.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   New "History" tab + pane (table: When / Scope / Status / Nodes / Edges /
+   Components / Avg Degree / Density / Duration); `analyticsLoadHistory()` fetches
+   `/dtwin/metrics/history` and renders rows (failed runs shown with an error
+   tooltip); `_renderAnalyticsData()` refreshes the tab whenever a result renders.
+9. tests/units/registry/test_registry_store.py
+   In-memory `record/load_graph_analytics_runs` + empty / newest-first / limit /
+   version-scoping tests.
+10. docs/architecture.md, docs/user-guide.md
+    Documented the `graph_analytics_runs` table and the History tab.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- scripts/upgrade_lakebase_0.6_add_graph_analytics.sql
+- scripts/bootstrap-lakebase-perms.sh
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- tests/units/registry/test_registry_store.py
+- docs/architecture.md
+- docs/user-guide.md
+
+Tests: `uv run pytest -q -m "not scenario" tests/units/registry
+tests/units/core/test_graph_metrics.py` → 300 passed.
+
+
+## Analytics — resume the running spinner when returning to the page
+
+Context: With the analysis now running in a background TaskManager task, leaving
+the Analytics page (to Ontology or another section/page) and coming back while a
+computation was still running showed no progress indicator — the spinner state
+lived only in the `analyticsCompute()` call that started it. Users had no signal
+the analysis was still in flight.
+
+Fix: on section open, query the global task list for an in-flight
+`graph_analytics` task; if one exists, re-show the spinner, disable the button,
+and resume waiting (`waitForTask`) before loading the stored result. Otherwise
+just render the last stored result as before.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_analytics.html
+   - New `_setAnalysisBusy()` (single spinner/button toggle), `_findRunningAnalyticsTask()`
+     (scans `GET /tasks/?include_completed=false` for a running/pending
+     `graph_analytics` task), `_waitAndLoad()`, and `analyticsResume()`.
+   - `analyticsLoadTypes()` now calls `analyticsResume()` instead of
+     `analyticsLoadLatest()` directly, so a re-opened page rejoins an in-progress
+     run.
+   - `analyticsCompute()` refactored to use `_setAnalysisBusy()`.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_analytics.html
+
+Tests: not run — frontend-only change (no Python touched); no unit tests cover
+this inline template script.
+
+
+## Analytics — enable "Run Analysis" immediately when a graph is configured
+
+Context: On first opening the KG → Analytics section, the **Run Analysis**
+button stayed disabled for a few seconds even though the graph existed. The
+button was only re-enabled after the `/dtwin/sync/stats` round-trip (which loads
+the optional entity-type filter) completed, so the network latency of that call
+was perceived as the button "taking a while to check" whether a graph exists.
+
+Fix: a configured `window.__TRIPLESTORE_CONFIG.graph_name` already tells us a
+graph exists, so enable the button (and hide the no-graph banner) immediately in
+`_loadEntityTypes()` before awaiting `/dtwin/sync/stats`. The stats call now only
+enriches the entity-type dropdown; if it reports no built graph (`success:false`)
+the button is re-disabled as before.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_analytics.html
+   `_loadEntityTypes()` — optimistically `_setComputeBtnState(true)` +
+   `_showNoGraphBanner(false)` as soon as `graph_name` is present, before the
+   stats fetch, so the button is no longer gated on that round-trip.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_analytics.html
+
+Tests: not run — single frontend-only change (no Python touched); no unit tests
+cover this inline template script.
+
+
+## Async Graph Analytics — background compute + persisted last result
+
+Context: The Knowledge Graph Analytics computation (NetworkX centrality /
+structure) ran synchronously, blocking the browser until it finished, and the
+Domain Validation cockpit even re-ran a full compute on every page load. On
+large graphs this is slow and wasteful. Made the analysis asynchronous (a
+background `TaskManager` task), persisted **only the last** result per
+`(domain, version)` in a new Lakebase `graph_analytics` cache, and switched the
+Analytics page and the cockpit to render from that stored result.
+
+Key design decisions:
+- One row per `(domain_id, version)`, UPSERTed on every successful recompute —
+  literally "only the last one persists". The full `compute_graph_metrics`
+  payload is stored in a `result` JSONB column so the page tabs and the AI
+  Interpret agent rebuild everything from storage; `stats` / `top_pagerank` are
+  denormalised for the cheap cockpit summary read.
+- Reused the existing KG-build async convention: `POST /dtwin/metrics/compute`
+  now returns a `task_id`, the frontend polls `/tasks/{id}` via the global
+  `waitForTask()` then reads `/dtwin/metrics/latest`. Mirrored the `build_runs`
+  store pattern (lazy `_ensure_*` self-heal DDL, best-effort writes).
+- Failures leave the previous good cached row intact (the error surfaces via the
+  global task tracker, not the cache).
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   New `graph_analytics` table DDL (PK `(domain_id, version)`).
+2. scripts/upgrade_lakebase_0.6_add_graph_analytics.sql (new)
+   Idempotent migration for registries provisioned before the table existed;
+   also added to the `bootstrap-lakebase-perms.sh` inline migrations block.
+3. src/back/objects/registry/store/lakebase/store.py
+   `_graph_analytics_ready` guard, `_ensure_graph_analytics_table`,
+   `save_graph_analytics` (INSERT … ON CONFLICT DO UPDATE), `load_graph_analytics`,
+   `_graph_analytics_row_to_entry`; added `graph_analytics` to `_KNOWN_TABLES`.
+4. src/back/objects/registry/store/base.py
+   New `GraphAnalyticsResult` TypedDict + default-no-op `save/load_graph_analytics`
+   on the `RegistryStore` ABC.
+5. src/back/objects/registry/RegistryService.py
+   `save_graph_analytics` / `load_graph_analytics` delegation (best-effort).
+6. src/back/objects/digitaltwin/DigitalTwin.py
+   New `run_metrics_task`: compute in a worker thread, UPSERT the result on
+   success (via `RegistryService.from_context`), `fail_task` on error.
+7. src/api/routers/internal/dtwin.py
+   `/metrics/compute` now starts a background task and returns `task_id`; new
+   `GET /metrics/latest` reads the cached row; `GET /metrics/summary` reads the
+   cache instead of recomputing; shared `_load_stored_metrics` helper.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   Extracted `_renderAnalyticsData`; new `analyticsLoadLatest` (hydrates from the
+   cache on section open and after a run, restores the entity-type filter, shows a
+   "Last computed …" line); `analyticsCompute` now starts the task, waits via
+   `waitForTask`, then reloads from storage.
+9. src/front/static/global/js/task-tracker.js
+   Registered `graph_analytics` → `/dtwin#analytics` in `TASK_TYPE_URLS`.
+10. src/front/static/domain/js/domain-validation.js + _domain_validation.html
+   Cockpit "Graph Structure" card handles `has_result:false` with a
+   "Run Analysis in KG → Analytics" prompt instead of a blocking recompute.
+11. tests/units/registry/test_registry_store.py
+   In-memory `save/load_graph_analytics` + round-trip / UPSERT / version-scoping
+   / missing-row tests.
+12. tests/e2e/scenarios/test_scenario_3_rules_analysis.py
+   Updated the (opt-in) analysis step to the async flow (compute → poll task →
+   read `/metrics/latest`).
+13. docs/architecture.md, docs/user-guide.md
+   Documented the `graph_analytics` table and the async / persisted-last-result
+   behaviour.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- scripts/upgrade_lakebase_0.6_add_graph_analytics.sql (new)
+- scripts/bootstrap-lakebase-perms.sh
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/static/global/js/task-tracker.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/templates/partials/domain/_domain_validation.html
+- tests/units/registry/test_registry_store.py
+- tests/e2e/scenarios/test_scenario_3_rules_analysis.py
+- docs/architecture.md
+- docs/user-guide.md
+
+Tests: `uv run pytest -q -m "not scenario"
+tests/units/registry/test_registry_store.py tests/units/core/test_graph_metrics.py`
+→ 92 passed. Full `uv run pytest -q -m "not scenario"` → 3017 passed, 58 failed,
+17 skipped. The 58 failures are the pre-existing full-suite event-loop/
+test-isolation flakes in the API/MCP suites — confirmed unrelated by stashing
+this work and re-running the full suite on the clean tree (identical 58 failures,
+3013 passed), and by the affected files passing in isolation/together.
+
+
+## Add scenario 3 — rules → data quality → reasoning → analysis → audit trail
+
+Context: New live, gated journey that runs **after scenarios 1 and 2** and
+reuses the durable ``test_scenario_1`` domain. It exercises the "governed
+enrichment" loop on top of a built knowledge graph: generate data-quality
+rules (SHACL) and business rules (SWRL / decision tables / SPARQL / aggregate),
+run the data-quality rules on the knowledge graph, run the business rules and
+materialise the inferred triples back into the graph, then run the graph
+Analysis, interpret it with the graph-interpreter agent, and record the
+interpreted result in the unified audit trail. Mapped each step to the real
+internal API and honoured the lifecycle constraints discovered while reading
+the code.
+
+Key design decisions:
+- Targets the highest **DRAFT** version (V2 after scenario 2), never the
+  PUBLISHED V1: comments/tasks — the surface the audit trail is written through
+  — are writable only in DRAFT/IN-REVIEW.
+- A freshly branched version (scenario 2's ``create-version``) carries the
+  ontology + mappings but has no graph data, so the scenario builds the KG once
+  (and skips the costly rebuild on re-runs by checking ``/dtwin/sync/status``).
+- Data-quality generation uses the deterministic
+  ``GET /ontology/dataquality/suggest`` + ``accept-suggestions`` (no LLM);
+  business-rule generation uses the async ``agent_business_rules_generator``.
+- Data-quality runs against ``backend=graph``; reasoning enables every phase
+  (tbox/swrl/graph/decision_tables/sparql_rules/aggregate_rules), then
+  ``/dtwin/reasoning/materialize`` writes the inferred triples to the graph.
+- Analysis = ``/dtwin/metrics/compute`` then ``/dtwin/metrics/interpret``.
+- "Add the result to the audit trail": a plain comment is *not* recorded in the
+  review audit log, but a task that anchors a comment appends a ``commented``
+  row — so the scenario posts the full write-up as a comment, creates a task
+  referencing it, and asserts the event surfaces in ``/domain/audit-trail``.
+
+Changes:
+
+1. tests/e2e/scenarios/test_scenario_3_rules_analysis.py (new)
+   New scenario ``TestScenario3RulesAnalysis``. Gated by
+   ``ONTOBRICKS_SCENARIO_LIVE=1`` + the ``scenario`` marker (auto-applied by
+   the scenarios conftest). Skips with guidance when the domain is absent or has
+   no DRAFT version (run scenarios 1 & 2 first). Idempotent: reuses an existing
+   KG, only accepts new rule suggestions, and tolerates a run that infers
+   nothing (materialise step becomes a no-op). Env-tunable timeouts for build /
+   rule-gen / data-quality / reasoning / analysis.
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_3_rules_analysis.py (new)
+
+Tests: `uv run pytest -q -m "not scenario"` → 3003 passed, 58 failed, 17
+skipped, 4 deselected in 271s. The new scenario is `scenario`-marked, so it is
+deselected from the routine run; it collects cleanly (`--collect-only` → 1 item)
+and the gate skips it without the env var (`1 skipped`). The 58 failures are the
+pre-existing full-suite event-loop/test-isolation flakes in the API/MCP suites
+(`RuntimeError: Runner.run() cannot be called from a running event loop`) —
+confirmed unrelated by re-running the affected files in isolation/together
+(e.g. `test_review_endpoints.py` + `test_comment_endpoints.py` → 16/16 passed).
+The live journey itself was not executed (requires a running app + SQL
+warehouse + LLM serving endpoint + scenarios 1 & 2 having run); run it with
+`ONTOBRICKS_SCENARIO_LIVE=1 uv run pytest
+tests/e2e/scenarios/test_scenario_3_rules_analysis.py -m scenario -v -s --no-cov`.
+
+
+## Mapping Diagnostics — exclude relationships of excluded entities + row counts
+
+Context: In Mapping Diagnostics a relationship pointing at an excluded entity
+(e.g. `has: Meter → MeterReading` when `MeterReading` is excluded) was wrongly
+reported as an "target entity not found" error. The relationship should follow
+the entity and be treated as excluded too. Also added per-item row counts:
+each Entity and Relationship now shows the number of rows returned by its source
+query so users can spot empty/large sources at a glance.
+
+Changes:
+
+1. src/back/objects/mapping/Mapping.py
+   - `run_diagnostics`: drop relationships whose source/target resolves to an
+     excluded entity (new `_references_excluded_entity` helper), so they no
+     longer surface as errors. Genuinely missing (non-excluded) entities still
+     error as before.
+   - Extracted `_index_entities_by_alias` from `_build_entity_lookup` so the
+     same alias index can be built for excluded entities (Extract Method).
+   - Replaced `_check_query_has_data` with `_probe_query_rows`, a single
+     `COUNT(*)` round-trip returning both the data-presence check and the row
+     count (no extra query). Entity/relationship results now carry `row_count`.
+2. src/front/static/mapping/js/mapping-diagnostics.js
+   - New `_countBadge` helper; render the row-count badge in entity and
+     relationship headers.
+3. src/front/static/mapping/css/mapping-diagnostics.css
+   - Styles for `.diag-count-badge` (and `.diag-count-empty` for zero rows).
+4. tests/units/mapping/test_mapping_service.py
+   - New `TestProbeQueryRows`, `TestRunDiagnosticsExcludedEntityRelationships`,
+     and `TestRunDiagnosticsRowCounts`.
+
+Modified files:
+- src/back/objects/mapping/Mapping.py
+- src/front/static/mapping/js/mapping-diagnostics.js
+- src/front/static/mapping/css/mapping-diagnostics.css
+- tests/units/mapping/test_mapping_service.py
+
+Tests: `uv run pytest -q tests/units/mapping/test_mapping_service.py` → 51 passed.
+Full `uv run pytest -q -m "not scenario"` → 3013 passed, 58 failed (the same
+pre-existing full-suite event-loop/test-isolation flakes documented above;
+confirmed unrelated — the affected API files pass in isolation and alongside the
+mapping tests, 64/64).
+
+
+## Document `uv.lock` deploy guardrails in rules + deploy skill
+
+Context: The Databricks Apps deploy runs `uv run --frozen` and installs verbatim
+from `uv.lock`. Two recurring failure modes have broken deploys before: (1) the
+lock's wheel URLs getting rewritten from the public CDN
+(`files.pythonhosted.org`) to the internal proxy
+(`pypi-proxy.dev.databricks.com`, which cold-caches fresh wheels and times out),
+and (2) the lock drifting out of sync with `pyproject.toml`. The dev shell
+defaults `UV_INDEX_URL`/`PIP_INDEX_URL` to the proxy, so any bare `uv lock` /
+`uv sync` silently churns the lock to proxy URLs. Verified the current lock is
+clean (3653 URLs, all `files.pythonhosted.org`, zero proxy; `uv lock --check`
+against the public index → exit 0) and captured the checks/rules so the issue
+can't recur.
+
+Changes:
+
+1. .cursor/09-package-management.mdc
+   New "`uv.lock` is deployment-critical — DO NOT let it churn" section: the two
+   failure modes, the day-to-day `--frozen` rule, the public-index re-lock
+   command, the read-only pre-deploy verification commands (URL host check +
+   `UV_INDEX_URL=https://pypi.org/simple uv lock --check`), and the
+   `git checkout -- uv.lock` recovery for accidental churn.
+2. .claude/skills/deploy/SKILL.md
+   Added pre-flight step 5 (verify lock is on the public CDN and in sync via the
+   public index) and two new "Don't" entries (no bare `uv lock`/`uv sync`; never
+   commit proxy URLs).
+3. .cursor/08-testing-and-deployment.mdc
+   Cross-referenced the new lockfile section from the Deployment bullet.
+
+Modified files:
+- .cursor/09-package-management.mdc
+- .claude/skills/deploy/SKILL.md
+- .cursor/08-testing-and-deployment.mdc
+
+Tests: not run — documentation/rules only, no Python touched. Verified the
+documented commands against the live lock: `rg -c 'pypi-proxy\.dev\.databricks\.com' uv.lock`
+→ no matches; `rg -o 'url = "https?://[^/"]+' uv.lock | sort -u` → only
+`https://files.pythonhosted.org`; `UV_INDEX_URL=https://pypi.org/simple uv lock --check`
+→ exit 0 (in sync).
+
+
+## Wire 12-ai-feature-lifecycle.mdc into CLAUDE.md + .cursorrules
+
+Context: `.cursor/12-ai-feature-lifecycle.mdc` (the CNS §3.5 eval gate for AI/LLM
+agent features) existed but was orphaned — `.cursorrules` only listed rules 1–11
+and `CLAUDE.md` only `@`-imported 01–11, so neither Cursor's contract nor Claude
+Code's session context referenced it. Wired it in so the gate is actually
+leveraged by both entry points.
+
+Changes:
+
+1. .cursorrules
+   - Added rule 12 (`12-ai-feature-lifecycle.mdc`) to the modular-rules list.
+   - New "When working on an AI / LLM agent feature" workflow block: scopes the
+     trigger (`src/agents/**`, `src/back/core/agents/**`, `src/mcp-server/**`,
+     new MLflow-traced LLM call, MCP tool wrapping an agent) and points at the
+     gate + the `ai-feature` skill, restating the hard rules (SPEC.md entry
+     ticket, eval delta, mandatory tracing).
+2. CLAUDE.md
+   - Added `@./.cursor/12-ai-feature-lifecycle.mdc` to the imported canonical
+     rules so Claude Code inlines it.
+   - Added the `ai-feature` skill row to the auto-invoked Skills table (the
+     orchestrator for the rule-12 gate).
+
+Modified files:
+- .cursorrules
+- CLAUDE.md
+
+Tests: not run — documentation/rules only, no Python touched.
+
+
+## Preflight soft-dependency check (psql) in deploy.sh
+
+Context: `psql` (libpq) is only validated deep inside
+`bootstrap-lakebase-perms.sh` (step 11), so on a Lakebase-target deploy a
+missing client was discovered only AFTER the whole bundle had already been
+deployed and started. Surface optional tooling up front during preflight,
+warn with an actionable list, and prompt to continue.
+
+Changes:
+
+1. scripts/deploy.sh
+   - Step 1a: split tooling check into hard deps (databricks, python3 — still
+     abort) and a new soft-dep pass. `check_soft_cmd` collects every missing
+     optional tool into `_missing_soft`; `psql` is checked only when the run
+     will actually reach the Lakebase GRANT bootstrap (`$IS_LAKEBASE &&
+     $DO_BOOTSTRAP`).
+   - On any missing soft dep: warn, list each tool + install hint, then prompt
+     `Continue anyway? [y/N]` on a TTY (abort via `die` on no), or warn-and-
+     continue on a non-interactive shell so CI is never blocked.
+   - Updated the Prerequisites header comment to list python3 + psql.
+
+Modified files:
+- scripts/deploy.sh
+
+Tests: uv run pytest -q -m "not scenario" → 3021 passed, 58 failed, 17 skipped
+in 271.90s. All 58 failures are pre-existing API-endpoint unit tests
+(test_review_endpoints.py, test_domain_current_user_endpoint.py,
+test_set_version_status_endpoint.py) — unrelated to this bash-only change
+(no Python touched).
+
+
+## In-app registry permission grants (Initialize + Repair permissions button)
+
+Context: The Lakebase registry-schema GRANTs (CAN_USE on the project,
+USAGE/CREATE/DML on the schema, UC catalog ALL_PRIVILEGES) were only available
+via scripts/bootstrap-lakebase-perms.sh, which needs psql at deploy time. The
+app connects to Lakebase as its own service principal and OWNS the registry
+schema after Initialize, so it can run these GRANTs itself — exactly as the
+in-app graph-DB provisioner already does for the graph schema. Surfaced the
+same capability for the registry: Initialize now auto-applies the grants and a
+new "Repair permissions" button re-applies them idempotently. This removes the
+psql dependency for the everyday registry schema grants (control-plane CAN_USE/
+UC grants stay best-effort in-app, mirroring the bash script).
+
+Changes:
+
+1. src/back/core/databricks/lakebase_grants.py (new)
+   - Extracted the grant primitives into one reusable, TaskManager-free module:
+     resolve_app_service_principals, grant_can_use_on_project,
+     grant_schema_privileges, grant_uc_catalog. Each returns (granted, warnings);
+     control-plane grants are best-effort. Single source of truth for the GRANT
+     SQL/API previously inlined in the provisioner.
+2. src/back/core/graphdb/lakebase/provisioner.py
+   - Refactored _step_grant_can_use / _step_grant_schema / _step_grant_uc and
+     _resolve_service_principals to delegate to lakebase_grants (removed the
+     duplicated GRANT bodies and the now-unused _app_service_principal). Behaviour
+     unchanged — the graph-DB provision flow still applies the same grants.
+3. src/back/objects/registry/store/lakebase/store.py
+   - Added LakebaseRegistryStore.grant_app_permissions(app_names, uc_catalog):
+     in-app port of bootstrap-lakebase-perms.sh for the registry schema. Resolves
+     each app SP via the Apps API, grants CAN_USE on the project (best-effort),
+     USAGE/DML on the schema (the SP owns it), and UC ALL_PRIVILEGES when set.
+     Returns {success, granted, warnings, error, schema, apps}.
+4. src/back/objects/domain/SettingsService.py
+   - Added _registry_grant_app_names (running app + MCP app), the shared sync
+     core _grant_registry_permissions, and the async
+     grant_registry_permissions_result. Hooked _grant_registry_permissions into
+     initialize_registry_result so Initialize self-applies the grants and returns
+     them under a new "permissions" key (best-effort, never fatal to Initialize).
+5. src/api/routers/internal/settings.py
+   - New admin-only route POST /settings/registry/grant-permissions →
+     grant_registry_permissions_result. initialize_registry now runs via
+     run_blocking (the auto-grant does blocking I/O) and documents the new
+     permissions key.
+6. src/front/templates/partials/registry/_registry_configuration.html
+   - Added the admin-gated "Repair permissions" button (Lakebase Connection
+     panel), a "Permission Grants" results panel, the _renderGrantResult renderer
+     (exposed as window._obRenderRegistryGrants), and the button click handler.
+7. src/front/static/registry/js/registry.js
+   - Initialize handler now renders the returned permissions summary and warns
+     when any grant produced a warning.
+8. docs/deployment.md
+   - Documented the in-app alternative (no psql) in Step 5b and the Initialize /
+     Repair permissions behaviour in Step 8.
+9. docs/sphinx/api/app.core.databricks.rst
+   - Added the lakebase_grants automodule entry.
+
+Modified files:
+- src/back/core/databricks/lakebase_grants.py (new)
+- src/back/core/graphdb/lakebase/provisioner.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/registry/js/registry.js
+- docs/deployment.md
+- docs/sphinx/api/app.core.databricks.rst
+
+Tests: uv run pytest -q -m "not scenario" → 3021 passed, 58 failed, 17 skipped
+in 279.57s. Identical 58 pre-existing failures as the baseline above (same
+test files: test_review_endpoints.py, test_comment_endpoints.py,
+test_domain_current_user_endpoint.py, test_set_version_status_endpoint.py) —
+no regressions. tests/units/settings/ (incl. test_lakebase_provision.py, which
+covers the refactored provisioner grant steps) → 126 passed.
+
+
+## Domain edit-lock (single-editor, heartbeat TTL, admin take-over)
+
+Context: Concurrency control for DRAFT domain versions. Previously two users
+could open and edit the same (domain, version) at once, racing last-write-wins
+saves. This adds a single-editor lock: the first opener of a DRAFT version
+edits it; later openers land read-only with a banner naming the current
+editor. The lock lives in Lakebase (multi-replica safe) with a heartbeat +
+TTL auto-expiry (closed tab / crash self-heals in ~90s), and an app-admin can
+force "take over" a held lock. Server enforcement is authoritative
+(PermissionMiddleware); the UI re-uses the existing read-only CSS gating.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   - New table domain_edit_locks (domain_id, version, holder_email,
+     holder_name, holder_session, acquired_at, heartbeat_at; PK
+     (domain_id, version)) keyed by domain row with ON DELETE CASCADE.
+2. src/back/objects/registry/store/lakebase/store.py
+   - Added _EDIT_LOCK_TTL_S = 90 and "domain_edit_locks" to _KNOWN_TABLES.
+   - _ensure_domain_edit_locks_table() lazy self-heal (same ownership-safe
+     pattern as _ensure_collab_tables; guarded by _edit_locks_ready).
+   - Store methods with TTL semantics: acquire_edit_lock (atomic upsert —
+     wins when free / stale / self / force), heartbeat_edit_lock (refresh iff
+     still holder; held=False on take-over), release_edit_lock (holder-only),
+     force_release_edit_lock (admin, unconditional), get_edit_lock (+ computed
+     stale), and the _get_edit_lock_row / _edit_lock_row_to_dict helpers.
+3. src/back/objects/registry/EditLockService.py (new)
+   - Stateless orchestrator over the store methods. Resolves the Lakebase
+     store via RegistryFactory.lakebase (same path as
+     SettingsService.check_lakebase_permissions); identity from the request
+     (user_email / x-forwarded-preferred-username / session_id). Methods:
+     status (non-forcing acquire → edit/view/none), heartbeat, acquire
+     (admin-only force), release, on_domain_loaded (release prev + acquire
+     new), release_for_session, force_release, and blocking_holder (the
+     middleware gate helper). Degrades to mode "none" when Lakebase/psycopg
+     is unavailable.
+4. src/api/routers/internal/domain.py
+   - load-from-uc now attaches a {lock} block on success (releases the prior
+     version's lock, acquires the new DRAFT one). New routes GET
+     /domain/edit-lock, POST /domain/edit-lock/{heartbeat,acquire,release}.
+     set-version-status force-releases the lock when a version leaves DRAFT.
+     save-to-uc forwards actor_email for the defence-in-depth lock re-check.
+5. src/api/routers/internal/home.py
+   - reset-session releases the session's edit lock before wiping the session.
+6. src/shared/fastapi/main.py
+   - PermissionMiddleware: edit-lock gate after the lifecycle gate — a
+     non-holder mutating a status-gated edit route on a DRAFT version gets a
+     403 ("being edited by <holder>"). Admins are NOT exempt (must take over
+     first). New _session_edit_lock_holder helper (only runs on already-gated
+     mutating routes — no per-request Lakebase cost on reads).
+7. src/back/objects/domain/Domain.py
+   - save_domain_to_uc gains actor_email + a defence-in-depth lock-ownership
+     re-check (ConflictError when another user holds the lock).
+8. src/front/static/global/js/edit-lock.js (new)
+   - On load GETs the lock: editor → 30s heartbeat (flips to read-only +
+     toast on take-over); viewer → body.read-only-locked + dismissible banner
+     ("being edited by <holder>") with an admin "Take over editing" button.
+     Releases on pagehide/beforeunload via fetch keepalive (CSRF-safe; the
+     server TTL is the real safety net).
+9. src/front/static/global/css/permissions.css
+   - Folded .read-only-locked into the shared read-only selector group
+     (replace_all of body:is(.read-only-version, .role-viewer) →
+     …, .read-only-locked), so every existing write-surface gate applies to
+     locked viewers with no per-control edits. Added #editLockBanner styling.
+10. src/front/static/global/js/permissions.js
+    - canEditOntology() now also returns false when window.editLockMode ==
+      'view' (set by edit-lock.js).
+11. src/front/templates/base.html
+    - Loads edit-lock.js (deferred, after version-check.js).
+12. Tests: tests/units/registry/test_edit_lock_store.py (mocked-cursor store
+    methods: free/self/stale/force/heartbeat-lost), test_edit_lock_service.py
+    (mode shaping, force gating, blocking_holder), tests/units/api/
+    test_edit_lock_endpoints.py (request wiring; sync _run() helper avoids the
+    pre-existing async-endpoint event-loop clash), and an edit-lock gate class
+    in tests/units/auth/test_permission_middleware.py (non-holder 403, holder
+    passes, admin not exempt, no check on reads).
+13. docs/deployment.md (domain_edit_locks in the Lakebase schema map),
+    docs/sphinx/api/app.objects.registry.rst (EditLockService automodule).
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/EditLockService.py (new)
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/home.py
+- src/shared/fastapi/main.py
+- src/back/objects/domain/Domain.py
+- src/front/static/global/js/edit-lock.js (new)
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/permissions.js
+- src/front/templates/base.html
+- tests/units/registry/test_edit_lock_store.py (new)
+- tests/units/registry/test_edit_lock_service.py (new)
+- tests/units/api/test_edit_lock_endpoints.py (new)
+- tests/units/auth/test_permission_middleware.py
+- docs/deployment.md
+- docs/sphinx/api/app.objects.registry.rst
+
+Tests: uv run pytest -q -m "not scenario" → 3056 passed, 58 failed, 17 skipped
+in 250.46s. The 58 failures are the identical pre-existing baseline (async
+endpoint tests in test_review_endpoints.py, test_comment_endpoints.py,
+test_domain_current_user_endpoint.py, test_set_version_status_endpoint.py that
+hit "RuntimeError: Runner.run() cannot be called from a running event loop"
+under the full event-loop-polluted run) — no regressions, +35 new passing
+tests. The new edit-lock endpoint tests use a sync _run() helper so they pass
+in the full suite (unlike the bare async endpoint tests).

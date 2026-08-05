@@ -552,8 +552,12 @@ class OntologyParser:
                 "namespace": namespace,
             }
 
+        # No owl:Ontology declaration in the file. Fall back to the default
+        # base URI for BOTH ``uri`` and ``namespace`` — never the literal
+        # "Unknown", which used to leak into the domain's stored base_uri and
+        # surface on the Registry Browse page.
         return {
-            "uri": "Unknown",
+            "uri": DEFAULT_BASE_URI,
             "label": "Unknown Ontology",
             "comment": "",
             "namespace": DEFAULT_BASE_URI,

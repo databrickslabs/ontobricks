@@ -49,8 +49,8 @@ if [[ -f scripts/deploy.config.sh ]]; then
 fi
 
 VOLUME_PATH="${VOLUME_PATH:-}"
-LAKEBASE_SCHEMA_ARG="${LAKEBASE_REGISTRY_SCHEMA:-ontobricks_registry}"
-LAKEBASE_DATABASE_ARG="${LAKEBASE_REGISTRY_DATABASE:-ontobricks_registry}"
+LAKEBASE_SCHEMA_ARG="${LAKEBASE_SCHEMA:-ontobricks_registry}"
+LAKEBASE_DATABASE_ARG="${LAKEBASE_DATABASE:-ontobricks_registry}"
 LAKEBASE_INSTANCE_ARG="${LAKEBASE_PROJECT:-ontobricks-app}"
 LAKEBASE_BRANCH_ARG="${LAKEBASE_BRANCH:-production}"
 DRY_RUN=0

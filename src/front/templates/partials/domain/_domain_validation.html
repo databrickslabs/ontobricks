@@ -212,12 +212,12 @@
         </div>
     </div>
 
-    <!-- Digital Twin + Missing Items (1-column) -->
+    <!-- Knowledge Graph + Missing Items (1-column) -->
     <div class="row g-3 mb-4">
     <div class="col-12">
     <div class="card validation-detail-card h-100" id="dtwinValidationCard">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-box-fill me-1"></i> Digital Twin</span>
+            <span><i class="bi bi-box-fill me-1"></i> Knowledge Graph</span>
             <div class="d-flex align-items-center gap-2">
                 <span id="dtwinValidationBadge" class="badge bg-secondary">Checking...</span>
                 <a href="/dtwin/" class="btn btn-outline-primary btn-sm py-0 px-2 validation-dtwin-link">
@@ -231,7 +231,7 @@
                 <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
                 <div>
                     <strong>Ontology or assignments have changed</strong> since the last build.
-                    <span class="d-block text-muted">Open Digital Twin to rebuild.</span>
+                    <span class="d-block text-muted">Open Knowledge Graph to rebuild.</span>
                 </div>
             </div>
 
@@ -308,6 +308,64 @@
                 <span class="d-none" id="psDtExistLocal"></span>
                 <span class="d-none" id="psDtGraphStorageSubtitle"></span>
 
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Graph Structure Metrics Card -->
+    <div class="col-12">
+    <div class="card validation-detail-card h-100" id="graphStructureCard">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bar-chart-line me-1"></i> Graph Structure</span>
+            <span id="graphStructureBadge" class="badge bg-secondary">Not computed</span>
+        </div>
+        <div class="card-body">
+            <div id="graphStructureSpinner" class="text-center py-3">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                <span class="small text-muted ms-2">Loading…</span>
+            </div>
+            <div id="graphStructureContent" class="d-none">
+                <div class="row row-cols-2 row-cols-md-3 g-2 mb-3">
+                    <div class="col">
+                        <div class="p-2 border rounded text-center">
+                            <div class="small text-muted">Nodes</div>
+                            <div class="fw-bold" id="gsNodeCount">—</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="p-2 border rounded text-center">
+                            <div class="small text-muted">Edges</div>
+                            <div class="fw-bold" id="gsEdgeCount">—</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="p-2 border rounded text-center">
+                            <div class="small text-muted">Components</div>
+                            <div class="fw-bold" id="gsComponents">—</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="p-2 border rounded text-center">
+                            <div class="small text-muted">Avg Degree</div>
+                            <div class="fw-bold" id="gsAvgDegree">—</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="p-2 border rounded text-center">
+                            <div class="small text-muted">Density</div>
+                            <div class="fw-bold" id="gsDensity">—</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="small fw-semibold mb-1"><i class="bi bi-trophy text-warning"></i> Top PageRank nodes</div>
+                <div id="gsTopPagerank" class="small text-muted">—</div>
+            </div>
+            <div id="graphStructureEmpty" class="d-none">
+                <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>No analysis yet — open <strong>Knowledge Graph &rarr; Analytics</strong> and click <strong>Run Analysis</strong> to compute metrics.</span>
+            </div>
+            <div id="graphStructureError" class="d-none">
+                <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Build the Knowledge Graph first to compute metrics.</span>
             </div>
         </div>
     </div>

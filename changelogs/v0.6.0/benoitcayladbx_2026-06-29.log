@@ -1,0 +1,245 @@
+## Make scenario suites opt-in (excluded from routine/agent test runs)
+
+Context: The `tests/e2e/scenarios/` journey suites are long and, for the
+`*_live` ones, billable (warehouse + LLM + a durable registry write). They
+must not run during routine development, the post-change routine, code
+review, or Ask-mode test runs — only when the user explicitly asks. The live
+scenario was already env-gated, but `test_full_lifecycle.py` was collected by
+a plain `pytest` run. Introduced a `scenario` marker and made the canonical
+agent test command exclude it, then propagated that convention into the
+rules and skills.
+
+Changes:
+
+1. pyproject.toml
+   Registered the `scenario` pytest marker in `[tool.pytest.ini_options].markers`.
+2. pytest.ini
+   Mirrored the `scenario` marker (kept in sync with pyproject per the file's own note).
+3. tests/e2e/scenarios/conftest.py
+   New conftest that auto-tags every test collected under `tests/e2e/scenarios/`
+   with `pytest.mark.scenario`, filtering by path so the sub-dir hook does not
+   tag the whole session's items.
+4. .cursor/08-testing-and-deployment.mdc
+   Documented the default/routine command `uv run pytest -q -m "not scenario"`
+   and that scenarios are opt-in (`-m scenario`; live one also needs
+   `ONTOBRICKS_SCENARIO_LIVE=1`).
+5. .cursorrules
+   Updated both "Run all tests" steps (post-change routine + code review) to
+   use `-m "not scenario"` and point at `.cursor/08`.
+6. .claude/skills/changelog/SKILL.md
+   Post-change test step + the `Tests:` template now use `-m "not scenario"`.
+7. .claude/skills/code-review/SKILL.md
+   Review test step now uses `-m "not scenario"`.
+
+Modified files:
+- pyproject.toml
+- pytest.ini
+- tests/e2e/scenarios/conftest.py
+- .cursor/08-testing-and-deployment.mdc
+- .cursorrules
+- .claude/skills/changelog/SKILL.md
+- .claude/skills/code-review/SKILL.md
+
+Tests: `uv run pytest -q -m "not scenario"` → 2998 passed, 58 failed, 17 skipped, **2 deselected** (the scenario suites, as intended). The 58 failures are pre-existing and unrelated to this change: a full-suite pytest-asyncio ordering issue (`RuntimeError: Runner.run() cannot be called from a running event loop` across `tests/units/api/*` and `tests/mcp/integration/*`) plus flaky Playwright timeouts in `tests/e2e/navigation/`. Verified inert: `tests/units/api/test_comment_endpoints.py` passes 8/8 in isolation, and collection checks confirm only the 2 scenario tests are deselected (`-m scenario` → 2 selected / 3073 deselected).
+
+## Add scenario 2 — collaboration + review lifecycle (reuses scenario 1's domain)
+
+Context: New live, gated journey that exercises the human-in-the-loop workflow
+on top of a built domain. It deliberately **reuses the durable
+``test_scenario_1`` domain** (built + persisted by scenario 1) rather than
+regenerating one, then walks: add comments (ontology + mapping framing) →
+turn them into tasks → advance a task → submit for review (DRAFT → IN-REVIEW)
+→ reopen to DRAFT + new comment → publish (submit → sign-off → publish →
+PUBLISHED) → create a new version (V2). Mapped each step to the real
+internal API (``/comments/*``, ``/review/*``, ``/domain/create-version``).
+Key constraints honoured: ``submit`` requires a prior KG build (``last_build``),
+comments are writable only in DRAFT/IN-REVIEW, publish needs an IN-REVIEW
+version (admin meets the quorum via a self sign-off).
+
+Changes:
+
+1. tests/e2e/scenarios/test_scenario_2_collab_lifecycle.py
+   New scenario. Gated by ONTOBRICKS_SCENARIO_LIVE=1 + the `scenario` marker
+   (auto-applied by the scenarios conftest). Skips with guidance when
+   `test_scenario_1` is absent, never built, or already has versions > 1
+   (re-run scenario 1 for a clean single-version V1). Idempotent for the
+   comment/review steps (reopens V1 to DRAFT at start); creates V2.
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_2_collab_lifecycle.py (new)
+
+Tests: `ONTOBRICKS_SCENARIO_LIVE=1 uv run pytest tests/e2e/scenarios/test_scenario_2_collab_lifecycle.py -m scenario -v -s --no-cov` → **1 passed in 49.03s** (V1 PUBLISHED with 3 comments + 2 tasks, V2 DRAFT). Routine suite unaffected (new test is `scenario`-marked → excluded from `-m "not scenario"`).
+
+## Consolidate 0.5.x → 0.6 Lakebase upgrade into a single clean script
+
+Context: The `scripts/upgrade_lakebase_0.5_To_0.6.sql` migration created
+`domain_comments` in the early, *anchored* 0.6 shape (`anchor_type` /
+`anchor_ref` columns + `idx_domain_comments_anchor`). Discussions later became
+domain-wide within the 0.6 cycle, so reaching the final schema required a
+second pass, `scripts/upgrade_lakebase_0.6_drop_comment_anchor.sql`. A user
+upgrading "0.5.x → 0.6" therefore had to run two scripts and briefly
+materialise dead columns. Folded the anchor-drop into the main script so it
+lands the final 0.6 shape (matching the canonical
+`src/back/objects/registry/store/lakebase/schema.sql`) in one idempotent pass.
+
+Changes:
+
+1. scripts/upgrade_lakebase_0.5_To_0.6.sql
+   - `domain_comments` now created in its final (anchor-less) form.
+   - Added a converge step that `DROP INDEX IF EXISTS idx_domain_comments_anchor`
+     and `ALTER TABLE ... DROP COLUMN IF EXISTS anchor_type / anchor_ref`, so
+     installs already created with the anchored shape (earlier draft, app lazy
+     self-heal, or `make bootstrap-lakebase`) converge cleanly. The
+     `anchor_type` CHECK drops with its column.
+   - Replaced the now-irrelevant `idx_domain_comments_anchor` with
+     `idx_domain_comments_lookup (domain_id, version, created_at)`.
+   - Removed the dead `anchor_type` CHECK backfill block; fixed the stale
+     "see 1b" cross-reference in the `domain_tasks` status-CHECK backfill.
+   - Rewrote the header to document the one-shot path and that
+     `upgrade_lakebase_0.6_drop_comment_anchor.sql` is no longer required
+     (kept only for installs already on the intermediate anchored 0.6 shape).
+   - Part 2 (graph `datatype` / `lang` backfill) unchanged.
+
+Note: no schema change was needed for the per-table SELECT "Rights" feature —
+`can_select` / `select_error` live in the version `info` JSONB blob, not a
+column.
+
+Modified files:
+- scripts/upgrade_lakebase_0.5_To_0.6.sql
+
+Tests: not run — SQL-only migration script + changelog, no Python touched. The
+script mirrors the canonical `schema.sql` and is idempotent (`IF EXISTS` /
+`IF NOT EXISTS` guards throughout).
+
+## In-place "update deployed app" script (code + SQL) reusing live config
+
+Context: Updating an already-deployed OntoBricks instance (e.g. pushing the
+latest code + applying pending registry migrations to `ontobricks-060`)
+required editing `scripts/deploy.config.sh` and running `make deploy`. We
+wanted a one-command updater whose ONLY inputs are the two app names, that
+reads every coordinate back from the live apps so it never drifts from
+`deploy.config.sh`. Built it to reuse the existing orchestrators rather than
+duplicate them.
+
+Changes:
+
+1. scripts/update-deployed-app.sh (new)
+   `update-deployed-app.sh <UI_APP> <MCP_APP>`. Introspects each app via
+   `databricks apps get -o json` for its SQL warehouse, registry Volume
+   (catalog.schema.volume), and Lakebase postgres binding (project / branch /
+   db-… segment); fetches the deployed `app.yaml` (UI + MCP) verbatim via
+   `databricks workspace export` so the runtime env (LAKEBASE_SCHEMA /
+   LAKEBASE_DATABASE, triplestore table, MLflow URI, …) is preserved; then
+   delegates the code push to `scripts/deploy.sh -t <target> --skip-app-yaml
+   --no-bootstrap` and the SQL/grants to `scripts/bootstrap-lakebase-perms.sh`
+   with the introspected schema. Volume-only apps skip the SQL step. Mirrors
+   `deploy.sh`'s output/error-trap style.
+2. scripts/deploy.config.sh
+   Made `REGISTRY_SCHEMA` env-overridable (`${REGISTRY_SCHEMA:-$DEFAULT_…}`)
+   so the new script can pin the schema it read back from a live app. Safe:
+   every `make` deploy target already `unset`s `REGISTRY_SCHEMA`, so the
+   routine deploy still uses `DEFAULT_REGISTRY_SCHEMA`.
+3. scripts/bootstrap-lakebase-perms.sh
+   Extended the idempotent step-2b registry migration to also provision
+   `domain_comments` + `domain_tasks` in their final (anchor-less) 0.6 shape
+   (converging any pre-existing anchored table), so both `make deploy` and the
+   new in-place updater provision the collaboration tables as the schema
+   owner instead of relying on the app's lazy self-heal.
+
+Modified files:
+- scripts/update-deployed-app.sh (new)
+- scripts/deploy.config.sh
+- scripts/bootstrap-lakebase-perms.sh
+
+Tests: not run — shell/SQL tooling only, no Python touched. Validated with
+`bash -n` on all three scripts (syntax OK) and verified `deploy.config.sh`
+honours both the `REGISTRY_SCHEMA` override and the `unset` (default) path.
+
+## Fix published-version edit lock + stale lifecycle status
+
+Context: A PUBLISHED version (`test_scenario_1 V1`, published out-of-band by
+the scenario-2 collab suite) still showed a `Draft` badge in the navbar and
+stayed editable. Two distinct defects: (1) the navbar badge and the
+read-only gate derived the lifecycle status from the in-session `info.status`
+snapshot taken at load time, so a publish/reopen done in another session was
+never reflected without a manual reload; (2) read-only was enforced only by a
+frontend CSS body-class — `version_lifecycle.is_editable()` was dead code, so
+the backend would happily overwrite (and silently revert to DRAFT) a PUBLISHED
+version via `save-to-uc`, a direct API call, or a stale session.
+
+Changes:
+
+1. src/back/objects/registry/store/base.py
+   Added a concrete default `get_version_status(folder, version) -> str|None`
+   on the store ABC (derives status from the full document; never raises on a
+   missing domain/version).
+2. src/back/objects/registry/store/lakebase/store.py
+   Overrode `get_version_status` with a cheap single-column SELECT on the
+   denormalised `domain_versions.status` (no full-document read) — version
+   status is polled frequently by the UI.
+3. src/back/objects/registry/RegistryService.py
+   Exposed a `get_version_status` passthrough to the store.
+4. src/back/objects/domain/Domain.py
+   `get_version_status` now reads the authoritative lifecycle status from the
+   registry for the loaded version and self-heals the in-session snapshot
+   (`info.status` + `save()`), so an out-of-band transition surfaces without a
+   reload. `save_domain_to_uc` now rejects an overwrite of any non-DRAFT
+   version with a `ConflictError` (mirrors `CommentService._require_writable`),
+   making `is_editable()` an enforced server-side gate. Imported `is_editable`.
+5. tests/units/domain/test_domain_service.py
+   Added `TestGetVersionStatusAuthoritative` (self-heal from registry; keep
+   session status when registry is silent) and `TestSaveDomainToUcLifecycleLock`
+   (reject PUBLISHED/IN-REVIEW overwrite; allow DRAFT).
+
+Modified files:
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/domain/Domain.py
+- tests/units/domain/test_domain_service.py
+
+Tests: `uv run pytest -q -m "not scenario"` → 3003 passed, 58 failed, 17
+skipped, 3 deselected in 261s. All 58 failures are the pre-existing
+event-loop/test-isolation flakes (`RuntimeError: Runner.run() cannot be called
+from a running event loop`) in the MCP/API endpoint suites — confirmed
+unrelated by re-running the affected files in isolation (13/13 passed). The 5
+new tests pass. Also verified live against the dev server: loading PUBLISHED
+`test_scenario_1 V1` then `POST /domain/save-to-uc` now returns `HTTP 409`
+("Version 1 is PUBLISHED (read-only)…").
+
+## Pin local uv sync to --frozen (stop lockfile index-URL churn)
+
+Context: `uv.lock` kept showing as modified after every `scripts/start.sh` /
+test run. The diff was 4040/4040 lines with **zero dependency-version changes**
+— purely the package index being rewritten from the public CDN
+(`pypi.org` / `files.pythonhosted.org`) to the internal proxy
+(`pypi-proxy.dev.databricks.com`), driven by the shell's `UV_INDEX_URL` /
+`PIP_INDEX_URL`. The committed lock is deliberately pinned to the public CDN
+(see `afa8d32` / `d9cf05a` / `cb0a6ee`) because the Databricks Apps deploy runs
+`uv run --frozen` and the proxy cold-cache crashed deploys. Local `uv sync`
+without `--frozen` was re-resolving and rewriting those URLs.
+
+Changes:
+
+1. scripts/start.sh
+   `uv sync` → `uv sync --frozen` so starting the dev server installs exactly
+   from the committed lockfile and never rewrites its index URLs.
+2. scripts/setup.sh
+   Same `--frozen` pin on the initial environment sync (a dep change now
+   requires an explicit `uv lock`, which is the desired forcing function).
+3. Makefile
+   `make install` (`uv sync`) also pinned to `--frozen`. NB: `make test`
+   already activates the venv and runs `pytest` directly (no `uv run`), so it
+   never churns. The remaining trigger is any *ad-hoc* `uv run` (e.g. the
+   canonical `uv run pytest -m "not scenario"`), which re-resolves against the
+   proxy `UV_INDEX_URL`; the universal guard is `UV_FROZEN=1` in the shell or
+   `uv run --frozen`.
+
+Modified files:
+- scripts/start.sh
+- scripts/setup.sh
+- Makefile
+
+Tests: not run — local dev tooling only, no Python touched. Validated with
+`bash -n scripts/start.sh scripts/setup.sh` (syntax OK); `uv.lock` restored to
+the committed public-CDN state and no longer shows as modified.

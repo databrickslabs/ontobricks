@@ -1,6 +1,6 @@
 # Getting Started with OntoBricks
 
-By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology and explore a knowledge graph.
+By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology and explore a graph viewer.
 
 ## Prerequisites
 
@@ -218,10 +218,10 @@ In local development mode, there are no restrictions — all users have full adm
 
 ### 2. Design an Ontology (Visual Designer)
 
-The fastest way to create an ontology is using the visual **Design** interface:
+The fastest way to create an ontology is using the visual **Business Views** interface:
 
 1. Go to the **Ontology** page (click on "Ontology" in the navbar)
-2. Click **Design** in the sidebar
+2. Click **Business Views** in the sidebar
 
 #### Create Entities
 1. Click **+ Add Entity** button
@@ -272,7 +272,7 @@ Alternatively, use the traditional form interface:
 
 ### 4. Preview and Save
 
-1. Click **OWL Content** to see your generated ontology in Turtle format
+1. Click **OWL** to see your generated ontology in Turtle format
 2. Click **Validate** to check your ontology
 3. Click **Save** to store in Unity Catalog
 
@@ -306,20 +306,18 @@ Alternatively, use the traditional form interface:
 
 4. Click **Validate** (in navbar) to verify all mappings are complete
 
-### 6. Explore Your Data (Digital Twin)
+### 6. Explore Your Data (Knowledge Graph)
 
-1. Go to the **Digital Twin** page
-2. Click **Synchronize** to generate triples from your mappings and write them to the configured Unity Catalog table
-3. Once synced, browse the **Triples** tab to see the generated data in a sortable grid
-4. Explore the **Knowledge Graph** tab for an interactive graph:
+1. Go to the **Knowledge Graph** page
+2. Click **Build** in the sidebar, then click **Synchronize** to generate triples from your mappings and write them to Unity Catalog and Lakebase
+3. Click **Explorer** in the sidebar to explore your graph viewer interactively:
    - Click on entities to see details in the right panel
    - Use **Find** to search for specific entities
    - Use **Filters** to narrow down by entity type, field, or depth
    - View all mapped attributes, values, and relationships
-5. Run **Quality** checks to validate your data against ontology constraints
-6. Run **Data Quality** (SHACL) checks from the **Data Quality** sidebar section — validates cardinality, datatypes, patterns, and custom SPARQL rules against the triple store
-7. Run **Reasoning** from the **Reasoning** sidebar section — executes OWL 2 RL inference and SWRL business rules to discover inferred triples
-8. Access the **GraphQL** playground to query your knowledge graph with auto-generated typed queries
+4. Run **Data Quality** checks from the **Data Quality** sidebar section — validates cardinality, datatypes, patterns, and custom SPARQL rules against the triple store
+5. Run inference from the **Inference** sidebar section — executes OWL 2 RL inference and SWRL business rules to discover inferred triples
+6. Access the **Query** sidebar section to query your graph viewer with auto-generated typed GraphQL queries
 
 ## Common Commands
 
@@ -355,27 +353,29 @@ The OntoBricks interface has a navigation bar with status indicators:
 | **SQL Warehouse** | Dropdown to select/switch SQL warehouses |
 | **Ontology** | Shows ✓ (green) when ontology is loaded, ✗ (red) otherwise |
 | **Mapping** | Shows ✓ (green) when R2RML mapping exists, ✗ (red) otherwise |
-| **Digital Twin** | Access the sync, knowledge graph, and quality checks interface |
+| **Knowledge Graph** | Access the sync, graph viewer, and quality checks interface |
 | **Settings** | Manage Databricks connection and settings |
 
 ## Ontology Sidebar Navigation
 
 | Menu Item | Description |
 |-----------|-------------|
-| **Wizard** | AI-powered ontology generation with quick templates |
-| **Design** | Visual drag-and-drop ontology designer |
 | **Information** | Basic ontology settings (name, URI) |
+| **Import** | Import OWL, RDFS, FIBO, CDISC, IOF standards |
+| **Generate** | AI-powered ontology generation from database schema using an LLM |
+| **Designer** | Interactive force-directed ontology graph (OntoViz canvas) |
+| **Groups** | Manage entity groupings |
+| **Business Views** | Visual drag-and-drop business view designer |
 | **Entities** | Manage classes with form interface |
 | **Relationships** | Manage object properties |
-| **Designer** | Interactive force-directed ontology graph (OntoViz canvas) |
-| **SWRL Rules** | Define SWRL inference rules |
 | **Data Quality** | SHACL shape-based data quality rules |
-| **Constraints** | Property cardinality and value constraints |
+| **Business Rules** | Define SWRL inference rules (graphical D3 editor) |
+| **Cohorts** | Define cohort queries for data slicing |
 | **Expr. & Axioms** | OWL class expressions and axioms |
-| **Import** | Import OWL, RDFS, FIBO, CDISC, IOF standards |
-| **OWL Content** | View generated Turtle/OWL |
+| **Pitfalls** | Automated ontology pitfall detection |
+| **OWL** | View generated Turtle/OWL |
 
-> **Tip**: The Wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in `src/shared/config/constants.py` and can be customised or extended.
+> **Tip**: The **Generate** wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in `src/shared/config/constants.py` and can be customised or extended.
 
 ## Troubleshooting
 
@@ -412,7 +412,7 @@ rm -rf .venv
 scripts/setup.sh
 ```
 
-### Sync or Knowledge Graph Fails
+### Sync or Graph Viewer Fails
 
 - Ensure both Ontology and Mapping have green checkmarks in the navbar
 - Check that the R2RML mapping is generated (visible in Domain → Export)
@@ -499,6 +499,12 @@ the workspace token (locally) or the SP token (in Apps).
 |----------|-------------|---------|
 | `ONTOBRICKS_URL` | URL of the main OntoBricks app (used by the MCP server) | `http://localhost:8000` |
 
+#### Knowledge Graph Analytics
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` | Max triples loaded into memory for the NetworkX centrality/structure analysis. Graphs larger than this are rejected up-front (the Analytics page warns and disables **Run Analysis** using the known triple count). Class/predicate filters narrow the charts, not the load, so they don't lift this limit. | `500000` |
+
 #### Databricks Runtime Detection
 
 | Variable | Description | Set By |
@@ -527,6 +533,7 @@ DATABRICKS_APP_PORT=8000
 LOG_FORMAT=json                        # Structured JSON logging (default: text)
 LOG_LEVEL=INFO                         # DEBUG, INFO, WARNING, ERROR, CRITICAL
 ONTOBRICKS_THREAD_POOL_SIZE=20         # Max threads for blocking I/O
+ONTOBRICKS_ANALYTICS_MAX_TRIPLES=500000  # KG analytics in-memory triple cap
 ```
 
 #### Shell Export

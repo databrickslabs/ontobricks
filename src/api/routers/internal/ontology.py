@@ -279,6 +279,80 @@ async def parse_rdfs_content(
         )
 
 
+@router.post("/analyze-import")
+async def analyze_import(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
+    """Analyse OWL/RDFS content for conflicts against the current session ontology.
+
+    Read-only — the session is never mutated.  Returns a
+    :class:`~back.core.w3c.owl.ConflictReport` dict describing every
+    incoming entity as ``new``, ``duplicate``, ``uri_conflict``, or
+    ``name_conflict``.
+
+    Body: ``{ "content": "...", "format": "owl" | "rdfs" }``
+    """
+    data = await request.json()
+    content = data.get("content", "")
+    fmt = (data.get("format") or "owl").lower()
+    if not content:
+        raise ValidationError("No content provided")
+    logger.info("/ontology/analyze-import: format=%s content_len=%d", fmt, len(content))
+    with map_route_errors("Import analysis failed", logger):
+        result = Ontology(get_domain(session_mgr)).analyze_import(content, format=fmt)
+        s = result.get("report", {}).get("summary", {})
+        logger.info(
+            "/ontology/analyze-import: done — new=%s duplicates=%s conflicts=%s",
+            s.get("new"), s.get("duplicates"), s.get("conflicts"),
+        )
+        return result
+
+
+@router.post("/merge-import")
+async def merge_import(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
+    """Append parsed OWL/RDFS content to the current session ontology.
+
+    New entities are added; duplicates are silently skipped; conflicting
+    entities are handled according to the user-supplied *resolutions* map.
+
+    Body::
+
+        {
+            "content": "...",
+            "format": "owl" | "rdfs",
+            "resolutions": {
+                "<uri_or_name>": "skip" | "overwrite" | "rename:<new_name>"
+            }
+        }
+    """
+    data = await request.json()
+    content = data.get("content", "")
+    fmt = (data.get("format") or "owl").lower()
+    resolutions = data.get("resolutions") or {}
+    if not content:
+        raise ValidationError("No content provided")
+    logger.info(
+        "/ontology/merge-import: format=%s content_len=%d resolutions=%d",
+        fmt, len(content), len(resolutions),
+    )
+    with map_route_errors("Import merge failed", logger):
+        result = Ontology(get_domain(session_mgr)).merge_parsed_owl_to_domain(
+            content,
+            resolutions,
+            format=fmt,
+        )
+        stats = result.get("stats", {})
+        logger.info(
+            "/ontology/merge-import: done — classes=%s properties=%s new=%s "
+            "duplicates_skipped=%s conflicts_resolved=%s",
+            stats.get("classes"), stats.get("properties"), stats.get("new"),
+            stats.get("duplicates_skipped"), stats.get("conflicts_resolved"),
+        )
+        return result
+
+
 # ===========================================
 # Industry Ontology Import (FIBO, CDISC, IOF)
 # ===========================================
@@ -374,7 +448,8 @@ async def save_shape(
         domain = get_domain(session_mgr)
         shapes = list(domain.shacl_shapes)
 
-        if shape_id and any(s["id"] == shape_id for s in shapes):
+        is_update = bool(shape_id and any(s["id"] == shape_id for s in shapes))
+        if is_update:
             shapes = SHACLService.update_shape(shapes, shape_id, shape_data)
         else:
             new_shape = SHACLService.create_shape(
@@ -393,6 +468,12 @@ async def save_shape(
             shapes.append(new_shape)
 
         domain.shacl_shapes = shapes
+        _ref = shape_id or shape_data.get("label", "") or shape_data.get("target_class", "")
+        domain.record_change(
+            "shacl_updated" if is_update else "shacl_added",
+            entity_type="shacl", entity_ref=_ref,
+            summary=shape_data.get("label", "") or _ref,
+        )
         domain.save()
         return {"success": True, "message": "Shape saved", "shapes": shapes}
 
@@ -411,6 +492,10 @@ async def delete_shape(
         domain = get_domain(session_mgr)
         shapes = SHACLService.delete_shape(domain.shacl_shapes, shape_id)
         domain.shacl_shapes = shapes
+        domain.record_change(
+            "shacl_removed", entity_type="shacl",
+            entity_ref=shape_id, summary=shape_id,
+        )
         domain.save()
         return {"success": True, "message": "Shape deleted", "shapes": shapes}
 
@@ -723,12 +808,18 @@ async def save_swrl_rule(
         domain = get_domain(session_mgr)
         rules = domain.swrl_rules
 
-        if 0 <= index < len(rules):
+        is_update = 0 <= index < len(rules)
+        if is_update:
             rules[index] = rule
         else:
             rules.append(rule)
 
         domain.swrl_rules = rules
+        domain.record_change(
+            "swrl_updated" if is_update else "swrl_added",
+            entity_type="swrl", entity_ref=rule.get("name", ""),
+            summary=rule.get("name", ""),
+        )
         domain.save()
         return {
             "success": True,
@@ -751,8 +842,13 @@ async def delete_swrl_rule(
         if not (0 <= index < len(rules)):
             raise ValidationError("Invalid rule index")
 
+        removed_name = rules[index].get("name", "") if isinstance(rules[index], dict) else ""
         rules.pop(index)
         domain.swrl_rules = rules
+        domain.record_change(
+            "swrl_removed", entity_type="swrl",
+            entity_ref=removed_name, summary=removed_name,
+        )
         domain.save()
         return {"success": True, "message": "SWRL rule deleted", "rules": rules}
 

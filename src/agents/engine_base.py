@@ -184,7 +184,13 @@ def extract_message_content(llm_response: dict) -> str:
     """Extract text content from an OpenAI-style or predictions-style LLM response."""
     choices = llm_response.get("choices", [])
     if choices:
-        return choices[0].get("message", {}).get("content", "") or ""
+        content = choices[0].get("message", {}).get("content") or ""
+        # Claude endpoints return content as a list of blocks, not a string
+        if isinstance(content, list):
+            content = "".join(
+                b if isinstance(b, str) else b.get("text", "") for b in content
+            )
+        return content
     preds = llm_response.get("predictions", [])
     if preds:
         return preds[0] if isinstance(preds[0], str) else str(preds[0])

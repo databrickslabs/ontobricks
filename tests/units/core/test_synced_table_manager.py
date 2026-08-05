@@ -109,7 +109,7 @@ class TestEnsure:
         out = mgr.ensure(
             "cat.sch.tab",
             source_table_full_name="cat.sch.view",
-            primary_key_columns=["subject", "predicate", "object"],
+            primary_key_columns=["subject", "predicate", "object_hash"],
         )
         assert out is not None
         client.database.create_synced_database_table.assert_not_called()
@@ -134,7 +134,7 @@ class TestEnsure:
             mgr.ensure(
                 "cat.sch.tab",
                 source_table_full_name="cat.sch.view",
-                primary_key_columns=["subject", "predicate", "object"],
+                primary_key_columns=["subject", "predicate", "object_hash"],
                 sync_mode="snapshot",
             )
         client.database.create_synced_database_table.assert_called_once()
@@ -143,7 +143,7 @@ class TestEnsure:
         assert captured["payload"]["primary_key_columns"] == [
             "subject",
             "predicate",
-            "object",
+            "object_hash",
         ]
         assert captured["payload"]["sync_mode"] == "snapshot"
         # project/branch are instance attrs consumed by the builder internals.
@@ -171,7 +171,7 @@ class TestEnsure:
             out = mgr.ensure(
                 "cat.sch.tab",
                 source_table_full_name="cat.sch.view",
-                primary_key_columns=["subject", "predicate", "object"],
+                primary_key_columns=["subject", "predicate", "object_hash"],
             )
         assert out is not None  # ownership-probe returned the winner
 

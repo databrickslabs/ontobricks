@@ -1,0 +1,11 @@
+## Add CONTRIBUTORS.md
+
+**Context:** Added a contributors file to the repository root for GitHub visibility, listing all human contributors with their GitHub handles and roles.
+
+**Changes:**
+1. `CONTRIBUTORS.md` (new) — created contributors file with a table listing Benoit Cayla and Dermot Smyth with links to their GitHub profiles, plus a pointer to CONTRIBUTING.md
+
+**Modified files:**
+- `CONTRIBUTORS.md` (created)
+
+**Test result:** N/A — documentation-only change.

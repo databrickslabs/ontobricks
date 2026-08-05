@@ -33,7 +33,7 @@ This document describes all external dependencies used by OntoBricks, including 
 | **APScheduler** | ≥3.10.0 | Advanced Python Scheduler for background jobs (used by BuildScheduler for scheduled triple store builds) | MIT | [pypi.org/project/APScheduler](https://pypi.org/project/APScheduler/) |
 | **owlrl** | ≥7.0.0 | OWL 2 RL forward-chaining reasoner — performs deductive closure on RDFLib graphs for ontology-level inference | W3C | [owl-rl.readthedocs.io](https://owl-rl.readthedocs.io/) |
 | **pyshacl** | ≥0.26.0 | W3C SHACL validator for RDFLib graphs — validates RDF data against SHACL shapes for data quality checks | Apache-2.0 | [github.com/RDFLib/pySHACL](https://github.com/RDFLib/pySHACL) |
-| **NetworkX** | ≥3.0 | Graph analysis library — server-side community detection (Louvain, Label Propagation, Greedy Modularity) on the full knowledge graph | BSD-3-Clause | [networkx.org](https://networkx.org/) |
+| **NetworkX** | ≥3.0 | Graph analysis library — server-side community detection (Louvain, Label Propagation, Greedy Modularity) on the full graph viewer | BSD-3-Clause | [networkx.org](https://networkx.org/) |
 | **strawberry-graphql[fastapi]** | ≥0.220.0 | GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI | MIT | [strawberry.rocks](https://strawberry.rocks/) |
 | **MLflow** | ≥2.19.0 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
 
@@ -197,7 +197,7 @@ Provides the visual foundation for OntoBricks UI including:
 
 #### D3.js
 
-Used for data-driven DOM manipulation and graph data processing in the Digital Twin page:
+Used for data-driven DOM manipulation and graph data processing in the Knowledge Graph page:
 - Data array processing for graph node and link construction
 - SVG element management
 - Force simulation utilities
@@ -217,7 +217,7 @@ const simulation = d3.forceSimulation(nodes)
 
 #### Sigma.js + Graphology
 
-Powers the WebGL-accelerated graph visualization in the Digital Twin "Knowledge Graph" view:
+Powers the WebGL-accelerated graph visualization in the Knowledge Graph "Graph Viewer" view:
 - High-performance rendering of large graphs via WebGL
 - Interactive pan, zoom, hover highlighting, and click selection
 - ForceAtlas2 layout algorithm (via graphology-library)
@@ -366,7 +366,7 @@ tests/
   test_sparql_service.py            # SPARQL translation and local execution
   test_ontology_service.py          # Ontology domain helpers (Ontology class)
   test_home_service.py              # Home/dashboard service layer
-  test_dtwin_service.py             # Digital Twin domain class (back.objects.digitaltwin)
+  test_dtwin_service.py             # Knowledge Graph domain class (back.objects.digitaltwin)
   test_mapping_service.py           # Mapping domain class (back.objects.mapping.Mapping)
   test_domain_service.py            # Domain class (back.objects.domain.Domain)
   test_domain_session.py            # DomainSession state management
@@ -559,22 +559,49 @@ Modules with 0% coverage (`back/core/w3c/rdfs`, `back/core/sqlwizard`, `back/cor
 
 #### Markers
 
-Defined in `pytest.ini`:
+Defined in `pytest.ini` (see the file for the authoritative list):
 
 ```ini
 markers =
-    unit: Unit tests
-    integration: Integration tests
-    slow: Slow running tests
+    unit: Unit tests (pure in-process, no I/O — default)
+    integration: Multi-module, in-proc backends
+    contract: Schema/contract verification
+    e2e: Playwright browser flows (CI nightly only)
+    scenario: Live end-to-end journey suites under tests/e2e/scenarios/ (opt-in)
+    dependency: Cross-scenario ordering (pytest-dependency; campaign only)
+    db / spark / external / live_integration / property / slow / eval / mcp: see pytest.ini
 ```
 
 Use them to selectively run subsets:
 
 ```bash
+# Routine / agent runs — everything except the opt-in live scenarios:
+uv run pytest -q -m "not scenario"
+
 .venv/bin/python -m pytest -m unit
 .venv/bin/python -m pytest -m integration
 .venv/bin/python -m pytest -m "not slow"
 ```
+
+#### Live scenario campaign
+
+The suites under `tests/e2e/scenarios/` (`test_scenario_01_generate_live.py` →
+`02` → `03` → `test_scenario_validation.py`) are a **single, ordered, billable
+journey** (warehouse + LLM + a durable registry write) against a **running**
+app. They are `scenario`-marked, excluded from routine runs, and gated behind
+`ONTOBRICKS_SCENARIO_LIVE=1`. Run the whole campaign with:
+
+```bash
+make scenario-campaign                                   # local dev server
+make scenario-campaign ONTOBRICKS_LIVE_BASE=https://<app-url>
+```
+
+This sets `ONTOBRICKS_SCENARIO_LIVE=1` + `ONTOBRICKS_SCENARIO_CHAIN=1`
+(pytest-dependency chaining: an upstream failure skips the downstream suites),
+runs them in filename order, and writes reports to `artifacts/scenarios/`
+(`campaign.xml`, `campaign.html`, `campaign_report.md`). The canonical guide —
+env vars, chaining, registry isolation, and how to add a scenario — lives in
+[`tests/e2e/scenarios/README.md`](../tests/e2e/scenarios/README.md).
 
 #### Writing New Tests
 
@@ -649,14 +676,14 @@ Fast tests that fetch pages via the Starlette `TestClient` and verify DOM struct
 
 | Page | What Is Verified |
 |------|-----------------|
-| All pages | Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Registry, Domain, Digital Twin), Ontology/Mapping links under Domain dropdown, Settings link, warehouse status, task tracker |
+| All pages | Navbar present, brand link, notification container, Bootstrap/utils.js scripts, nav dropdowns (Registry, Domain, Knowledge Graph), Ontology/Mapping links under Domain dropdown, Settings link, warehouse status, task tracker |
 | Home `/` | Hero section, domain panel, stat items (Entities, Relationships, Mappings), quick links (Settings, About) |
 | Settings `/settings` | Connection form, host/token/warehouse displays, Test Connection button, base URI field, Save button |
 | Registry `/registry/` | Registry domains section, schedules table, API endpoint cards |
 | Ontology `/ontology` | Sidebar section groups: Ontology Editor (Information, Import, Generate, Model, Business Views, Entities, Relationships), Advanced (Data Quality, Business Rules, Expr. & Axioms), W3C Standards (OWL); section divs, OntoViz script |
 | Mapping `/mapping` | Sidebar with 6 section links (Information, Designer, Manual, Auto-Map, R2RML, Spark SQL), mapping-core.js |
 | Domain `/domain` | Sidebar with 6 section links (Information, Metadata, Documents, Validation, OWL, R2RML), section divs |
-| Digital Twin `/dtwin/` | Sidebar section groups: Navigation (Knowledge Graph, GraphQL), Advanced (Data Quality, Reasoning); Sigma.js script |
+| Knowledge Graph `/dtwin/` | Sidebar section groups: Navigation (Graph Viewer, GraphQL), Advanced (Data Quality, Reasoning); Sigma.js script |
 | About `/about` | Page renders, contains "OntoBricks" |
 
 **Run:**
@@ -681,7 +708,7 @@ Browser-based tests using Playwright against a live Uvicorn server. Verifies nav
 | `TestOntologySidebar` | All 11 sidebar items switch to correct section, wizard select-all checkbox exists |
 | `TestMappingSidebar` | All 6 sidebar items switch to correct section |
 | `TestProjectSidebar` | All 6 sidebar items switch to correct section |
-| `TestDigitalTwinSidebar` | Knowledge Graph section visible by default, sidebar navigation links present |
+| `TestDigitalTwinSidebar` | Graph Viewer section visible by default, sidebar navigation links present |
 | `TestAboutPage` | Page content and R2RML reference present |
 
 **Prerequisites:**
@@ -766,8 +793,8 @@ A user's effective role is determined by combining all three layers.
 | Role | Source | Capabilities |
 |------|--------|--------------|
 | **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can view, edit, build, and manage the Settings page including the permission list. |
-| **Builder** | In-app permission list | Can view, edit, and **build digital twins**. Cannot access Settings. |
-| **Editor** | In-app permission list | Can view all pages, create and modify domains, ontologies, and mappings. **Cannot build digital twins.** Cannot access Settings. |
+| **Builder** | In-app permission list | Can view, edit, and **build graph viewers**. Cannot access Settings. |
+| **Editor** | In-app permission list | Can view all pages, create and modify domains, ontologies, and mappings. **Cannot build graph viewers.** Cannot access Settings. |
 | **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
 
@@ -821,7 +848,7 @@ Request arrives
 | `role = none` | JSON 403 (for fetch/XHR) or redirect to `/access-denied` (for page navigation). |
 | `role = viewer` + write method (POST/PUT/PATCH/DELETE) | JSON 403: "Viewer role does not allow write operations". |
 | `role != admin` + path starts with `/settings` | JSON 403 or redirect to `/`. Only admins can access the Settings page. |
-| Digital twin build + effective domain role < `builder` | JSON 403: "Only builders and admins can build a digital twin". |
+| Digital twin build + effective domain role < `builder` | JSON 403: "Only builders and admins can build a graph viewer". |
 | Otherwise | Request proceeds normally. |
 
 ---

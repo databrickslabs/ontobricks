@@ -5,9 +5,15 @@
         <h4 class="mb-1"><i class="bi bi-info-circle me-2"></i>Ontology Information</h4>
         <p class="text-muted mb-0 small">Define your ontology name and base URI</p>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetOntology">
-        <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
-    </button>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-sm btn-outline-danger ontology-edit-btn" id="resetOntology">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the ontology discussion" onclick="openOntologyDiscussion()">
+            <i class="bi bi-chat-dots"></i>
+        </button>
+    </div>
 </div>
 <div class="card">
     <div class="card-body">

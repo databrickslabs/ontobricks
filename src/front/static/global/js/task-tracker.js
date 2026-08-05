@@ -19,7 +19,8 @@ const TASK_TYPE_URLS = {
     'metadata_update': '/domain#metadata',
     'triplestore_sync': '/dtwin#sync',
     'registry_archive': '/dtwin#sync',
-    'quality_checks': '/dtwin#quality'
+    'quality_checks': '/dtwin#quality',
+    'graph_analytics': '/dtwin#analytics'
 };
 
 // =====================================================

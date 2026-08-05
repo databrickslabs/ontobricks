@@ -1,5 +1,5 @@
 <!--
-    Cohort Discovery — RUN page (Digital Twin > Cohorts).
+    Cohort Discovery — RUN page (Knowledge Graph > Cohorts).
 
     Design lives in Ontology > Advanced > Cohorts. This page picks a saved
     rule, previews and materialises it. It deliberately does NOT show the
@@ -36,6 +36,10 @@
                     id="cohortMaterializeBtn"
                     onclick="CohortModule.openMaterializeModal()" disabled>
                 <i class="bi bi-cloud-upload me-1"></i>Materialise
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                    title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
+                <i class="bi bi-chat-dots"></i>
             </button>
         </div>
     </div>

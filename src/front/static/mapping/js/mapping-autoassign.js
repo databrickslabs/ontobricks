@@ -77,8 +77,91 @@ window.AutoAssignModule = {
         
         this.initialized = true;
         this.updateStatus();
+        this.checkMetadataQuality();
     },
-    
+
+    /**
+     * Fetch catalog metadata and warn when table/column descriptions are missing.
+     * Missing descriptions reduce AI mapping accuracy.
+     */
+    checkMetadataQuality: async function() {
+        const warningEl = document.getElementById('metadataQualityWarning');
+        if (!warningEl) return;
+
+        let metadata;
+        try {
+            const resp = await fetch('/domain/metadata', { credentials: 'same-origin' });
+            const data = await resp.json();
+            if (!data.success || !data.has_metadata) {
+                warningEl.style.display = 'none';
+                return;
+            }
+            metadata = data.metadata;
+        } catch (e) {
+            console.warn('[AutoAssign] Could not fetch metadata for quality check:', e);
+            return;
+        }
+
+        const tables = metadata.tables || [];
+        if (tables.length === 0) {
+            warningEl.style.display = 'none';
+            return;
+        }
+
+        const tablesNoDesc = [];
+        const columnsNoDesc = [];
+
+        for (const t of tables) {
+            const tName = t.full_name || t.name || '?';
+            if (!t.comment || !t.comment.trim()) {
+                tablesNoDesc.push(tName);
+            }
+            for (const col of (t.columns || [])) {
+                if (!col.comment || !col.comment.trim()) {
+                    columnsNoDesc.push({ table: tName, column: col.name || '?' });
+                }
+            }
+        }
+
+        const totalMissing = tablesNoDesc.length + columnsNoDesc.length;
+        if (totalMissing === 0) {
+            warningEl.style.display = 'none';
+            return;
+        }
+
+        const collapseId = 'metaQualityDetails';
+        const tableRows = tablesNoDesc.map(t =>
+            `<li><i class="bi bi-table text-muted me-1"></i><code>${t}</code> — no table description</li>`
+        ).join('');
+        const colRows = columnsNoDesc.map(c =>
+            `<li><i class="bi bi-columns text-muted me-1"></i><code>${c.table}</code> › <strong>${c.column}</strong> — no column description</li>`
+        ).join('');
+
+        warningEl.innerHTML = `
+            <div class="alert alert-warning mb-0 py-2">
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+                    <div class="flex-grow-1">
+                        <strong>Incomplete data source descriptions may reduce mapping accuracy.</strong>
+                        <span class="ms-1">${tablesNoDesc.length} table(s) and ${columnsNoDesc.length} column(s) are missing descriptions.</span>
+                        <button class="btn btn-link btn-sm py-0 px-1 ms-1 text-warning-emphasis text-decoration-none"
+                                type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                            <i class="bi bi-chevron-down" style="font-size:0.75rem;"></i> Show details
+                        </button>
+                        <a href="/domain/?section=metadata" class="btn btn-link btn-sm py-0 px-1 ms-1 text-warning-emphasis text-decoration-none">
+                            <i class="bi bi-pencil-square"></i> Edit descriptions
+                        </a>
+                        <div class="collapse mt-2" id="${collapseId}">
+                            <ul class="list-unstyled mb-0 small" style="max-height:180px;overflow-y:auto;">
+                                ${tableRows}${colRows}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        warningEl.style.display = 'block';
+    },
+
     /**
      * Check if a saved task is still running and resume monitoring
      */
@@ -181,12 +264,20 @@ window.AutoAssignModule = {
             if (dataProps.length === 0) return false;
             const em = mappingByClass[cls.uri] || {};
             const attrMap = em.attribute_mappings || {};
+            const exclAttrs = new Set(em.excluded_attributes || []);
+            // Only count included attributes as missing.
             return dataProps.some(dp => {
                 const name = dp.name || dp.localName || '';
-                return name && !attrMap[name];
+                return name && !exclAttrs.has(name) && !attrMap[name];
             });
         });
         
+        // Excluded counts
+        const excludedEntityCount = allClasses.filter(c => c.excluded).length;
+        const excludedRelCount = allProperties.filter(p =>
+            p.excluded || excludedNames.has(p.domain) || excludedNames.has(p.range)
+        ).length;
+
         // Update UI - show assigned / total (non-excluded)
         const assignedEntityCount = classes.length - unassignedEntities.length;
         const assignedRelCount = properties.length - unassignedRels.length;
@@ -195,24 +286,31 @@ window.AutoAssignModule = {
         const attrCountEl = document.getElementById('autoAssignAttrCount');
         const reassignBtn = document.getElementById('reassignAttrsBtn');
 
-        if (entityCountEl) entityCountEl.textContent = `${assignedEntityCount} / ${classes.length}`;
-        if (relCountEl) relCountEl.textContent = `${assignedRelCount} / ${properties.length}`;
+        const _excl = (n) => n > 0 ? ` <span class="text-warning-emphasis" title="${n} excluded" style="font-size:0.72rem;">· ${n} excl.</span>` : '';
+        if (entityCountEl) entityCountEl.innerHTML = `${assignedEntityCount} / ${classes.length}${_excl(excludedEntityCount)}`;
+        if (relCountEl) relCountEl.innerHTML = `${assignedRelCount} / ${properties.length}${_excl(excludedRelCount)}`;
 
-        // Compute attribute completion across mapped entities
+        // Compute attribute completion across mapped entities (non-excluded)
+        // Only included attributes (not in excluded_attributes) count towards the total.
         let totalAttributes = 0;
         let mappedAttributes = 0;
+        let excludedAttrCount = 0;
         for (const cls of classes) {
             const dataProps = cls.dataProperties || [];
             if (dataProps.length === 0) continue;
-            totalAttributes += dataProps.length;
             const em = mappingByClass[cls.uri] || {};
             const attrMap = em.attribute_mappings || {};
+            const exclAttrs = new Set(em.excluded_attributes || []);
+            excludedAttrCount += exclAttrs.size;
             for (const dp of dataProps) {
                 const name = dp.name || dp.localName || '';
-                if (name && attrMap[name]) mappedAttributes++;
+                if (!name) continue;
+                if (exclAttrs.has(name)) continue;  // excluded — don't count in total
+                totalAttributes++;
+                if (attrMap[name]) mappedAttributes++;
             }
         }
-        if (attrCountEl) attrCountEl.textContent = `${mappedAttributes} / ${totalAttributes}`;
+        if (attrCountEl) attrCountEl.innerHTML = `${mappedAttributes} / ${totalAttributes}${_excl(excludedAttrCount)}`;
 
         // Draw gauges (reuses _drawMappingGauge from mapping-information.js)
         const entityPct = classes.length > 0 ? (assignedEntityCount / classes.length) * 100 : null;
@@ -432,7 +530,11 @@ window.AutoAssignModule = {
         }
         
         const entities = unassignedClasses.map(entity => {
-            const attributes = (entity.dataProperties || []).map(a => a.name || a.localName || a);
+            const existingMapping = entityMappings.find(m => m.ontology_class === entity.uri);
+            const exclAttrs = new Set(existingMapping?.excluded_attributes || []);
+            const attributes = (entity.dataProperties || [])
+                .map(a => a.name || a.localName || a)
+                .filter(a => !exclAttrs.has(a));
             return {
                 uri: entity.uri,
                 name: entity.label || entity.name || entity.localName,
@@ -517,16 +619,17 @@ window.AutoAssignModule = {
             if (uri) mappingByClass[uri] = m;
         });
         
-        // Find non-excluded entities with missing attributes
+        // Find non-excluded entities with missing included attributes
         const partialEntities = classes.filter(cls => {
             if (!assignedEntityUris.has(cls.uri)) return false;
             const dataProps = cls.dataProperties || [];
             if (dataProps.length === 0) return false;
             const em = mappingByClass[cls.uri] || {};
             const attrMap = em.attribute_mappings || {};
+            const exclAttrs = new Set(em.excluded_attributes || []);
             return dataProps.some(dp => {
                 const name = dp.name || dp.localName || '';
-                return name && !attrMap[name];
+                return name && !exclAttrs.has(name) && !attrMap[name];
             });
         });
         
@@ -535,9 +638,13 @@ window.AutoAssignModule = {
             return;
         }
         
-        // Build data for backend (same format as start())
+        // Build data for backend (same format as start()) — exclude user-excluded attributes
         const entities = partialEntities.map(entity => {
-            const attributes = (entity.dataProperties || []).map(a => a.name || a.localName || a);
+            const existingMapping = entityMappings.find(m => m.ontology_class === entity.uri);
+            const exclAttrs = new Set(existingMapping?.excluded_attributes || []);
+            const attributes = (entity.dataProperties || [])
+                .map(a => a.name || a.localName || a)
+                .filter(a => !exclAttrs.has(a));
             return {
                 uri: entity.uri,
                 name: entity.label || entity.name || entity.localName,

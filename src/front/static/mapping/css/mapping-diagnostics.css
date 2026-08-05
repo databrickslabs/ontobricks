@@ -72,6 +72,29 @@
     min-width: 0;
 }
 
+/* Row-count badge in the item header */
+.diag-count-badge {
+    flex-shrink: 0;
+    margin: 0 0.6rem;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: #0d6efd;
+    background: #e7f1ff;
+    border-radius: 0.75rem;
+}
+
+.diag-count-badge.diag-count-empty {
+    color: #856404;
+    background: #fff3cd;
+}
+
+.diag-count-badge i {
+    font-size: 0.7rem;
+    margin-right: 0.15rem;
+}
+
 .diag-chevron {
     font-size: 0.75rem;
     transition: transform 0.2s;

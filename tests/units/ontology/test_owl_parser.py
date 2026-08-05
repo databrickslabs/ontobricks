@@ -242,6 +242,25 @@ class TestGetOntologyInfo:
         info = parser.get_ontology_info()
         assert info["namespace"].endswith("#") or info["namespace"].endswith("/")
 
+    def test_missing_ontology_declaration_falls_back_to_default_uri(self):
+        """A file with no owl:Ontology header must not yield a "Unknown" uri.
+
+        Regression: the "Unknown" sentinel used to leak into the domain's
+        stored base_uri and show up on the Registry Browse page.
+        """
+        from shared.config.constants import DEFAULT_BASE_URI
+
+        classes_only = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://test.org/ontology#> .
+
+:Customer a owl:Class ; rdfs:label "Customer" .
+"""
+        info = OntologyParser(classes_only).get_ontology_info()
+        assert info["uri"] != "Unknown"
+        assert info["uri"] == DEFAULT_BASE_URI
+        assert info["namespace"] == DEFAULT_BASE_URI
+
 
 class TestGetConstraints:
     def test_functional_property(self):

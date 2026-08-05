@@ -1,6 +1,6 @@
 /**
  * OntoBricks - query-visualization.css
- * Shared styles used by Knowledge Graph detail panels, filter panes, and entity views
+ * Shared styles used by Graph Viewer detail panels, filter panes, and entity views
  */
 
 /* Graph Wrapper (contains graph + filter pane vertically) */
@@ -371,7 +371,12 @@
 }
 
 .graph-context-menu .ctx-item:hover {
-    background: #ffffff;
+    background: #e8f4fd;
+    color: #1a73e8;
+}
+
+.graph-context-menu .ctx-item:hover i {
+    color: #1a73e8;
 }
 
 .graph-context-menu .ctx-item i {

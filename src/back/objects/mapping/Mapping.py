@@ -516,6 +516,8 @@ class Mapping:
         }
         if data.get("excluded"):
             mapping["excluded"] = True
+        if data.get("excluded_attributes"):
+            mapping["excluded_attributes"] = list(data["excluded_attributes"])
         return mapping
 
     @staticmethod
@@ -537,6 +539,8 @@ class Mapping:
         }
         if data.get("excluded"):
             mapping["excluded"] = True
+        if data.get("excluded_attributes"):
+            mapping["excluded_attributes"] = list(data["excluded_attributes"])
         return mapping
 
     def add_or_update_entity_mapping(
@@ -560,6 +564,12 @@ class Mapping:
 
         domain.assignment["entities"] = mappings
         domain.clear_generated_content()
+        domain.record_change(
+            "mapping_entity_updated" if was_update else "mapping_entity_added",
+            entity_type="mapping_entity",
+            entity_ref=new_mapping.get("ontology_class", ""),
+            summary=new_mapping.get("ontology_class", ""),
+        )
         domain.save()
 
         return was_update, new_mapping
@@ -573,6 +583,10 @@ class Mapping:
         if len(mappings) < original_len:
             domain.assignment["entities"] = mappings
             domain.clear_generated_content()
+            domain.record_change(
+                "mapping_entity_removed", entity_type="mapping_entity",
+                entity_ref=ontology_class, summary=ontology_class,
+            )
             domain.save()
             return True
         return False
@@ -598,6 +612,13 @@ class Mapping:
 
         domain.assignment["relationships"] = mappings
         domain.clear_generated_content()
+        domain.record_change(
+            "mapping_relationship_updated" if was_update
+            else "mapping_relationship_added",
+            entity_type="mapping_relationship",
+            entity_ref=new_mapping.get("property", ""),
+            summary=new_mapping.get("property", ""),
+        )
         domain.save()
 
         return was_update, new_mapping
@@ -611,12 +632,19 @@ class Mapping:
         if len(mappings) < original_len:
             domain.assignment["relationships"] = mappings
             domain.clear_generated_content()
+            domain.record_change(
+                "mapping_relationship_removed",
+                entity_type="mapping_relationship",
+                entity_ref=property_uri, summary=property_uri,
+            )
             domain.save()
             return True
         return False
 
     def save_mapping_config(self, mapping_config: Dict[str, Any]) -> Dict[str, int]:
         domain = self._domain
+        old_entities = list(domain.get_entity_mappings())
+        old_rels = list(domain.get_relationship_mappings())
         domain.assignment["entities"] = mapping_config.get(
             "entities", mapping_config.get("data_source_mappings", [])
         )
@@ -627,6 +655,12 @@ class Mapping:
             domain.assignment["r2rml_output"] = mapping_config["r2rml_output"]
 
         domain.clear_generated_content()
+        self._record_mapping_diff(
+            old_entities,
+            domain.get_entity_mappings(),
+            old_rels,
+            domain.get_relationship_mappings(),
+        )
         domain.save()
 
         return {
@@ -634,12 +668,45 @@ class Mapping:
             "relationships": len(domain.get_relationship_mappings()),
         }
 
+    @staticmethod
+    def _diff_mappings(
+        old_list: list, new_list: list, key: str
+    ) -> Tuple[list, list, list]:
+        """Return (added, updated, removed) keys for mappings keyed by *key*."""
+        old_map = {m.get(key): m for m in (old_list or []) if m.get(key)}
+        new_map = {m.get(key): m for m in (new_list or []) if m.get(key)}
+        added = [k for k in new_map if k not in old_map]
+        removed = [k for k in old_map if k not in new_map]
+        updated = [k for k in new_map if k in old_map and new_map[k] != old_map[k]]
+        return added, updated, removed
+
+    def _record_mapping_diff(
+        self, old_entities: list, new_entities: list, old_rels: list, new_rels: list
+    ) -> None:
+        """Buffer per-mapping change events for a bulk mapping replacement."""
+        domain = self._domain
+        for entity_type, key, old, new in (
+            ("mapping_entity", "ontology_class", old_entities, new_entities),
+            ("mapping_relationship", "property", old_rels, new_rels),
+        ):
+            added, updated, removed = self._diff_mappings(old, new, key)
+            for verb, refs in (("added", added), ("updated", updated),
+                               ("removed", removed)):
+                for ref in refs:
+                    domain.record_change(f"{entity_type}_{verb}",
+                                         entity_type=entity_type,
+                                         entity_ref=ref, summary=ref)
+
     def reset_mapping(self) -> None:
         domain = self._domain
         domain.assignment["entities"] = []
         domain.assignment["relationships"] = []
         domain.assignment["r2rml_output"] = ""
         domain.clear_generated_content()
+        domain.record_change(
+            "mapping_reset", entity_type="mapping",
+            summary="All mappings reset",
+        )
         domain.save()
 
     def generate_r2rml(self) -> str:
@@ -659,7 +726,7 @@ class Mapping:
             raise ValidationError("No entity mappings configured")
 
         try:
-            base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+            base_uri = domain.ontology.get("base_uri") or DEFAULT_BASE_URI
             generator = R2RMLGenerator(base_uri)
             r2rml_content = generator.generate_mapping(
                 domain.assignment, domain.ontology
@@ -910,6 +977,57 @@ class Mapping:
         return results
 
     @staticmethod
+    def _merge_entity_mappings(
+        existing: List[Dict[str, Any]], incoming: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Upsert *incoming* entity mappings into *existing* (keyed by class URI).
+
+        Preserves an existing ``excluded`` flag when the incoming mapping does
+        not set one, so a re-map never silently re-includes an entity the user
+        excluded.
+        """
+        merged = list(existing)
+        for new_m in incoming:
+            uri = new_m.get("ontology_class") or new_m.get("class_uri", "")
+            idx = next(
+                (
+                    i
+                    for i, m in enumerate(merged)
+                    if (m.get("ontology_class") or m.get("class_uri")) == uri
+                ),
+                None,
+            )
+            if idx is not None:
+                if merged[idx].get("excluded") and "excluded" not in new_m:
+                    new_m["excluded"] = True
+                merged[idx] = new_m
+            else:
+                merged.append(new_m)
+        return merged
+
+    @staticmethod
+    def _merge_relationship_mappings(
+        existing: List[Dict[str, Any]], incoming: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Upsert *incoming* relationship mappings into *existing* (keyed by
+        ``property``), preserving an existing ``excluded`` flag.
+        """
+        merged = list(existing)
+        for new_m in incoming:
+            uri = new_m.get("property", "")
+            idx = next(
+                (i for i, m in enumerate(merged) if m.get("property") == uri),
+                None,
+            )
+            if idx is not None:
+                if merged[idx].get("excluded") and "excluded" not in new_m:
+                    new_m["excluded"] = True
+                merged[idx] = new_m
+            else:
+                merged.append(new_m)
+        return merged
+
+    @staticmethod
     def save_mappings_to_session(
         session_id: Optional[str],
         session_ref: Any,
@@ -941,48 +1059,17 @@ class Mapping:
 
             if entity_mappings is not None:
                 if existing_entity_mappings is not None:
-                    merged = list(existing_entity_mappings)
-                    for new_m in entity_mappings:
-                        uri = new_m.get("ontology_class") or new_m.get("class_uri", "")
-                        idx = next(
-                            (
-                                i
-                                for i, m in enumerate(merged)
-                                if (m.get("ontology_class") or m.get("class_uri"))
-                                == uri
-                            ),
-                            None,
-                        )
-                        if idx is not None:
-                            if merged[idx].get("excluded") and "excluded" not in new_m:
-                                new_m["excluded"] = True
-                            merged[idx] = new_m
-                        else:
-                            merged.append(new_m)
-                    assignment["entities"] = merged
+                    assignment["entities"] = Mapping._merge_entity_mappings(
+                        existing_entity_mappings, entity_mappings
+                    )
                 else:
                     assignment["entities"] = entity_mappings
 
             if relationship_mappings is not None:
                 if existing_relationship_mappings is not None:
-                    merged = list(existing_relationship_mappings)
-                    for new_m in relationship_mappings:
-                        uri = new_m.get("property", "")
-                        idx = next(
-                            (
-                                i
-                                for i, m in enumerate(merged)
-                                if m.get("property") == uri
-                            ),
-                            None,
-                        )
-                        if idx is not None:
-                            if merged[idx].get("excluded") and "excluded" not in new_m:
-                                new_m["excluded"] = True
-                            merged[idx] = new_m
-                        else:
-                            merged.append(new_m)
-                    assignment["relationships"] = merged
+                    assignment["relationships"] = Mapping._merge_relationship_mappings(
+                        existing_relationship_mappings, relationship_mappings
+                    )
                 else:
                     assignment["relationships"] = relationship_mappings
 
@@ -1101,6 +1188,20 @@ class Mapping:
             for prop in domain.ontology.get("properties", []):
                 prop.pop("excluded", None)
 
+        if changed:
+            domain.record_change(
+                "mapping_excluded" if excluded else "mapping_included",
+                entity_type=(
+                    "mapping_entity" if item_type == "entity"
+                    else "mapping_relationship"
+                ),
+                entity_ref=", ".join(sorted(uri_set))[:500],
+                summary=(
+                    f"{'Excluded' if excluded else 'Included'} {changed} "
+                    f"{item_type} mapping(s)"
+                ),
+                meta={"uris": sorted(uri_set), "excluded": excluded},
+            )
         domain.save()
         return changed
 
@@ -1155,10 +1256,11 @@ class Mapping:
                 continue
             em = mapping_by_class.get(cls_uri, {})
             attr_map = em.get("attribute_mappings", {})
+            excluded_attrs = set(em.get("excluded_attributes", []))
             cls_label = cls.get("label") or cls.get("name", "Unknown")
             for dp in data_props:
                 attr_name = dp.get("name") or dp.get("localName") or ""
-                if attr_name and attr_name not in attr_map:
+                if attr_name and attr_name not in attr_map and attr_name not in excluded_attrs:
                     unmapped_attributes.append(
                         {"class": cls_label, "attribute": attr_name}
                     )
@@ -1407,12 +1509,43 @@ class Mapping:
             },
         }
 
-    @staticmethod
-    def _check_query_has_data(sql_query: str, client: Any) -> Dict[str, str]:
-        """Execute *sql_query* with LIMIT 1 and report whether it returns rows.
+    @classmethod
+    def _references_excluded_entity(
+        cls, rel: Dict[str, Any], excluded_lookup: Dict[str, Dict]
+    ) -> bool:
+        """Return ``True`` when *rel*'s source or target resolves to an
+        entity the user has excluded.
 
-        Returns a check dict with keys ``check``, ``status``, ``detail``
-        suitable for inclusion in an entity or relationship ``checks`` list.
+        Such a relationship is treated as excluded by the diagnostics —
+        e.g. ``has: Meter → MeterReading`` is dropped when ``MeterReading``
+        is excluded, instead of being reported as a "target entity not
+        found" error.
+        """
+        if not excluded_lookup:
+            return False
+        src = cls._resolve_entity(
+            excluded_lookup,
+            rel.get("source_class", ""),
+            rel.get("source_class_label", ""),
+        )
+        tgt = cls._resolve_entity(
+            excluded_lookup,
+            rel.get("target_class", ""),
+            rel.get("target_class_label", ""),
+        )
+        return bool(src or tgt)
+
+    @staticmethod
+    def _probe_query_rows(
+        sql_query: str, client: Any
+    ) -> Tuple[Dict[str, str], Optional[int]]:
+        """Run ``COUNT(*)`` over *sql_query* and report row presence + count.
+
+        Returns ``(check, row_count)`` where *check* is a dict with keys
+        ``check``, ``status``, ``detail`` suitable for an entity/relationship
+        ``checks`` list, and *row_count* is the number of rows the query
+        returns (``None`` when the probe failed). A single ``COUNT(*)``
+        round-trip yields both the row count and the data-presence signal.
         Errors thrown by the warehouse (e.g. syntax errors, missing tables)
         are surfaced as ``error`` status so the user sees an actionable
         message rather than a silent failure.
@@ -1424,24 +1557,44 @@ class Mapping:
                 sql_query.strip().rstrip(";"),
                 flags=re.IGNORECASE,
             ).strip()
-            rows = client.execute_query(f"{probe} LIMIT 1")
+            rows = client.execute_query(
+                f"SELECT COUNT(*) AS cnt FROM ({probe}) AS _diag_count"
+            )
+            count = 0
             if rows:
-                return {
+                first = rows[0]
+                value = (
+                    next(iter(first.values()))
+                    if isinstance(first, dict)
+                    else first[0]
+                )
+                count = int(value) if value is not None else 0
+            if count > 0:
+                return (
+                    {
+                        "check": "has_data",
+                        "status": "ok",
+                        "detail": f"Query returns {count:,} row(s)",
+                    },
+                    count,
+                )
+            return (
+                {
                     "check": "has_data",
-                    "status": "ok",
-                    "detail": "Query returns data",
-                }
-            return {
-                "check": "has_data",
-                "status": "warning",
-                "detail": "Query returns no rows — source table may be empty",
-            }
+                    "status": "warning",
+                    "detail": "Query returns no rows — source table may be empty",
+                },
+                0,
+            )
         except Exception as exc:  # noqa: BLE001
-            return {
-                "check": "has_data",
-                "status": "error",
-                "detail": f"Query execution failed: {exc}",
-            }
+            return (
+                {
+                    "check": "has_data",
+                    "status": "error",
+                    "detail": f"Query execution failed: {exc}",
+                },
+                None,
+            )
 
     def run_diagnostics(self, *, client: Any = None) -> Dict[str, Any]:
         """Run comprehensive validation on all entity and relationship mappings.
@@ -1467,7 +1620,19 @@ class Mapping:
         entity_lookup = self._build_entity_lookup(entities)
 
         active_entities = [e for e in entities if not e.get("excluded")]
-        active_rels = [r for r in relationships if not r.get("excluded")]
+
+        # A relationship whose source *or* target entity has been excluded is
+        # itself implicitly excluded — flagging it as a "missing entity" error
+        # would be misleading because the user deliberately dropped that side.
+        excluded_lookup = self._index_entities_by_alias(
+            [e for e in entities if e.get("excluded")]
+        )
+        active_rels = [
+            r
+            for r in relationships
+            if not r.get("excluded")
+            and not self._references_excluded_entity(r, excluded_lookup)
+        ]
 
         entity_results = [
             self._diagnose_entity(ent, ont_index) for ent in active_entities
@@ -1477,20 +1642,23 @@ class Mapping:
             for rel in active_rels
         ]
 
-        # When a warehouse client is available, probe each SQL query for data.
+        # When a warehouse client is available, probe each SQL query for row
+        # presence and count, surfacing both in the per-item result.
         if client is not None:
             for ent, result in zip(active_entities, entity_results):
                 sql = (ent.get("sql_query") or "").strip()
                 if sql:
-                    data_check = self._check_query_has_data(sql, client)
+                    data_check, count = self._probe_query_rows(sql, client)
                     result["checks"].append(data_check)
+                    result["row_count"] = count
                     result["status"] = self._aggregate_status(result["checks"])
 
             for rel, result in zip(active_rels, rel_results):
                 sql = (rel.get("sql_query") or "").strip()
                 if sql:
-                    data_check = self._check_query_has_data(sql, client)
+                    data_check, count = self._probe_query_rows(sql, client)
                     result["checks"].append(data_check)
+                    result["row_count"] = count
                     result["status"] = self._aggregate_status(result["checks"])
 
         permission_section = self._run_permission_checks(client)
@@ -1553,12 +1721,11 @@ class Mapping:
         }
 
     @staticmethod
-    def _build_entity_lookup(entities: List[Dict]) -> Dict[str, Dict]:
-        """Index non-excluded entity mappings by every alias used downstream."""
+    def _index_entities_by_alias(entities: List[Dict]) -> Dict[str, Dict]:
+        """Index *entities* by every alias (table, label, class URI, local name)
+        used downstream — no ``excluded`` filtering is applied here."""
         entity_lookup: Dict[str, Dict] = {}
         for m in entities:
-            if m.get("excluded"):
-                continue
             for key in (
                 m.get("table"),
                 m.get("ontology_class_label"),
@@ -1574,6 +1741,13 @@ class Mapping:
                     entity_lookup[local] = m
                     entity_lookup[local.lower()] = m
         return entity_lookup
+
+    @staticmethod
+    def _build_entity_lookup(entities: List[Dict]) -> Dict[str, Dict]:
+        """Index non-excluded entity mappings by every alias used downstream."""
+        return Mapping._index_entities_by_alias(
+            [m for m in entities if not m.get("excluded")]
+        )
 
     @staticmethod
     def _aggregate_status(checks: List[Dict[str, str]]) -> str:
@@ -1723,6 +1897,7 @@ class Mapping:
             "available_columns": (
                 sorted(available_cols) if available_cols else None
             ),
+            "row_count": None,
             "checks": checks,
         }
 
@@ -1891,6 +2066,7 @@ class Mapping:
             "source_class": src_label or src_class,
             "target_class": tgt_label or tgt_class,
             "status": cls._aggregate_status(checks),
+            "row_count": None,
             "checks": checks,
         }
 

@@ -4,11 +4,13 @@ Internal API -- Settings / configuration JSON endpoints.
 Moved from app/frontend/settings/routes.py during the front/back split.
 """
 
+import asyncio
 import json
 
 from typing import Optional
 
-from fastapi import APIRouter, Request, Depends, Query
+from fastapi import APIRouter, Request, Depends, Query, Response
+from fastapi.responses import PlainTextResponse
 
 from shared.config.settings import get_settings, Settings
 from shared.config.constants import DEFAULT_BASE_URI
@@ -20,7 +22,7 @@ from back.objects.registry import ROLE_ADMIN, require
 
 from api.routers.internal._permissions import filter_visible_domains
 from api.routers.internal._helpers import map_route_errors
-from back.core.logging import get_logger
+from back.core.logging import get_logger, LogManager
 
 from back.objects.domain import SettingsService as config_service
 
@@ -204,13 +206,75 @@ async def get_registry(
     return await run_blocking(config_service.build_registry_get_payload, session_mgr, settings)
 
 
+@router.get("/registry/check")
+async def check_registry_access(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Probe UC schema/Volume existence + Lakebase registry permissions.
+
+    Combines three independent checks:
+    - UC schema: exists + USE SCHEMA privilege (REST API, no warehouse needed)
+    - UC Volume: exists + READ VOLUME privilege (REST API, no warehouse needed)
+    - Lakebase: connection, schema USAGE/CREATE, and per-table CRUD privileges
+
+    Each check runs independently; a failure in one does not stop the others.
+    """
+    uc_result, lb_result = await asyncio.gather(
+        config_service.check_registry_access(session_mgr, settings),
+        config_service.check_lakebase_permissions(session_mgr, settings),
+        return_exceptions=True,
+    )
+    # Unwrap exceptions from gather — surface as error payloads
+    if isinstance(uc_result, Exception):
+        uc_result = {"success": False, "error": str(uc_result)}
+    if isinstance(lb_result, Exception):
+        lb_result = {"success": False, "error": str(lb_result)}
+
+    return {
+        "success": True,
+        "uc": uc_result,
+        "lakebase": lb_result,
+    }
+
+
 @router.post("/registry/initialize")
 async def initialize_registry(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Create the registry Volume (and root marker) if they do not exist."""
-    return config_service.initialize_registry_result(session_mgr, settings)
+    """Create the registry Volume (and root marker) if they do not exist.
+
+    On the Lakebase backend this also self-serves the project/schema/UC
+    grants the app + MCP service principals need (in-app port of
+    ``scripts/bootstrap-lakebase-perms.sh``); the per-SP outcome is
+    returned under the ``permissions`` key.
+    """
+    return await run_blocking(
+        config_service.initialize_registry_result, session_mgr, settings
+    )
+
+
+@router.post(
+    "/registry/grant-permissions",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def grant_registry_permissions(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Re-apply Lakebase grants for the registry schema to the app SPs.
+
+    Admin-only, in-app equivalent of ``scripts/bootstrap-lakebase-perms.sh``:
+    grants ``CAN_USE`` on the project, ``USAGE``/DML on the registry schema,
+    and ``ALL_PRIVILEGES`` on the UC catalog to the app + MCP service
+    principals. Idempotent — safe to re-run after a rebind/redeploy that
+    dropped the schema GRANTs. Control-plane grants are best-effort.
+    """
+    with map_route_errors("registry grant permissions", logger):
+        return await config_service.grant_registry_permissions_result(
+            session_mgr, settings
+        )
 
 
 @router.get(
@@ -551,6 +615,32 @@ async def save_registry_cache_ttl(
     )
     return config_service.save_registry_cache_ttl_result(
         ttl, email, user_token, session_mgr, settings
+    )
+
+
+@router.get("/edit-lock-ttl")
+async def get_edit_lock_ttl(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get the effective DRAFT edit-lock lease TTL in seconds (0 = disabled)."""
+    return config_service.get_edit_lock_ttl_result(session_mgr, settings)
+
+
+@router.post("/save-edit-lock-ttl")
+async def save_edit_lock_ttl(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the DRAFT edit-lock lease TTL in seconds (admin only, global; 0 disables)."""
+    data = await request.json()
+    ttl_s = int(data.get("edit_lock_ttl_s", 600))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_edit_lock_ttl_result(
+        ttl_s, email, user_token, session_mgr, settings
     )
 
 
@@ -1100,6 +1190,134 @@ async def run_schedule_now(
     """Fire the build schedule for *domain_name* immediately (one-shot)."""
     return config_service.trigger_schedule_now_result(
         domain_name, session_mgr, settings
+    )
+
+
+# ===========================================
+# Domain edit locks (admin overview)
+# ===========================================
+
+
+@router.get(
+    "/locks",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def list_edit_locks(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List all active domain edit-locks across the registry (admin only)."""
+    from back.objects.registry.lockmgt import EditLockService
+
+    with map_route_errors("list edit locks", logger):
+        return EditLockService.list_all(session_mgr, settings)
+
+
+@router.post(
+    "/locks/release",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def release_edit_lock_admin(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Force-unlock a ``(folder, version)`` edit-lock (admin only)."""
+    from back.objects.registry.lockmgt import EditLockService
+
+    data = await request.json()
+    folder = (data.get("folder") or "").strip()
+    version = (data.get("version") or "").strip()
+    if not folder or not version:
+        raise ValidationError("folder and version are required")
+    with map_route_errors("force release edit lock", logger):
+        return EditLockService.admin_release(
+            session_mgr, settings, folder, version
+        )
+
+
+# ===========================================
+# Application Logs
+# ===========================================
+
+
+@router.get(
+    "/logs",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_app_logs(
+    lines: int = Query(default=200, ge=1, le=5000),
+):
+    """Return the last *lines* lines of the rotating application log file (admin only)."""
+    from pathlib import Path as _Path
+
+    mgr = LogManager.instance()
+    log_path = mgr.log_path
+    if not log_path:
+        return {"log_path": None, "log_level": mgr.level, "lines": [], "total_lines": 0}
+
+    def _read() -> list[str]:
+        p = _Path(log_path)
+        if not p.exists():
+            return []
+        return p.read_text(encoding="utf-8", errors="replace").splitlines()
+
+    try:
+        all_lines: list[str] = await run_blocking(_read)
+        tail = all_lines[-lines:]
+        return {
+            "log_path": log_path,
+            "log_level": mgr.level,
+            "lines": tail,
+            "total_lines": len(all_lines),
+        }
+    except Exception as exc:
+        logger.warning("Failed to read log file %s: %s", log_path, exc)
+        return {
+            "log_path": log_path,
+            "log_level": mgr.level,
+            "lines": [f"[Error reading log file: {exc}]"],
+            "total_lines": 0,
+        }
+
+
+@router.get(
+    "/logs/download",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def download_app_logs():
+    """Download the full rotating log file as a plain-text attachment (admin only).
+
+    Reads the file atomically into memory so Content-Length always matches the
+    actual body — avoids a Content-Length mismatch on a live log that is still
+    being written to.
+    """
+    from pathlib import Path as _Path
+
+    mgr = LogManager.instance()
+    log_path = mgr.log_path
+    if not log_path:
+        return PlainTextResponse("Log file not configured.", status_code=404)
+
+    p = _Path(log_path)
+    if not p.exists():
+        return PlainTextResponse(f"Log file not found: {log_path}", status_code=404)
+
+    try:
+        content: bytes = await run_blocking(p.read_bytes)
+    except Exception as exc:
+        logger.warning("Failed to read log file for download %s: %s", log_path, exc)
+        return PlainTextResponse(f"Error reading log file: {exc}", status_code=500)
+
+    from datetime import datetime as _dt
+    stamp = _dt.now().strftime("%Y%m%d_%H%M%S")
+    stem = p.stem   # e.g. "ontobricks"
+    filename = f"{stem}_{stamp}.log"
+
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

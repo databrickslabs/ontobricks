@@ -615,7 +615,8 @@ class SQLWizardService:
         token = col_expr.strip().split(".")[-1].strip('`"')
         return token
 
-    def _deduplicate_select_columns(self, sql: str, mapping_type: str = None) -> str:
+    @staticmethod
+    def _deduplicate_select_columns(sql: str, mapping_type: str = None) -> str:
         """Ensure every column in the SELECT list has a unique output name.
 
         - For *entity* queries: guarantees the first column is aliased AS ID
@@ -624,13 +625,16 @@ class SQLWizardService:
           AS source_id and the second AS target_id.
         - For any query: if two columns share the same effective output name,
           the later occurrence(s) get a numeric suffix (e.g. col_2).
+
+        Made static so it can be reused from agents/tools/mapping.py's Auto-Map
+        submission tools without constructing a full SQLWizardService.
         """
-        parsed = self._parse_select_columns(sql)
+        parsed = SQLWizardService._parse_select_columns(sql)
         if parsed is None or len(parsed) != 3:
             return sql
 
         prefix, select_part, rest = parsed
-        columns = self._split_columns(select_part)
+        columns = SQLWizardService._split_columns(select_part)
 
         if not columns:
             return sql
@@ -646,7 +650,7 @@ class SQLWizardService:
         for idx, alias in required.items():
             if idx < len(columns):
                 col = columns[idx]
-                eff = self._effective_name(col)
+                eff = SQLWizardService._effective_name(col)
                 if eff.upper() != alias.upper():
                     # Strip any existing alias first
                     col_stripped = re.sub(
@@ -658,10 +662,10 @@ class SQLWizardService:
         seen = {}  # lowercase name -> count
         deduped = []
         for col in columns:
-            eff = self._effective_name(col).lower()
+            eff = SQLWizardService._effective_name(col).lower()
             if eff in seen:
                 seen[eff] += 1
-                new_alias = f"{self._effective_name(col)}_{seen[eff]}"
+                new_alias = f"{SQLWizardService._effective_name(col)}_{seen[eff]}"
                 col_stripped = re.sub(
                     r"\s+AS\s+\S+\s*$", "", col, flags=re.IGNORECASE
                 ).strip()

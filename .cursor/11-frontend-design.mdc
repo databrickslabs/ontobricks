@@ -91,8 +91,10 @@ the entire app chrome — never duplicate or substitute any of it:
 
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
-| Navbar (top) | `<nav class="navbar navbar-expand-lg navbar-dark">` driven by `menu_config.json` | a custom top bar |
-| Breadcrumb | `#obBreadcrumb` / `.ob-breadcrumb`, populated by `breadcrumb.js` | a per-page breadcrumb |
+| L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-dark">` driven by `menu_config.json` | a custom top bar |
+| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains Domain / Ontology / Mapping / KG dropdowns + breadcrumb + Save Domain button | a second nav element |
+| Breadcrumb | `#obBreadcrumb` inside `#obBreadcrumbWrap` (`<li>` in the L2 subnav row), populated by `breadcrumb.js` | a per-page breadcrumb |
+| Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
 | Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
 | Task Tracker dropdown | `#taskTrackerDropdown` (hourglass) | a per-page task panel |
@@ -273,60 +275,120 @@ keyboard handling.
 - ❌ Adjusting `--ob-chrome-height` from page code — the breadcrumb
   computes it.
 
+### Two-Level Navigation (L1 + L2 subnav)
+
+The app chrome has **two horizontal nav levels**, both provided by `base.html`.
+
+#### L1 Navbar
+
+- Standard Bootstrap `<nav class="navbar navbar-expand-lg">`.
+- Shows: brand logo, Registry link, a `·` separator, a `›` path
+  separator, and the Domain link (`#domainL1Link`).
+- `#domainL1Link` is disabled (`.ob-nav-disabled`, `pointer-events: none`)
+  when no domain is loaded. Do not enable it from page code.
+- Other menus (Digital Twin) may be hidden via `"navbar_hidden": true`
+  in `menu_config.json`.
+
+#### L2 Subnav (`#obSubnav`)
+
+- `<nav id="obSubnav" class="ob-subnav d-none">` — hidden by default.
+- Revealed by `updateDomainMenuVisibility(true)` in `navbar.js` when
+  `hasDomain` becomes true (domain has a name or content in session).
+- Layout (left → right inside `.ob-subnav-nav`):
+  1. **Domain dropdown** (`#subnavDomainDropdown`) — all domain sub-sections.
+  2. A `.ob-subnav-divider`.
+  3. **Ontology dropdown** (`#subnavOntologyDropdown`).
+  4. **Mapping dropdown** (`#subnavMappingDropdown`).
+  5. **Knowledge Graph dropdown** (`#subnavKgDropdown`).
+  6. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
+  7. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
+  8. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
+- The three tab toggles (Ontology/Mapping/KG) do **not** carry
+  `nav-requires-domain`. They are enabled whenever the subnav is
+  visible. Specific dropdown items that truly need a UC-saved domain
+  keep `dropdown-requires-domain`.
+- `--ob-chrome-height` = navbar height + subnav height (subnav already
+  contains the breadcrumb). Updated by `_updateChromeHeight()` in
+  `breadcrumb.js` and called from `updateDomainMenuVisibility`.
+
+**Tokens**
+
+| Level | Token | Value |
+|-------|-------|-------|
+| L1 navbar background | `--db-navbar-bg` | `#ECECEC` |
+| L2 subnav background | `--db-subnav-bg` | `#F4F4F4` (lighter than L1) |
+| Breadcrumb | white (page background) | n/a |
+
+**New Domain flow**
+
+`domainNew()` in `navbar.js`:
+1. Opens `showNewDomainDialog()` (from `utils.js`) — collects name,
+   description, LLM endpoint.
+2. POSTs `/domain/clear` then `/domain/info`.
+3. Immediately opens `showDomainSaveDialog({ afterSave: '/domain/#information' })`
+   so the domain is registered in UC before navigation.
+
+`showNewDomainDialog()` is exposed as `window.showNewDomainDialog`.
+
+**Don'ts**
+
+- ❌ Adding a third nav level above or below these two.
+- ❌ Toggling `#obSubnav` visibility from page code — it is controlled
+  exclusively by `updateDomainMenuVisibility` in `navbar.js`.
+- ❌ Adding `nav-requires-domain` to the L2 tab toggles — the subnav
+  itself being hidden is the gate. Use `dropdown-requires-domain` on
+  items inside a dropdown that need UC.
+- ❌ Moving the Save Domain button out of the L2 subnav.
+- ❌ Manually setting `--ob-chrome-height` from page code.
+
 ### Breadcrumb Behaviour & Style
 
-The breadcrumb is owned by `global/js/breadcrumb.js` + the
-`.ob-breadcrumb` styles in `global/css/components.css`. It is **not**
+The breadcrumb is owned by `global/js/breadcrumb.js`. It is **not**
 configured per page — it is fully derived from the URL and the
 currently-active sidebar section.
 
+**Location**
+
+The breadcrumb now lives **inside the L2 subnav row** as
+`<li id="obBreadcrumbWrap" class="ob-subnav-item ob-subnav-breadcrumb-wrap d-none">`.
+It is not a standalone `<nav>` below the navbar. `breadcrumb.js`
+shows/hides `#obBreadcrumbWrap` (not `#obBreadcrumb`).
+
 **Behaviour**
 
-- The breadcrumb container `#obBreadcrumb` lives in `base.html` and is
-  hidden by default (`d-none`). `breadcrumb.js` auto-runs on
-  `DOMContentLoaded`, builds the crumbs and removes `d-none` only when
-  there is more than one crumb to show. Pages that never qualify
-  (e.g. home, about) keep it hidden — that is intentional, do not
-  force it.
+- `breadcrumb.js` auto-runs on `DOMContentLoaded`, builds the crumbs
+  and removes `d-none` from `#obBreadcrumbWrap` only when there is
+  more than one crumb to show.
 - The route hierarchy is fixed in `breadcrumb.js`:
-  Registry → Domain → Ontology → Mapping → Digital Twin (plus
+  Registry → Domain → Ontology → Mapping → Knowledge Graph (plus
   Settings as a flat entry). Adding a new top-level page means
-  extending `_ROUTE_MAP` and `_HIERARCHY` there — not patching
-  templates.
+  extending `_ROUTE_MAP` and `_HIERARCHY` — not patching templates.
 - The "Domain" crumb label is read from `#currentDomainName` (set by
-  the navbar) — do **not** add a separate fetch for the domain name.
+  the navbar).
 - The last crumb is the active sidebar section, updated live on every
-  `sidebarSectionChanged` event. Section labels come from the
-  sidebar's `.nav-label` text, so renaming a sidebar item
-  automatically renames the breadcrumb crumb.
-- After rendering, `breadcrumb.js` writes the total chrome height
-  (navbar + breadcrumb) into the CSS variable `--ob-chrome-height`,
-  which `.sidebar-layout` reads to compute the available viewport
-  height. **Don't set this variable from anywhere else.**
+  `sidebarSectionChanged` event.
+- `breadcrumb.js` exposes itself as `window.OBBreadcrumb` so
+  `navbar.js` can call `OBBreadcrumb._updateChromeHeight()` after the
+  subnav appears/disappears.
+- `--ob-chrome-height` = navbar height + subnav height (breadcrumb is
+  inside the subnav, so no separate measurement). **Don't set this
+  variable from anywhere else.**
 
 **Style**
 
-- Container: `.ob-breadcrumb` — `0.35rem 1rem` padding, light
-  background (`var(--bs-light, #f8f9fa)`), bottom border
-  (`var(--bs-border-color, #dee2e6)`), font-size `0.8rem`.
-- Separator: Bootstrap-icons chevron (`\F285`) at `0.65rem`. Do not
-  switch to `/`, `>`, or any other glyph.
-- Links: `var(--bs-secondary)`, no underline; underline only on
-  `:hover`.
-- Active crumb (last item): `var(--bs-body-color)`, weight 500, no
-  link.
-- Each crumb prefixes its label with a Bootstrap icon (`bi-...`).
-  Keep icons consistent with the corresponding sidebar entry.
+- Inline in the subnav row: `font-size: 0.65rem`, italic, no icons,
+  muted colour, left border separator.
+- Active crumb: `--db-text`, weight 500.
+- Links: `--db-text-muted`, no underline; underline on `:hover`.
 
 **Don'ts**
 
 - ❌ Manually mutating `#obBreadcrumbList` from page JS. Use the
   `_ROUTE_MAP` extension or rely on `sidebarSectionChanged`.
-- ❌ Adding a per-page breadcrumb (`<nav class="breadcrumb">`) — the
-  global one is the only one allowed.
-- ❌ Changing the separator, font-size, or padding per page.
-- ❌ Forcing the breadcrumb visible on a single-crumb page just to
-  display a title — use `.page-header` instead.
+- ❌ Adding a per-page breadcrumb — the global one is the only one allowed.
+- ❌ Toggling `#obBreadcrumb` or `#obBreadcrumbWrap` from page code.
+- ❌ Forcing the breadcrumb visible on a single-crumb page — use
+  `.page-header` instead.
 
 ### Section / Partial Conventions
 
@@ -644,8 +706,13 @@ These already exist; reuse before reinventing.
   *Loading Spinners* for the full contract.
 - **Page-level loading overlay** — `.domain-loading-overlay` already wired
   in `base.html` as `#domainLoadingOverlay`. Toggle via `.d-none`.
-- **Breadcrumb** — `.ob-breadcrumb` driven by `breadcrumb.js`; do not
-  build a parallel breadcrumb.
+- **Breadcrumb** — `#obBreadcrumbWrap` (`<li>` inside `#obSubnav`),
+  driven by `breadcrumb.js`; do not build a parallel breadcrumb.
+- **Save Domain button** — `#menuSaveDomain` (`.ob-subnav-save-btn`) in the
+  L2 subnav. Enabled/disabled by `updateVersionStatus()` in
+  `domain-actions.js`. Do not add a second Save button on a page.
+- **New Domain dialog** — `showNewDomainDialog()` (from `utils.js`). Returns
+  `{ name, description, llm_endpoint }` or `null`.
 - **Tabs** — `.nav.nav-tabs.ob-tabs` (flat-underline). One shared
   visual treatment defined in `components.css`; see
   *Tabs (`.ob-tabs`) — flat-underline style* above for the canonical
@@ -927,10 +994,16 @@ src/front/static/
   `sidebarSectionChanged` event or `onBeforeSectionChange` hook.
 - ❌ Setting `style.display` on `.sidebar-section` directly — toggle
   the `.active` class via `SidebarNav.switchTo(...)`.
-- ❌ Writing `--ob-chrome-height` from page code — that's the
-  breadcrumb's responsibility.
+- ❌ Writing `--ob-chrome-height` from page code — `breadcrumb.js` /
+  `updateDomainMenuVisibility` own it.
 - ❌ A custom per-page breadcrumb. Extend `_ROUTE_MAP` in
   `breadcrumb.js` instead.
+- ❌ Toggling `#obSubnav` or `#obBreadcrumbWrap` from page code.
+- ❌ Adding `nav-requires-domain` to L2 subnav tab toggles — use
+  `dropdown-requires-domain` on individual items instead.
+- ❌ A Save Domain button anywhere outside `#obSubnav`.
+- ❌ Calling `alert()` / `prompt()` for new-domain input — use
+  `showNewDomainDialog()` from `utils.js`.
 - ❌ Bare `<ul class="nav nav-tabs">` (no `ob-tabs`), pill tabs,
   or per-area redeclaration of `.nav-link` / `.nav-link.active`
   styles. All tab nav uses the shared `ob-tabs` flat-underline

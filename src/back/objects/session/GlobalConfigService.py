@@ -342,6 +342,36 @@ class GlobalConfigService:
         set_registry_cache_ttl(ttl)
         return self._save(host, token, registry_cfg, {"registry_cache_ttl": ttl})
 
+    def get_edit_lock_ttl_s(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> Optional[int]:
+        """Return the admin-set edit-lock lease TTL (seconds), or ``None``.
+
+        ``None`` means "not set in the global config" — the caller
+        (:meth:`EditLockService._ttl_seconds`) then falls back to the
+        ``ONTOBRICKS_EDIT_LOCK_TTL_S`` env var / built-in default. Deliberately
+        absent from :meth:`_empty` so an unconfigured / failed load yields the
+        empty sentinel rather than masking the env fallback. ``0`` is a valid
+        stored value (disables the lease).
+        """
+        val = self.get(host, token, registry_cfg, "edit_lock_ttl_s", "")
+        s = str(val).strip()
+        if s.lstrip("-").isdigit():
+            return max(0, int(s))
+        return None
+
+    def set_edit_lock_ttl_s(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        ttl_s: int,
+    ) -> Tuple[bool, str]:
+        """Persist the edit-lock lease TTL (seconds; ``0`` disables the lease)."""
+        return self._save(
+            host, token, registry_cfg, {"edit_lock_ttl_s": max(0, int(ttl_s))}
+        )
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

@@ -12,6 +12,15 @@ dependencies = [
     "databricks-sdk>=0.20.0",
 ]
 
+[tool.uv]
+constraint-dependencies = [
+    # pydantic-settings>=2.14.2: NestedSecretsSettingsSource symlink traversal
+    # (GHSA-4xgf-cpjx-pc3j) — symlinks inside secrets_dir pointing outside it were
+    # followed, enabling local file read and bypassing secrets_dir_max_size.
+    # Pulled in transitively (fastmcp/databricks-sdk). Dependabot #60/#61.
+    "pydantic-settings>=2.14.2",
+]
+
 [project.scripts]
 mcp-ontobricks = "server.main:main"
 

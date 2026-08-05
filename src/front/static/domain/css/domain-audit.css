@@ -49,6 +49,12 @@
     background: #fff;
 }
 
+.audit-marker-change {
+    color: #fff;
+    background: var(--db-info, #2272b4);
+    border-color: var(--db-info, #2272b4);
+}
+
 .audit-content {
     flex: 1 1 auto;
     min-width: 0;

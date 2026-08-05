@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', function () {
     loadCurrentDefaultEmoji();
 
     loadRegistryCacheTtl();
+    loadEditLockTtl();
     loadNavbarLogo();
 
     // =====================================================================
@@ -185,6 +186,24 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             console.log('Using default registry cache TTL');
+        }
+    }
+
+    // =====================================================================
+    //  GLOBAL TAB – Edit Lock Lease TTL (stored in seconds, shown in minutes)
+    // =====================================================================
+
+    async function loadEditLockTtl() {
+        const input = document.getElementById('editLockTtlMin');
+        if (!input) return;
+        try {
+            const resp = await fetch('/settings/edit-lock-ttl', { credentials: 'same-origin' });
+            const result = await resp.json();
+            if (result.success && result.edit_lock_ttl_s != null) {
+                input.value = Math.round(result.edit_lock_ttl_s / 60);
+            }
+        } catch (error) {
+            console.log('Using default edit-lock lease TTL');
         }
     }
 
@@ -760,12 +779,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function prefillLakebaseConnectionFromConfig() {
         let o = {};
         try { o = JSON.parse(document.getElementById('graphEngineConfig')?.value || '{}'); } catch (_) {}
+        // Connection tab — all 4 cascading selects
         _ensureSelectedOption(document.getElementById('lakebaseProject'),    o.lakebase_project || '');
         _ensureSelectedOption(document.getElementById('lakebaseBranch'),     o.lakebase_branch  || '');
         _ensureSelectedOption(document.getElementById('lakebaseGraphDb'),    o.database         || '');
         _ensureSelectedOption(document.getElementById('lakebaseGraphSchema'), o.schema          || '');
         const schIn = document.getElementById('lakebaseGraphSchemaInput');
         if (schIn && o.schema) schIn.value = o.schema;
+        // Bulk loading tab — UC catalog (managed_synced mode)
+        _ensureSelectedOption(document.getElementById('lakebaseUcCatalog'),  o.sync_uc_catalog  || '');
     }
 
     function applyLakebaseFormFromConfigTextarea() {
@@ -916,6 +938,10 @@ document.addEventListener('DOMContentLoaded', function () {
             await loadLakebaseProjects();
             prefillLakebaseConnectionFromConfig();
             await loadLakebaseGraphHealth();
+            const syncModeEl = document.getElementById('lakebaseSyncMode');
+            if (syncModeEl && syncModeEl.value === 'managed_synced') {
+                await loadUcCatalogsForGraphEngine();
+            }
         }
     });
 
@@ -2058,6 +2084,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     const r = await resp.json();
                     if (!r.success) errors.push('Cache TTL: ' + r.message);
                 } catch (e) { errors.push('Cache TTL: ' + e.message); }
+            }
+        }
+
+        // 3b. Save edit-lock lease TTL (UI in minutes → API in seconds; 0 disables)
+        const lockTtlInput = document.getElementById('editLockTtlMin');
+        if (lockTtlInput) {
+            const mins = parseInt(lockTtlInput.value, 10);
+            if (!isNaN(mins) && mins >= 0) {
+                try {
+                    const resp = await fetch('/settings/save-edit-lock-ttl', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ edit_lock_ttl_s: mins * 60 })
+                    });
+                    const r = await resp.json();
+                    if (!r.success) errors.push('Edit lock lease: ' + r.message);
+                } catch (e) { errors.push('Edit lock lease: ' + e.message); }
             }
         }
 

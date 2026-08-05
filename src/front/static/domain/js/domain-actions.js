@@ -11,7 +11,7 @@
 function updateVersionStatus(editable, version, isLatest) {
     const alert = document.getElementById('versionStatusAlert');
     const text = document.getElementById('versionStatusText');
-    const saveBtn = document.getElementById('btnSaveDomain');
+    const saveBtn = document.getElementById('menuSaveDomain');
     const versionBtn = document.getElementById('btnCreateVersion');
     
     if (editable) {

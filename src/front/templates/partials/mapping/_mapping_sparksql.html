@@ -29,7 +29,7 @@
 </div>
 
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
-    <div>
+    <div class="me-auto">
         <h4 class="mb-1"><i class="bi bi-file-earmark-code me-2"></i>Generated Spark SQL</h4>
         <p class="text-muted mb-0 small">View the Spark SQL generated from your SPARQL queries</p>
     </div>
@@ -39,6 +39,10 @@
         </button>
         <button type="button" class="btn btn-sm btn-outline-primary" data-action="sparksql-refresh-sql">
             <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the mappings discussion" onclick="openMappingDiscussion()">
+            <i class="bi bi-chat-dots"></i>
         </button>
     </div>
 </div>

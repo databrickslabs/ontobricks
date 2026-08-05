@@ -1,0 +1,70 @@
+## Fix: Claude serving endpoints — flatten list-style message content
+
+Context: Databricks Claude serving endpoints (`databricks-claude-*`) return
+`choices[0].message.content` as a list of content blocks instead of a plain
+string. `extract_message_content` passed that through, so downstream `.strip()`
+calls crashed (`'list' object has no attribute 'strip'`), breaking Ontology
+Wizard → Generate and Mapping → Auto-Map. Cherry-picked from community PR #109
+(author: [@a-niehaus](https://github.com/a-niehaus), fixes #107) for the 0.6.2
+release branch.
+
+### Changes
+
+1. `src/agents/engine_base.py`
+   - Flatten list content blocks to a single string in `extract_message_content`;
+     OpenAI/Gemini string responses unchanged.
+
+### Modified files
+
+- `src/agents/engine_base.py`
+
+Tests: `uv run pytest -q tests/units/agents/test_agent_engine_base.py` — 22 passed.
+
+## Fix: Lakebase sync fails on long literal objects (issue #108)
+
+Context: Knowledge Graph sync to Lakebase Postgres aborted when any mapped
+literal `object` exceeded the Postgres btree index limit (~2704 bytes). The
+composite `PRIMARY KEY (subject, predicate, object)` and secondary indexes on
+`object` could not index long text columns (messages, notes, descriptions).
+Users saw an opaque "Triple store sync failed" message.
+
+Changes:
+
+1. `src/back/core/graphdb/lakebase/_companion_ddl.py`
+   - Add `object_hash` generated column (`digest(object, 'sha256')`) and key
+     uniqueness on `(subject, predicate, object_hash)`; enable `pgcrypto`;
+     add `wrap_triple_view_sql_for_lakeflow` and `LAKEFLOW_SYNC_PRIMARY_KEY`.
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   - Catch btree index limit errors with actionable messages; warn on legacy
+     tables missing `object_hash`.
+3. `src/back/core/graphdb/lakebase/schema.sql`
+   - Update reference DDL to match the new layout.
+4. `src/back/objects/digitaltwin/_build_pipeline.py`
+   - Wrap managed-synced warehouse VIEW with `object_hash`; use hash PK for
+     Lakeflow; improve sync failure messages.
+5. `src/back/objects/registry/scheduler.py`
+   - Use `object_hash` in Lakeflow `primary_key_columns`.
+6. `docs/lakebase-graphdb.md`
+   - Document long literal support and rebuild requirement for legacy graphs.
+7. `releasereq/PLAN-lakebase-long-literal-pk.md`
+   - Implementation plan for issue #108.
+8. `tests/units/core/test_lakebase_flat_store.py`
+   - Assert new DDL; test index-limit error handling and view SQL wrapper.
+9. `tests/units/core/test_synced_table_manager.py`
+   - Update Lakeflow PK column expectations.
+10. `tests/units/dtwin/test_build_pipeline_streaming.py`
+    - Update managed-synced PK column expectations.
+
+Modified files:
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/core/graphdb/lakebase/schema.sql`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/objects/registry/scheduler.py`
+- `docs/lakebase-graphdb.md`
+- `releasereq/PLAN-lakebase-long-literal-pk.md`
+- `tests/units/core/test_lakebase_flat_store.py`
+- `tests/units/core/test_synced_table_manager.py`
+- `tests/units/dtwin/test_build_pipeline_streaming.py`
+
+Tests: `uv run pytest -q -m "not scenario"` → 2995 passed, 275 skipped in 28.50s

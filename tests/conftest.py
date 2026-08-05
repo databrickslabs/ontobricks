@@ -36,6 +36,17 @@ def setup_test_env(monkeypatch):
     monkeypatch.setenv("DATABRICKS_DISABLE_CLOUD_FETCH", "1")
     monkeypatch.delenv("DATABRICKS_FORCE_CLOUD_FETCH", raising=False)
     monkeypatch.setenv("CSRF_DISABLED", "1")
+    # Prevent a developer's .env Lakebase coordinates from leaking into unit
+    # tests — otherwise RegistryCfg / graph-engine probes hit a real (or
+    # mis-matched) workspace and block the suite.
+    for _lakebase_var in (
+        "LAKEBASE_PROJECT",
+        "LAKEBASE_BRANCH",
+        "LAKEBASE_DATABASE",
+        "PGHOST",
+        "PGDATABASE",
+    ):
+        monkeypatch.delenv(_lakebase_var, raising=False)
 
 
 @pytest.fixture

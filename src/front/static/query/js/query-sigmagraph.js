@@ -1,6 +1,6 @@
 /**
  * OntoBricks - query-sigmagraph.js
- * Sigma.js + Graphology graph view for the Digital Twin section.
+ * Sigma.js + Graphology graph view for the Knowledge Graph section.
  * Reuses the same data (lastQueryResults / d3NodesData / d3LinksData) built by query.js.
  */
 
@@ -61,6 +61,11 @@ var SigmaGraph = (function () {
     var _clusterResolution = 1.0;
     var _collapsedClusters = new Set();
     var _clusterCollapseActive = false;
+
+    // --- Graph metrics state ---
+    var _nodeMetrics = {};       // node URI → { degree, pagerank, betweenness, closeness, clustering }
+    var _metricMode = null;      // active metric key, or null
+    var _metricStatsData = null; // aggregate MetricsStats from last compute
 
     // --- Last right-click anchor for contextual info bubbles ---
     var _lastNodeMenuX = null;
@@ -551,12 +556,17 @@ var SigmaGraph = (function () {
             var icon = _iconForType(entityType);
             var rawLabel = n.label || _extractLocalName(n.id);
             try {
+                var nodeSize = 6;
+                if (_metricMode && _nodeMetrics[n.id]) {
+                    var score = _nodeMetrics[n.id][_metricMode] || 0;
+                    nodeSize = 4 + Math.round(score * 16);
+                }
                 graph.addNode(n.id, {
                     label: icon + ' ' + rawLabel,
                     entityType: entityType,
                     icon: icon,
                     color: _colorForType(entityType),
-                    size: 6,
+                    size: nodeSize,
                     _data: n
                 });
                 addedNodes.add(n.id);
@@ -998,6 +1008,14 @@ var SigmaGraph = (function () {
             if (cid !== undefined) {
                 res.color = _clusterColor(cid);
             }
+        }
+
+        // Color by metric mode (5-tier heatmap: blue → green → yellow → orange → red)
+        if (_metricMode && _nodeMetrics[node] && !data._isGroup && !data._isClusterNode) {
+            var mScore = _nodeMetrics[node][_metricMode] || 0;
+            var _metricPalette = ['#2196F3', '#4CAF50', '#FFEB3B', '#FF9800', '#F44336'];
+            var tier = Math.min(4, Math.floor(mScore * 5));
+            res.color = _metricPalette[tier];
         }
 
         if (_highlightedSeeds && _highlightedSeeds.has(node)) {
@@ -1446,6 +1464,12 @@ var SigmaGraph = (function () {
             html += _sec('bi bi-arrow-left-circle', 'Incoming (' + incomingRels.length + ')', inBody, false);
         }
 
+        var _dNid = esc(nodeId).replace(/'/g, "\\'");
+        var _dNlbl = esc(displayLabel).replace(/'/g, "\\'");
+        html += '<div class="entity-detail-section">' +
+            '<button class="btn btn-sm btn-outline-primary w-100" onclick="SigmaGraph.discussNode(\'' + _dNid + '\', \'' + _dNlbl + '\')">' +
+            '<i class="bi bi-chat-dots me-1"></i>Discuss this entity</button></div>';
+
         el.innerHTML = html;
     }
 
@@ -1518,6 +1542,14 @@ var SigmaGraph = (function () {
             ' <i class="bi bi-arrow-right text-muted"></i> ' +
             '<span class="badge bg-info">' + targetIcon + ' ' + esc(targetLabel) + '</span>' +
             '</div></div></div>';
+
+        var _dSrc = esc(source).replace(/'/g, "\\'");
+        var _dPred = esc(predicateUri).replace(/'/g, "\\'");
+        var _dTgt = esc(target).replace(/'/g, "\\'");
+        var _dPlbl = esc(predicateLabel).replace(/'/g, "\\'");
+        html += '<div class="entity-detail-section">' +
+            '<button class="btn btn-sm btn-outline-primary w-100" onclick="SigmaGraph.discussEdge(\'' + _dSrc + '\', \'' + _dPred + '\', \'' + _dTgt + '\', \'' + _dPlbl + '\')">' +
+            '<i class="bi bi-chat-dots me-1"></i>Discuss this relationship</button></div>';
 
         el.innerHTML = html;
     }
@@ -2289,7 +2321,7 @@ var SigmaGraph = (function () {
                 placeholder.innerHTML =
                     '<div class="text-muted">' +
                     '<i class="bi bi-diagram-3 " style="font-size:2.5rem;"></i>' +
-                    '<p class="mt-2 mb-1 fw-semibold">Knowledge Graph</p>' +
+                    '<p class="mt-2 mb-1 fw-semibold">Graph Viewer</p>' +
                     '<p class="small">Use the filter panel to search and explore entities.</p>' +
                     '</div>';
                 container.appendChild(placeholder);
@@ -2348,6 +2380,24 @@ var SigmaGraph = (function () {
             if (_renderer) {
                 _renderer.refresh();
                 _focusCameraOnNodes(new Set([entityId]));
+            }
+        },
+
+        // Open the contextual discussion thread anchored to a graph node
+        // (subject URI) or edge (source|predicate|target). Auto-resolves
+        // the loaded domain + version via OntoComments.
+        discussNode: function (nodeId, label) {
+            if (window.OntoComments) {
+                window.OntoComments.openForSelection('graph_node', nodeId, label || nodeId);
+            }
+        },
+
+        discussEdge: function (source, predicate, target, label) {
+            if (window.OntoComments) {
+                window.OntoComments.openForSelection(
+                    'graph_edge', source + '|' + predicate + '|' + target,
+                    label || predicate
+                );
             }
         },
 
@@ -2979,8 +3029,115 @@ var SigmaGraph = (function () {
             if (slider && label) label.textContent = parseFloat(slider.value).toFixed(2);
         },
 
+        computeMetrics: async function () {
+            var btn = document.getElementById('sgComputeMetricsBtn');
+            var spinner = document.getElementById('sgMetricsSpinner');
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.classList.remove('d-none');
+            try {
+                var resp = await fetch('/dtwin/metrics/compute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({})
+                });
+                var data = await resp.json();
+                if (!data.success) {
+                    if (typeof showNotification === 'function') showNotification(data.message || 'Metrics computation failed', 'danger');
+                    return;
+                }
+                _nodeMetrics = data.nodes || {};
+                _metricStatsData = data.stats || null;
+                var topNodes = data.top_pagerank || [];
+
+                // Normalise scores per metric to [0,1] range for sizing/coloring
+                var metrics = ['degree', 'pagerank', 'betweenness', 'closeness', 'clustering'];
+                var maxVals = {};
+                metrics.forEach(function (m) { maxVals[m] = 0; });
+                Object.values(_nodeMetrics).forEach(function (nm) {
+                    metrics.forEach(function (m) {
+                        if ((nm[m] || 0) > maxVals[m]) maxVals[m] = nm[m];
+                    });
+                });
+                Object.keys(_nodeMetrics).forEach(function (uri) {
+                    var nm = _nodeMetrics[uri];
+                    metrics.forEach(function (m) {
+                        nm[m] = maxVals[m] > 0 ? nm[m] / maxVals[m] : 0;
+                    });
+                });
+
+                // Populate stats panel
+                var statsEl = document.getElementById('sgMetricsStats');
+                if (statsEl && _metricStatsData) {
+                    document.getElementById('sgMetricStatNodes').textContent = _metricStatsData.node_count || '—';
+                    document.getElementById('sgMetricStatEdges').textContent = _metricStatsData.edge_count || '—';
+                    document.getElementById('sgMetricStatComponents').textContent = _metricStatsData.connected_components || '—';
+                    document.getElementById('sgMetricStatAvgDegree').textContent = _metricStatsData.avg_degree != null ? _metricStatsData.avg_degree.toFixed(2) : '—';
+                    document.getElementById('sgMetricStatDensity').textContent = _metricStatsData.density != null ? _metricStatsData.density.toFixed(6) : '—';
+                    statsEl.classList.remove('d-none');
+                }
+
+                // Populate ranking list (top-PageRank by default)
+                _populateMetricRanking(topNodes, 'pagerank');
+
+                var sel = document.getElementById('sgMetricSelector');
+                if (sel && !sel.value) sel.value = 'pagerank';
+                _metricMode = 'pagerank';
+
+                SigmaGraph.refresh(true);
+
+                if (typeof showNotification === 'function') {
+                    showNotification(
+                        'Metrics computed: ' + Object.keys(_nodeMetrics).length + ' nodes (' +
+                        (_metricStatsData ? _metricStatsData.elapsed_ms : '?') + 'ms)',
+                        'success'
+                    );
+                }
+            } catch (e) {
+                console.error('[SigmaGraph] Graph metrics error:', e);
+                if (typeof showNotification === 'function') showNotification('Metrics error: ' + e.message, 'danger');
+            } finally {
+                if (btn) btn.disabled = false;
+                if (spinner) spinner.classList.add('d-none');
+            }
+        },
+
+        onMetricSelectorChange: function () {
+            var sel = document.getElementById('sgMetricSelector');
+            _metricMode = (sel && sel.value) ? sel.value : null;
+            if (_metricMode && Object.keys(_nodeMetrics).length > 0) {
+                var ranked = Object.keys(_nodeMetrics).sort(function (a, b) {
+                    return (_nodeMetrics[b][_metricMode] || 0) - (_nodeMetrics[a][_metricMode] || 0);
+                }).slice(0, 10);
+                _populateMetricRanking(ranked, _metricMode);
+            }
+            SigmaGraph.refresh(false);
+        },
+
         openGraphSwitcher: function () { _openGraphSwitcherModal(); }
     };
+
+    function _populateMetricRanking(uris, metric) {
+        var el = document.getElementById('sgMetricRanking');
+        if (!el) return;
+        if (!uris || uris.length === 0) {
+            el.innerHTML = '<span class="text-muted small">No data.</span>';
+            return;
+        }
+        var html = '';
+        uris.forEach(function (uri, idx) {
+            var nm = _nodeMetrics[uri];
+            var score = nm ? (nm[metric] || 0) : 0;
+            var label = _extractLocalName(uri) || uri;
+            html += '<div class="d-flex justify-content-between align-items-center py-1 border-bottom">' +
+                '<span class="small text-truncate me-2" title="' + uri + '">' +
+                    '<span class="text-muted me-1">' + (idx + 1) + '.</span>' + label +
+                '</span>' +
+                '<span class="badge bg-primary ms-auto">' + score.toFixed(4) + '</span>' +
+            '</div>';
+        });
+        el.innerHTML = html;
+    }
 })();
 
 // =====================================================

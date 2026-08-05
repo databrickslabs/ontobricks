@@ -54,7 +54,7 @@ Projects API (list & artifacts)
    :undoc-members:
    :show-inheritance:
 
-Digital Twin API
+Knowledge Graph API
 ----------------
 
 .. automodule:: api.routers.digitaltwin

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 
+{% block page_id %}settings{% endblock %}
 {% block title %}Settings - OntoBricks{% endblock %}
 
 {% block extra_css %}
@@ -86,7 +87,7 @@
                 <div class="content-section">
                     <div class="section-header d-flex justify-content-between align-items-center mb-4">
                         <div>
-                            <h4 class="mb-1"><i class="bi bi-sliders me-2"></i>Triple store — Global</h4>
+                            <h4 class="mb-1"><i class="bi bi-sliders me-2"></i>Triple store — Back End</h4>
                             <p class="text-muted mb-0 small">Select the graph database engine used across all domains</p>
                         </div>
                         <button type="button" class="btn btn-primary btn-save-settings">
@@ -106,7 +107,7 @@
                                 <option value="lakebase">Lakebase (Postgres)</option>
                             </select>
                             <small class="text-muted d-block mt-2">
-                                Selects the graph database engine used for building and querying knowledge graphs.
+                                Selects the graph database engine used for building and querying graph viewers.
                                 <strong>Save</strong> at the top persists the choice.
                             </small>
                         </div>
@@ -614,11 +615,25 @@
                         </small>
                     </div>
 
+                    <div class="mb-4">
+                        <label for="editLockTtlMin" class="form-label fw-semibold">
+                            Edit Lock Lease (minutes)
+                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                            </span>
+                        </label>
+                        <input type="number" class="form-control settings-edit-lock-ttl-input" id="editLockTtlMin"
+                               min="0" step="1" value="10">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> How long a DRAFT single-editor lock survives with no keep-alive (a crashed / closed tab) before another user can reclaim it. The editor's browser auto-renews while open. Set to <strong>0</strong> to disable the lease (a lock is then held until the editor closes the domain or an admin force-unlocks it).
+                        </small>
+                    </div>
+
                     <hr>
 
                     <div class="mb-0">
                         <label class="form-label fw-semibold"><i class="bi bi-code-square me-1"></i> API Documentation</label>
-                        <p class="small text-muted mb-2">External API: REST <code>/api/v1/*</code>, domains <code>/api/v1/domains</code> and <code>/api/v1/domain/*</code> (versions, design status, OWL, R2RML, Spark SQL), Digital Twin <code>/api/v1/digitaltwin/*</code>, GraphQL <code>/api/v1/graphql/*</code>. In-app GraphQL also lives under <code>/graphql</code>. Other JSON routes are documented under <a href="/docs" target="_blank">/docs</a>.</p>
+                        <p class="small text-muted mb-2">External API: REST <code>/api/v1/*</code>, domains <code>/api/v1/domains</code> and <code>/api/v1/domain/*</code> (versions, design status, OWL, R2RML, Spark SQL), Knowledge Graph <code>/api/v1/digitaltwin/*</code>, GraphQL <code>/api/v1/graphql/*</code>. In-app GraphQL also lives under <code>/graphql</code>. Other JSON routes are documented under <a href="/docs" target="_blank">/docs</a>.</p>
                         <div class="d-flex gap-2 flex-wrap">
                             <a href="/api/docs" target="_blank" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-file-earmark-code me-1"></i> Swagger UI
@@ -670,6 +685,22 @@
                 </div>
             </div>
 
+            <!-- ==================== LOCKS SECTION (admin only) ==================== -->
+            <div id="locks-section" class="sidebar-section">
+                <div class="content-section">
+                    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h4 class="mb-1"><i class="bi bi-lock me-2"></i>Locks</h4>
+                            <p class="text-muted mb-0 small">Active domain edit-locks (single-editor concurrency) — force-unlock a stuck lock</p>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshLocks" title="Refresh">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    {% include "partials/settings/_settings_locks.html" %}
+                </div>
+            </div>
+
             <!-- ==================== REGISTRY SECTION (admin only) ==================== -->
             <div id="registry-section" class="sidebar-section">
                 <div class="content-section">
@@ -689,6 +720,31 @@
                     {% include "partials/settings/_settings_health.html" %}
                 </div>
             </div>
+
+            <!-- ==================== LOGS SECTION (admin only) ==================== -->
+            <div id="logs-section" class="sidebar-section">
+                <div class="content-section">
+                    <div class="section-header d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="mb-1"><i class="bi bi-terminal me-2"></i>Application Logs</h4>
+                            <p class="text-muted mb-0 small">Live tail of the app log file — same output as the Databricks Apps console</p>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="form-check form-switch mb-0 small me-1">
+                                <input class="form-check-input" type="checkbox" id="logsAutoRefresh" checked>
+                                <label class="form-check-label text-muted" for="logsAutoRefresh">Auto (10 s)</label>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnRefreshLogs" title="Reload logs now">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+                            </button>
+                            <a href="/settings/logs/download" class="btn btn-sm btn-outline-secondary" id="btnDownloadLogs" title="Download full log file" download>
+                                <i class="bi bi-download me-1"></i> Download
+                            </a>
+                        </div>
+                    </div>
+                    {% include "partials/settings/_settings_logs.html" %}
+                </div>
+            </div>
             {% endif %}
 
         </div>
@@ -700,7 +756,9 @@
 <script src="{{ url_for('static', filename='config/js/settings.js') }}?v={{ asset_version }}"></script>
 {% if user_role == 'admin' %}
 <script src="{{ url_for('static', filename='config/js/permissions.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/settings-locks.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='registry/js/registry.js') }}?v={{ asset_version }}"></script>
 <script src="{{ url_for('static', filename='config/js/settings-health.js') }}?v={{ asset_version }}"></script>
+<script src="{{ url_for('static', filename='config/js/settings-logs.js') }}?v={{ asset_version }}"></script>
 {% endif %}
 {% endblock %}

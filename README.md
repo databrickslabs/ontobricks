@@ -2,10 +2,10 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.5.2</h1>
+<h1 align="center">OntoBricks 0.6.2</h1>
 
 <p align="center">
-  <strong>Digital Twin Builder for Databricks</strong>
+  <strong>Knowledge Graph Builder for Databricks</strong>
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 
 ## Project Description
 
-OntoBricks is a web application that transforms Databricks tables into a materialized knowledge graph. It lets you design ontologies (OWL), map them to Unity Catalog tables via R2RML, materialize triples into a Delta-backed triple store and a Lakebase Postgres graph engine, reason over the graph (OWL 2 RL, SWRL, SHACL), and query it through an auto-generated GraphQL API. The entire pipeline — from metadata import to a queryable knowledge graph — can run in four clicks using LLM-powered automation.
+OntoBricks is a web application that transforms Databricks tables into a materialized graph viewer. It lets you design ontologies (OWL), map them to Unity Catalog tables via R2RML, materialize triples into a Delta-backed triple store and a Lakebase Postgres graph engine, reason over the graph (OWL 2 RL, SWRL, SHACL), and query it through an auto-generated GraphQL API. The entire pipeline — from metadata import to a queryable graph viewer — can run in four clicks using LLM-powered automation.
 
 ## Project Support
 
@@ -83,7 +83,7 @@ scripts/start.sh
 brew install databricks            # or curl -fsSL https://databricks.com/install.sh | sh
 databricks auth login --host https://<workspace>
 
-# Edit scripts/deploy.config.sh (warehouse, registry catalog/schema,
+# Edit scripts/deploy.config.sh (CLI profile, warehouse, registry catalog/schema,
 # Lakebase project/branch/database — see the file header) and then:
 make deploy
 # Or directly: scripts/deploy.sh
@@ -135,6 +135,11 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 
 See [Deployment Guide](docs/deployment.md) for the full checklist including resource configuration and permissions.
 
+## Testing
+
+- **Routine / CI:** `uv run pytest -q -m "not scenario"` — the fast in-process suite (the opt-in live scenarios are excluded).
+- **Live scenario campaign:** `make scenario-campaign` — an ordered, billable end-to-end journey (import → generate → collaborate → rules/analysis → validate) against a **running** app, writing reports to `artifacts/scenarios/`. See [`tests/e2e/scenarios/README.md`](tests/e2e/scenarios/README.md) for env vars, chaining, isolation, and how to add a scenario.
+
 ## Releasing the Project
 
 1. Ensure all tests pass: `make test`
@@ -158,12 +163,13 @@ git push origin main --tags
 | **1** | **Import Metadata** (Domain > Metadata) | Fetches table and column metadata from Unity Catalog |
 | **2** | **Generate Ontology** (Ontology > Wizard) | LLM designs entities, relationships, and attributes from your metadata |
 | **3** | **Auto-Map** (Mapping > Auto-Map) | LLM generates SQL mappings for every entity and relationship |
-| **4** | **Synchronize** (Digital Twin > Status) | Executes mappings and populates the triple store |
+| **4** | **Synchronize** (Knowledge Graph > Status) | Executes mappings and populates the triple store |
 
 ### Domain & registry (0.1.2 UX)
 
 - **Ontology Designer** — the main ontology graph view lives under **Ontology → Designer** (visual canvas + AI Assistant).
 - **Version lifecycle (DRAFT / IN-REVIEW / PUBLISHED)** — every domain version carries a lifecycle status, shown as a colour-coded badge across the navbar, Domain Information, Registry Browse, Domain Versions and query headers. Only **DRAFT** versions are editable; the external API/GraphQL/MCP only serve the **numeric-latest PUBLISHED** version. Transitions (DRAFT ↔ IN-REVIEW → PUBLISHED, PUBLISHED → DRAFT admin-only) are enforced server-side and replace the former "Active"/`mcp_enabled` toggle.
+- **Single-editor concurrency** — a DRAFT version is editable by **one user at a time**. The first opener edits; anyone else opening the same version is automatically **read-only** with a banner naming the editor. The lock uses a **renew-only lease**: the editor's browser keeps it alive in the background while the domain is open (a hover **countdown tooltip** on the navbar domain badge shows the remaining time), so an active session never expires, but a lock left behind by a crashed/abandoned tab **auto-releases** once its lease lapses (`ONTOBRICKS_EDIT_LOCK_TTL_S`, default 10 min; `0` disables → hold-until-close). It is also released immediately when the editor clicks **Close** (which prompts *Save before closing?*, releases the lock and returns to Home) or an **app-admin takes over**. **Opening a different domain closes the current one first** — the previous domain's lock is released server-side *before* the new one loads, so you never hold two locks; a same-domain **version** switch releases the old version's lock after the new one loads. The **Save** and **Close** buttons sit together in the domain sub-navigation. Admins also get a registry-wide **Settings → Locks** panel listing every active lock (domain, version, status, holder, acquired time, staleness) with a **force-unlock** action.
 - **Domain Cockpit (Validation)** — **Published Version** shows which registry version is exposed via **API / MCP**; it can differ from the version you have loaded in the editor.
 - **Registry → Browse** — drives the **lifecycle status transitions** for a domain's versions; **Domain → Versions** shows that status as a read-only badge.
 - **Validation & Review workflow** — a business-user-oriented review layer on top of the lifecycle. **Registry → My Tasks** is a cross-domain worklist of versions waiting on you (submit, sign off, or publish). **Domain → Validation** shows a soft consistency-check summary, a reviewer sign-off panel and the full audit trail. Submit-for-review and Publish stay builder/admin (Publish unlocks for a builder once the **sign-off quorum** is met — a **per-domain** setting, default 1, editable on **Domain → Information → Global** — while an **admin can publish at any time, overriding the quorum**, with the override flagged in the audit trail); **sign-off** (approve / request-changes) is open to any domain member, and request-changes reopens the version to DRAFT. Every decision (with `from → to` status snapshots) is persisted append-only in the `domain_review_events` registry table.
@@ -185,11 +191,11 @@ Engine-specific options are stored as global JSON (`graph_engine_config`). For L
 > | Schema | When to run | Who runs it |
 > |---|---|---|
 > | Registry schema (e.g. `ontobricks_registry`) | After `Settings → Registry → Initialize` | `scripts/deploy.sh` automatically on every `dev-lakebase` deploy (coords: `LAKEBASE_PROJECT` / `LAKEBASE_BRANCH` / `LAKEBASE_REGISTRY_DATABASE` / `LAKEBASE_REGISTRY_SCHEMA`) |
-> | Graph schema (e.g. `ontobricks_graph`) | After first Digital Twin `Build` | The in-app "Create graph DB" flow, or a manual `bootstrap-lakebase-perms.sh` run |
+> | Graph schema (e.g. `ontobricks_graph`) | After first Knowledge Graph `Build` | The in-app "Create graph DB" flow, or a manual `bootstrap-lakebase-perms.sh` run |
 >
 > The deploy script is **registry-scoped** — it only grants on the registry schema. The graph DB is configured in-app (`Settings → Graph DB`) and may live in a **different** Lakebase project, so its grant is handled separately.
 
-> **Lakebase build performance.** When the active engine is Lakebase, the Digital Twin build streams warehouse rows in `fetchmany` batches (`SQLWarehouse.iter_rows`) and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING` (and the symmetrical `DELETE … USING` for incremental removes). The FastAPI process never holds the full graph or the full diff: snapshot CTAS and `EXCEPT` execution stay warehouse-side, the app pipes one batch at a time. There is no Volume archive thread — Postgres is the system of record for the graph.
+> **Lakebase build performance.** When the active engine is Lakebase, the Knowledge Graph build streams warehouse rows in `fetchmany` batches (`SQLWarehouse.iter_rows`) and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING` (and the symmetrical `DELETE … USING` for incremental removes). The FastAPI process never holds the full graph or the full diff: snapshot CTAS and `EXCEPT` execution stay warehouse-side, the app pipes one batch at a time. There is no Volume archive thread — Postgres is the system of record for the graph.
 
 > **Lakebase managed-synced mode.** When `graph_engine_config.sync_mode = "managed_synced"`, the bulk R2RML data movement is moved entirely off the app: a Databricks Lakeflow snapshot pipeline keeps a Postgres synced table in lock-step with the R2RML view, and the FastAPI process only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`). Reasoning + cohort writes stay on the direct PG path through a writable companion table; readers see both via a UNION view (back-compat name). PG layout per graph version: `g_<dom>_v<n>_sync` (Lakeflow), `g_<dom>_v<n>__app` (app), `g_<dom>_v<n>` (UNION view). See `docs/graphdb-integration.md §9` for the full architecture.
 
@@ -197,17 +203,17 @@ Engine-specific options are stored as global JSON (`graph_engine_config`). For L
 
 1. **Design** an ontology visually using the OntoViz canvas, or import OWL/RDFS/industry standards (FIBO, CDISC, IOF, HL7 FHIR R4/R4B/R5)
 2. **Map** ontology entities to Databricks tables with column-level precision
-3. **Build** the Digital Twin — materializes triples into the triple store (incremental by default)
-4. **Query** through the GraphQL playground or explore the interactive knowledge graph
+3. **Build** the Knowledge Graph — materializes triples into the triple store (incremental by default)
+4. **Query** through the GraphQL playground or explore the interactive graph viewer
 5. **Reason** over the graph — run OWL 2 RL inference, SWRL rules, SHACL validation, and constraint checks
 
-### Knowledge Graph Features
+### Graph Viewer Features
 
 - **Two-phase search** — preview matching entities in a flat list, then select specific ones to expand into the full graph with relationships and neighbors
 - **Configurable search depth** — control the maximum traversal depth and entity cap for graph expansion
 - **Right-click "Expand neighbours"** — enrich the current graph in place with N-hop neighbours of any selected node (depth follows the right-pane Depth slider, default 2); newly added entities are highlighted and the camera zooms to frame them, with a non-blocking spinner in the canvas top-right while the request runs
-- **Bridge navigation** — follow cross-domain bridges to automatically switch domains and focus on the target entity in the knowledge graph
-- **Data cluster detection** — detect communities in the knowledge graph using Louvain, Label Propagation, or Greedy Modularity algorithms; available client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; cluster results can be visualized with color-by-cluster mode and collapsed into super-nodes
+- **Bridge navigation** — follow cross-domain bridges to automatically switch domains and focus on the target entity in the graph viewer
+- **Data cluster detection** — detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms; available client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; cluster results can be visualized with color-by-cluster mode and collapsed into super-nodes
 - **Cohort discovery** — group entities that travel together using rule-based linkage (shared resources via predicates) and compatibility constraints (same-value, value-equals, value-in, value-range); deterministic, explainable cohorts with live counters, why/why-not explainers, and idempotent materialisation as graph triples (`:inCohort`) or Unity Catalog Delta tables. See [`docs/cohort_discovery.md`](docs/cohort_discovery.md).
 - **Data quality violation limits** — cap the number of violations displayed per rule (configurable via dropdown, default 10) for faster quality checks
 - **Per-rule progress tracking** — SWRL inference and data quality checks report progress for each individual rule
@@ -227,7 +233,7 @@ The **Ontology Designer** view (**Ontology → Designer**) includes a floating A
 
 ### MCP Integration
 
-OntoBricks exposes the knowledge graph to LLM agents via the [Model Context Protocol](https://modelcontextprotocol.io/). Deploy the companion `mcp-ontobricks` app and connect from Cursor, Claude Desktop, or the Databricks Playground.
+OntoBricks exposes the graph viewer to LLM agents via the [Model Context Protocol](https://modelcontextprotocol.io/). Deploy the companion `mcp-ontobricks` app and connect from Cursor, Claude Desktop, or the Databricks Playground.
 
 ### Registry OBX Export / Import (UI)
 
@@ -238,7 +244,7 @@ No command line required — ideal for ad-hoc transfers and cross-tenant sharing
 
 ### Registry Import / Export (CLI)
 
-For automated promotion pipelines, use the
+For automated promotion pipelines use the
 `scripts/registry_transfer.sh` command-line tool — export a curated subset
 of domains/versions from a source registry into a `.zip`, then preview and
 commit it into the target registry. See

@@ -5,7 +5,8 @@
         <div>
             <h4 class="mb-1"><i class="bi bi-journal-text me-2"></i>Audit trail</h4>
             <p class="text-muted mb-0 small">
-                Every status change (with comments) and build run recorded for this domain, newest first.
+                Every ontology/mapping change, status change (with comments) and build run
+                recorded for this domain, newest first.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -15,6 +16,9 @@
             </select>
             <div class="btn-group btn-group-sm" role="group" aria-label="Filter audit trail" id="auditFilter">
                 <button type="button" class="btn btn-outline-secondary active" data-audit-filter="all">All</button>
+                <button type="button" class="btn btn-outline-secondary" data-audit-filter="changes">
+                    <i class="bi bi-pencil-square me-1"></i>Ontology &amp; mapping
+                </button>
                 <button type="button" class="btn btn-outline-secondary" data-audit-filter="review">
                     <i class="bi bi-chat-left-text me-1"></i>Status &amp; comments
                 </button>
@@ -26,6 +30,15 @@
                     title="Reload audit trail from the registry">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Refresh
             </button>
+        </div>
+    </div>
+
+    <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 small mb-3" role="note">
+        <i class="bi bi-info-circle-fill mt-1"></i>
+        <div>
+            Ontology and mapping edits (new entities, attributes, mappings, rules&hellip;)
+            are recorded here when you <strong>Save the domain to the registry</strong>.
+            Changes you make in the current session appear in the trail after the next save.
         </div>
     </div>
 

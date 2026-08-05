@@ -53,7 +53,7 @@
                     '</div>';
                 return;
             }
-            render(data.tasks || []);
+            render(data.tasks || [], data.assigned_tasks || []);
             loaded = true;
         } catch (err) {
             console.error('loadTasks error:', err);
@@ -64,11 +64,12 @@
         }
     }
 
-    function render(tasks) {
+    function render(tasks, assignedTasks) {
         const container = document.getElementById('myTasksContainer');
         if (!container) return;
+        assignedTasks = assignedTasks || [];
 
-        if (!tasks.length) {
+        if (!tasks.length && !assignedTasks.length) {
             container.innerHTML =
                 '<div class="my-tasks-empty text-center text-muted py-5">' +
                 '<i class="bi bi-check2-circle d-block mb-2"></i>' +
@@ -77,6 +78,15 @@
             return;
         }
 
+        container.innerHTML = assignedTasksHtml(assignedTasks) +
+            reviewTasksHtml(tasks);
+
+        bindReviewActions(container);
+        bindAssignedActions(container);
+    }
+
+    function reviewTasksHtml(tasks) {
+        if (!tasks.length) return '';
         const rows = tasks.map((t) => {
             const approvals = '<span class="my-tasks-approvals">' +
                 t.approvals + ' / ' + t.required + '</span>';
@@ -93,15 +103,67 @@
                 '</tr>';
         }).join('');
 
-        container.innerHTML =
-            '<div class="table-responsive">' +
+        return '<div class="mb-2 fw-medium small text-uppercase text-muted">' +
+            '<i class="bi bi-ui-checks me-1"></i>Review worklist</div>' +
+            '<div class="table-responsive mb-4">' +
             '<table class="table table-sm align-middle my-tasks-table mb-0">' +
             '<thead><tr>' +
             '<th>Domain</th><th>Version</th><th>Status</th>' +
             '<th>Approvals</th><th>Last activity</th>' +
             '<th class="text-end">Your action</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
 
+    function assignedTasksHtml(tasks) {
+        if (!tasks.length) return '';
+        const rows = tasks.map((t) => {
+            return '<tr>' +
+                '<td class="fw-medium">' + escapeHtml(t.title) + '</td>' +
+                '<td>' + escapeHtml(t.folder) + ' v' + escapeHtml(t.version) + '</td>' +
+                '<td>' + escapeHtml(t.created_by) + '</td>' +
+                '<td>' + taskStatusBadge(t.status) + '</td>' +
+                '<td>' + (t.due_date ? escapeHtml(t.due_date) : '<span class="text-muted small">&mdash;</span>') + '</td>' +
+                '<td class="text-end">' + taskActions(t) + '</td>' +
+                '</tr>';
+        }).join('');
+
+        return '<div class="mb-2 fw-medium small text-uppercase text-muted">' +
+            '<i class="bi bi-person-check me-1"></i>Assigned to me</div>' +
+            '<div class="table-responsive mb-4">' +
+            '<table class="table table-sm align-middle my-tasks-table mb-0">' +
+            '<thead><tr>' +
+            '<th>Task</th><th>Domain</th><th>From</th><th>Status</th>' +
+            '<th>Due</th><th class="text-end">Action</th>' +
+            '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+
+    function taskActions(t) {
+        const start = t.status === 'open'
+            ? '<button type="button" class="btn btn-sm btn-outline-secondary ms-1" ' +
+              'data-task-status="in_progress" data-folder="' + escapeAttr(t.folder) + '" ' +
+              'data-version="' + escapeAttr(t.version) + '" data-task-id="' + escapeAttr(t.id) + '">' +
+              '<i class="bi bi-play me-1"></i>Start</button>'
+            : '';
+        const done = '<button type="button" class="btn btn-sm btn-success ms-1" ' +
+            'data-task-status="done" data-folder="' + escapeAttr(t.folder) + '" ' +
+            'data-version="' + escapeAttr(t.version) + '" data-task-id="' + escapeAttr(t.id) + '">' +
+            '<i class="bi bi-check2 me-1"></i>Done</button>';
+        return start + ' ' + done;
+    }
+
+    function taskStatusBadge(status) {
+        const map = {
+            open: 'bg-secondary-subtle text-dark border',
+            in_progress: 'bg-info-subtle text-dark border-info',
+            done: 'bg-success-subtle text-dark border-success',
+            cancelled: 'bg-light text-muted border',
+        };
+        const cls = map[status] || map.open;
+        const label = (status || 'open').replace('_', ' ');
+        return '<span class="badge ' + cls + '">' + escapeHtml(label) + '</span>';
+    }
+
+    function bindReviewActions(container) {
         container.querySelectorAll('button[data-action]').forEach((btn) => {
             btn.addEventListener('click', onAction);
         });
@@ -110,6 +172,40 @@
                 ReviewModals.showComments(btn.dataset.domain, btn.dataset.version);
             });
         });
+    }
+
+    function bindAssignedActions(container) {
+        container.querySelectorAll('button[data-task-status]').forEach((btn) => {
+            btn.addEventListener('click', () => onTaskStatus(btn));
+        });
+    }
+
+    async function onTaskStatus(btn) {
+        const { folder, version, taskId } = btn.dataset;
+        const status = btn.dataset.taskStatus;
+        try {
+            const resp = await fetch(
+                '/comments/' + encodeURIComponent(folder) + '/' +
+                encodeURIComponent(version) + '/tasks/' +
+                encodeURIComponent(taskId) + '/status',
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: status }),
+                }
+            );
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                showNotification(data.message || 'Failed to update task', 'error');
+                return;
+            }
+            showNotification('Task marked ' + status.replace('_', ' ') + '.', 'success');
+            loaded = false;
+            loadTasks();
+        } catch (err) {
+            showNotification('Error: ' + err.message, 'error');
+        }
     }
 
     function commentsButton(task) {

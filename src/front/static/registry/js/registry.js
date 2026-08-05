@@ -1548,6 +1548,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 registryCfg.configured = true;
                 updateRegistryLabel();
                 updateRegistryStatus(registryCfg);
+                // Surface the Lakebase grants applied during Initialize
+                // (in-app port of bootstrap-lakebase-perms.sh). Rendered by
+                // the inline script in _registry_configuration.html.
+                if (data.permissions && typeof window._obRenderRegistryGrants === 'function') {
+                    window._obRenderRegistryGrants(data.permissions);
+                    const warns = (data.permissions.warnings || []).length;
+                    if (warns) {
+                        showNotification(
+                            'Registry initialized, but ' + warns + ' permission grant warning' +
+                            (warns === 1 ? '' : 's') + ' — see Permission Grants below.',
+                            'warning'
+                        );
+                    }
+                }
             } else {
                 showNotification('Error: ' + data.message, 'error');
             }

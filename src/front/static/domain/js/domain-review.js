@@ -89,10 +89,13 @@
     function statusBanner(d) {
         const buttons = actionButtons(d);
         const notes = actionNotes(d);
-        const right = buttons.length
-            ? '<div class="review-actions d-flex flex-wrap gap-2 justify-content-end">' +
-              buttons.join('') + '</div>'
-            : '';
+        const discussBtn =
+            '<button type="button" class="btn btn-sm btn-outline-secondary" ' +
+            'data-review-discuss="1" title="Open the domain discussion">' +
+            '<i class="bi bi-chat-dots me-1"></i>Discussion</button>';
+        const right =
+            '<div class="review-actions d-flex flex-wrap gap-2 justify-content-end">' +
+            buttons.join('') + discussBtn + '</div>';
         const notesHtml = notes.length
             ? '<div class="review-banner-notes d-flex flex-column gap-2 mt-2">' +
               notes.join('') + '</div>'
@@ -298,7 +301,7 @@
                 checkRow('Ontology valid', !!d.ontology_valid) +
                 checkRow('Mapping complete', !!d.mapping_valid) +
                 checkRow('SQL Warehouse configured', !!warehouse.warehouse_id) +
-                checkRow('Digital Twin built', dtwin.indicator === 'green',
+                checkRow('Knowledge Graph built', dtwin.indicator === 'green',
                     dtwin.indicator === 'orange');
         } catch (err) {
             el.innerHTML = '<div class="text-muted small">Readiness unavailable.</div>';
@@ -469,6 +472,15 @@
         document.querySelectorAll('[data-review-action]').forEach((b) => {
             b.addEventListener('click', () => onAction(b.dataset.reviewAction));
         });
+        document.querySelector('[data-review-discuss]')?.addEventListener(
+            'click', () => {
+                if (!window.OntoComments) return;
+                OntoComments.openThread({
+                    folder: state.folder,
+                    version: state.version,
+                });
+            }
+        );
     }
 
     async function onAction(action) {

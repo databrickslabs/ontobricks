@@ -19,7 +19,7 @@ OntoBricks currently ships with one **runtime** graph engine, selectable under *
 
 ## 1. Architecture Overview
 
-OntoBricks has two storage layers for knowledge graph data:
+OntoBricks has two storage layers for graph viewer data:
 
 | Layer | Package | Purpose |
 |-------|---------|---------|
@@ -394,7 +394,7 @@ passes it to `GraphDBFactory`.  You only edit `GraphDBFactory`.
 
 ## 8. Lakebase build performance
 
-When the active engine is **Lakebase**, the Digital Twin build keeps heavy
+When the active engine is **Lakebase**, the Knowledge Graph build keeps heavy
 data on the Databricks side and never holds the full triple set inside the
 FastAPI process.
 

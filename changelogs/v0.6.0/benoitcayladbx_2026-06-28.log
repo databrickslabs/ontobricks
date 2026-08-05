@@ -1,0 +1,363 @@
+## Fix: Display real Volume path in Documents section
+
+**Context:** The Volume path banner in the Documents panel was showing an incorrect path — using dot notation (`catalog.schema.volume`) and omitting the version segment. The actual storage path follows the pattern `/Volumes/{catalog}/{schema}/{volume}/domains/{folder}/V{version}/documents`.
+
+**Changes:**
+1. `src/front/static/domain/js/domain-documents.js` — Fixed `loadVolumeLocation()` to build the path as `/Volumes/{catalog}/{schema}/{volume}/domains/{folder}/V{version}/documents`, using the `version` field already present in the `/domain/version-status` response.
+
+**Modified files:**
+- `src/front/static/domain/js/domain-documents.js`
+
+**Test result:** N/A (frontend display fix, no unit tests affected)
+
+---
+
+## Fix: Stale sidebar menu references in documentation (GitHub issue #94)
+
+**Context:** Issue #94 reported that users following the documentation could not find menu items described in the docs. The root cause was that several Ontology sidebar labels had been renamed in `menu_config.json` without updating the documentation, and the "Constraints" panel was removed from the UI entirely but its documentation remained.
+
+**Changes:**
+1. `docs/get-started.md` — Updated "Ontology Sidebar Navigation" table to match actual menu labels; fixed "Design" → "Business Views", "Wizard" → "Generate", "OWL Content" → "OWL"; removed "Constraints" row; added missing entries (Groups, Business Views, Cohorts, Pitfalls); updated step 2 wording from "Design" to "Business Views" and "OWL Content" to "OWL".
+2. `docs/user-guide.md` — Removed the "Property Constraints" section that referenced the no-longer-existing "Constraints" sidebar panel; updated "Click **Design**" → "Click **Business Views**"; "Click **Wizard**" → "Click **Generate**"; "Click **OWL Content**" → "Click **OWL**"; "open **Wizard**" → "open **Generate**".
+3. `docs/images/ui-layout.svg` — Updated three sidebar labels in the UI diagram: "Constraints" → "Business Rules", "Design" → "Business Views", "OWL Content" → "OWL".
+
+**Modified files:**
+- `docs/get-started.md`
+- `docs/user-guide.md`
+- `docs/images/ui-layout.svg`
+
+**Test result:** docs-only change; no test impact
+
+---
+
+## Fix: Full documentation accuracy audit (all docs/*.md)
+
+**Context:** Comprehensive review of all online documentation for accuracy and relevance against the live app state (menu_config.json, route handlers, MCP server tool definitions). Found an additional set of stale sidebar label references, a removed KG section ("Triples"), MCP tool name mismatches, and a navigation step error in examples.md.
+
+**Changes:**
+1. `docs/user-guide.md` — Fixed KG sidebar labels: "Status" → "Build", "Quality" → "Data Quality", "Reasoning" → "Inference", "Graph Viewer" → "Explorer"; removed entire "Triples" sidebar section (no longer exists); updated workflow summary table (steps 6 & 7); fixed step instructions referencing stale names.
+2. `docs/get-started.md` — Fixed Step 6 (Explore Your Data): removed "Triples tab", corrected "Graph Viewer" → "Explorer", "Quality" → "Data Quality", "Reasoning" → "Inference"; updated Knowledge Graph Build instruction to use "Build" sidebar.
+3. `docs/features.md` — Fixed MCP tool names: `list_projects` → `list_domains`, `select_project` → `select_domain`; fixed "Ontology → Model" → "Ontology → Designer" for D3 graph feature.
+4. `docs/examples.md` — Fixed "Navigate to Configuration" → "Navigate to Settings".
+
+**Modified files:**
+- `docs/user-guide.md`
+- `docs/get-started.md`
+- `docs/features.md`
+- `docs/examples.md`
+
+**Test result:** docs-only changes; no test impact. Sphinx HTML rebuild needed separately.
+
+---
+
+## Fix: Add Data Source — SP permission check and warning (GitHub issue #91)
+
+Context: When the app service principal has USE CATALOG + USE SCHEMA but lacks
+SELECT on source tables, SHOW TABLES silently returns an empty list, misleading
+the user into thinking the schema contains no tables. Added two new probes that
+detect missing READ TABLES (via information_schema) and missing SELECT (via
+SELECT … LIMIT 0) and surface actionable warnings in the UI.
+
+Changes:
+
+1. src/back/core/databricks/UnityCatalog.py
+   Added probe_schema_has_tables() — queries information_schema.tables (requires
+   only USE SCHEMA) to detect hidden tables when SHOW TABLES returns empty.
+2. src/back/core/databricks/UnityCatalog.py
+   Added check_table_select_permission() — runs SELECT … LIMIT 0 on the first
+   available table to confirm the SP can read data (not just metadata).
+3. src/back/core/databricks/DatabricksClient.py
+   Exposed probe_schema_has_tables() and check_table_select_permission() as
+   facade methods on DatabricksClient.
+4. src/back/objects/domain/Domain.py
+   list_schema_tables_result() now calls both probes and returns a `permissions`
+   dict with can_list_tables, can_select, hidden_table_count, and
+   permission_warning fields.
+5. src/front/static/domain/js/domain-metadata.js
+   loadMetadataFromUC() surfaces permission_warning via showNotification when
+   tables are empty (hard error) or SELECT is denied (soft warning).
+   showTableSelectionModal() now accepts a perms argument and renders a
+   per-permission badge banner (List tables: OK/denied, SELECT data: OK/denied).
+6. src/front/templates/partials/domain/_domain_metadata.html
+   Added #tableSelectionPermBanner alert div above the table list inside the
+   Select Tables modal.
+
+Modified files:
+- src/back/core/databricks/UnityCatalog.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/objects/domain/Domain.py
+- src/front/static/domain/js/domain-metadata.js
+- src/front/templates/partials/domain/_domain_metadata.html
+
+Tests: uv run pytest -q … -k "unity_catalog or metadata or permission" → 342 passed, 0 failed in 4.67s
+
+---
+
+## Feature: Per-table SELECT permission column in Data Sources grid
+
+Context: The schema-level SELECT probe added for issue #91 only tells the user
+whether the service principal can read the *first* table of a schema during
+import. Once tables are loaded, the Data Sources grid gave no per-table signal
+of readability. Added a "Select" column to the loaded-tables grid showing, per
+table, whether the app service principal can SELECT it — reusing the existing
+SELECT … LIMIT 0 probe. Computed once at load/refresh time and persisted with
+the table metadata.
+
+Changes:
+
+1. src/back/core/databricks/MetadataService.py
+   _fetch_tables_metadata() now calls UnityCatalog.check_table_select_permission()
+   per table and stores `can_select` (bool) and `select_error` (str|None) on
+   each table dict; the error branch defaults can_select to False.
+2. src/front/templates/partials/domain/_domain_metadata.html
+   Added a "Select" <th> (dm-th-select-perm) between Cols and Description in the
+   #metadataTablesTable header.
+3. src/front/static/domain/js/domain-metadata.js
+   displayMetadataPreview() renders a per-row badge via new renderSelectPermCell()
+   helper: green check (can SELECT), red cross with the error as tooltip (denied),
+   grey dash (unknown — metadata loaded before this field existed). Empty-state
+   colspan bumped 5 → 6.
+4. src/front/static/domain/css/domain-metadata.css
+   Added .dm-th-select-perm (7%, centered) and rebalanced .dm-th-desc 51% → 44%.
+
+Modified files:
+- src/back/core/databricks/MetadataService.py
+- src/front/templates/partials/domain/_domain_metadata.html
+- src/front/static/domain/js/domain-metadata.js
+- src/front/static/domain/css/domain-metadata.css
+
+Tests: uv run pytest -q -k "metadata or unity_catalog or permission or select" →
+362 passed, 1 failed (pre-existing MCP async event-loop smoke test, unrelated).
+Full suite: 2987 passed, 58 failed — all failures pre-existing async event-loop
+RuntimeErrors in unrelated api endpoint tests (review / version-status /
+current-user / comments), none touched by this change.
+
+---
+
+## Fix: Deployed app crash on v0.6.0 security bumps — pin lock to public CDN + `uv run --frozen`
+
+**Context:** After landing the 24-advisory security sprint, the deployed app
+reported "App started successfully" then immediately CRASHED. The container logs
+(retrieved via `databricks apps logs ontobricks-060`) showed the true cause was
+never native code or a runtime fault — it was a dependency *download* failure at
+app start:
+
+```
+× Failed to download `python-multipart==0.0.32`
+ ├─▶ Failed to fetch: https://pypi-proxy.dev.databricks.com/packages/.../python_multipart-0.0.32-py3-none-any.whl
+ ├─▶ client error (Connect) ╰─▶ operation timed out
+```
+
+Root cause: the Databricks Apps base image defaults uv's index to the internal
+`pypi-proxy.dev.databricks.com`. That proxy **cold-caches** — it had not yet
+mirrored the freshly-published security wheels (python-multipart 0.0.32, etc.),
+so the container's cold fetch through the proxy timed out and the process exited
+before serving. The last-good deploy (a649625) worked only because every wheel
+it needed was already warm in the proxy cache; the security bump introduced new
+versions that were not. Each `uv lock` / `uv run` run locally rewrote every lock
+URL back to the proxy (my `UV_INDEX_URL` points there), re-introducing the trap.
+
+**Changes:**
+1. `uv.lock` — Restored the full security version set (aiohttp 3.14.1,
+   cryptography 48.0.1, msgpack 1.2.1, pyjwt 2.13.0, python-multipart 0.0.32,
+   starlette 1.3.1, pydantic-settings 2.14.2, mlflow 3.14.0) and rewrote all
+   3986 `pypi-proxy.dev.databricks.com` URLs to `files.pythonhosted.org`
+   (wheels/sdists) and `pypi.org/simple` (registry) — the public CDN is always
+   warm and reachable from the App container (same approach as commit cc84c98).
+2. `pyproject.toml` — Removed the proxy-driven version caps and the `mlflow<3.12`
+   cap added during the (incorrect) native-crash hypothesis; the native reverts
+   were chasing a phantom, since the failure was a download timeout, not a fault.
+3. `app.yaml.template` / `app.yaml` / `src/mcp-server/app.yaml` — Added
+   `--frozen` to the `uv run` startup command. This makes uv use `uv.lock`
+   verbatim and NEVER re-resolve in the container, so it cannot rewrite the
+   pinned pythonhosted URLs back to the flaky proxy. Without `--frozen` the
+   container's proxy-defaulted index would re-lock on startup and re-create the
+   cold-cache timeout.
+
+**Modified files:**
+- `pyproject.toml`
+- `uv.lock`
+- `app.yaml.template`
+- `app.yaml` (rendered)
+- `src/mcp-server/app.yaml` (rendered)
+
+**Test result:** `uv run --frozen pytest …` → 2787 passed, 28 skipped, 0 failed.
+Verified `uv run --frozen` imports all security packages and leaves the lock at
+0 proxy URLs (3653 files.pythonhosted.org + 333 pypi.org/simple).
+
+---
+
+## Fix: MCP server pydantic-settings advisory (#60/#61) + same proxy/frozen treatment
+
+**Context:** The MCP server pulled `pydantic-settings` transitively at 2.14.1,
+leaving Dependabot #60/#61 (GHSA-4xgf-cpjx-pc3j — NestedSecretsSettingsSource
+symlink traversal) unpatched in `src/mcp-server/uv.lock`. The MCP app was also
+crashing on the same proxy cold-cache (`Failed to download aiofile==3.11.1` /
+`exceptiongroup==1.3.1` → operation timed out).
+
+**Changes:**
+1. `src/mcp-server/pyproject.toml` — Added `[tool.uv] constraint-dependencies`
+   pinning `pydantic-settings>=2.14.2` (transitive via fastmcp/databricks-sdk).
+2. `src/mcp-server/uv.lock` — Re-locked (pydantic-settings 2.14.1 → 2.14.2) and
+   rewrote all 1143 proxy URLs to files.pythonhosted.org / pypi.org.
+
+**Modified files:**
+- `src/mcp-server/pyproject.toml`
+- `src/mcp-server/uv.lock`
+
+**Test result:** `uv run --frozen mcp-ontobricks --help` → exit 0; lock at 0 proxy
+URLs (1045 files.pythonhosted.org + 98 pypi.org/simple). Both apps RUNNING after
+redeploy with clean startup logs (Uvicorn running, no download timeouts).
+
+---
+
+## Fix: Data Sources "Rights" column always Unknown + rename from "Select"
+
+**Context:** The per-table SELECT permission column in the Data Sources grid was
+labelled "Select" (confusing next to the row checkboxes) and showed a grey dash
+("Unknown") for every table loaded before the probe feature existed. The cell
+tooltip told users to "refresh with Update from UC", but the Update-from-UC path
+(`merge_table_metadata`) only refreshed columns and comments — it never
+re-probed `can_select`, so the column stayed Unknown forever.
+
+**Changes:**
+1. `src/front/templates/partials/domain/_domain_metadata.html` — Renamed the
+   grid header "Select" → "Rights" (`dm-th-select-perm` th).
+2. `src/back/objects/domain/Domain.py` — `merge_table_metadata()` now accepts an
+   optional `select_probe` arg and writes `can_select` / `select_error` onto the
+   table dict when provided; `update_metadata_tables()` runs
+   `check_table_select_permission()` per table and passes the result through, so
+   the sync refresh recomputes rights.
+3. `src/back/objects/domain/_metadata_tasks.py` — `run_metadata_update_task()`
+   (async Update from UC) likewise probes SELECT per table and forwards it to
+   `merge_table_metadata()`, so refreshing pre-existing metadata resolves the
+   Unknown state.
+
+**Modified files:**
+- `src/front/templates/partials/domain/_domain_metadata.html`
+- `src/back/objects/domain/Domain.py`
+- `src/back/objects/domain/_metadata_tasks.py`
+
+**Test result:** `uv run --frozen pytest -q -k "metadata or unity_catalog or
+permission or select or domain"` → 670 passed, 2 skipped, 11 failed. All 11
+failures are the pre-existing async event-loop RuntimeErrors in unrelated
+endpoints (current-user, review, set-version-status, comments, MCP smoke);
+none touch the metadata code changed here.
+
+---
+
+## Test: Full domain-lifecycle E2E journey (Playwright)
+
+**Context:** The existing E2E suites are per-endpoint contract tests — each
+test does one navigation plus one request. Nothing exercised the *whole*
+authoring flow as a single continuous session, where state must accumulate
+from step to step (the way it does for a real user). Added a new
+`tests/e2e/scenarios/` sub-suite with one journey test that walks the entire
+deterministic, session-only lifecycle and asserts the accumulated state at
+every hop. The flow alternates genuine DOM interactions (file-input OWL
+upload, the "Regenerate" R2RML button) with `page.context.request` mutations
+(the same endpoints the page JS hits), proving both the JS wiring and the
+session-cookie state-carry. The Databricks-backed tail (UC save/load, KG
+build, auto-assign, LLM wizard) is intentionally out of scope and left to the
+live-gated suites.
+
+**Changes:**
+1. `tests/e2e/scenarios/__init__.py` — New package marker for the journey sub-suite.
+2. `tests/e2e/scenarios/test_full_lifecycle.py` — New `TestFullDomainLifecycle::test_create_domain_to_r2rml_journey`. In one browser context (one `DomainSession`): creates a domain (`#domainName` fill + `POST /domain/info`), imports an ontology through the real `#importOwlFileInput` file input (drives the JS → `/ontology/parse-owl`), asserts the imported classes render in `#classHierarchyTree`, saves entity/relationship mappings (`POST /mapping/save`), generates R2RML via the real `#regenerateR2RMLBtn` button, round-trips OWL (`GET /ontology/export-owl`), and snapshots the full domain (`GET /domain/export`). Reuses the existing `sample_owl_content` and `sample_mapping_config` conftest fixtures (their URIs align so the mapping references the imported classes).
+
+**Modified files:**
+- `tests/e2e/scenarios/__init__.py` (new)
+- `tests/e2e/scenarios/test_full_lifecycle.py` (new)
+
+**Test result:** `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run pytest tests/e2e/scenarios/ --no-cov` → 1 passed; verified stable across 3 consecutive runs (~9.5s each). Deterministic under fake creds (no workspace, warehouse, or LLM required).
+
+---
+
+## Test: Live `test_scenario_1` E2E — data-source import → Generate-page OWL → persist
+
+**Context:** The deterministic full-lifecycle journey deliberately skips the
+Databricks-backed tail (UC metadata read, the LLM Generate wizard, durable
+registry save). This new live-gated scenario covers exactly that tail end-to-end
+and, by design, leaves a **durable** domain behind for manual inspection. It
+runs against an *already-running* OntoBricks instance (default the local dev
+server on `http://localhost:8000`) so the persisted `test_scenario_1` lands in
+the same registry the local app reads. The journey: reset → create
+`test_scenario_1` with the `databricks-claude-sonnet-4-5` serving endpoint
+attached → import the `benoit_cayla.customer` data sources *beforehand*
+(`POST /domain/metadata/initialize`) → open the real **Generate** page
+(`/ontology?section=wizard`), confirm the imported tables render, and click the
+real `#wizardTopGenerateBtn` → the async LLM wizard runs and auto-applies the
+generated OWL → poll `/ontology/load` until classes land → `POST
+/domain/save-to-uc` and verify the domain is listed. The domain is intentionally
+NOT reset at the end.
+
+**Changes:**
+1. `tests/e2e/scenarios/test_scenario_1_generate_live.py` — New
+   `TestScenario1GenerateLive::test_import_sources_generate_owl_and_persist`.
+   Gated behind `ONTOBRICKS_SCENARIO_LIVE=1` (needs a running app + warehouse +
+   LLM and mutates the registry). Self-contained fixtures: `scenario_base`
+   (health-probes `/health` then `/healthz`, skips cleanly if no app is up) and
+   `scenario_page` (a fresh browser context on the running app, bypassing the
+   int-workspace `page` fixture so no int bearer is carried). Target/inputs are
+   env-overridable (`ONTOBRICKS_LIVE_BASE`, `…_CATALOG`, `…_SCHEMA`, `…_LLM`,
+   `…_GEN_TIMEOUT`). Direct POSTs carry the double-submit CSRF token from the
+   cookie; generation completion is detected by polling the session truth
+   (`/ontology/load`) rather than front-end state.
+
+**Modified files:**
+- `tests/e2e/scenarios/test_scenario_1_generate_live.py` (new)
+
+**Test result:** `ONTOBRICKS_SCENARIO_LIVE=1 ONTOBRICKS_LIVE_BASE=http://localhost:8000
+uv run pytest tests/e2e/scenarios/test_scenario_1_generate_live.py -v -s --no-cov`
+→ 1 passed in 114s against the live local app. The wizard generated an 11-class
+ontology (Call, Claim, Contract, Customer, CustomerInteraction, Interaction,
+Invoice, Meter, MeterReading, Payment, Subscription) from the 10 imported
+`benoit_cayla.customer` tables; `save-to-uc` returned "Domain saved" and
+`test_scenario_1` is listed in the registry (persisted for manual inspection).
+
+---
+
+## Test: Extend live `test_scenario_1` — Auto-Map (AI mapping) + Knowledge-Graph build
+
+**Context:** Extended the live `test_scenario_1` journey so it now exercises the
+*entire* Databricks-backed authoring pipeline end-to-end, not just OWL
+generation: after generating the ontology it runs **Auto-Map** (the AI mapping
+wizard that generates the SQL + column mappings for every entity/relationship)
+and then **builds the knowledge graph** (CREATE VIEW + populate the graph store),
+before persisting the durable domain for manual inspection. Several real
+behaviours of the persistence/async layer had to be accommodated to make the
+journey idempotent and reliably re-runnable.
+
+**Changes:**
+1. `tests/e2e/scenarios/test_scenario_1_generate_live.py` — Added two steps to
+   the journey and reworked the persistence flow:
+   - **Auto-Map**: navigates the real Mapping page (`/mapping?section=autoassign`),
+     waits for `MappingState.loadedOntology` to hydrate, then invokes
+     `AutoAssignModule.start()` directly (the button re-renders its label/gauges
+     on every status tick, so a DOM click races with "element not stable").
+     Polls `/mapping/load` until entities carry generated `sql_query` and the
+     module is no longer running.
+   - **KG build**: `POST /dtwin/sync/start`, then polls `GET /tasks/<id>` (new
+     `_poll_task` helper) to terminal state and asserts `completed`.
+   - **Idempotent persistence**: at start, deletes any prior `test_scenario_1`
+     (`DELETE /settings/registry/domains/{name}`, cache-invalidating) for a clean
+     rebuild; immediately claims the registry folder with an initial
+     `save-to-uc` (so the async Auto-Map/Build tasks — which persist their domain
+     *snapshot* on a background thread — overwrite the folder instead of
+     creating a conflicting entry); saves again pre-build and post-build to
+     capture the ontology+mappings and the build metadata.
+   - New env knobs: `ONTOBRICKS_SCENARIO_AUTOMAP_TIMEOUT` (default 600s),
+     `ONTOBRICKS_SCENARIO_BUILD_TIMEOUT` (default 420s). Renamed the test method
+     to `test_import_generate_automap_build_and_persist`.
+
+**Modified files:**
+- `tests/e2e/scenarios/test_scenario_1_generate_live.py`
+
+**Test result:** `ONTOBRICKS_SCENARIO_LIVE=1 ONTOBRICKS_LIVE_BASE=http://localhost:8000
+uv run pytest tests/e2e/scenarios/test_scenario_1_generate_live.py -v -s --no-cov`
+→ 1 passed in 396s against the live local app. End-to-end: generated a 10-class
+ontology from `benoit_cayla.customer`, Auto-Map produced 10 entity + 9
+relationship mappings with SQL, the KG build wrote 35,038 triples in 63s, and
+`test_scenario_1` was persisted to the registry for manual inspection. Still
+collects + skips cleanly in the default matrix (gated on
+`ONTOBRICKS_SCENARIO_LIVE=1`).

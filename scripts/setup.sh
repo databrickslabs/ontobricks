@@ -34,7 +34,7 @@ echo ""
 
 # Install dependencies (including optional lakebase and pitfalls extras for local dev)
 echo "Installing dependencies..."
-uv sync --extra lakebase --extra pitfalls
+uv sync --frozen --extra lakebase --extra pitfalls
 echo ""
 
 # Create .env file if it doesn't exist

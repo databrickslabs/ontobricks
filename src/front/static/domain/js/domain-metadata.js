@@ -12,6 +12,83 @@ let loadMetadataWidgetInitialized = false; // Track if widget is initialized
 let pendingLoadCatalog = ''; // Catalog selected in the load metadata modal
 let pendingLoadSchema = ''; // Schema selected in the load metadata modal
 
+const _metadataGauges = {};
+
+function _drawMetadataGauge(canvasId, score) {
+    if (_metadataGauges[canvasId]) {
+        _metadataGauges[canvasId].destroy();
+        delete _metadataGauges[canvasId];
+    }
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const val = Math.max(0, Math.min(100, Math.round(score)));
+    const color = val === 100 ? '#198754' : val >= 80 ? '#ffc107' : '#dc3545';
+    const remaining = 100 - val;
+
+    _metadataGauges[canvasId] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [val, remaining],
+                backgroundColor: [color, '#e9ecef'],
+                borderWidth: 0,
+                circumference: 180,
+                rotation: 270,
+            }]
+        },
+        options: {
+            responsive: false,
+            cutout: '70%',
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            layout: { padding: 0 },
+        },
+        plugins: [{
+            id: 'metadataGaugeLabel',
+            afterDraw(chart) {
+                const c = chart.ctx, w = chart.width, h = chart.height;
+                c.save();
+                c.textAlign = 'center';
+                c.textBaseline = 'bottom';
+                c.font = 'bold 14px system-ui, sans-serif';
+                c.fillStyle = color;
+                c.fillText(val + '%', w / 2, h - 4);
+                c.restore();
+            }
+        }],
+    });
+}
+
+function updateMetadataGauges(metadata) {
+    const tables = metadata?.tables || [];
+    if (tables.length === 0) return;
+
+    let tablesWithDesc = 0;
+    let totalColumns = 0;
+    let columnsWithDesc = 0;
+
+    for (const t of tables) {
+        if (t.comment && t.comment.trim()) tablesWithDesc++;
+        for (const col of (t.columns || [])) {
+            totalColumns++;
+            if (col.comment && col.comment.trim()) columnsWithDesc++;
+        }
+    }
+
+    const tableScore = Math.round((tablesWithDesc / tables.length) * 100);
+    const colScore = totalColumns > 0 ? Math.round((columnsWithDesc / totalColumns) * 100) : 0;
+
+    _drawMetadataGauge('gaugeTableDesc', tableScore);
+    _drawMetadataGauge('gaugeColumnDesc', colScore);
+
+    const tableDetail = document.getElementById('gaugeTableDescDetail');
+    if (tableDetail) tableDetail.textContent = `${tablesWithDesc} / ${tables.length} tables`;
+
+    const colDetail = document.getElementById('gaugeColumnDescDetail');
+    if (colDetail) colDetail.textContent = `${columnsWithDesc} / ${totalColumns} columns`;
+}
+
 // Async task tracking
 const METADATA_LOAD_TASK_KEY = 'ontobricks_metadata_load_task';
 const METADATA_UPDATE_TASK_KEY = 'ontobricks_metadata_update_task';
@@ -83,6 +160,8 @@ async function loadMetadataStatus() {
             
             // Show preview and Update Mappings button
             displayMetadataPreview(data.metadata);
+            checkMetadataDescriptions(data.metadata);
+            updateMetadataGauges(data.metadata);
             const updateMappingsBtn = document.getElementById('updateMappingsBtn');
             if (updateMappingsBtn) updateMappingsBtn.classList.remove('d-none');
         } else {
@@ -91,6 +170,8 @@ async function loadMetadataStatus() {
             statusDiv.className = 'alert alert-secondary mb-4';
             statusText.innerHTML = '<i class="bi bi-info-circle"></i> No data sources loaded';
             previewDiv.classList.add('d-none');
+            const warningEl = document.getElementById('metadataDescriptionWarning');
+            if (warningEl) warningEl.style.display = 'none';
             const updateMappingsBtn = document.getElementById('updateMappingsBtn');
             if (updateMappingsBtn) updateMappingsBtn.classList.add('d-none');
         }
@@ -145,23 +226,35 @@ async function loadMetadataFromUC() {
         statusSpan.textContent = '';
         
         if (data.success) {
-            // Store available tables
+            // Store available tables and permission info
             allAvailableTables = data.tables || [];
-            
+            const perms = data.permissions || {};
+
             if (allAvailableTables.length === 0) {
-                showNotification(`No tables found in ${catalog}.${schema}`, 'warning');
+                if (perms.permission_warning) {
+                    showNotification(
+                        `No tables visible in ${catalog}.${schema}. ` + perms.permission_warning,
+                        'error'
+                    );
+                } else {
+                    showNotification(`No tables found in ${catalog}.${schema}`, 'warning');
+                }
                 return;
             }
-            
+
+            // Non-blocking warning when SELECT is denied
+            if (perms.permission_warning) {
+                showNotification(perms.permission_warning, 'warning');
+            }
+
             // Initialize import selections (select all new tables by default)
             importTableSelections = {};
             allAvailableTables.forEach(table => {
-                // Pre-select tables that are not already loaded
                 importTableSelections[table.name] = !table.already_loaded;
             });
-            
-            // Show the selection modal
-            showTableSelectionModal(catalog, schema);
+
+            // Show the selection modal, pass permissions for the status banner
+            showTableSelectionModal(catalog, schema, perms);
         } else {
             showNotification('Error: ' + (data.message || 'Failed to list tables'), 'error');
         }
@@ -174,16 +267,48 @@ async function loadMetadataFromUC() {
     }
 }
 
-function showTableSelectionModal(catalog, schema) {
+function showTableSelectionModal(catalog, schema, perms) {
     const tbody = document.getElementById('tableSelectionBody');
     const infoSpan = document.getElementById('tableSelectionInfo');
-    
+
     const newCount = allAvailableTables.filter(t => !t.already_loaded).length;
     const existingCount = allAvailableTables.filter(t => t.already_loaded).length;
-    
+
     infoSpan.innerHTML = `<code>${catalog}.${schema}</code> - ${allAvailableTables.length} table(s) found`;
     if (existingCount > 0) {
         infoSpan.innerHTML += ` <span class="badge bg-info">${existingCount} already loaded</span>`;
+    }
+
+    // Permission status banner
+    const permBanner = document.getElementById('tableSelectionPermBanner');
+    if (permBanner) {
+        if (!perms) {
+            permBanner.classList.add('d-none');
+        } else {
+            const listOk  = perms.can_list_tables !== false;
+            const selOk   = perms.can_select === true;
+            const selUnk  = perms.can_select === null;
+
+            const listBadge = listOk
+                ? '<span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>List tables: OK</span>'
+                : '<span class="badge bg-danger me-1"><i class="bi bi-x-circle me-1"></i>List tables: denied</span>';
+
+            const selBadge = selUnk
+                ? '<span class="badge bg-secondary me-1"><i class="bi bi-dash-circle me-1"></i>SELECT: n/a</span>'
+                : selOk
+                    ? '<span class="badge bg-success me-1"><i class="bi bi-check-circle me-1"></i>SELECT data: OK</span>'
+                    : '<span class="badge bg-warning text-dark me-1"><i class="bi bi-exclamation-triangle me-1"></i>SELECT data: denied</span>';
+
+            permBanner.innerHTML = `
+                <div class="d-flex align-items-center flex-wrap gap-1">
+                    <small class="text-muted me-1">Service principal permissions:</small>
+                    ${listBadge}${selBadge}
+                    ${perms.permission_warning
+                        ? `<small class="text-warning ms-1"><i class="bi bi-exclamation-triangle me-1"></i>${perms.permission_warning}</small>`
+                        : ''}
+                </div>`;
+            permBanner.classList.remove('d-none');
+        }
     }
     
     // Build table rows
@@ -482,6 +607,7 @@ function displayMetadataPreview(metadata) {
         const parts = fullName.split('.');
         const displayName = parts.length === 3 ? parts[2] : fullName;
         const dataSource = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : '';
+        const selectCell = renderSelectPermCell(table);
         
         html += `
             <tr class="${isMarked ? 'table-danger' : ''}" data-table-index="${index}">
@@ -502,6 +628,7 @@ function displayMetadataPreview(metadata) {
                 <td class="meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}">
                     <span class="badge bg-secondary">${columnCount}</span>
                 </td>
+                <td class="text-center">${selectCell}</td>
                 <td class="table-comment-cell meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}">
                     <span class="table-comment-text" id="tableComment_${index}">${tableComment || '<span class="text-muted fst-italic">Click to add description...</span>'}</span>
                 </td>
@@ -509,11 +636,27 @@ function displayMetadataPreview(metadata) {
         `;
     });
     
-    tbody.innerHTML = html || '<tr><td colspan="5" class="text-center text-muted">No tables found</td></tr>';
+    tbody.innerHTML = html || '<tr><td colspan="6" class="text-center text-muted">No tables found</td></tr>';
     previewDiv.classList.remove('d-none');
     
     updateSelectionCount();
     updateSelectAllCheckbox();
+}
+
+function renderSelectPermCell(table) {
+    // can_select may be undefined for metadata loaded before this field existed
+    if (table.can_select === undefined || table.can_select === null) {
+        return '<span class="text-muted" title="Unknown — refresh with Update from UC">'
+            + '<i class="bi bi-dash-circle"></i></span>';
+    }
+    if (table.can_select) {
+        return '<span class="text-success" title="Service principal can SELECT this table">'
+            + '<i class="bi bi-check-circle-fill"></i></span>';
+    }
+    const reason = (table.select_error || 'SELECT not permitted')
+        .toString()
+        .replace(/"/g, '&quot;');
+    return `<span class="text-danger" title="${reason}"><i class="bi bi-x-circle-fill"></i></span>`;
 }
 
 function toggleTableSelection(tableName, isChecked) {
@@ -697,6 +840,7 @@ async function saveMetadataChanges(silent = false) {
         
         if (data.success) {
             if (!silent) showNotification(`Saved data sources for ${allTables.length} tables`, 'success');
+            updateMetadataGauges(metadataCache);
         } else {
             showNotification('Error: ' + data.message, 'error');
         }
@@ -775,6 +919,7 @@ function saveTableDetails() {
     
     // Refresh the display
     displayMetadataPreview(metadataCache);
+    checkMetadataDescriptions(metadataCache);
     
     showNotification('Table details updated. Click "Save Changes" to persist.', 'info', 2000);
 }
@@ -1061,3 +1206,62 @@ async function updateMetadataFromUC() {
     }
     document.addEventListener('DOMContentLoaded', bind);
 })();
+
+function checkMetadataDescriptions(metadata) {
+    const warningEl = document.getElementById('metadataDescriptionWarning');
+    if (!warningEl) return;
+
+    const tables = metadata?.tables || [];
+    if (tables.length === 0) {
+        warningEl.style.display = 'none';
+        return;
+    }
+
+    const tablesNoDesc = [];
+    let columnsNoDescCount = 0;
+
+    for (const t of tables) {
+        const tName = t.full_name || t.name || '?';
+        if (!t.comment || !t.comment.trim()) {
+            tablesNoDesc.push(tName);
+        }
+        for (const col of (t.columns || [])) {
+            if (!col.comment || !col.comment.trim()) {
+                columnsNoDescCount++;
+            }
+        }
+    }
+
+    const totalMissing = tablesNoDesc.length + columnsNoDescCount;
+    if (totalMissing === 0) {
+        warningEl.style.display = 'none';
+        return;
+    }
+
+    const collapseId = 'metaDescQualityDetails';
+    const tableRows = tablesNoDesc.map(t =>
+        `<li><i class="bi bi-table text-muted me-1"></i><code>${t}</code> — no table description</li>`
+    ).join('');
+
+    warningEl.innerHTML = `
+        <div class="alert alert-warning mb-0 py-2">
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-exclamation-triangle-fill mt-1 flex-shrink-0"></i>
+                <div class="flex-grow-1">
+                    <strong>${tablesNoDesc.length} table(s) and ${columnsNoDescCount} column(s) are missing descriptions.</strong>
+                    <span class="ms-1 text-muted small">Adding descriptions improves AI mapping accuracy.</span>
+                    ${tablesNoDesc.length > 0 ? `
+                    <button class="btn btn-link btn-sm py-0 px-1 ms-1 text-warning-emphasis text-decoration-none"
+                            type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                        <i class="bi bi-chevron-down" style="font-size:0.75rem;"></i> Show tables
+                    </button>
+                    <div class="collapse mt-2" id="${collapseId}">
+                        <ul class="list-unstyled mb-0 small" style="max-height:160px;overflow-y:auto;">
+                            ${tableRows}
+                        </ul>
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>`;
+    warningEl.style.display = 'block';
+}

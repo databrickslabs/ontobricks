@@ -952,3 +952,371 @@ class TestImportAndResetEndpoints:
         )
         assert resp.status_code == 403
         assert not result.get("passed")
+
+
+# ------------------------------------------------------------------
+# Single-editor edit-lock gate (authoritative)
+# ------------------------------------------------------------------
+
+
+def _dispatch_with_edit_lock(holder, *, app_role=ROLE_EDITOR, domain_role=ROLE_EDITOR,
+                             method="POST", path="/ontology/"):
+    """Drive a dispatch on a DRAFT version with a stubbed lock holder.
+
+    ``holder`` is the name returned by ``_session_edit_lock_holder`` (``""``
+    means the lock is free / held by the caller — request must pass).
+    """
+    from shared.fastapi.main import PermissionMiddleware
+
+    req = _make_request(method=method, path=path)
+    result = {}
+
+    async def call_next(r):
+        result["passed"] = True
+        return MagicMock(status_code=200)
+
+    middleware = PermissionMiddleware(MagicMock())
+
+    with (
+        patch("back.core.databricks.is_databricks_app", return_value=True),
+        patch.object(
+            PermissionMiddleware, "_resolve_roles",
+            return_value=(app_role, domain_role),
+        ),
+        patch.object(
+            PermissionMiddleware, "_session_version_status", return_value="DRAFT"
+        ),
+        patch.object(
+            PermissionMiddleware, "_session_edit_lock_holder", return_value=holder
+        ),
+    ):
+        resp = _run(middleware.dispatch(req, call_next))
+    return req, resp, result
+
+
+class TestEditLockGate:
+    """The edit-lock gate runs after the lifecycle gate on DRAFT versions:
+    a non-holder mutating a gated edit route is 403'd, while the holder
+    (empty ``_session_edit_lock_holder``) passes through. Admins are NOT
+    exempt — they must take over the lock first."""
+
+    def test_non_holder_editor_blocked(self):
+        _, resp, result = _dispatch_with_edit_lock("Bob")
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+    def test_holder_passes(self):
+        _, _, result = _dispatch_with_edit_lock("")
+        assert result.get("passed")
+
+    def test_admin_not_exempt_from_lock(self):
+        _, resp, result = _dispatch_with_edit_lock(
+            "Bob", app_role=ROLE_ADMIN, domain_role=ROLE_ADMIN
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+    def test_lock_not_checked_on_read(self):
+        """GET is not a status-gated edit, so the lock gate never runs."""
+        called = {}
+
+        def _holder(_self, _req):
+            called["checked"] = True
+            return "Bob"
+
+        from shared.fastapi.main import PermissionMiddleware
+
+        req = _make_request(method="GET", path="/ontology/")
+
+        async def call_next(r):
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch.object(
+                PermissionMiddleware, "_resolve_roles",
+                return_value=(ROLE_EDITOR, ROLE_EDITOR),
+            ),
+            patch.object(
+                PermissionMiddleware, "_session_edit_lock_holder", _holder
+            ),
+        ):
+            _run(middleware.dispatch(req, call_next))
+        assert "checked" not in called
+
+
+# ------------------------------------------------------------------
+# Data-refresh ops are NOT gated on lifecycle status (issue #78)
+# ------------------------------------------------------------------
+
+
+def _dispatch_with_status(
+    app_role, domain_role, *, version_status, method="POST", path
+):
+    """Drive a dispatch with predetermined roles AND a stubbed version status."""
+    from shared.fastapi.main import PermissionMiddleware
+
+    req = _make_request(method=method, path=path)
+    result = {}
+
+    async def call_next(r):
+        result["passed"] = True
+        return MagicMock(status_code=200)
+
+    middleware = PermissionMiddleware(MagicMock())
+
+    with (
+        patch("back.core.databricks.is_databricks_app", return_value=True),
+        patch.object(
+            PermissionMiddleware, "_resolve_roles",
+            return_value=(app_role, domain_role),
+        ),
+        patch.object(
+            PermissionMiddleware, "_session_version_status",
+            return_value=version_status,
+        ),
+        patch.object(
+            PermissionMiddleware, "_session_edit_lock_holder", return_value="",
+        ),
+    ):
+        resp = _run(middleware.dispatch(req, call_next))
+    return req, resp, result
+
+
+class TestDataRefreshNotStatusGated:
+    """KG data-refresh ops must pass on PUBLISHED / IN-REVIEW domains.
+
+    These paths were previously in ``_STATUS_GATE_EDIT_PATHS`` and blocked
+    all non-DRAFT versions.  After the fix (issue #78) they are status-open:
+    a builder can re-materialise graph data without reverting to DRAFT.
+    Design-editing paths (``/ontology/``) must still be blocked.
+    """
+
+    DATA_REFRESH_PATHS = [
+        "/dtwin/sync/start",
+        "/dtwin/sync/load",
+        "/dtwin/reasoning/materialize",
+    ]
+
+    @pytest.mark.parametrize("path", DATA_REFRESH_PATHS)
+    @pytest.mark.parametrize("status", ["PUBLISHED", "IN-REVIEW"])
+    def test_builder_can_refresh_on_non_draft(self, path, status):
+        """A builder on a non-DRAFT version must reach data-refresh endpoints."""
+        _, _, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_BUILDER,
+            version_status=status,
+            path=path,
+        )
+        assert result.get("passed"), (
+            f"builder should reach {path} on {status} version"
+        )
+
+    @pytest.mark.parametrize("status", ["PUBLISHED", "IN-REVIEW"])
+    def test_design_edit_still_blocked_on_non_draft(self, status):
+        """Design-editing paths must still be blocked on non-DRAFT versions."""
+        _, resp, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_BUILDER,
+            version_status=status,
+            path="/ontology/entities",
+        )
+        assert resp.status_code == 403, (
+            f"design edit should be blocked on {status} version"
+        )
+        assert not result.get("passed")
+
+    @pytest.mark.parametrize("path", DATA_REFRESH_PATHS)
+    def test_viewer_still_blocked_by_role_gate(self, path):
+        """Role gate still applies: viewers must not reach data-refresh ops."""
+        _, resp, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_VIEWER,
+            version_status="DRAFT",
+            path=path,
+        )
+        assert resp.status_code == 403, (
+            f"viewer should be blocked on {path} regardless of status"
+        )
+        assert not result.get("passed")
+
+    @pytest.mark.parametrize("path", DATA_REFRESH_PATHS)
+    def test_admin_can_refresh_on_published(self, path):
+        """Admins bypass the domain-role gate and must also reach data-refresh
+        paths on non-DRAFT versions."""
+        _, _, result = _dispatch_with_status(
+            ROLE_ADMIN, ROLE_ADMIN,
+            version_status="PUBLISHED",
+            path=path,
+        )
+        assert result.get("passed"), (
+            f"admin should reach {path} on PUBLISHED version"
+        )
+
+    def test_data_refresh_allowed_on_draft_too(self):
+        """Data-refresh ops must of course still work on DRAFT versions."""
+        for path in self.DATA_REFRESH_PATHS:
+            _, _, result = _dispatch_with_status(
+                ROLE_APP_USER, ROLE_BUILDER,
+                version_status="DRAFT",
+                path=path,
+            )
+            assert result.get("passed"), (
+                f"builder should reach {path} on DRAFT version"
+            )
+
+
+# ------------------------------------------------------------------
+# _is_status_gated_edit — pure function unit tests
+# ------------------------------------------------------------------
+
+
+class TestIsStatusGatedEdit:
+    """Direct unit tests for the ``_is_status_gated_edit`` classifier.
+
+    Exercises the path/method classification logic without going through
+    the full middleware dispatch stack.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        from shared.fastapi.main import _is_status_gated_edit
+        self._fn = _is_status_gated_edit
+
+    # --- GET requests are never gated (only write methods are) ---
+
+    @pytest.mark.parametrize("path", [
+        "/ontology/entities",
+        "/domain/save",
+        "/dtwin/sync/start",
+    ])
+    def test_get_is_never_gated(self, path):
+        assert not self._fn(path, "GET")
+
+    # --- Design-edit prefixes are gated ---
+
+    @pytest.mark.parametrize("path", [
+        "/ontology/",
+        "/ontology/entities",
+        "/mapping/",
+        "/mapping/assignments",
+    ])
+    def test_design_edit_prefixes_are_gated(self, path):
+        assert self._fn(path, "POST")
+
+    # --- Open suffixes under an editing prefix are NOT gated ---
+
+    @pytest.mark.parametrize("path", [
+        "/ontology/entities/generate",
+        "/ontology/validate",
+        "/mapping/assignments/analyze",
+        "/ontology/pitfalls/analyze",
+        "/ontology/chat",
+    ])
+    def test_open_suffixes_exempt_from_gate(self, path):
+        assert not self._fn(path, "POST")
+
+    # --- Explicit design-edit paths (domain/* writes) ---
+
+    @pytest.mark.parametrize("path", [
+        "/domain/save",
+        "/domain/info",
+        "/domain/import",
+        "/domain/reset",
+        "/domain/clear",
+        "/domain/config",
+        "/domain/map-layout",
+        "/domain/save-to-uc",
+        "/domain/design-views/create",
+        "/domain/design-views/rename",
+        "/domain/design-views/delete",
+        "/domain/metadata/",
+        "/domain/documents/",
+    ])
+    def test_explicit_design_edit_paths_are_gated(self, path):
+        assert self._fn(path, "POST")
+
+    # --- Data-refresh ops are NOT gated (issue #78) ---
+
+    @pytest.mark.parametrize("path", [
+        "/dtwin/sync/start",
+        "/dtwin/sync/load",
+        "/dtwin/reasoning/materialize",
+    ])
+    def test_data_refresh_paths_not_gated(self, path):
+        assert not self._fn(path, "POST"), (
+            f"{path} must not be status-gated (data-refresh op)"
+        )
+
+    # --- Other dtwin writes that were always open ---
+
+    @pytest.mark.parametrize("path", [
+        "/dtwin/sync/filter",
+        "/dtwin/reasoning/start",
+        "/dtwin/execute",
+    ])
+    def test_dtwin_non_gated_paths_remain_open(self, path):
+        assert not self._fn(path, "POST")
+
+    # --- Wizard paths are exempt regardless ---
+
+    def test_wizard_path_exempt(self):
+        assert not self._fn("/ontology/wizard/step1", "POST")
+
+
+# ------------------------------------------------------------------
+# Full lifecycle gate in dispatch (design blocked, data-refresh open)
+# ------------------------------------------------------------------
+
+
+class TestLifecycleGateInDispatch:
+    """End-to-end dispatch tests for the lifecycle status gate.
+
+    Complements ``TestIsStatusGatedEdit`` (function) and
+    ``TestDataRefreshNotStatusGated`` (role/status combos) by verifying
+    the gate wires correctly inside the full middleware dispatch.
+    """
+
+    @pytest.mark.parametrize("status", ["PUBLISHED", "IN-REVIEW"])
+    def test_mapping_edit_blocked_on_non_draft(self, status):
+        _, resp, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_BUILDER,
+            version_status=status,
+            path="/mapping/assignments",
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+    @pytest.mark.parametrize("path", [
+        "/domain/save",
+        "/domain/metadata/",
+        "/domain/documents/",
+        "/domain/design-views/create",
+    ])
+    def test_explicit_design_paths_blocked_on_published(self, path):
+        _, resp, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_BUILDER,
+            version_status="PUBLISHED",
+            path=path,
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
+
+    def test_draft_design_edit_passes(self):
+        """On DRAFT, design edits pass through (role gate allows builder)."""
+        _, _, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_BUILDER,
+            version_status="DRAFT",
+            path="/ontology/entities",
+        )
+        assert result.get("passed")
+
+    @pytest.mark.parametrize("status", ["PUBLISHED", "IN-REVIEW"])
+    def test_kg_filter_allowed_on_non_draft(self, status):
+        """KG filtering is read-only; it must stay available on locked versions."""
+        _, _, result = _dispatch_with_status(
+            ROLE_APP_USER, ROLE_BUILDER,
+            version_status=status,
+            path="/dtwin/sync/filter",
+        )
+        assert result.get("passed"), (
+            f"KG filter should be allowed on {status} version"
+        )

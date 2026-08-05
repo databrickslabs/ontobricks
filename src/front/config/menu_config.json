@@ -117,16 +117,28 @@
             "status_indicator": null,
             "navbar_actions": [
                 {
-                    "label": "Save Domain",
+                    "label": "Save",
                     "icon": "bi-cloud-upload",
                     "action": "domainSave",
                     "element_id": "menuSaveDomain"
+                },
+                {
+                    "label": "Switch",
+                    "icon": "bi-arrow-repeat",
+                    "action": "domainSwitch",
+                    "element_id": "menuSwitchDomain"
+                },
+                {
+                    "label": "Close",
+                    "icon": "bi-x-circle",
+                    "action": "domainClose",
+                    "element_id": "menuCloseDomain"
                 }
             ],
             "groups": [
                 {
                     "id": "domain-main",
-                    "title": "Domain details",
+                    "title": "",
                     "icon": "bi-folder2-open",
                     "items": [
                         {
@@ -144,19 +156,19 @@
                             "requires": "domain_saved"
                         },
                         {
-                            "id": "validation",
-                            "label": "Cockpit",
-                            "icon": "bi-speedometer2",
-                            "default": false,
-                            "requires": "domain_saved"
-                        },
-                        {
                             "id": "review",
-                            "label": "Validation",
+                            "label": "Publication",
                             "icon": "bi-patch-check",
                             "default": false,
                             "requires": "domain_saved"
-                        },
+                        }
+                    ]
+                },
+                {
+                    "id": "domain-metadata",
+                    "title": "Metadata",
+                    "icon": "bi-database",
+                    "items": [
                         {
                             "id": "metadata",
                             "label": "Data Sources",
@@ -174,22 +186,22 @@
                     ]
                 },
                 {
-                    "id": "domain-design",
-                    "title": "Design",
-                    "icon": "bi-pencil-square",
+                    "id": "domain-collaboration",
+                    "title": "Collaboration",
+                    "icon": "bi-chat-left-text",
                     "items": [
                         {
-                            "id": "ontology-link",
-                            "label": "Ontology",
-                            "icon": "bi-bezier2",
-                            "route": "/ontology/",
+                            "id": "mytasks",
+                            "label": "My Tasks",
+                            "icon": "bi-inbox",
+                            "default": false,
                             "requires": "domain_saved"
                         },
                         {
-                            "id": "mapping-link",
-                            "label": "Mapping",
-                            "icon": "bi-shuffle",
-                            "route": "/mapping/",
+                            "id": "discussions",
+                            "label": "Discussions",
+                            "icon": "bi-chat-left-text",
+                            "default": false,
                             "requires": "domain_saved"
                         }
                     ]
@@ -200,16 +212,9 @@
                     "icon": "bi-gear",
                     "items": [
                         {
-                            "id": "sync",
-                            "label": "Build",
-                            "icon": "bi-arrow-repeat",
-                            "default": false,
-                            "requires": "domain_saved"
-                        },
-                        {
-                            "id": "runs",
-                            "label": "Runs",
-                            "icon": "bi-list-check",
+                            "id": "validation",
+                            "label": "Cockpit",
+                            "icon": "bi-speedometer2",
                             "default": false,
                             "requires": "domain_saved"
                         },
@@ -493,6 +498,14 @@
                             "requires": null
                         },
                         {
+                            "id": "registry",
+                            "label": "Registry",
+                            "icon": "bi-archive",
+                            "default": false,
+                            "requires": null,
+                            "admin_only": true
+                        },
+                        {
                             "id": "global",
                             "label": "Global",
                             "icon": "bi-sliders",
@@ -508,7 +521,7 @@
                     "items": [
                         {
                             "id": "ts-global",
-                            "label": "Global",
+                            "label": "Back End",
                             "icon": "bi-sliders",
                             "default": false,
                             "requires": null
@@ -536,9 +549,9 @@
                             "admin_only": true
                         },
                         {
-                            "id": "registry",
-                            "label": "Registry",
-                            "icon": "bi-archive",
+                            "id": "locks",
+                            "label": "Locks",
+                            "icon": "bi-lock",
                             "default": false,
                             "requires": null,
                             "admin_only": true
@@ -550,6 +563,14 @@
                             "default": false,
                             "requires": null,
                             "admin_only": true
+                        },
+                        {
+                            "id": "logs",
+                            "label": "Logs",
+                            "icon": "bi-terminal",
+                            "default": false,
+                            "requires": null,
+                            "admin_only": true
                         }
                     ]
                 }
@@ -558,13 +579,35 @@
 
         {
             "id": "digitaltwin",
-            "label": "Digital Twin",
+            "label": "Knowledge Graph",
             "icon": "bi-box",
             "route": "/dtwin/",
             "requires_domain_saved": true,
+            "navbar_hidden": true,
             "status_indicator": null,
             "navbar_actions": [],
             "groups": [
+                {
+                    "id": "digitaltwin-management",
+                    "title": "Management",
+                    "icon": "bi-gear",
+                    "items": [
+                        {
+                            "id": "sync",
+                            "label": "Build",
+                            "icon": "bi-arrow-repeat",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "runs",
+                            "label": "Runs",
+                            "icon": "bi-list-check",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
                 {
                     "id": "digitaltwin-insight",
                     "title": "Insight",
@@ -574,6 +617,13 @@
                             "id": "insight",
                             "label": "Overview",
                             "icon": "bi-bar-chart-line",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "analytics",
+                            "label": "Analytics",
+                            "icon": "bi-graph-up-arrow",
                             "default": false,
                             "requires": null
                         }
@@ -586,21 +636,21 @@
                     "items": [
                         {
                             "id": "sigmagraph",
-                            "label": "Knowledge Graph",
+                            "label": "Explorer",
                             "icon": "bi-layers-half",
                             "default": true,
                             "requires": null
                         },
                         {
                             "id": "graphql",
-                            "label": "GraphQL",
+                            "label": "Query",
                             "icon": "bi-braces-asterisk",
                             "default": false,
                             "requires": null
                         },
                         {
                             "id": "chat",
-                            "label": "Graph Chat",
+                            "label": "Chat",
                             "icon": "bi-chat-dots",
                             "default": false,
                             "requires": null

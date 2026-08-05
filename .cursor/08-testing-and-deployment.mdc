@@ -7,9 +7,14 @@ scope:
 
 ### Testing and Deployment
 
-- **Test framework**: `pytest` for the backend. Run with `uv run pytest -q`.
+- **Test framework**: `pytest` for the backend.
+- **Default / routine test command** (post-change routine, code review, dev iteration, Ask mode): `uv run pytest -q -m "not scenario"`. This is what you run unless the user explicitly says otherwise. It expects **0 failures**.
+- **The nightly `tests/e2e` browser suite auto-skips in routine runs.** Every non-scenario test under `tests/e2e/` is tagged `e2e` and skipped unless the suite is *explicitly targeted* (a `tests/e2e` path arg, `-m e2e`, or live mode via `ONTOBRICKS_LIVE_BASE`) — see `tests/e2e/conftest.py`. This is deliberate: the suite drives a **session-scoped `sync_playwright` browser** whose event loop stays alive in-process and would otherwise break `pytest-asyncio` for the unit/mcp suites collected after it. Run the browser flows explicitly with `uv run pytest tests/e2e` (needs Databricks int creds / Playwright).
+- **Scenarios are opt-in.** The journey suites under `tests/e2e/scenarios/` are tagged with the `scenario` marker (auto-applied by `tests/e2e/scenarios/conftest.py`). **Never** run them during routine/dev/Ask test runs. Run them **only when the user explicitly asks for a scenario** (e.g. "run the scenario"):
+  - All scenarios: `uv run pytest -m scenario`
+  - The live, billable scenarios (`test_scenario_01_generate_live.py` → `02` → `03` → `test_scenario_validation.py`) additionally need a running app + warehouse + LLM and are gated behind `ONTOBRICKS_SCENARIO_LIVE=1`. They write/read a durable domain in the registry; run the whole campaign with `make scenario-campaign`.
 - Ensure proper input validation and error handling.
-- **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `app.yaml` (Databricks Asset Bundle format).
+- **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `app.yaml` (Databricks Asset Bundle format). The container runs `uv run --frozen`, so `uv.lock` must stay pinned to the public CDN and in sync with `pyproject.toml` — see the **"`uv.lock` is deployment-critical"** section in `.cursor/09-package-management.mdc` before deploying or re-locking.
 - **Development Server**: Run via `run.py` which imports `create_app` from `shared.fastapi.main`. Uvicorn with auto-reload for local development.
 - **Changelog**: After any code change, update `/changelogs/YYYY-MM-DD.log` with a section including title, context, numbered changes with file paths, modified files list, and test results.
 

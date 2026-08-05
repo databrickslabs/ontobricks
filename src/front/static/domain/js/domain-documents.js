@@ -43,7 +43,8 @@ const DocManager = {
             const folder = data.domain_folder || data.project_folder;
             if (data.success && data.registry && data.registry.catalog && folder) {
                 const r = data.registry;
-                el.innerHTML = `<strong>${r.catalog}.${r.schema}.${r.volume}</strong>/domains/<strong>${folder}</strong>/documents`;
+                const version = data.version || '1';
+                el.innerHTML = `/Volumes/<strong>${r.catalog}/${r.schema}/${r.volume}</strong>/domains/<strong>${folder}</strong>/V${version}/documents`;
             } else {
                 el.textContent = 'Domain not saved to the registry yet';
             }

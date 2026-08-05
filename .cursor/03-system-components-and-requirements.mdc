@@ -12,7 +12,7 @@ scope:
 - **Domain Classes:** Business logic lives in `back/objects/` (not in route handlers). Current classes:
   - `Ontology` — OWL/RDFS/SHACL operations, class/property CRUD, URI management.
   - `Mapping` — entity/relationship mapping CRUD, R2RML, SQL validation, auto-assign.
-  - `DigitalTwin` — knowledge graph build, sync, query, quality.
+  - `DigitalTwin` — graph viewer build, sync, query, quality.
   - `Domain` — UC save/load, version status, metadata, layout persistence.
 - **Core Infrastructure:** `back/core/` hosts shared infrastructure with no dependency on HTTP/FastAPI types: Databricks clients, triple store, graph DB, W3C parsers, reasoning engines, agents, logging, errors.
 - **Internal API:** Session-aware JSON endpoints in `api/routers/internal/`, delegating to domain classes.

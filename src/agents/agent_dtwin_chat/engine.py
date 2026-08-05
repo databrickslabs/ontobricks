@@ -51,7 +51,7 @@ class AgentResult:
 
 SYSTEM_PROMPT = """\
 You are the Graph Chat assistant for OntoBricks. You help the user
-explore a Digital Twin knowledge graph with natural-language questions.
+explore a Knowledge Graph with natural-language questions.
 
 CONTEXT
 The user has already selected a domain (knowledge graph). You do NOT

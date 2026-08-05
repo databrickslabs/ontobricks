@@ -1,7 +1,7 @@
 <!-- Classes Hierarchy Section -->
 <!-- JS: /static/ontology/js/ontology-entities.js -->
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
-    <div>
+    <div class="me-auto">
         <h4 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Classes (Hierarchy)</h4>
         <p class="text-muted mb-0 small">View the class inheritance hierarchy and manage entities</p>
     </div>
@@ -16,6 +16,10 @@
         </div>
         <button type="button" class="btn btn-sm btn-outline-primary ontology-edit-btn" onclick="openEntityPanel()">
             <i class="bi bi-plus-circle me-1"></i> Add Entity
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                title="Open the ontology discussion" onclick="openOntologyDiscussion()">
+            <i class="bi bi-chat-dots"></i>
         </button>
     </div>
 </div>

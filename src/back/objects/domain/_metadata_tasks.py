@@ -84,8 +84,17 @@ def run_metadata_update_task(
                 old_table = existing_tables[table_name]
                 new_columns = client.get_table_columns(catalog, schema, table_name)
                 table_comment = client.get_table_comment(catalog, schema, table_name)
+                select_probe = client.check_table_select_permission(
+                    catalog, schema, table_name
+                )
                 merge_table_metadata(
-                    old_table, new_columns, table_comment, catalog, schema, table_name
+                    old_table,
+                    new_columns,
+                    table_comment,
+                    catalog,
+                    schema,
+                    table_name,
+                    select_probe=select_probe,
                 )
                 updated_count += 1
             except Exception as e:

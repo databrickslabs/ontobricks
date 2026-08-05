@@ -39,12 +39,14 @@ from back.core.databricks import (
 )
 from back.core.helpers import (
     get_databricks_host_and_token,
+    resolve_default_base_uri,
     resolve_warehouse_id,
     run_blocking,
 )
 from back.core.logging import get_logger
 from back.objects.registry import RegistryService
 from back.objects.registry.registry_cache import invalidate_registry_cache
+from back.objects.registry.version_lifecycle import is_editable
 from back.objects.session import sanitize_domain_folder
 from back.core.task_manager import get_task_manager
 from back.objects.domain._metadata_tasks import (
@@ -70,17 +72,27 @@ def merge_table_metadata(
     catalog: str,
     schema: str,
     table_name: str,
+    select_probe: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Merge freshly-fetched UC metadata into an existing table dict in-place.
 
     Preserves user-edited column comments that the UC schema has lost.
     Shared by :meth:`Domain.update_metadata_tables` and the async
     task variant in ``_metadata_tasks``.
+
+    When *select_probe* is provided (the dict returned by
+    :meth:`UnityCatalog.check_table_select_permission`), the table's
+    ``can_select`` / ``select_error`` fields are refreshed so the Data Sources
+    "Rights" column stops reporting *unknown* for tables loaded before the probe
+    existed.
     """
     old_table["full_name"] = f"{catalog}.{schema}.{table_name}"
     if table_comment:
         old_table["comment"] = table_comment
         old_table["description"] = table_comment
+    if select_probe is not None:
+        old_table["can_select"] = select_probe.get("can_select")
+        old_table["select_error"] = select_probe.get("error")
     if new_columns:
         old_column_comments: Dict[str, str] = {}
         for col in old_table.get("columns", []):
@@ -277,13 +289,17 @@ class Domain:
 
         self._s.ontology["name"] = domain_name.lower()
 
-        # Update ontology base_uri if provided
-        base_uri = data.get("base_uri") or data.get("uri")
-        if base_uri:
-            self._s.ontology["base_uri"] = base_uri
-
-        if "base_uri_auto" in data:
-            self._s.ontology["base_uri_auto"] = bool(data["base_uri_auto"])
+        # Resolve the ontology base URI. In auto mode (the default for a new
+        # domain) it is generated server-side from the configured default base
+        # URI domain + the domain name, so the URI is always created correctly
+        # even if the browser never computed it. A custom URI is preserved; an
+        # empty custom URI falls back to the generated one (never stored empty).
+        provided = (data.get("base_uri") or data.get("uri") or "").strip()
+        auto = bool(data.get("base_uri_auto", not provided))
+        self._s.ontology["base_uri"] = self._resolve_base_uri(
+            domain_name, provided, auto=auto
+        )
+        self._s.ontology["base_uri_auto"] = auto
 
         # Update version separately
         if data.get("version"):
@@ -310,6 +326,28 @@ class Domain:
             return max(1, int(raw))
         except (TypeError, ValueError):
             return 1
+
+    def _resolve_base_uri(
+        self, domain_name: str, provided: str = "", *, auto: bool = True
+    ) -> str:
+        """Return the effective ontology base URI for ``domain_name``.
+
+        Mirrors the frontend ``updateAutoBaseUri`` (``{default}/{Name}#``):
+        a custom (non-auto) value is kept as-is, while auto mode — or an empty
+        custom value — is generated from the globally configured default base
+        URI domain and the domain name. Guarantees a non-empty, well-formed URI
+        so a new domain never persists an empty or sentinel base_uri.
+        """
+        if not auto and provided:
+            return provided
+        try:
+            default_domain = resolve_default_base_uri(self._s, self._settings)
+        except Exception as exc:  # noqa: BLE001 — never fail a save on URI gen
+            logger.debug("default base URI resolve failed: %s", exc)
+            default_domain = ""
+        default_domain = (default_domain or DEFAULT_BASE_URI).rstrip("/#")
+        safe_name = (domain_name or "").strip() or "MyDomain"
+        return f"{default_domain}/{safe_name}#"
 
     def get_domain_template_data(self) -> Dict[str, Any]:
         """Get project data for template rendering.
@@ -452,10 +490,11 @@ class Domain:
     ) -> Dict[str, Any]:
         """Unified activity feed for the loaded domain (all versions).
 
-        Merges two registry streams so the frontend can interleave them
+        Merges three registry streams so the frontend can interleave them
         into one timeline: review/validation decisions (status switches
-        with their comments) and the build-run history (runs + results).
-        Both streams (plus the available ``versions`` list) are returned
+        with their comments), the build-run history (runs + results), and
+        the ontology/mapping change audit (who changed what, and when).
+        All streams (plus the available ``versions`` list) are returned
         raw; the UI sorts and filters by version client-side, defaulting
         the version dropdown to ``current_version``.
         """
@@ -472,6 +511,7 @@ class Domain:
                 "versions": svc.list_versions_sorted(folder),
                 "events": svc.list_review_events(folder),
                 "runs": svc.load_build_runs(folder, limit=limit),
+                "changes": svc.list_change_events(folder, limit=limit),
             }
         except OntoBricksError:
             raise
@@ -691,8 +731,16 @@ class Domain:
                 "List version details failed", detail=str(e)
             ) from e
 
-    def save_domain_to_uc(self, svc: RegistryService) -> Dict[str, Any]:
-        """Save domain into the registry Volume under /domains/<name>/V{ver}/V{ver}.json."""
+    def save_domain_to_uc(
+        self, svc: RegistryService, *, actor_email: str = ""
+    ) -> Dict[str, Any]:
+        """Save domain into the registry Volume under /domains/<name>/V{ver}/V{ver}.json.
+
+        ``actor_email`` (when provided) enables a defence-in-depth
+        single-editor lock re-check: an overwrite by anyone other than the
+        live lock holder is refused, mirroring the authoritative
+        :class:`PermissionMiddleware` edit gate.
+        """
         try:
             c = svc.cfg
             if not c.is_configured:
@@ -705,6 +753,44 @@ class Domain:
                     f'A domain named "{folder}" already exists in the registry. Please choose a different name.',
                 )
             version = self._s.current_version or "1"
+            # Lifecycle lock: never overwrite a version that is no longer a
+            # DRAFT. Mirrors ``CommentService._require_writable`` so the
+            # published (or in-review) artifact is protected on the server
+            # even when the UI read-only gate is bypassed — e.g. a stale
+            # session or a direct API call. Absent version (None) means a
+            # brand-new version row, which is always writable.
+            if not is_new_domain:
+                live_status = svc.get_version_status(folder, version)
+                if live_status and not is_editable(live_status):
+                    raise ConflictError(
+                        f"Version {version} is {live_status} (read-only). "
+                        f"Reopen it to DRAFT before saving changes."
+                    )
+                # Defence-in-depth single-editor lock re-check: refuse an
+                # overwrite by anyone other than the current lock holder
+                # (the authoritative gate lives in PermissionMiddleware).
+                if actor_email:
+                    get_lock = getattr(svc.store, "get_edit_lock", None)
+                    lock = get_lock(folder, version) if get_lock else None
+                    if lock:
+                        holder = lock.get("holder_email") or ""
+                        if (
+                            holder
+                            and holder.lower() != actor_email.lower()
+                        ):
+                            raise ConflictError(
+                                f"Version {version} is being edited by "
+                                f"{lock.get('holder_name') or holder}; you "
+                                "have read-only access. Take over editing "
+                                "to make changes."
+                            )
+            # Guarantee a well-formed base URI at persist time even if Domain
+            # Information was never saved (auto-generate from the domain name),
+            # so the Registry Browse "URI" column is never empty/"Unknown".
+            if not (self._s.ontology.get("base_uri") or "").strip():
+                self._s.ontology["base_uri"] = self._resolve_base_uri(
+                    self._s.info.get("name", ""), auto=True
+                )
             export_data = self._s.export_for_save()
             # A brand-new domain always starts as DRAFT; an overwrite of an
             # existing version preserves whatever status the session carries.
@@ -724,6 +810,23 @@ class Domain:
                     reg_settings["schema"] = c.schema
                 if not reg_settings.get("volume"):
                     reg_settings["volume"] = c.volume
+                # Flush the buffered ontology/mapping change-audit events
+                # (who / what / when) into the registry now that the domain
+                # row is guaranteed to exist. Best-effort: an audit-log
+                # failure must never roll back a successful save.
+                try:
+                    events = self._s.drain_change_log()
+                    if events:
+                        svc.record_change_events(
+                            folder, version, actor_email, events
+                        )
+                except Exception as audit_exc:  # noqa: BLE001
+                    logger.warning(
+                        "Change-audit flush failed for %s/%s: %s",
+                        folder,
+                        version,
+                        audit_exc,
+                    )
                 self._s.save()
                 clear_version_status_cache()
                 invalidate_registry_cache()
@@ -954,6 +1057,7 @@ class Domain:
 
             available_versions: List[str] = []
             active_version: Optional[str] = None
+            live_status: Optional[str] = None
             if has_registry:
                 try:
                     svc = self.build_registry_service()
@@ -961,6 +1065,7 @@ class Domain:
                     available_versions = svc.list_versions_sorted(folder)
                     mcp_ver, _ = svc.find_mcp_version(folder)
                     active_version = mcp_ver
+                    live_status = svc.get_version_status(folder, version)
                 except Exception as e:
                     logger.warning("Could not fetch versions from UC: %s", e)
                     available_versions = [version]
@@ -975,7 +1080,21 @@ class Domain:
             # is exposed separately via ``active_version`` so the Cockpit
             # tile can show what's actually live on the API/MCP surface.
             is_active = is_latest
+            # Lifecycle status is authoritative from the registry: a
+            # transition performed out-of-band (e.g. a publish in another
+            # session) must be reflected without a manual reload. Self-heal
+            # the in-session snapshot so the navbar badge and the read-only
+            # gate stay consistent with reality.
             status = self._s.info.get("status", "DRAFT")
+            if live_status and live_status != status:
+                status = live_status
+                self._s.info["status"] = live_status
+                try:
+                    self._s.save()
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(
+                        "version status self-heal save failed: %s", exc
+                    )
             result = {
                 "success": True,
                 "version": version,
@@ -1336,11 +1455,49 @@ class Domain:
                         "already_loaded": table_name in existing_table_names,
                     }
                 )
+
+            # Permission probes ------------------------------------------------
+            permissions: Dict[str, Any] = {
+                "can_list_tables": len(tables) > 0,
+                "can_select": None,        # None = unknown (no tables to probe)
+                "select_error": None,
+                "hidden_table_count": None,
+                "permission_warning": None,
+            }
+            if not tables:
+                # SHOW TABLES returned nothing — check if tables actually exist
+                hidden = await run_blocking(client.probe_schema_has_tables, catalog, schema)
+                if hidden > 0:
+                    permissions["hidden_table_count"] = hidden
+                    permissions["can_list_tables"] = False
+                    permissions["can_select"] = False
+                    permissions["permission_warning"] = (
+                        f"SHOW TABLES returned no results but "
+                        f"{catalog}.information_schema.tables reports {hidden} table(s). "
+                        "Grant SELECT (and USE CATALOG / USE SCHEMA) on the tables to "
+                        "the app service principal."
+                    )
+            else:
+                # Probe SELECT on the first table
+                probe_table = tables[0]
+                select_result = await run_blocking(
+                    client.check_table_select_permission, catalog, schema, probe_table
+                )
+                permissions["can_select"] = select_result["can_select"]
+                if not select_result["can_select"]:
+                    permissions["select_error"] = select_result["error"]
+                    permissions["permission_warning"] = (
+                        f"The service principal can list tables in {catalog}.{schema} "
+                        "but cannot SELECT from them. "
+                        "Grant SELECT on the tables (or the schema) to the app service principal."
+                    )
+
             return {
                 "success": True,
                 "tables": table_list,
                 "total_count": len(tables),
                 "existing_count": len(existing_table_names),
+                "permissions": permissions,
             }
         except OntoBricksError:
             raise
@@ -1769,6 +1926,9 @@ class Domain:
                     logger.debug(
                         "Metadata update: table comment from UC: %s", table_comment
                     )
+                    select_probe = client.check_table_select_permission(
+                        catalog, schema, table_name
+                    )
                     merge_table_metadata(
                         old_table,
                         new_columns,
@@ -1776,6 +1936,7 @@ class Domain:
                         catalog,
                         schema,
                         table_name,
+                        select_probe=select_probe,
                     )
                     updated_count += 1
                     logger.debug("Metadata update: successfully updated %s", table_name)

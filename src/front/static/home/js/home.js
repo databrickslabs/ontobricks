@@ -2,116 +2,14 @@
  * OntoBricks - home.js
  *
  * Business-user home page:
- *   - KPI / health band for the current domain (entities, relationships,
- *     mappings, quality, status, version)
+ *   - Settings / About quick links
  *   - "All Domains" gateway grid (the open door to every domain)
- *   - demoted builder workflow status (Step 1/2/3 cards)
+ *   - My Tasks review worklist
+ *
+ * The current-domain KPI / health band lives on Domain → Information
+ * (see domain-information.js); it is no longer rendered here.
  */
 
-
-/* ──────────────────────────────────────────────────────────────────────────
-   Current-domain KPI band + workflow status
-   ────────────────────────────────────────────────────────────────────────── */
-async function loadHomeStatus() {
-    try {
-        const [infoResp, sessionResp] = await Promise.all([
-            fetch('/domain/info', { credentials: 'same-origin' }),
-            fetch('/session-status', { credentials: 'same-origin' }),
-        ]);
-        const info = await infoResp.json();
-        const session = await sessionResp.json();
-
-        const domainName = session.domain_name || info.name || 'NewDomain';
-        const nameEl = document.getElementById('homeDomainName');
-        if (nameEl) nameEl.textContent = domainName;
-
-        const stats = (info && info.stats) || {};
-        const meta = (info && info.info) || {};
-
-        const entityCount = stats.entities != null
-            ? stats.entities
-            : (session.class_count || 0);
-        const relationshipCount = stats.relationships != null
-            ? stats.relationships
-            : (session.property_count || 0);
-        const mappingCount = (stats.entity_mappings || 0) + (stats.relationship_mappings || 0)
-            || ((session.entities || 0) + (session.relationships || 0));
-
-        renderKpis({
-            entities: entityCount,
-            relationships: relationshipCount,
-            mappings: mappingCount,
-            precision: info ? info.precision_score : null,
-            status: meta.status || 'DRAFT',
-            version: meta.version || session.version || '1',
-        });
-    } catch (error) {
-        console.error('Error loading home status:', error);
-    }
-}
-
-function renderKpis(kpi) {
-    setKpiValue('kpiEntities', 'kpiEntitiesTile', kpi.entities, kpi.entities > 0);
-    setKpiValue('kpiRelationships', 'kpiRelationshipsTile', kpi.relationships, kpi.relationships > 0);
-    setKpiValue('kpiMappings', 'kpiMappingsTile', kpi.mappings, kpi.mappings > 0);
-    renderQualityKpi(kpi.precision);
-    renderStatusKpi(kpi.status);
-    renderVersionKpi(kpi.version);
-}
-
-function setKpiValue(valueId, tileId, value, active) {
-    const valueEl = document.getElementById(valueId);
-    const tileEl = document.getElementById(tileId);
-    if (valueEl) valueEl.textContent = value != null ? value : '-';
-    if (tileEl) tileEl.className = 'ob-kpi-tile ' + (active ? 'tile-success' : 'tile-muted');
-}
-
-function renderQualityKpi(score) {
-    const valueEl = document.getElementById('kpiQuality');
-    const tileEl = document.getElementById('kpiQualityTile');
-    if (!valueEl || !tileEl) return;
-
-    if (score == null) {
-        valueEl.textContent = '-';
-        tileEl.className = 'ob-kpi-tile tile-muted';
-        return;
-    }
-    valueEl.textContent = score;
-    let variant = 'tile-danger';
-    if (score >= 80) variant = 'tile-success';
-    else if (score >= 50) variant = 'tile-warning';
-    tileEl.className = 'ob-kpi-tile ' + variant;
-}
-
-function renderStatusKpi(status) {
-    const valueEl = document.getElementById('kpiStatus');
-    const tileEl = document.getElementById('kpiStatusTile');
-    if (!valueEl || !tileEl) return;
-    valueEl.innerHTML = statusBadge(status);
-    tileEl.className = 'ob-kpi-tile tile-muted';
-}
-
-function renderVersionKpi(version) {
-    const valueEl = document.getElementById('kpiVersion');
-    const tileEl = document.getElementById('kpiVersionTile');
-    if (!valueEl || !tileEl) return;
-    valueEl.textContent = 'v' + version;
-    tileEl.className = 'ob-kpi-tile tile-muted';
-}
-
-function statusBadge(status) {
-    const map = {
-        'DRAFT': 'bg-warning-subtle text-dark border-warning',
-        'IN-REVIEW': 'bg-info-subtle text-dark border-info',
-        'PUBLISHED': 'bg-success-subtle text-dark border-success',
-    };
-    const key = (status || 'DRAFT').toUpperCase();
-    const cls = map[key] || map['DRAFT'];
-    const label = key === 'IN-REVIEW'
-        ? 'In Review'
-        : (key.charAt(0) + key.slice(1).toLowerCase());
-    return '<span class="badge border ' + cls + '">' + escapeHtml(label) + '</span>';
-}
 
 /* ──────────────────────────────────────────────────────────────────────────
    All Domains gateway — the open door
@@ -304,7 +202,6 @@ function showDomainStatus(message, type) {
    Init + event wiring
    ────────────────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', function () {
-    loadHomeStatus();
     loadDomainGateway();
     initHomeActionButtons();
 });

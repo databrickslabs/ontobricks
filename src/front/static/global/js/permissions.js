@@ -275,6 +275,11 @@
      */
     function canEditOntology() {
         if (window.isActiveVersion === false) return false;
+        // The single-editor lock: another user is editing this DRAFT
+        // version (or our lock was taken over). ``edit-lock.js`` sets
+        // ``window.editLockMode = 'view'`` in that case; it defaults to
+        // ``'edit'`` so this stays permissive until the async check runs.
+        if (window.editLockMode === 'view') return false;
         // Editing is only allowed while the loaded version is DRAFT.
         // ``window.versionStatus`` defaults to 'DRAFT' until
         // ``version-check.js`` resolves it, so this stays permissive

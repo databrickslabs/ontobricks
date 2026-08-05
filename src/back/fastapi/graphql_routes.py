@@ -122,7 +122,7 @@ def _load_domain_from_registry(domain_name, session_mgr, settings, *, external=F
     # If the user already has this registry folder open at a chosen version,
     # keep it. Otherwise GraphQL would resolve to the latest PUBLISHED
     # version — often an older v3 while the user is on v4 — and would open
-    # the wrong graph store snapshot for subsequent Digital Twin /
+    # the wrong graph store snapshot for subsequent Knowledge Graph /
     # data-quality calls.
     session_folder = (getattr(domain, "domain_folder", None) or "").strip()
     session_ver = (getattr(domain, "current_version", None) or "").strip()

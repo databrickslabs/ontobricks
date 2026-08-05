@@ -7,33 +7,6 @@
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   KPI / health band (inside the Current Domain panel)
-   -------------------------------------------------------------------------- */
-.home-kpi-band {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 1rem;
-}
-
-@media (max-width: 992px) {
-    .home-kpi-band {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
-@media (max-width: 576px) {
-    .home-kpi-band {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-/* The status / version tiles carry a badge in place of a numeric value. */
-.home-kpi-band .ob-kpi-tile-value .badge {
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-/* --------------------------------------------------------------------------
    All Domains — the open door
    -------------------------------------------------------------------------- */
 .ob-domain-grid {

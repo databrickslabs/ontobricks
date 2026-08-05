@@ -1,13 +1,13 @@
 OntoBricks Documentation
 ========================
 
-**Knowledge Graph Builder for Databricks**
+**Graph Viewer Builder for Databricks**
 
 OntoBricks is a web-based application that turns Databricks tables into a
-knowledge graph. Design ontologies using OWL or import industry standards
+graph viewer. Design ontologies using OWL or import industry standards
 (FIBO, CDISC, IOF), map them to tables via R2RML, materialize triples into a
 Delta-backed triple store mirrored on Lakebase Postgres, query them through a typed GraphQL API, and
-explore your knowledge graph visually.
+explore your graph viewer visually.
 
 **Topic guides** (Markdown in ``docs/``, included here via MyST) are the
 canonical narrative documentation. **Developer overviews** below are short

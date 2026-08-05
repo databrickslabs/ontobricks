@@ -31,6 +31,15 @@
 command:
   - "uv"
   - "run"
+  # --frozen: use uv.lock verbatim — NEVER re-resolve in the container. The Apps
+  # base image defaults uv's index to the internal pypi-proxy, which cold-caches
+  # and times out on freshly-published wheels (the v0.6.0 security bumps). The
+  # committed lock pins files.pythonhosted.org URLs (public CDN, always warm and
+  # container-reachable); --frozen guarantees uv downloads those exact URLs
+  # instead of re-locking back to the flaky proxy. Do NOT remove without also
+  # pinning the container index away from pypi-proxy.dev.databricks.com.
+  - "--frozen"
+  - "--no-dev"
   - "--extra"
   - "lakebase"
   - "python"

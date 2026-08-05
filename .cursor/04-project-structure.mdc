@@ -49,7 +49,7 @@ back/objects/
 ├── domain/           <- Session-scoped UC/metadata/layout operations
 ├── ontology/         <- Ontology domain class
 ├── mapping/          <- Mapping domain class
-└── digitaltwin/      <- Digital Twin domain class
+└── digitaltwin/      <- Knowledge Graph domain class
 ```
 
 ### Backend Core Infrastructure (`src/back/core/`)

@@ -384,6 +384,96 @@ class SettingsService:
             raise InfrastructureError(f"{log_label} failed", detail=str(e)) from e
 
     @staticmethod
+    async def check_lakebase_permissions(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Run a comprehensive Lakebase permission check for the registry schema.
+
+        Delegates to :meth:`LakebaseRegistryStore.check_permissions` which
+        probes connection, schema existence/privileges, and per-table CRUD
+        rights in a single round-trip. Returns ``{"success": False, ...}``
+        when psycopg is not installed or the Lakebase resource is unbound.
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return {
+                "success": False,
+                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
+            }
+        try:
+            from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
+            store = RegistryFactory.lakebase(
+                registry_cfg=rcfg,
+                schema=rcfg.lakebase_schema,
+                database=rcfg.lakebase_database,
+            )
+            return await run_blocking(store.check_permissions)
+        except ImportError:
+            return {
+                "success": False,
+                "error": "psycopg is not installed — Lakebase backend unavailable.",
+            }
+        except Exception as exc:
+            logger.warning("check_lakebase_permissions failed: %s", exc)
+            return {"success": False, "error": str(exc)}
+
+    @staticmethod
+    async def check_registry_access(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Verify that the configured UC schema and Volume exist and are accessible.
+
+        Performs two independent REST API probes (no warehouse required):
+
+        1. ``catalog.schema`` — checks existence and USE SCHEMA privilege.
+        2. ``catalog.schema.volume`` — checks existence and READ VOLUME privilege.
+
+        The result shape::
+
+            {
+              "success": True,
+              "schema": {
+                "path": "my_catalog.my_schema",
+                "exists": bool | None,
+                "accessible": bool,
+                "error": str | None,
+              },
+              "volume": {
+                "name": "OntoBricksRegistry",
+                "path": "my_catalog.my_schema.OntoBricksRegistry",
+                "exists": bool | None,
+                "accessible": bool,
+                "error": str | None,
+                "volume_type": "MANAGED" | "EXTERNAL",
+              },
+            }
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return {
+                "success": False,
+                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME",
+            }
+
+        client = get_databricks_client(get_domain(session_mgr), settings)
+        if not client:
+            return {"success": False, "error": "Databricks client not available"}
+
+        schema_result = await run_blocking(
+            client.catalog.check_schema_access, rcfg.catalog, rcfg.schema
+        )
+        schema_result["path"] = f"{rcfg.catalog}.{rcfg.schema}"
+
+        vol_name = rcfg.volume or "OntoBricksRegistry"
+        volume_result = await run_blocking(
+            client.catalog.check_volume_access, rcfg.catalog, rcfg.schema, vol_name
+        )
+        volume_result["name"] = vol_name
+        volume_result["path"] = f"{rcfg.catalog}.{rcfg.schema}.{vol_name}"
+
+        return {"success": True, "schema": schema_result, "volume": volume_result}
+
+    @staticmethod
     def build_registry_get_payload(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
@@ -744,7 +834,23 @@ class SettingsService:
                     "Skipping graph_engine seed after registry init",
                     exc_info=True,
                 )
-            return {"success": ok, "message": msg}
+            # Self-serve the Lakebase grants the app + MCP service principals
+            # need (in-app port of scripts/bootstrap-lakebase-perms.sh). The
+            # app SP owns the schema it just created, so the Postgres grants
+            # always apply; CAN_USE / UC grants are best-effort. Failures are
+            # surfaced in the payload, never fatal to Initialize itself.
+            result: Dict[str, Any] = {"success": ok, "message": msg}
+            try:
+                grant_summary = SettingsService._grant_registry_permissions(
+                    session_mgr, settings
+                )
+                if grant_summary is not None:
+                    result["permissions"] = grant_summary
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "Post-initialize permission grant skipped", exc_info=True
+                )
+            return result
         except OntoBricksError:
             raise
         except Exception as e:
@@ -752,6 +858,101 @@ class SettingsService:
             raise InfrastructureError(
                 "Initialize registry failed", detail=str(e)
             ) from e
+
+    @staticmethod
+    def _registry_grant_app_names(settings: Settings) -> List[str]:
+        """Apps whose service principals receive the registry grants.
+
+        The running app first, then the MCP companion (``MCP_APP_NAME`` env
+        → ``mcp-ontobricks`` default) — same resolution as the graph-DB
+        provisioning flow.
+        """
+        app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
+        mcp_app_name = (
+            os.environ.get("MCP_APP_NAME", "").strip() or "mcp-ontobricks"
+        )
+        names: List[str] = []
+        for candidate in (app_name, mcp_app_name):
+            if candidate and candidate not in names:
+                names.append(candidate)
+        return names
+
+    @staticmethod
+    def _grant_registry_permissions(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Optional[Dict[str, Any]]:
+        """Apply Lakebase project + registry-schema + UC grants to the app SPs.
+
+        Synchronous core shared by :meth:`initialize_registry_result`
+        (auto-run) and :meth:`grant_registry_permissions_result` (the
+        explicit *Repair permissions* button). Returns ``None`` when the
+        registry is not configured or the Lakebase backend is unavailable;
+        otherwise the ``grant_app_permissions`` summary dict.
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return None
+        app_names = SettingsService._registry_grant_app_names(settings)
+        if not app_names:
+            return {
+                "success": False,
+                "granted": [],
+                "warnings": [],
+                "error": (
+                    "Could not determine the app name to grant — set "
+                    "ONTOBRICKS_APP_NAME."
+                ),
+            }
+        try:
+            from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
+
+            store = RegistryFactory.lakebase(
+                registry_cfg=rcfg,
+                schema=rcfg.lakebase_schema,
+                database=rcfg.lakebase_database,
+            )
+        except ImportError:
+            return {
+                "success": False,
+                "granted": [],
+                "warnings": [],
+                "error": "psycopg is not installed — Lakebase backend unavailable.",
+            }
+        return store.grant_app_permissions(
+            app_names=app_names,
+            uc_catalog=(rcfg.catalog or "").strip(),
+        )
+
+    @staticmethod
+    async def grant_registry_permissions_result(
+        session_mgr: SessionManager, settings: Settings
+    ) -> Dict[str, Any]:
+        """Explicit *Repair permissions* action for the Registry page.
+
+        In-app equivalent of ``scripts/bootstrap-lakebase-perms.sh`` for the
+        registry schema: re-applies CAN_USE on the project, USAGE/DML on the
+        schema, and ALL_PRIVILEGES on the UC catalog to the app + MCP service
+        principals. Idempotent and safe to re-run after a rebind/redeploy.
+        """
+        rcfg = RegistryCfg.from_session(session_mgr, settings)
+        if not rcfg.is_configured:
+            return {
+                "success": False,
+                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
+            }
+        try:
+            summary = await run_blocking(
+                SettingsService._grant_registry_permissions, session_mgr, settings
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("grant_registry_permissions failed: %s", exc)
+            return {"success": False, "error": str(exc)}
+        if summary is None:
+            return {
+                "success": False,
+                "error": "Lakebase registry backend is not available.",
+            }
+        return summary
 
     @staticmethod
     def list_registry_domains_result(
@@ -1188,6 +1389,46 @@ class SettingsService:
             raise InfrastructureError("Failed to save registry cache TTL", detail=msg)
         return {"success": True, "registry_cache_ttl": max(10, int(ttl))}
 
+    @staticmethod
+    def get_edit_lock_ttl_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the effective DRAFT edit-lock lease TTL (seconds).
+
+        Mirrors :meth:`EditLockService._ttl_seconds` resolution (global config
+        → ``ONTOBRICKS_EDIT_LOCK_TTL_S`` → built-in default) so the Settings UI
+        shows the value actually in force. ``0`` means the lease is disabled.
+        """
+        from back.objects.registry.lockmgt import EditLockService
+
+        ttl_s = EditLockService._ttl_seconds(session_mgr, settings)
+        return {"success": True, "edit_lock_ttl_s": ttl_s}
+
+    @staticmethod
+    def save_edit_lock_ttl_result(
+        ttl_s: int,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the DRAFT edit-lock lease TTL globally (admin only, seconds)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ttl_s = max(0, int(ttl_s))
+        ok, msg = global_config_service.set_edit_lock_ttl_s(
+            host, token, registry_cfg, ttl_s
+        )
+        if not ok:
+            raise InfrastructureError(
+                "Failed to save edit-lock lease TTL", detail=msg
+            )
+        return {"success": True, "edit_lock_ttl_s": ttl_s}
+
     # ------------------------------------------------------------------
     #  Graph DB Engine
     # ------------------------------------------------------------------
@@ -1236,12 +1477,31 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        """Return the engine-specific JSON configuration."""
+        """Return the engine-specific JSON configuration.
+
+        Empty ``lakebase_project``, ``lakebase_branch``, and ``database``
+        fields are overlaid with env-var fallbacks so the Connection tab
+        always reflects the current platform binding, even when the user
+        has not yet explicitly saved those fields through the UI.
+        """
+        import os as _os
+
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         global_config_service.load(host, token, registry_cfg, force=True)
-        cfg = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        cfg = dict(global_config_service.get_graph_engine_config(host, token, registry_cfg))
+
+        _env_project = _os.environ.get("LAKEBASE_PROJECT", "")
+        _env_branch = _os.environ.get("LAKEBASE_BRANCH", "")
+        _env_db = _os.environ.get("PGDATABASE", "") or _os.environ.get("LAKEBASE_DATABASE", "")
+        if not cfg.get("lakebase_project") and _env_project:
+            cfg["lakebase_project"] = _env_project
+        if not cfg.get("lakebase_branch") and _env_branch:
+            cfg["lakebase_branch"] = _env_branch
+        if not cfg.get("database") and _env_db:
+            cfg["database"] = _env_db
+
         return {"success": True, "graph_engine_config": cfg}
 
     @staticmethod
@@ -1419,7 +1679,7 @@ class SettingsService:
         else:
             out["message"] = (
                 f"Connected to graph database {graph_db!r}, but schema {schema!r} "
-                "does not exist yet — run a Digital Twin build or create the schema. "
+                "does not exist yet — run a Knowledge Graph build or create the schema. "
                 f"Registry database: {registry_db!r}."
             )
         return out

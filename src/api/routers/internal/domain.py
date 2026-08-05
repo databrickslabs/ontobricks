@@ -219,6 +219,29 @@ async def clear_domain(session_mgr: SessionManager = Depends(get_session_manager
     return await reset_domain(session_mgr)
 
 
+@router.post("/close")
+async def close_domain(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Close the loaded domain: release the edit lock, then reset the session.
+
+    Releasing the single-editor lock is what lets another user open the same
+    DRAFT version in edit mode. The release must happen *before* the reset,
+    since the lock target (folder, version) is read from the session. When
+    the caller is only a viewer the release is a harmless no-op (the lock is
+    keyed by holder e-mail).
+    """
+    from back.objects.registry.lockmgt import EditLockService
+
+    EditLockService.release_for_session(request, session_mgr, settings)
+    domain = get_domain(session_mgr)
+    domain.reset()
+    domain.clear_uc_metadata()
+    return {"success": True, "message": "Domain closed"}
+
+
 # ===========================================
 # Session Debug
 # ===========================================
@@ -434,13 +457,19 @@ async def list_domain_versions(
 
 @router.post("/save-to-uc")
 async def save_domain_to_uc(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
     """Save domain into the registry Volume under /domains/<name>/v{ver}.json."""
     domain = get_domain(session_mgr)
     p = Domain(domain, settings)
-    return p.save_domain_to_uc(p.build_registry_service())
+    actor_email = getattr(request.state, "user_email", "") or request.headers.get(
+        "x-forwarded-email", ""
+    )
+    return p.save_domain_to_uc(
+        p.build_registry_service(), actor_email=actor_email
+    )
 
 
 @router.post("/load-from-uc")
@@ -449,13 +478,71 @@ async def load_domain_from_uc(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Load domain from registry Volume."""
+    """Load domain from registry Volume.
+
+    When opening a **different** domain than the one currently loaded, the
+    previously-open domain is *closed first* — its single-editor lock is
+    released **before** the new domain is loaded, so a user never holds two
+    DRAFT locks at once. On a successful load of a DRAFT version this then
+    auto-acquires the lock for the newly loaded version and returns a
+    ``lock`` block describing whether this browser is the editor or a
+    read-only viewer. (Same-domain version switches release the old version's
+    lock after the load to avoid a needless release/re-acquire when reopening
+    the same version.)
+    """
+    from back.objects.registry.lockmgt import EditLockService
+
     data = await request.json()
     domain_name = data.get("domain", data.get("project"))
     version = data.get("version")
     domain = get_domain(session_mgr)
+    # Snapshot the previously loaded (folder, version) before the load mutates
+    # the session, so the edit-lock orchestration can act on it.
+    prev_folder = getattr(domain, "domain_folder", "") or ""
+    prev_version = getattr(domain, "current_version", "") or ""
+
+    # Opening a different domain closes the currently-open one first (releases
+    # its edit-lock before the new load). Same-domain version switches defer to
+    # on_domain_loaded below.
+    switching = EditLockService.release_prev_on_switch(
+        request,
+        session_mgr,
+        settings,
+        prev_folder=prev_folder,
+        prev_version=prev_version,
+        new_domain=domain_name,
+    )
+
     p = Domain(domain, settings)
-    return p.load_domain_from_uc(p.build_registry_service(), domain_name, version)
+    try:
+        result = p.load_domain_from_uc(
+            p.build_registry_service(), domain_name, version
+        )
+    except Exception:
+        # Load raised after we freed the previous lock — restore it so a failed
+        # switch does not orphan the user's lock on the domain they came from.
+        if switching:
+            EditLockService.reacquire(
+                request, session_mgr, settings, prev_folder, prev_version
+            )
+        raise
+
+    if isinstance(result, dict) and result.get("success"):
+        result["lock"] = EditLockService.on_domain_loaded(
+            request,
+            session_mgr,
+            settings,
+            # Already released above when switching domains; only hand the
+            # previous pair to on_domain_loaded for same-domain version swaps.
+            prev_folder="" if switching else prev_folder,
+            prev_version="" if switching else prev_version,
+        )
+    elif switching:
+        # Load returned a failure envelope — restore the previous lock too.
+        EditLockService.reacquire(
+            request, session_mgr, settings, prev_folder, prev_version
+        )
+    return result
 
 
 @router.post("/create-version")
@@ -547,7 +634,7 @@ async def set_version_status(
     actor_email = getattr(request.state, "user_email", "") or request.headers.get(
         "x-forwarded-email", ""
     )
-    return SettingsService.set_registry_version_status_result(
+    result = SettingsService.set_registry_version_status_result(
         domain_name,
         version,
         new_status,
@@ -557,6 +644,88 @@ async def set_version_status(
         session_mgr=session_mgr,
         settings=settings,
     )
+    # A version leaving DRAFT becomes read-only for everyone; drop any
+    # held edit lock so the next DRAFT re-open starts clean.
+    if (
+        isinstance(result, dict)
+        and result.get("success")
+        and new_status.upper() != "DRAFT"
+    ):
+        from back.objects.registry.lockmgt import EditLockService
+
+        EditLockService.force_release(
+            session_mgr, settings, domain_name, version
+        )
+    return result
+
+
+# ===========================================
+# Domain edit lock (single-editor concurrency control)
+# ===========================================
+
+
+@router.get("/edit-lock")
+async def get_edit_lock(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Edit-lock status for the session's loaded DRAFT ``(folder, version)``.
+
+    Returns ``{mode: "edit"|"view"|"none", holder_email, holder_name,
+    acquired_at, is_self, is_admin, can_take_over}``. A non-forcing acquire
+    is performed so the editor keeps the lock across page reloads.
+    """
+    from back.objects.registry.lockmgt import EditLockService
+
+    return EditLockService.status(request, session_mgr, settings)
+
+
+@router.post("/edit-lock/acquire")
+async def acquire_edit_lock(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """(Re)acquire the lock. ``force`` (admin-only) is the "Take over" action."""
+    from back.objects.registry.lockmgt import EditLockService
+
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        data = {}
+    force = bool(data.get("force"))
+    return EditLockService.acquire(
+        request, session_mgr, settings, force=force
+    )
+
+
+@router.post("/edit-lock/release")
+async def release_edit_lock(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Release the current user's lock (the "Close" button)."""
+    from back.objects.registry.lockmgt import EditLockService
+
+    return EditLockService.release(request, session_mgr, settings)
+
+
+@router.post("/edit-lock/renew")
+async def renew_edit_lock(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Keep the holder's lease alive (periodic client ping while editing).
+
+    Returns ``{success, renewed}``; ``renewed=false`` tells the client its
+    editing session expired (the stale lease was reclaimed by another user).
+    """
+    from back.objects.registry.lockmgt import EditLockService
+
+    return EditLockService.renew(request, session_mgr, settings)
 
 
 # ===========================================

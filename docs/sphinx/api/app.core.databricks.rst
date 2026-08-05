@@ -17,6 +17,14 @@ Authentication
    :undoc-members:
    :show-inheritance:
 
+Lakebase Grants
+---------------
+
+.. automodule:: back.core.databricks.lakebase_grants
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Client (Facade)
 ---------------
 

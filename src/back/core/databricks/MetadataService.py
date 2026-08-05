@@ -188,6 +188,9 @@ class MetadataService:
             try:
                 columns = self._catalog.get_table_columns(catalog, schema, name)
                 comment = self._catalog.get_table_comment(catalog, schema, name)
+                select_probe = self._catalog.check_table_select_permission(
+                    catalog, schema, name
+                )
                 tables.append(
                     {
                         "name": name,
@@ -195,6 +198,8 @@ class MetadataService:
                         "comment": comment,
                         "description": comment,
                         "columns": columns,
+                        "can_select": select_probe["can_select"],
+                        "select_error": select_probe["error"],
                     }
                 )
             except Exception as exc:
@@ -206,6 +211,8 @@ class MetadataService:
                         "comment": "",
                         "description": "",
                         "columns": [],
+                        "can_select": False,
+                        "select_error": str(exc),
                         "error": str(exc),
                     }
                 )

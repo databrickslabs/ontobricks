@@ -330,6 +330,28 @@
 .ob-kpi-tile.tile-accent-warning { border-bottom: 3px solid #ffc107; }
 .ob-kpi-tile.tile-accent-danger  { border-bottom: 3px solid #dc3545; }
 
+/* KPI / health band — responsive tile grid. Shared by the Home page and
+   Domain → Information (the "Current Domain" band). */
+.ob-kpi-band {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 992px) {
+    .ob-kpi-band { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 576px) {
+    .ob-kpi-band { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* The status / version tiles carry a badge in place of a numeric value. */
+.ob-kpi-band .ob-kpi-tile-value .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
 
 /* ==========================================================================
    Home Page Workflow Steps

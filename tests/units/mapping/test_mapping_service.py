@@ -475,3 +475,168 @@ class TestRunDiagnosticsPermissionsSection:
         result = Mapping(domain).run_diagnostics(client=client)
         assert result["summary"]["errors"] >= 1
         assert any(p["status"] == "error" for p in result["permissions"])
+
+
+class TestProbeQueryRows:
+    def test_count_positive_is_ok(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"cnt": 42}]
+        check, count = Mapping._probe_query_rows("SELECT * FROM t", client)
+        assert count == 42
+        assert check["status"] == "ok"
+        assert "42" in check["detail"]
+        # Probe wraps the query in a COUNT(*) sub-select.
+        assert "COUNT(*)" in client.execute_query.call_args[0][0]
+
+    def test_zero_rows_is_warning(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"cnt": 0}]
+        check, count = Mapping._probe_query_rows("SELECT * FROM t", client)
+        assert count == 0
+        assert check["status"] == "warning"
+
+    def test_tuple_row_shape_supported(self):
+        client = MagicMock()
+        client.execute_query.return_value = [(7,)]
+        check, count = Mapping._probe_query_rows("SELECT * FROM t", client)
+        assert count == 7
+        assert check["status"] == "ok"
+
+    def test_trailing_limit_is_stripped(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"cnt": 1}]
+        Mapping._probe_query_rows("SELECT * FROM t LIMIT 10", client)
+        sql = client.execute_query.call_args[0][0]
+        assert "LIMIT 10" not in sql
+
+    def test_error_returns_none_count(self):
+        client = MagicMock()
+        client.execute_query.side_effect = Exception("boom")
+        check, count = Mapping._probe_query_rows("SELECT * FROM t", client)
+        assert count is None
+        assert check["status"] == "error"
+
+
+class TestRunDiagnosticsExcludedEntityRelationships:
+    def test_relationship_to_excluded_entity_is_dropped(self):
+        # ``has: Meter -> MeterReading`` must disappear (not error) when the
+        # MeterReading entity is excluded.
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/Meter",
+                    "ontology_class_label": "Meter",
+                },
+                {
+                    "ontology_class": "http://t/MeterReading",
+                    "ontology_class_label": "MeterReading",
+                    "excluded": True,
+                },
+            ],
+            relationships=[
+                {
+                    "property": "http://t/has",
+                    "property_label": "has",
+                    "source_class": "http://t/Meter",
+                    "source_class_label": "Meter",
+                    "target_class": "http://t/MeterReading",
+                    "target_class_label": "MeterReading",
+                }
+            ],
+        )
+        result = Mapping(domain).run_diagnostics()
+        assert result["relationships"] == []
+
+    def test_relationship_between_active_entities_kept(self):
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/Meter",
+                    "ontology_class_label": "Meter",
+                },
+                {
+                    "ontology_class": "http://t/MeterReading",
+                    "ontology_class_label": "MeterReading",
+                },
+            ],
+            relationships=[
+                {
+                    "property": "http://t/has",
+                    "property_label": "has",
+                    "source_class": "http://t/Meter",
+                    "source_class_label": "Meter",
+                    "target_class": "http://t/MeterReading",
+                    "target_class_label": "MeterReading",
+                }
+            ],
+        )
+        result = Mapping(domain).run_diagnostics()
+        assert len(result["relationships"]) == 1
+
+    def test_genuinely_missing_target_still_errors(self):
+        # Target entity is neither mapped nor excluded -> real error, kept.
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/Meter",
+                    "ontology_class_label": "Meter",
+                }
+            ],
+            relationships=[
+                {
+                    "property": "http://t/has",
+                    "property_label": "has",
+                    "source_class": "http://t/Meter",
+                    "source_class_label": "Meter",
+                    "target_class": "http://t/Ghost",
+                    "target_class_label": "Ghost",
+                }
+            ],
+        )
+        result = Mapping(domain).run_diagnostics()
+        assert len(result["relationships"]) == 1
+        assert result["relationships"][0]["status"] == "error"
+
+
+class TestRunDiagnosticsRowCounts:
+    def test_entity_and_relationship_row_counts(self):
+        client = MagicMock()
+        client.execute_query.return_value = [{"cnt": 5}]
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/A",
+                    "ontology_class_label": "A",
+                    "sql_query": "SELECT id FROM c.s.t",
+                    "id_column": "id",
+                }
+            ],
+            relationships=[
+                {
+                    "property": "http://t/p",
+                    "property_label": "p",
+                    "sql_query": "SELECT a, b FROM c.s.j",
+                    "source_class": "http://t/A",
+                    "source_class_label": "A",
+                    "target_class": "http://t/A",
+                    "target_class_label": "A",
+                }
+            ],
+        )
+        result = Mapping(domain).run_diagnostics(client=client)
+        assert result["entities"][0]["row_count"] == 5
+        assert result["relationships"][0]["row_count"] == 5
+
+    def test_row_count_none_without_client(self):
+        domain = _mock_domain(
+            entities=[
+                {
+                    "ontology_class": "http://t/A",
+                    "ontology_class_label": "A",
+                    "sql_query": "SELECT id FROM c.s.t",
+                    "id_column": "id",
+                }
+            ]
+        )
+        result = Mapping(domain).run_diagnostics()
+        assert result["entities"][0]["row_count"] is None
