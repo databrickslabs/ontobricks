@@ -60,3 +60,62 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4648 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 39.40s
+
+# Use TRY_CAST for remaining Spark SQL emitters
+
+Context: Databricks warehouses run with ANSI mode on, where a bare `CAST`
+aborts the whole statement on the first value that will not convert.
+Rule/DQ SQL (SWRL, decision tables, aggregates, SHACL guards) already used
+`TRY_CAST` via `SQLHelpers.sql_numeric` (2026-08-03). Three more Spark SQL
+emitters still used a bare `CAST` for stringification and typed NULLs.
+
+Changes:
+
+1. `src/back/core/helpers/SQLHelpers.py` — added `sql_cast(expr, sql_type)`
+   emitting `TRY_CAST`; `sql_numeric` is now a thin wrapper over it (same
+   signature, same behavior, no caller changes anywhere else in the
+   codebase).
+2. `src/back/core/helpers/__init__.py` — re-exported `sql_cast`.
+3. `src/back/core/w3c/sparql/SparqlTranslator.py` — `_cast_str` (backs every
+   SPARQL-to-Spark stringification/subject-URI path: `CONCAT`, `COALESCE`,
+   value-filter equality) now emits `TRY_CAST(... AS STRING)`.
+4. `src/agents/agent_mapping_pge/coverage.py` — the abstract-union builder's
+   placeholder columns for subclasses missing an attribute now emit
+   `TRY_CAST(NULL AS STRING)`.
+5. `src/back/core/graphdb/lakebase/_companion_ddl.py` —
+   `wrap_triple_view_sql_for_lakeflow`'s `object_hash` expression now uses
+   `TRY_CAST(object AS STRING)`.
+6. `tests/units/core/test_try_cast_policy.py` (new) — guards that these three
+   emitters never regress to a bare `CAST`; manually verified the guard
+   fails when `_cast_str` is reverted to bare `CAST`.
+
+Deliberately excluded: `src/jobs/graph_analytics_job.py` and
+`src/back/core/graph_analysis/JobMetrics.py`. Found during planning: their
+generated SQL executes literally against SQLite in tests
+(`test_graph_analytics_job_sql.py`, `test_job_metrics.py`) and is
+parse-checked under a Postgres sqlglot dialect; `TRY_CAST` is valid in
+neither. Every cast in those two files is also on already-numeric data
+(`COUNT(*)`-derived columns, Python-interpolated integer literals, float
+literals, typed NULLs) rather than raw triple-store strings, so the
+ANSI-abort risk `TRY_CAST` guards against does not apply there. Confirmed
+locally that SQLite (3.51.0, this environment) rejects `TRY_CAST` syntax.
+Full analysis in
+`documentation/superpowers/specs/2026-08-05-spark-try-cast-design.md`
+("Amendment" section).
+
+Modified files:
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/w3c/sparql/SparqlTranslator.py`
+- `src/agents/agent_mapping_pge/coverage.py`
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `tests/units/core/test_uri_sql_helpers.py`
+- `tests/units/ontology/test_sparql_service.py`
+- `tests/agents/agent_mapping_pge/test_coverage.py`
+- `tests/units/core/test_lakebase_flat_store.py`
+- `tests/units/core/test_try_cast_policy.py` (new)
+- `documentation/superpowers/specs/2026-08-05-spark-try-cast-design.md` (new)
+- `documentation/superpowers/plans/2026-08-05-spark-try-cast.md` (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4658 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 39.88s
