@@ -1463,7 +1463,7 @@ var SigmaGraph = (function () {
                     '<a href="' + esc(resolveUrl) + '" onclick="' + onClickSpinner + '" class="btn btn-sm btn-outline-primary w-100 text-start" title="' + esc(tooltip) + '">' +
                     '<i class="bi bi-signpost-2 me-1"></i>' +
                     '<span class="fw-semibold">' + esc(bridge.target_class_name || '') + '</span>' +
-                    '<small class="text-muted ms-1"><i class="bi bi-folder2-open ms-1 me-1"></i>' + esc(tgtDom) + '</small>' +
+                    '<small class="text-muted ms-1"><i class="bi bi-box ms-1 me-1"></i>' + esc(tgtDom) + '</small>' +
                     '<i class="bi bi-box-arrow-up-right ms-auto float-end mt-1"></i>' +
                     '</a></div>';
             });
@@ -3297,7 +3297,7 @@ async function _openGraphSwitcherModal() {
 
             domainsHtml += '<div class="border rounded p-2 mb-2">' +
                 '<div class="d-flex align-items-center gap-2">' +
-                '<i class="bi bi-folder2-open text-primary"></i>' +
+                '<i class="bi bi-box text-primary"></i>' +
                 '<span class="fw-semibold">' + esc(p.name) + '</span>' +
                 '</div>' +
                 (p.description ? '<div class="ms-4 mb-1"><small class="text-muted" style="font-size:.8rem">' + esc(p.description) + '</small></div>' : '') +

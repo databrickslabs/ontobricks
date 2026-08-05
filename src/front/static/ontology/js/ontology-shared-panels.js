@@ -1720,7 +1720,7 @@ function renderSharedEntityBridges(viewOnly = false) {
                         <span class="fw-semibold ms-1">${escapeHtml(bridge.target_class_name || '')}</span>
                     </small>
                     <small class="text-muted d-block ms-3">
-                        <i class="bi bi-folder2-open me-1"></i>${escapeHtml(bridge.target_domain || bridge.target_project || '')}
+                        <i class="bi bi-box me-1"></i>${escapeHtml(bridge.target_domain || bridge.target_project || '')}
                         ${bridge.label ? ` &mdash; ${escapeHtml(bridge.label)}` : ''}
                     </small>
                 </div>
@@ -1826,7 +1826,7 @@ async function openBridgeSelectorModal() {
         list.innerHTML = bridgeRows.map(p => `
             <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
                     onclick="_bridgeSelectDomain('${escapeHtml(p.name)}')">
-                <i class="bi bi-folder2-open text-primary"></i>
+                <i class="bi bi-box text-primary"></i>
                 <div class="flex-grow-1">
                     <div class="fw-semibold">${escapeHtml(p.name)}</div>
                     ${p.description ? `<small class="text-muted">${escapeHtml(p.description)}</small>` : ''}
@@ -1900,7 +1900,7 @@ function _bridgeSelectClass(cls) {
     document.getElementById('bridgeStepClass').style.display = 'none';
     document.getElementById('bridgeStepLabel').style.display = '';
     document.getElementById('bridgeSummary').innerHTML =
-        `<i class="bi bi-folder2-open me-1"></i>${escapeHtml(_bridgePendingDomain)} <i class="bi bi-arrow-right mx-1"></i> ${cls.emoji || '📦'} ${escapeHtml(cls.name)}`;
+        `<i class="bi bi-box me-1"></i>${escapeHtml(_bridgePendingDomain)} <i class="bi bi-arrow-right mx-1"></i> ${cls.emoji || '📦'} ${escapeHtml(cls.name)}`;
 }
 
 function _bridgeBackToDomains() {

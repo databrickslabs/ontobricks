@@ -1,7 +1,7 @@
 /* Registry navbar icon + modal */
 
 #registryModalToggle i {
-    font-size: 1.75rem;
+    font-size: 1.4rem;
     line-height: 1;
     vertical-align: middle;
     transition: transform 0.15s ease, color 0.15s ease;

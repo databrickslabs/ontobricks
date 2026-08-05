@@ -412,7 +412,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 html += '<tr>' +
                     '<td class="ps-3 fw-semibold text-nowrap">' +
-                        '<i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(domainName) +
+                        '<i class="bi bi-box me-1 text-primary"></i>' + escapeHtml(domainName) +
                     '</td>' +
                     '<td>' + spec.badge(s) + '</td>' +
                     '<td class="small">' + spec.details(s) + '</td>' +

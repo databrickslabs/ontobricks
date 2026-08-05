@@ -187,3 +187,147 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 33.77s
+
+## Change Registry icon to bi-boxes
+
+Context: User picked `bi-boxes` from a set of proposed alternatives to
+`bi-diagram-3` for the Registry navbar button, communicating "stored domain
+packages" more clearly than a connected-nodes glyph.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Registry navbar entry icon changed from `bi-diagram-3` to `bi-boxes`.
+2. `src/front/templates/partials/layout/registry_modal.html`
+   Registry popup header icon changed from `bi-archive` to `bi-boxes` to
+   match the navbar button; updated the stale "archive icon" comment.
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/templates/partials/layout/registry_modal.html`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 34.05s
+
+## Shrink Registry navbar icon
+
+Context: The `bi-boxes` Registry navbar icon at 1.75rem read as oversized next
+to the OntoBricks brand.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   `#registryModalToggle i` font-size reduced from `1.75rem` to `1.4rem`.
+
+Modified files:
+- `src/front/static/global/css/registry-modal.css`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 34.25s
+
+## Align Domain icon with Knowledge Graph (bi-box)
+
+Context: Every place representing "Domain" (navbar, breadcrumb, help modal,
+Registry rows, bridges, query "Domain: X" labels, settings domain lists) used
+a folder glyph (`bi-folder2` / `bi-folder2-open`), inconsistent with the
+Knowledge Graph menu entry's `bi-box`. Changed all Domain-representing icons
+to `bi-box` to visually align the two concepts. Folder icons that represent
+generic file/document browsing (`_domain_documents.html` "Browse Files",
+`uc_file_browser_modal.html`, `domain-documents.js` "No documents uploaded
+yet.") were intentionally left unchanged since they denote files, not the
+Domain entity.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Top navbar `domain` menu icon and Settings `domain-main` group icon:
+   `bi-folder2`/`bi-folder2-open` → `bi-box`.
+2. `src/front/static/global/js/breadcrumb.js`
+   `/domain/` route icon → `bi-box`.
+3. `src/front/templates/partials/layout/help_modal.html`
+   Workflow step "2. Domain" icon → `bi-box`.
+4. `src/front/templates/partials/dtwin/_query_api.html`,
+   `_query_reasoning.html`, `_query_chat.html`, `_query_sigmagraph.html`,
+   `_query_dataquality.html`, `_query_graphql.html`, `_query_cohorts.html`,
+   `src/front/templates/partials/ontology/_ontology_cohorts.html`
+   "Domain: {{ domain_name }}" labels → `bi-box`.
+5. `src/front/static/global/js/uc-location-widget.js`
+   "Domain Location:" label icon → `bi-box`.
+6. `src/front/templates/partials/registry/_registry_domains.html`,
+   `src/front/static/registry/js/registry.js`
+   Domains header and every domain-name row (Browse list, Export/Import
+   pickers, bridges summary + cards + table) → `bi-box`.
+7. `src/front/static/config/js/schedule.js`, `settings.js`
+   Domain name in schedule listing and Lakebase/Lakeflow object-drop domain
+   cards → `bi-box`.
+8. `src/front/templates/partials/settings/_settings_teams.html`
+   "Filter domains…" input icon → `bi-box`.
+9. `src/front/static/ontology/js/ontology-shared-panels.js`,
+   `src/front/static/query/js/query-entity-details.js`,
+   `src/front/static/query/js/query-sigmagraph.js`,
+   `src/front/static/home/js/home.js`
+   Bridge target-domain labels, bridge domain picker, target-domain badges on
+   graph nodes, and the empty-state "No domains yet." icon → `bi-box`.
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/static/global/js/breadcrumb.js`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/dtwin/_query_api.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/templates/partials/dtwin/_query_graphql.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/templates/partials/ontology/_ontology_cohorts.html`
+- `src/front/static/global/js/uc-location-widget.js`
+- `src/front/templates/partials/registry/_registry_domains.html`
+- `src/front/static/registry/js/registry.js`
+- `src/front/static/config/js/schedule.js`
+- `src/front/static/config/js/settings.js`
+- `src/front/templates/partials/settings/_settings_teams.html`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/query/js/query-entity-details.js`
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/static/home/js/home.js`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.50s
+
+## Give Knowledge Graph its own icon (`bi-radar`)
+
+Context: Domain took `bi-box`, which Knowledge Graph still used in the menu
+and as `bi-box-fill` in the breadcrumb, help walkthrough and Domain
+validation card. Pick was `bi-radar` — exploration surface, no collision
+with Domain / Registry / Ontology / Designer / Mapping.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   `digitaltwin` top-level icon → `bi-radar` (navbar + level-2 subnav inherit).
+2. `src/front/static/global/js/breadcrumb.js`
+   `/dtwin/` icon → `bi-radar` (aligned with the menu; no fill variant exists).
+3. `src/front/templates/partials/layout/help_modal.html`
+   Walkthrough step 5 icon → `bi-radar`.
+4. `src/front/templates/partials/domain/_domain_validation.html`
+   Knowledge Graph validation card header icon → `bi-radar`.
+5. `tests/units/front/test_knowledge_graph_icon.py` (new)
+   Static contract: digitaltwin is `bi-radar`, differs from Domain, matches
+   breadcrumb, and the two hardcoded labels use the same glyph.
+6. `documentation/superpowers/specs/2026-08-05-knowledge-graph-icon-design.md`
+   Design record for the choice and edit surface.
+7. `documentation/superpowers/plans/2026-08-05-knowledge-graph-icon.md`
+   Implementation plan (TDD + four edits).
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/static/global/js/breadcrumb.js`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/domain/_domain_validation.html`
+- `tests/units/front/test_knowledge_graph_icon.py`
+- `documentation/superpowers/specs/2026-08-05-knowledge-graph-icon-design.md`
+- `documentation/superpowers/plans/2026-08-05-knowledge-graph-icon.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 34.08s

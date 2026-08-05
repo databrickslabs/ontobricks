@@ -9,10 +9,10 @@ const Breadcrumb = {
     // so the breadcrumb visually matches the navbar/sidebar menus.
     _ROUTE_MAP: {
         '/registry/': { label: 'Registry',     icon: 'bi-archive' },
-        '/domain/':   { label: 'Domain',       icon: 'bi-folder2' },
+        '/domain/':   { label: 'Domain',       icon: 'bi-box' },
         '/ontology/': { label: 'Ontology',     icon: 'bi-bezier2' },
         '/mapping/':  { label: 'Mapping',      icon: 'bi-shuffle' },
-        '/dtwin/':    { label: 'Knowledge Graph', icon: 'bi-box-fill' },
+        '/dtwin/':    { label: 'Knowledge Graph', icon: 'bi-radar' },
         '/settings':  { label: 'Settings',     icon: 'bi-gear-fill' },
     },
 

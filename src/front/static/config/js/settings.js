@@ -1552,7 +1552,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     + ' data-bs-toggle="collapse" data-bs-target="#' + collapseId + '"'
                     + ' aria-expanded="false" aria-controls="' + collapseId + '">';
                 html += '<i class="bi bi-chevron-right lk-chevron"></i>';
-                html += '<i class="bi bi-folder2 text-muted" style="font-size:.85rem"></i>';
+                html += '<i class="bi bi-box text-muted" style="font-size:.85rem"></i>';
                 html += '<span class="lk-domain-name">' + escapeHtmlSettings(key) + '</span>';
                 html += '<span class="badge bg-secondary-subtle text-secondary-emphasis border lk-domain-count">'
                     + ((grp.items || []).length + analyticsItems.length) + '</span>';
@@ -1958,7 +1958,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         + ' data-bs-toggle="collapse" data-bs-target="#' + collapseId + '"'
                         + ' aria-expanded="false" aria-controls="' + collapseId + '">';
                     html += '<i class="bi bi-chevron-right lk-chevron"></i>';
-                    html += '<i class="bi bi-folder2 text-muted" style="font-size:.85rem"></i>';
+                    html += '<i class="bi bi-box text-muted" style="font-size:.85rem"></i>';
                     html += '<span class="lk-domain-name">' + escapeHtmlSettings(key) + '</span>';
                     html += '<span class="badge bg-secondary-subtle text-secondary-emphasis border lk-domain-count">'
                         + grp.items.length + '</span>';

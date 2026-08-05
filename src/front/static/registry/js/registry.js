@@ -350,7 +350,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '<tr class="registry-domain-row" data-target="' + rowId + '" style="cursor:pointer;">' +
                     '<td class="ps-3 fw-semibold text-nowrap">' +
                         '<i class="bi bi-chevron-right me-1 text-muted registry-chevron" style="font-size:0.7rem;transition:transform 0.15s;"></i>' +
-                        '<i class="bi bi-folder2 me-1 text-primary"></i>' +
+                        '<i class="bi bi-box me-1 text-primary"></i>' +
                         nameLabel +
                     '</td>' +
                     '<td class="text-muted text-truncate">' + uri + '</td>' +
@@ -626,7 +626,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ).join('');
                 return '<tr class="export-obx-row" data-domain="' + escapeHtml(d.name) + '">' +
                     '<td class="text-center"><input type="checkbox" class="form-check-input export-obx-pick" checked></td>' +
-                    '<td class="fw-semibold"><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(d.name) + '</td>' +
+                    '<td class="fw-semibold"><i class="bi bi-box me-1 text-primary"></i>' + escapeHtml(d.name) + '</td>' +
                     '<td class="text-center">' + verBadges + '</td>' +
                     '<td>' +
                         '<select class="form-select form-select-sm export-obx-mode">' +
@@ -786,7 +786,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 : '<span class="badge bg-success-subtle text-success border-success">New</span>';
             const defaultAction = d.exists ? 'skip' : 'overwrite';
             return '<tr class="import-obx-row" data-name="' + escapeHtml(d.name) + '" data-suggested="' + escapeHtml(d.suggested_new_name || '') + '">' +
-                '<td><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(d.name) +
+                '<td><i class="bi bi-box me-1 text-primary"></i>' + escapeHtml(d.name) +
                     (d.original_name && d.original_name !== d.name
                         ? '<div class="small text-muted">from <code>' + escapeHtml(d.original_name) + '</code></div>'
                         : '') +
@@ -1357,7 +1357,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 summaryEl.innerHTML = '<div class="bridges-summary-bar">' +
                     '<div class="summary-item"><i class="bi bi-signpost-split text-primary"></i> ' +
                         '<span class="summary-value">' + totalBridges + '</span> bridge' + (totalBridges !== 1 ? 's' : '') + '</div>' +
-                    '<div class="summary-item"><i class="bi bi-folder2 text-secondary"></i> ' +
+                    '<div class="summary-item"><i class="bi bi-box text-secondary"></i> ' +
                         '<span class="summary-value">' + domainsWithBridges.length + '</span> domain' + (domainsWithBridges.length !== 1 ? 's' : '') +
                         ' with bridges</div>' +
                     '<div class="summary-item"><i class="bi bi-globe text-secondary"></i> ' +
@@ -1378,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<div class="bridges-domain-header" data-bs-toggle="collapse" data-bs-target="#' + cardId + '">' +
                         '<div class="d-flex align-items-center gap-2">' +
                             '<i class="bi bi-chevron-right text-muted bridges-chevron" style="font-size:0.7rem;transition:transform 0.15s;"></i>' +
-                            '<i class="bi bi-folder2 text-primary"></i>' +
+                            '<i class="bi bi-box text-primary"></i>' +
                             '<span class="domain-name">' + escapeHtml(d.name) + '</span>';
 
                 if (d.base_uri) {
@@ -1413,7 +1413,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         html += '<tr>' +
                             '<td><span class="me-1">' + srcEmoji + '</span> ' + escapeHtml(b.source_class) + '</td>' +
                             '<td class="text-center bridge-arrow"><i class="bi bi-arrow-right"></i></td>' +
-                            '<td><i class="bi bi-folder2 text-secondary me-1"></i>' + escapeHtml(b.target_domain) + '</td>' +
+                            '<td><i class="bi bi-box text-secondary me-1"></i>' + escapeHtml(b.target_domain) + '</td>' +
                             '<td>' + escapeHtml(b.target_class_name) + '</td>' +
                             '<td>' + label + '</td>' +
                         '</tr>';

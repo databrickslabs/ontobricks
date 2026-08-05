@@ -8,7 +8,7 @@
         {
             "id": "registry",
             "label": "Registry",
-            "icon": "bi-diagram-3",
+            "icon": "bi-boxes",
             "route": "/?open=registry",
             "requires_domain_saved": false,
             "navbar_hidden": false,
@@ -21,7 +21,7 @@
         {
             "id": "domain",
             "label": "Domain",
-            "icon": "bi-folder2",
+            "icon": "bi-box",
             "route": "/domain/",
             "requires_domain_saved": false,
             "status_indicator": null,
@@ -49,7 +49,7 @@
                 {
                     "id": "domain-main",
                     "title": "",
-                    "icon": "bi-folder2-open",
+                    "icon": "bi-box",
                     "items": [
                         {
                             "id": "information",
@@ -533,7 +533,7 @@
         {
             "id": "digitaltwin",
             "label": "Knowledge Graph",
-            "icon": "bi-box",
+            "icon": "bi-radar",
             "route": "/dtwin/",
             "requires_domain_saved": true,
             "navbar_hidden": true,
