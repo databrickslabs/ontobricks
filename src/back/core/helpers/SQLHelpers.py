@@ -24,18 +24,27 @@ class SQLHelpers:
         return str(value).replace("\\", "\\\\").replace("'", "''")
 
     @staticmethod
+    def sql_cast(expr: str, sql_type: str) -> str:
+        """Cast a value to *sql_type* without failing the query.
+
+        Databricks warehouses run with ANSI mode on, so a plain ``CAST``
+        aborts the whole statement on the first value that will not convert.
+        ``TRY_CAST`` yields NULL instead. Every Spark SQL fragment OntoBricks
+        emits — stringification, typed literals, typed NULLs, numeric
+        coercion — must use this helper (or inline ``TRY_CAST``) instead of a
+        bare ``CAST``.
+        """
+        return f"TRY_CAST({expr} AS {sql_type})"
+
+    @staticmethod
     def sql_numeric(expr: str, sql_type: str = "DOUBLE") -> str:
         """Cast a triple-store value to a number without failing the query.
 
         Every object in the triple store is stored as a string, so a numeric
-        comparison has to cast. A plain ``CAST`` aborts the whole statement on
-        the first value that is not a number, and Databricks warehouses run
-        with ANSI mode on, so one ``"free"`` in a fee column takes the entire
-        rule down. ``TRY_CAST`` yields NULL instead, which makes the
-        comparison false — the value does not satisfy the condition, which is
-        what the reader means.
+        comparison has to cast. See :meth:`sql_cast` for why this is a
+        ``TRY_CAST`` rather than a bare ``CAST``.
         """
-        return f"TRY_CAST({expr} AS {sql_type})"
+        return SQLHelpers.sql_cast(expr, sql_type)
 
     @staticmethod
     def validate_uc_identifier(name: str, *, role: str = "identifier") -> str:
