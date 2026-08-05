@@ -115,6 +115,41 @@ class TestHelpDocsIndex:
         expected = {slug: meta["title"] for slug, meta in _DOC_INDEX.items()}
         assert indexed == expected
 
+    def test_graph_backend_guides_are_catalogued(self, client):
+        """Lakebase and Neo4j backend guides must be reachable from Help Center."""
+        response = client.get("/api/help/docs")
+        slugs = {
+            doc["slug"]
+            for cat in response.json()["categories"]
+            for doc in cat["docs"]
+        }
+        assert "graphdb-integration" in slugs
+        assert "lakebase-graphdb" in slugs
+        assert "neo4j-requirements" in slugs
+
+        neo = client.get("/api/help/docs/neo4j-requirements")
+        assert neo.status_code == 200
+        body = neo.json()["markdown"]
+        assert "Neo4j" in body
+        assert "Aura" in body
+
+    def test_cohort_and_import_export_guides_are_catalogued(self, client):
+        """Cohort Discovery, Import/Export and the contributor Code Map must be reachable."""
+        response = client.get("/api/help/docs")
+        slugs = {
+            doc["slug"]
+            for cat in response.json()["categories"]
+            for doc in cat["docs"]
+        }
+        assert "cohort-discovery" in slugs
+        assert "import-export" in slugs
+        assert "code-organization" in slugs
+
+        for slug in ("cohort-discovery", "import-export", "code-organization"):
+            resp = client.get(f"/api/help/docs/{slug}")
+            assert resp.status_code == 200
+            assert resp.json()["markdown"].strip()
+
 
 class TestHelpCatalogIntegrity:
     def test_docs_directory_exists(self):

@@ -3,7 +3,7 @@ Designer (D3.js force-directed graph, `ontology-map.js`).
 
 The badge is a purely visual indicator shown on entity nodes whose backing
 class has a Dashboard, Dataset, Actions, or Bridges configured under the
-entity panel's "External" tab. It carries no tooltip and no click handler.
+entity panel's "References" tab. It carries no tooltip and no click handler.
 """
 
 from pathlib import Path

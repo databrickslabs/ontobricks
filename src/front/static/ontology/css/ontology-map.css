@@ -71,7 +71,7 @@
 }
 
 /* Badge shown on entities that have a Dashboard, Dataset, Actions, or
-   Bridges configured under the entity panel's "External" tab. */
+   Bridges configured under the entity panel's "References" tab. */
 .map-node-external-badge-bg {
     fill: #333333;
     stroke: #ffffff;

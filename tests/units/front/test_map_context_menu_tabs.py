@@ -2,8 +2,8 @@
 
 Right-clicking an entity or relationship on the Ontology "Designer" graph
 should offer shortcuts straight to each tab of the shared entity/relationship
-panel (Details/Attributes/External/Constraints for entities; Details/
-Constraints for relationships, which have no Attributes/External tab).
+panel (Details/Attributes/References/Constraints for entities; Details/
+Constraints for relationships, which have no Attributes/References tab).
 """
 
 from pathlib import Path
@@ -19,7 +19,7 @@ def test_entity_context_menu_has_four_tab_shortcuts():
     for tab, label, icon in [
         ("details", "Details", "bi-info-circle"),
         ("attributes", "Attributes", "bi-tags"),
-        ("actions", "External", "bi-lightning"),
+        ("actions", "References", "bi-lightning"),
         ("constraints", "Constraints", "bi-sliders"),
     ]:
         assert f'data-action="open-tab-{tab}"' in js

@@ -57,7 +57,7 @@ def test_loaders_retain_class_actions():
 
 
 def test_designer_sync_preserves_dataset_actions_and_bridges():
-    """Designer → ontology sync must not wipe External-tab metadata."""
+    """Designer → ontology sync must not wipe References-tab metadata."""
     js = DESIGN_JS.read_text(encoding="utf-8")
     assert "bridges: existing.bridges || []" in js
     assert "dataset: existing.dataset || null" in js

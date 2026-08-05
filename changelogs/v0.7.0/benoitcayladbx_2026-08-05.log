@@ -419,3 +419,128 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.85s
+
+## Surface Neo4j in the Help Center
+
+Context: The in-app Help Center FAQ and glossary still described Graph DB as
+"currently Lakebase Postgres" only, and `neo4j-requirements.md` was not in
+the `/api/help/docs` catalog — so users searching Help for Neo4j found nothing
+even though the backend and Markdown guide already exist.
+
+Changes:
+
+1. `src/api/routers/internal/help.py`
+   Catalogued `neo4j-requirements.md` and `lakebase-graphdb.md` under Guides.
+2. `src/front/templates/partials/layout/help_modal.html`
+   FAQ backends answer, glossary (Graph DB + Neo4j), UC/SWRL/Inference copy,
+   and Resources shortcuts now name Lakebase / Lakehouse / Neo4j.
+3. `documentation/neo4j-requirements.md`
+   Fixed stale `docs/pr47-neo4j-demo/` path → `documentation/pr47-neo4j-demo/`.
+4. `documentation/README.md`
+   Added Neo4j Backend to the topic index.
+5. `tests/units/front/test_help_center_neo4j.py` (new)
+   Static contract that FAQ/glossary/resources mention Neo4j.
+6. `tests/units/api/test_help_api.py`
+   Asserts Neo4j and Lakebase guides are catalogued and Neo4j markdown serves.
+
+Modified files:
+- `src/api/routers/internal/help.py`
+- `src/front/templates/partials/layout/help_modal.html`
+- `documentation/neo4j-requirements.md`
+- `documentation/README.md`
+- `tests/units/front/test_help_center_neo4j.py`
+- `tests/units/api/test_help_api.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4681 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 33.02s
+
+## General Help Center review: fix drift, catalogue missing guides
+
+Context: a full read-through of `help_modal.html` against `menu_config.json`
+turned up drift that predated the Neo4j pass — labels and icons that had
+been renamed in the app but never updated in the docs, plus two shipped
+guides (`cohort_discovery.md`, `import-export.md`) and a contributor
+reference (`code_organization.md`) that were never added to the Help
+Center's doc allow-list.
+
+Changes:
+
+1. `src/front/templates/partials/layout/help_modal.html`
+   - Workflow step 1 (Registry): icon `bi-archive` → `bi-boxes` (matches the
+     current navbar icon); removed "Schedule" / "API" / "Registry Location"
+     bullets that actually live under Settings, not the Registry modal;
+     added the real "Export / Import" `.obx` feature with a link to the new
+     Import / Export guide.
+   - Workflow step 3 (Ontology): "Advanced section" list incorrectly claimed
+     Groups and Business Views (they're in the main editor sidebar, not
+     Advanced) and omitted Cohorts and Pitfalls (which really are in
+     Advanced). Split into "Additional sidebar sections" (Groups, Business
+     Views) and a corrected Advanced list (Data Quality, Business Rules,
+     Cohorts, Expr. & Axioms, Pitfalls), linking to the new Cohort Discovery
+     guide.
+   - Workflow step 5 (Knowledge Graph): renamed "Graph Viewer" → "Explorer"
+     and "GraphQL" → "Query" to match the current menu labels; added the
+     previously unmentioned Build/Runs, Analytics, Chat and Cohorts
+     sub-items.
+   - Feature Guide: added "Graph Chat" and "Cohort Discovery" cards (both
+     shipped features that had no entry anywhere in the Help Center).
+   - Glossary: added a "Cohort Discovery" definition.
+   - Resources: added Cohort Discovery, Import / Export and Code Map doc
+     links.
+2. `src/api/routers/internal/help.py`
+   Catalogued `cohort_discovery.md` → `cohort-discovery` and
+   `import-export.md` → `import-export` under Guides, and
+   `code_organization.md` → `code-organization` under Reference & Ops (all
+   three already existed on disk and in the Sphinx toctree, just missing
+   from the in-app allow-list).
+3. `tests/units/front/test_help_center_menu_sync.py` (new)
+   Static contract deriving expected labels/icons straight from
+   `menu_config.json` for Registry, Ontology-Advanced and Knowledge Graph,
+   so this class of drift fails CI instead of being found by inspection.
+4. `tests/units/api/test_help_api.py`
+   Added `test_cohort_and_import_export_guides_are_catalogued`.
+
+Modified files:
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/api/routers/internal/help.py`
+- `tests/units/front/test_help_center_menu_sync.py` (new)
+- `tests/units/api/test_help_api.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4688 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 36.73s
+
+## Rename Ontology Designer entity panel tab: External → References
+
+Context: user request — the entity edit panel's fourth tab (Dashboard /
+Dataset / Actions / Bridges configuration) was labelled "External", which
+read as ambiguous next to Details/Attributes/Constraints. Renamed to
+"References" without touching the `data-form-tab="actions"` id, internal
+`hasExternal`/`externalBadgeNodes` variables, or `map-node-external-badge-*`
+CSS classes (out of scope for a label-only rename).
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Tab link label "External" → "References" (`data-form-tab="actions"`).
+2. `src/front/static/ontology/js/ontology-map.js`
+   Designer canvas right-click context-menu shortcut label, and three code
+   comments referencing the tab by name, updated to "References".
+3. `src/front/static/ontology/css/ontology-map.css`
+   Comment referencing the tab by name updated to "References".
+4. `tests/units/front/test_map_context_menu_tabs.py`
+   Updated the asserted tab label and docstrings.
+5. `tests/units/front/test_ontology_map_external_badge.py`,
+   `tests/units/front/test_class_actions_ui.py`
+   Updated docstrings referencing the tab by its old name (assertions on
+   internal identifiers/CSS classes untouched).
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/js/ontology-map.js`
+- `src/front/static/ontology/css/ontology-map.css`
+- `tests/units/front/test_map_context_menu_tabs.py`
+- `tests/units/front/test_ontology_map_external_badge.py`
+- `tests/units/front/test_class_actions_ui.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4688 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 38.07s

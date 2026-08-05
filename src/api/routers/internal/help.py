@@ -68,6 +68,26 @@ _DOC_CATEGORIES: List[Dict] = [
                 "file": "graphdb-integration.md",
                 "title": "GraphDB Integration",
             },
+            {
+                "slug": "lakebase-graphdb",
+                "file": "lakebase-graphdb.md",
+                "title": "Lakebase GraphDB",
+            },
+            {
+                "slug": "neo4j-requirements",
+                "file": "neo4j-requirements.md",
+                "title": "Neo4j Backend",
+            },
+            {
+                "slug": "cohort-discovery",
+                "file": "cohort_discovery.md",
+                "title": "Cohort Discovery",
+            },
+            {
+                "slug": "import-export",
+                "file": "import-export.md",
+                "title": "Import / Export",
+            },
             {"slug": "mcp", "file": "mcp.md", "title": "MCP"},
         ],
     },
@@ -87,6 +107,11 @@ _DOC_CATEGORIES: List[Dict] = [
                 "title": "Data Access",
             },
             {"slug": "development", "file": "development.md", "title": "Development"},
+            {
+                "slug": "code-organization",
+                "file": "code_organization.md",
+                "title": "Code Map",
+            },
             {"slug": "deployment", "file": "deployment.md", "title": "Deployment"},
         ],
     },

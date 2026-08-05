@@ -174,7 +174,7 @@ async function initOntologyMap() {
             label: cls.label || cls.name,
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
             // True when the backing class has a Dashboard, Dataset, Actions, or
-            // Bridges configured under the entity panel's External tab.
+            // Bridges configured under the entity panel's References tab.
             hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
             parent: cls.parent,
             // Use saved position if available, fix positions to prevent animation
@@ -524,7 +524,7 @@ async function initOntologyMap() {
         .text(d => d.label || d.name);
 
     // Small badge overlay signalling the class has Dashboard/Dataset/Actions/
-    // Bridges configured (entity panel's "External" tab). Purely visual — no
+    // Bridges configured (entity panel's "References" tab). Purely visual — no
     // tooltip, no click handler — so it's rendered only for matching nodes
     // and marked pointer-events: none in CSS.
     const externalBadgeNodes = nodeElements.filter(d => d.hasExternal);
@@ -542,7 +542,7 @@ async function initOntologyMap() {
         .attr('x', 16)
         .attr('y', -16)
         .attr('aria-hidden', 'true')
-        .text('\uf46d'); // bi-lightning-charge codepoint (bootstrap-icons font) — same glyph/colour as the entity panel's External tab
+        .text('\uf46d'); // bi-lightning-charge codepoint (bootstrap-icons font) — same glyph/colour as the entity panel's References tab
 
     // Tooltip on hover
     nodeElements.append('title')
@@ -1316,7 +1316,7 @@ function showMapContextMenu(event, entityData, container) {
         </div>
         <div class="map-context-item" data-action="open-tab-actions">
             <i class="bi bi-lightning"></i>
-            <span>External</span>
+            <span>References</span>
         </div>
         <div class="map-context-item" data-action="open-tab-constraints">
             <i class="bi bi-sliders"></i>
@@ -1403,7 +1403,7 @@ function showMapContextMenu(event, entityData, container) {
 /**
  * Show a right-click context menu for a relationship link, offering
  * shortcuts straight to each tab of its edit panel (Details, Constraints —
- * relationships have no Attributes/External tab).
+ * relationships have no Attributes/References tab).
  */
 function showMapRelationshipContextMenu(event, linkData, container) {
     // Remove existing menu

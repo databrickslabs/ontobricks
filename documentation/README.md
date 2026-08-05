@@ -21,6 +21,7 @@ OntoBricks is a **Graph Viewer Builder** for the Databricks platform. It lets yo
 | **Development** | [development.md](development.md) | Dependencies, test suite, permission / SDK notes |
 | **Code Map** | [code_organization.md](code_organization.md) | UI routes & templates, API surfaces, agents, MCP wiring |
 | **Lakebase GraphDB** | [lakebase-graphdb.md](lakebase-graphdb.md) | Lakebase setup, write modes, Postgres schema layout, permissions bootstrap, troubleshooting |
+| **Neo4j Backend** | [neo4j-requirements.md](neo4j-requirements.md) | Neo4j 5.x requirements, Aura / Community / Enterprise compatibility, typed property-graph model |
 | **GraphDB Integration** | [graphdb-integration.md](graphdb-integration.md) | Deep-dive: UC schema layout, resolver design, synced-table pipeline steps |
 | **Cohort Discovery** | [cohort_discovery.md](cohort_discovery.md) | Cohort rule builder, path traversal, predicate namespace handling |
 | **Import / Export** | [import-export.md](import-export.md) | Registry OBX UI (browser) + CLI `registry_transfer.sh` (CI/CD) |
