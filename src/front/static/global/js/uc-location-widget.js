@@ -161,7 +161,7 @@ const UCLocationWidget = (function() {
                             <!-- Use domain registry location option -->
                             <div id="ucLocationDomainOption" class="border rounded d-flex align-items-center mb-3 p-2 bg-light" style="display: none !important;">
                                 <div class="flex-grow-1">
-                                    <strong><i class="bi bi-folder2"></i> Domain Location:</strong>
+                                    <strong><i class="bi bi-box"></i> Domain Location:</strong>
                                     <span id="ucLocationDomainValue" class="fw-semibold ms-1">-</span>
                                 </div>
                                 <button type="button" class="btn btn-sm btn-primary" id="ucLocationUseDomainBtn">

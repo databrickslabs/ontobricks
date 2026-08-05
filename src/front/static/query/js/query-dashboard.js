@@ -324,8 +324,9 @@ async function _loadDatasetPreviewRows(entityUri) {
  * @param {string} entityUri - Full entity URI
  * @param {string} actionFullName - Fully qualified UC function name
  * @param {string} [label] - Display label for the action
+ * @param {string} [description] - Optional function description from the class config
  */
-function openEntityActionModal(entityUri, actionFullName, label) {
+function openEntityActionModal(entityUri, actionFullName, label, description) {
     const existingModal = document.getElementById('entityActionResultModal');
     if (existingModal) {
         existingModal.remove();
@@ -333,6 +334,12 @@ function openEntityActionModal(entityUri, actionFullName, label) {
 
     const safeLabel = escapeHtml(label || actionFullName || 'Action');
     const safeFullName = escapeHtml(actionFullName || '');
+    const safeDescription = (description || '').trim()
+        ? escapeHtml(String(description).trim())
+        : '';
+    const descriptionBlock = safeDescription
+        ? `<p class="text-muted small mb-3">${safeDescription}</p>`
+        : '';
     const modalHtml = `
         <div class="modal fade" id="entityActionResultModal" tabindex="-1" aria-labelledby="entityActionResultModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
@@ -344,6 +351,7 @@ function openEntityActionModal(entityUri, actionFullName, label) {
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body" id="entityActionResultModalBody">
+                        ${descriptionBlock}
                         <div class="text-center text-muted py-4">
                             <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
                             Running action…
@@ -368,7 +376,7 @@ function openEntityActionModal(entityUri, actionFullName, label) {
 
     _runEntityAction(entityUri, actionFullName).then(function (html) {
         const body = document.getElementById('entityActionResultModalBody');
-        if (body) body.innerHTML = html;
+        if (body) body.innerHTML = descriptionBlock + html;
     });
 }
 

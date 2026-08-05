@@ -3,15 +3,15 @@
 # build_docs.sh -- Build the OntoBricks Sphinx documentation.
 #
 # Usage:
-#   scripts/build_docs.sh          # build HTML docs
-#   scripts/build_docs.sh clean    # remove previous build artifacts
-#   scripts/build_docs.sh open     # build and open in the default browser
+#   ci/build_docs.sh          # build HTML docs
+#   ci/build_docs.sh clean    # remove previous build artifacts
+#   ci/build_docs.sh open     # build and open in the default browser
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/.."
-SPHINX_DIR="$PROJECT_ROOT/docs/sphinx"
+SPHINX_DIR="$PROJECT_ROOT/documentation/sphinx"
 BUILD_DIR="$SPHINX_DIR/_build"
 
 # Prefer the project venv if it exists
@@ -60,7 +60,7 @@ fi
 
 find_sphinx_build
 
-# Narrative docs use MyST to include ../../docs/*.md — install if missing:
+# Narrative docs use MyST to include ../../documentation/*.md — install if missing:
 if ! "$PYTHON" -c "import myst_parser" 2>/dev/null; then
     echo "Installing Sphinx dependencies (sphinx, myst-parser)..."
     "$PYTHON" -m pip install -q "sphinx>=7" "myst-parser>=3" || {

@@ -171,6 +171,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
+            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -306,6 +307,13 @@ class Domain:
                         self._s.info.get("graph_backend"),
                     )
                 ),
+                "neo4j_database": str(
+                    data.get(
+                        "neo4j_database",
+                        self._s.info.get("neo4j_database", ""),
+                    )
+                    or ""
+                ).strip(),
             }
         )
 
@@ -342,6 +350,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
+            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
         }
 
     @staticmethod
@@ -438,6 +447,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
+            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,
@@ -537,8 +547,6 @@ class Domain:
                 "success": True,
                 "domain_folder": folder,
                 "version": version,
-                "current_version": self._s.current_version,
-                "versions": svc.list_versions_sorted(folder),
                 "runs": runs,
             }
         except OntoBricksError:
@@ -634,12 +642,21 @@ class Domain:
         self,
         entity_uri: str,
         bridge_domain: Optional[str] = None,
+        domain_switched: bool = False,
     ) -> str:
-        """Build ``/dtwin/?section=sigmagraph&focus=...`` URL for entity URI resolution."""
+        """Build ``/dtwin/?section=sigmagraph&focus=...`` URL for entity URI resolution.
+
+        ``domain_switched=True`` adds ``&domain_switched=1`` so the navbar can
+        bust its sessionStorage ``/navbar/state`` cache after a server-side
+        domain load (cross-domain bridges). ``bridge_domain`` is the client
+        fallback when the server could not switch the session.
+        """
         encoded = quote(entity_uri, safe="")
         target = f"/dtwin/?section=sigmagraph&focus={encoded}"
         if bridge_domain:
             target += f"&domain={quote(bridge_domain, safe='')}"
+        if domain_switched:
+            target += "&domain_switched=1"
         logger.info("Resolving entity URI %s -> %s", entity_uri, target)
         return target
 
@@ -651,7 +668,8 @@ class Domain:
         """Resolve owning domain, switch session when needed, return redirect URL path/query.
 
         Used by the ``/resolve`` HTML routes: cross-domain bridges load the target
-        domain server-side; the redirect omits ``&domain=`` when the switch succeeds.
+        domain server-side; the redirect omits ``&domain=`` when the switch succeeds
+        and sets ``domain_switched=1`` so the client invalidates the navbar cache.
         """
         target_domain = domain_hint
         if not target_domain:
@@ -660,7 +678,9 @@ class Domain:
         if target_domain:
             switched = await self._switch_domain_if_needed_for_resolve(target_domain)
             if switched:
-                return self._build_resolve_entity_redirect_url(entity_uri)
+                return self._build_resolve_entity_redirect_url(
+                    entity_uri, domain_switched=True
+                )
 
         return self._build_resolve_entity_redirect_url(
             entity_uri,

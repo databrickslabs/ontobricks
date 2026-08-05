@@ -33,6 +33,13 @@ from back.core.industry import (
 from back.core.industry.fhir import get_fhir_versions
 from back.core.logging import get_logger
 from back.core.w3c import SHACLService
+from back.core.w3c.shacl.constants import (
+    AGGREGATE_ID_PREFIX,
+    DECISION_TABLE_ID_PREFIX,
+    RULE_FAMILY_CATEGORIES,
+    SWRL_ID_PREFIX,
+    rule_check_id,
+)
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 
 router = APIRouter(prefix="/ontology", tags=["Ontology"])
@@ -417,18 +424,59 @@ async def list_constraints(session_mgr: SessionManager = Depends(get_session_man
 # ===========================================
 
 
+def _selectable_rule_families(domain) -> list:
+    """List the non-SHACL rules a data quality run executes, as selectables.
+
+    Each entry mirrors a shape closely enough for the run page to render and
+    select it: the ``id`` is the same check id the run reports, so ticking one
+    here is what the run filters on.
+    """
+    ontology_dict = getattr(domain, "ontology", None)
+    if not isinstance(ontology_dict, dict):
+        ontology_dict = domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
+
+    families = (
+        (SWRL_ID_PREFIX, domain.swrl_rules or [], "SWRL Rule"),
+        (DECISION_TABLE_ID_PREFIX, ontology_dict.get("decision_tables", []), "Decision Table"),
+        (AGGREGATE_ID_PREFIX, ontology_dict.get("aggregate_rules", []), "Aggregate Rule"),
+    )
+    rules = []
+    for prefix, family, fallback in families:
+        for index, rule in enumerate(family or []):
+            if not rule.get("enabled", True):
+                continue
+            rules.append(
+                {
+                    "id": rule_check_id(prefix, rule, index),
+                    "label": rule.get("name") or f"{fallback} {index + 1}",
+                    "category": RULE_FAMILY_CATEGORIES[prefix],
+                    "family": prefix,
+                    "enabled": True,
+                }
+            )
+    return rules
+
+
 @router.get("/dataquality/list")
 async def list_shapes(
     session_mgr: SessionManager = Depends(get_session_manager),
     category: str = "",
 ):
-    """List all SHACL data-quality shapes, optionally filtered by category."""
+    """List all SHACL data-quality shapes, optionally filtered by category.
+
+    ``rules`` carries the non-SHACL families a data quality run also executes
+    (SWRL rules, decision tables, aggregate rules) so they can be selected one
+    by one like a shape. They are kept out of ``shapes`` because the ontology
+    editor manages actual shapes only.
+    """
     domain = get_domain(session_mgr)
     domain.deduplicate_shacl_shapes()
     shapes = domain.shacl_shapes
+    rules = _selectable_rule_families(domain)
     if category:
         shapes = [s for s in shapes if s.get("category") == category]
-    return {"success": True, "shapes": shapes}
+        rules = [r for r in rules if r.get("category") == category]
+    return {"success": True, "shapes": shapes, "rules": rules}
 
 
 @router.post("/dataquality/save")
@@ -464,6 +512,8 @@ async def save_shape(
                 message=shape_data.get("message", ""),
                 label=shape_data.get("label", ""),
                 enabled=shape_data.get("enabled", True),
+                conditions=shape_data.get("conditions", []),
+                condition_logic=shape_data.get("condition_logic", "and"),
             )
             shapes.append(new_shape)
 
@@ -524,7 +574,7 @@ async def import_shacl(
             raise ValidationError("No Turtle content provided")
 
         svc = SHACLService()
-        imported = svc.import_shapes(turtle_content)
+        imported, report = svc.import_shapes_with_report(turtle_content)
         if not imported:
             raise ValidationError("No valid shapes found in the provided Turtle")
 
@@ -533,11 +583,16 @@ async def import_shacl(
         shapes.extend(imported)
         domain.shacl_shapes = shapes
         domain.save()
+        dropped = report.get("conditions_dropped", 0)
+        message = f"Imported {len(imported)} shapes"
+        if dropped:
+            message += f" — {dropped} lost their conditions and now apply to every instance"
         return {
             "success": True,
-            "message": f"Imported {len(imported)} shapes",
+            "message": message,
             "shapes": shapes,
             "imported_count": len(imported),
+            "conditions_dropped": dropped,
         }
 
 
@@ -601,6 +656,7 @@ async def cleanup_shapes(session_mgr: SessionManager = Depends(get_session_manag
     """Remove SHACL shapes that are stale or reference excluded mapping entries.
 
     A shape is considered stale when any of the following is true:
+
     - Its ``target_class_uri`` is set but matches no current ontology class (by URI or name).
     - Its ``property_uri`` is set, is not a W3C standard URI, and matches no current
       ontology property or data-property (by URI or name).
@@ -861,6 +917,79 @@ async def validate_swrl_rule(request: Request):
     if errors:
         raise ValidationError("SWRL rule is invalid", detail="; ".join(str(e) for e in errors))
     return {"success": True, "valid": True, "message": "Rule syntax is valid"}
+
+
+@router.get("/swrl/text")
+async def get_swrl_text(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Serialize all SWRL rules as OntoBricks SWRL text."""
+    from back.core.reasoning.SWRLTextCodec import serialize_rules
+
+    domain = get_domain(session_mgr)
+    return {"success": True, "text": serialize_rules(domain.swrl_rules)}
+
+
+@router.get("/swrl/export")
+async def export_swrl(session_mgr: SessionManager = Depends(get_session_manager)):
+    """Download SWRL rules as an OntoBricks SWRL text file."""
+    from fastapi.responses import Response
+    from back.core.reasoning.SWRLTextCodec import serialize_rules
+
+    domain = get_domain(session_mgr)
+    text = serialize_rules(domain.swrl_rules)
+    export_name = (
+        domain._data.get("domain", domain._data.get("project", {}))
+        .get("info", {})
+        .get("name", DEFAULT_GRAPH_NAME)
+    )
+    filename = f"{export_name}_swrl_rules.swrl"
+    return Response(
+        content=text,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/swrl/import")
+async def import_swrl(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
+    """Import SWRL rules from OntoBricks SWRL text (always append)."""
+    from back.core.reasoning.SWRLTextCodec import parse_rules
+
+    with map_route_errors("SWRL import failed", logger):
+        data = await request.json()
+        text = data.get("text", "")
+        if not text or not str(text).strip():
+            raise ValidationError("No SWRL text provided")
+        try:
+            imported = parse_rules(text)
+        except ValueError as e:
+            raise ValidationError(str(e)) from e
+        if not imported:
+            raise ValidationError("No valid SWRL rules found in the provided text")
+        for rule in imported:
+            errors = Ontology.validate_swrl_rule(rule)
+            if errors:
+                raise ValidationError(
+                    f"Invalid rule '{rule.get('name', '')}': {'; '.join(errors)}"
+                )
+        domain = get_domain(session_mgr)
+        rules = list(domain.swrl_rules)
+        rules.extend(imported)
+        domain.swrl_rules = rules
+        domain.record_change(
+            "swrl_added",
+            entity_type="swrl",
+            entity_ref=f"{len(imported)} imported",
+            summary=f"Imported {len(imported)} SWRL rule(s)",
+        )
+        domain.save()
+        return {
+            "success": True,
+            "message": f"Imported {len(imported)} rules",
+            "rules": rules,
+            "imported_count": len(imported),
+        }
 
 
 # ===========================================
@@ -1936,13 +2065,15 @@ async def ontology_assistant_chat(
 ):
     """Process a single chat turn with the ontology assistant agent.
 
-    Expects JSON body:
+    Expects a JSON body::
+
         {
             "message": "Remove the entity Customer",
             "history": [...]   // optional prior conversation messages
         }
 
-    Returns:
+    and responds with::
+
         {
             "success": true/false,
             "reply": "...",

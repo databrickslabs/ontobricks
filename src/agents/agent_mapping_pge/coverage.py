@@ -32,6 +32,7 @@ fast and unit-testable.
 
 from typing import Dict, List, Optional, Set, Tuple
 
+from back.core.helpers import sql_cast
 from back.core.logging import get_logger
 from agents.agent_mapping_pge.contracts import SourceModel
 
@@ -294,7 +295,7 @@ def build_abstract_union_mapping(
             if src_alias:
                 cols.append(f"{src_alias} AS {attr}")
             else:
-                cols.append(f"CAST(NULL AS STRING) AS {attr}")
+                cols.append(f"{sql_cast('NULL', 'STRING')} AS {attr}")
         selects.append(f"SELECT {', '.join(cols)} FROM ({m['sql_query']}) ")
     union = " UNION ALL ".join(selects)
     # DISTINCT on the whole projection collapses any incidental duplicates while

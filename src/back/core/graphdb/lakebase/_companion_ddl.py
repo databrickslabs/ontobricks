@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from back.core.helpers import safe_identifier
+from back.core.helpers import safe_identifier, sql_cast
 
 # Lakeflow synced-table PK (object_hash comes from the Delta warehouse view).
 LAKEFLOW_SYNC_PRIMARY_KEY: tuple[str, ...] = (
@@ -87,7 +87,7 @@ def wrap_triple_view_sql_for_lakeflow(spark_sql: str) -> str:
     inner = spark_sql.strip().rstrip(";")
     return (
         "SELECT subject, predicate, object, "
-        "sha2(cast(object AS string), 256) AS object_hash "
+        f"sha2({sql_cast('object', 'STRING')}, 256) AS object_hash "
         f"FROM ({inner}) AS _ob_triples"
     )
 
@@ -203,7 +203,7 @@ def _create_triple_table(cur: Any, schema: str, table: str) -> None:
 
 
 def ensure_synced(cur: Any, schema: str, synced: str) -> None:
-    """Create the *_sync bulk-data table + standard B-tree indexes if absent.
+    """Create the ``_sync`` bulk-data table + standard B-tree indexes if absent.
 
     Used by the ``app_managed`` build path to provision the table that receives
     warehouse-streamed triples.  In ``managed_synced`` mode this table is
@@ -222,7 +222,7 @@ def is_lakeflow_sync_owner(owner: str) -> bool:
 
 
 def drop_synced(cur: Any, synced: str) -> None:
-    """Drop the *_sync bulk-data table (app_managed cleanup path).
+    """Drop the ``_sync`` bulk-data table (``app_managed`` cleanup path).
 
     Uses a DO block to skip the DROP when the current session does not own the
     table.  This prevents ``PSQLException: must be owner of table`` when a

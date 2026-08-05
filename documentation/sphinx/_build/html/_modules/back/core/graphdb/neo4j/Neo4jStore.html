@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.graphdb.neo4j.Neo4jStore &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.graphdb.neo4j.Neo4jStore</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Neo4j graph database backend — thin façade over three composed services.</span>
+
+<span class="sd">Bolt-based (Cypher) **typed property-graph** store (Strategy A, confirmed with</span>
+<span class="sd">Benoit 2026-07-28). Each subject/object URI becomes a node MERGE-keyed on its</span>
+<span class="sd">full URI, ``rdf:type`` becomes a Neo4j label, ``rdfs:label`` becomes the</span>
+<span class="sd">``name`` property, literal-object predicates become node properties, and</span>
+<span class="sd">URI-object predicates become real relationships ``(s)-[:reltype]-&gt;(o)``. Every</span>
+<span class="sd">node also carries a per-graph **marker label** (the sanitised table name) so a</span>
+<span class="sd">whole domain graph is one ``MATCH (n:&lt;marker&gt;)`` away for counting, dropping,</span>
+<span class="sd">and isolation — Neo4j 5+ ``CREATE CONSTRAINT`` enforces ``uri`` uniqueness on</span>
+<span class="sd">that marker.</span>
+
+<span class="sd">**Contract preservation:** reads still return the flat</span>
+<span class="sd">``{subject, predicate, object}`` shapes the SQL backends return — triples are</span>
+<span class="sd">*reconstructed* from the graph using reverse maps persisted by</span>
+<span class="sd">:class:`Neo4jSchemaMap` (label→class URI, reltype→predicate URI,</span>
+<span class="sd">prop-key→predicate URI). So the KG view / GraphQL / reasoning layers see no</span>
+<span class="sd">behavioural change, while traversal/reasoning now run as native relationship</span>
+<span class="sd">patterns. The forward transform lives in the driver-free</span>
+<span class="sd">:mod:`Neo4jGraphModel`.</span>
+
+<span class="sd">Implementation is split across three services (extracted during the PR</span>
+<span class="sd">#47 review — Benoit 2026-06-18 &quot;la classe est trop grosse&quot;):</span>
+
+<span class="sd">- :class:`Neo4jConnection` — driver lifecycle, auth resolution</span>
+<span class="sd">  (NEO4J_PASSWORD env var first, engine_config fallback in local dev,</span>
+<span class="sd">  hard refusal in the deployed app without a secret resource), and the</span>
+<span class="sd">  single :meth:`Neo4jConnection.run` execution path that emits one INFO</span>
+<span class="sd">  log line per Cypher statement.</span>
+<span class="sd">- :class:`Neo4jWriteOps` — schema (constraint create/drop), typed bulk writes</span>
+<span class="sd">  (``UNWIND`` + ``MERGE`` nodes/labels/props then batched relationship MERGE),</span>
+<span class="sd">  deletes, cohort wipes, and reverse-schema-map persistence.</span>
+<span class="sd">- :class:`Neo4jReadOps` — the 16+ named-query methods of the</span>
+<span class="sd">  ``TripleStoreBackend`` contract: SPO reconstruction, statistics, entity</span>
+<span class="sd">  lookup, pagination, KG-filter primitives (``find_seed_subjects`` /</span>
+<span class="sd">  ``bfs_traversal`` / ``expand_entity_neighbors``), reasoning helpers</span>
+<span class="sd">  (``transitive_closure``, ``symmetric_expand``, ``shortest_path``), and the</span>
+<span class="sd">  admin inventory used by the Settings → Neo4j tabs (``list_labels`` /</span>
+<span class="sd">  ``list_databases``).</span>
+
+<span class="sd">``execute_query`` deliberately raises ``NotImplementedError`` — no raw</span>
+<span class="sd">Cypher entry point. All writes go through ``insert_triples`` after</span>
+<span class="sd">ontology validation in the build pipeline (Benoit&#39;s C2 safeguard:</span>
+<span class="sd">&quot;l&#39;entrée se fait par l&#39;ontologie&quot;).</span>
+
+<span class="sd">Reasoning translation (``get_query_translator``) returns a</span>
+<span class="sd">:class:`SWRLFlatCypherTranslator` that is currently scaffolded only —</span>
+<span class="sd">full SWRL → Cypher translation lands in a follow-up PR.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.GraphDBBackend</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphDBBackend</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jConnection</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DEFAULT_AUTH_METHOD</span><span class="p">,</span>
+    <span class="n">DEFAULT_DATABASE</span><span class="p">,</span>
+    <span class="n">NEO4J_PASSWORD_ENV</span><span class="p">,</span>
+    <span class="n">Neo4jConnection</span><span class="p">,</span>
+    <span class="n">SUPPORTED_AUTH_METHODS</span><span class="p">,</span>
+    <span class="n">_normalise_cypher_for_log</span><span class="p">,</span>  <span class="c1"># noqa: F401  — re-exported for legacy callers/tests</span>
+    <span class="n">is_neo4j_password_from_secret</span><span class="p">,</span>
+    <span class="n">resolve_neo4j_database</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jReadOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jReadOps</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jWriteOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jWriteOps</span><span class="p">,</span> <span class="n">sanitise_label</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">shared.config.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_GRAPH_NAME</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># Re-exported so callers that did ``from Neo4jStore import is_neo4j_password_from_secret``</span>
+<span class="c1"># (SettingsService, home.py) keep working without churn.</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;DEFAULT_AUTH_METHOD&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;DEFAULT_DATABASE&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;NEO4J_PASSWORD_ENV&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Neo4jStore&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUPPORTED_AUTH_METHODS&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;is_neo4j_password_from_secret&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+
+<div class="viewcode-block" id="Neo4jStore">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Neo4jStore</span><span class="p">(</span><span class="n">GraphDBBackend</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Neo4j (Bolt / Cypher) graph database backend — typed property-graph model.</span>
+
+<span class="sd">    Public façade composing :class:`Neo4jConnection`, :class:`Neo4jWriteOps`,</span>
+<span class="sd">    and :class:`Neo4jReadOps`. Implements both the ``TripleStoreBackend``</span>
+<span class="sd">    and ``GraphDBBackend`` contracts.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    db_name:</span>
+<span class="sd">        Logical name for the graph, used as the per-graph **marker label**</span>
+<span class="sd">        (every node of this graph carries ``:&lt;sanitised_db_name&gt;``) so the</span>
+<span class="sd">        whole domain graph is one ``MATCH`` away for counting/dropping.</span>
+<span class="sd">    engine_config:</span>
+<span class="sd">        JSON dict from Settings &gt; Graph DB &gt; Engine Configuration. Keys:</span>
+
+<span class="sd">        ``uri`` (required)</span>
+<span class="sd">            Bolt URI, e.g. ``neo4j+s://b4810af7.databases.neo4j.io``.</span>
+<span class="sd">        ``database`` (default ``&quot;neo4j&quot;``)</span>
+<span class="sd">            Logical Neo4j database name on the target instance.</span>
+<span class="sd">        ``auth_method`` (default ``&quot;basic&quot;``)</span>
+<span class="sd">            ``&quot;basic&quot;`` → username + password. ``&quot;databricks_secret&quot;`` →</span>
+<span class="sd">            credentials resolved from a Databricks secret scope (PR 3,</span>
+<span class="sd">            deferred).</span>
+<span class="sd">        ``username``</span>
+<span class="sd">            Required when ``auth_method == &quot;basic&quot;``.</span>
+<span class="sd">        ``password``</span>
+<span class="sd">            Local-dev fallback when ``auth_method == &quot;basic&quot;``. **In the</span>
+<span class="sd">            deployed app** (when ``DATABRICKS_APP_PORT`` is set) the password</span>
+<span class="sd">            MUST come from the ``NEO4J_PASSWORD`` env var, populated via a</span>
+<span class="sd">            Databricks Apps secret resource bound in ``app.yaml``. The</span>
+<span class="sd">            persisted JSON ``password`` is ignored in prod and stripped at</span>
+<span class="sd">            save-time so no clear-text credential ever lands in</span>
+<span class="sd">            ``global_config``. See</span>
+<span class="sd">            ``docs/pr47-neo4j-demo/secret-configuration.md``.</span>
+<span class="sd">        ``secret_scope``, ``secret_key``</span>
+<span class="sd">            Required when ``auth_method == &quot;databricks_secret&quot;``.</span>
+<span class="sd">        ``encrypted`` (default ``True``)</span>
+<span class="sd">            Bolt-level encryption flag (ignored when URI is ``neo4j+s://``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">db_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">DEFAULT_GRAPH_NAME</span><span class="p">,</span>
+        <span class="n">engine_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db_name</span> <span class="o">=</span> <span class="n">db_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">engine_config</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">engine_config</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="n">cfg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_config</span>
+
+        <span class="n">uri</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">uri</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Neo4jStore: engine_config[&#39;uri&#39;] is required &quot;</span>
+                <span class="s2">&quot;(e.g. &#39;neo4j+s://&lt;aura-id&gt;.databases.neo4j.io&#39;)&quot;</span>
+            <span class="p">)</span>
+        <span class="n">database</span> <span class="o">=</span> <span class="n">resolve_neo4j_database</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+        <span class="n">auth_method</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;auth_method&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">DEFAULT_AUTH_METHOD</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">auth_method</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">SUPPORTED_AUTH_METHODS</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Neo4jStore: unsupported auth_method </span><span class="si">%r</span><span class="s2"> (allowed: </span><span class="si">%s</span><span class="s2">)&quot;</span>
+                <span class="o">%</span> <span class="p">(</span><span class="n">auth_method</span><span class="p">,</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">SUPPORTED_AUTH_METHODS</span><span class="p">))</span>
+            <span class="p">)</span>
+        <span class="n">encrypted</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;encrypted&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">))</span>
+
+        <span class="c1"># Cache constructor-derived fields so the existing test suite (which</span>
+        <span class="c1"># reads them directly) keeps passing.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_uri</span> <span class="o">=</span> <span class="n">uri</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_database</span> <span class="o">=</span> <span class="n">database</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_auth_method</span> <span class="o">=</span> <span class="n">auth_method</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_encrypted</span> <span class="o">=</span> <span class="n">encrypted</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span> <span class="o">=</span> <span class="n">Neo4jConnection</span><span class="p">(</span>
+            <span class="n">uri</span><span class="o">=</span><span class="n">uri</span><span class="p">,</span>
+            <span class="n">database</span><span class="o">=</span><span class="n">database</span><span class="p">,</span>
+            <span class="n">auth_method</span><span class="o">=</span><span class="n">auth_method</span><span class="p">,</span>
+            <span class="n">engine_config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">engine_config</span><span class="p">,</span>
+            <span class="n">encrypted</span><span class="o">=</span><span class="n">encrypted</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_writes</span> <span class="o">=</span> <span class="n">Neo4jWriteOps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span> <span class="o">=</span> <span class="n">Neo4jReadOps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="p">)</span>
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  GraphDBBackend — capability flags</span>
+    <span class="c1"># ======================================================================</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">supports_cypher</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">supports_graph_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="c1"># Typed property-graph model: nodes keyed on full URI (Strategy A),</span>
+        <span class="c1"># rdf:type → labels, rdfs:label → name, literal predicates → node</span>
+        <span class="c1"># properties, URI-object predicates → real relationships. Reads</span>
+        <span class="c1"># reconstruct SPO from the graph (Neo4jReadOps + Neo4jSchemaMap).</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">query_dialect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;cypher&quot;</span>
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  Connection — delegates to Neo4jConnection</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jStore.get_connection">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_connection">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="o">.</span><span class="n">get_driver</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.close">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.close">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_driver</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+        <span class="c1"># Back-compat: some tests patch `store._driver` directly. Surface</span>
+        <span class="c1"># the connection&#39;s driver attribute through this property so the</span>
+        <span class="c1"># old patching pattern keeps working.</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="o">.</span><span class="n">_driver</span>
+
+    <span class="nd">@_driver</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_driver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="o">.</span><span class="n">_driver</span> <span class="o">=</span> <span class="n">value</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cypher</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Back-compat passthrough — tests mock ``store._run``.</span>
+
+<span class="sd">        The split moved actual execution to :meth:`Neo4jConnection.run`.</span>
+<span class="sd">        New code in this module calls ``self._connection.run`` directly</span>
+<span class="sd">        (via the WriteOps / ReadOps helpers) so mocking happens at the</span>
+<span class="sd">        connection layer. This passthrough preserves the public API</span>
+<span class="sd">        surface for the few external callers that still drive Cypher</span>
+<span class="sd">        through the store.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_deployed_app</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Back-compat delegate to :meth:`Neo4jConnection._is_deployed_app`.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Neo4jConnection</span><span class="o">.</span><span class="n">_is_deployed_app</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_auth</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Back-compat delegate to :meth:`Neo4jConnection._resolve_auth`.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_connection</span><span class="o">.</span><span class="n">_resolve_auth</span><span class="p">()</span>
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  GraphDBBackend — schema helpers</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jStore.get_node_table">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_node_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_node_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_graph_schema">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_graph_schema">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_graph_schema</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+        <span class="c1"># Flat model — no schema object.</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  GraphDBBackend — sync to/from UC Volume (Aura is remote; no-ops)</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jStore.sync_to_remote">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.sync_to_remote">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_to_remote</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">volume_service</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Neo4j is remote-only; no UC Volume sync&quot;</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.sync_from_remote">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.sync_from_remote">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sync_from_remote</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">volume_service</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="s2">&quot;Neo4j is remote-only; no UC Volume sync&quot;</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.local_path">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.local_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">local_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.remote_archive_path">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.remote_archive_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">remote_archive_path</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">uc_domain_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  GraphDBBackend — reasoning support</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jStore.get_query_translator">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_query_translator">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_query_translator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the SWRL/rule translator for this engine.</span>
+
+<span class="sd">        Returns a :class:`SWRLFlatCypherTranslator` — currently scaffolded</span>
+<span class="sd">        (every translation returns ``None``), so reasoning on Neo4j</span>
+<span class="sd">        reports zero violations / zero inferences instead of crashing.</span>
+<span class="sd">        Full SWRL → Cypher translation is a follow-up PR.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.reasoning.SWRLFlatCypherTranslator</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">SWRLFlatCypherTranslator</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">SWRLFlatCypherTranslator</span><span class="p">(</span><span class="n">node_label</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_node_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">))</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  TripleStoreBackend — write delegators (→ Neo4jWriteOps)</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jStore.create_table">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.create_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writes</span><span class="o">.</span><span class="n">create_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.drop_table">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.drop_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">drop_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writes</span><span class="o">.</span><span class="n">drop_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.insert_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.insert_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">insert_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writes</span><span class="o">.</span><span class="n">insert_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">on_progress</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.delete_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.delete_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+        <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2000</span><span class="p">,</span>
+        <span class="n">on_progress</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writes</span><span class="o">.</span><span class="n">delete_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">triples</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">on_progress</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.optimize_table">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.optimize_table">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">optimize_table</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writes</span><span class="o">.</span><span class="n">optimize_table</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.delete_cohort_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.delete_cohort_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_cohort_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">cohort_uri_prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">in_cohort_predicate</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_writes</span><span class="o">.</span><span class="n">delete_cohort_triples</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="n">cohort_uri_prefix</span><span class="p">,</span> <span class="n">in_cohort_predicate</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.execute_query">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.execute_query">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">execute_query</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="c1"># Deliberate: no raw Cypher entry point. All writes go through</span>
+        <span class="c1"># the build pipeline after ontology validation (C2 safeguard).</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;Neo4jStore does not expose raw Cypher execution. &quot;</span>
+            <span class="s2">&quot;Use the named query methods on TripleStoreBackend instead.&quot;</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  TripleStoreBackend — read delegators (→ Neo4jReadOps)</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jStore.query_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.query_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">query_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">query_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.count_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.count_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">count_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.table_exists">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.table_exists">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">table_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">table_exists</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_status">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">get_status</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_aggregate_stats">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_aggregate_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_aggregate_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">get_aggregate_stats</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_type_distribution">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_type_distribution">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_type_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">get_type_distribution</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_predicate_distribution">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_predicate_distribution">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_predicate_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">get_predicate_distribution</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.find_subjects_by_type">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.find_subjects_by_type">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_subjects_by_type</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">search</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">find_subjects_by_type</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">,</span> <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.resolve_subject_by_id">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.resolve_subject_by_id">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve_subject_by_id</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">id_fragment</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">resolve_subject_by_id</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">,</span> <span class="n">id_fragment</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_entity_metadata">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_entity_metadata">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_entity_metadata</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">subjects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">get_entity_metadata</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">subjects</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_triples_for_subjects">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_triples_for_subjects">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_triples_for_subjects</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">subjects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">get_triples_for_subjects</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">subjects</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.get_predicates_for_type">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.get_predicates_for_type">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_predicates_for_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">get_predicates_for_type</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.paginated_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.paginated_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">paginated_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">paginated_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">conditions</span><span class="p">,</span> <span class="n">limit</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.paginated_count">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.paginated_count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">paginated_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">paginated_count</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">conditions</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.bfs_traversal">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.bfs_traversal">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bfs_traversal</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">seed_where</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">search</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">bfs_traversal</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="n">seed_where</span><span class="p">,</span> <span class="n">depth</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">,</span> <span class="n">entity_type</span><span class="o">=</span><span class="n">entity_type</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.find_seed_subjects">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.find_seed_subjects">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_seed_subjects</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;any&quot;</span><span class="p">,</span>
+        <span class="n">match_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;contains&quot;</span><span class="p">,</span>
+        <span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">find_seed_subjects</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span>
+            <span class="n">entity_type</span><span class="o">=</span><span class="n">entity_type</span><span class="p">,</span>
+            <span class="n">field</span><span class="o">=</span><span class="n">field</span><span class="p">,</span>
+            <span class="n">match_type</span><span class="o">=</span><span class="n">match_type</span><span class="p">,</span>
+            <span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">limit</span><span class="o">=</span><span class="n">limit</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.find_subjects_by_patterns">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.find_subjects_by_patterns">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_subjects_by_patterns</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">like_patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">find_subjects_by_patterns</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">like_patterns</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.expand_entity_neighbors">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.expand_entity_neighbors">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">expand_entity_neighbors</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entity_uris</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">expand_entity_neighbors</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">entity_uris</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.transitive_closure">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.transitive_closure">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transitive_closure</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">start_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">transitive_closure</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">,</span> <span class="n">start_uri</span><span class="o">=</span><span class="n">start_uri</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="n">max_depth</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.symmetric_expand">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.symmetric_expand">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">symmetric_expand</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">symmetric_expand</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jStore.shortest_path">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jStore.shortest_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">shortest_path</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">target_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reads</span><span class="o">.</span><span class="n">shortest_path</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span> <span class="n">source_uri</span><span class="p">,</span> <span class="n">target_uri</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="n">max_depth</span>
+        <span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

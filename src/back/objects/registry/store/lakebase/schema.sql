@@ -106,41 +106,60 @@ CREATE INDEX IF NOT EXISTS idx_domain_permissions_principal
     ON domain_permissions(lower(principal));
 
 -- ----------------------------------------------------------------
--- Scheduled builds
+-- Recurring scheduled tasks (Knowledge Graph builds, cohort
+-- materialisations, graph analytics, inference/reasoning).
+--
+-- ``task_type`` selects the executor; ``target_key`` narrows the
+-- schedule to a sub-object of the domain when a type needs one (the
+-- cohort rule id — empty string for every other type). ``config``
+-- holds the type-specific options, so a new task type never needs a
+-- new column. ``drop_existing`` is legacy: builds now read it from
+-- ``config``; the column is kept to avoid a destructive migration on
+-- live registries.
 -- ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS schedules (
     id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     registry_id         uuid NOT NULL
                         REFERENCES registries(id) ON DELETE CASCADE,
+    task_type           text NOT NULL DEFAULT 'build',
     domain_name         text NOT NULL,
+    target_key          text NOT NULL DEFAULT '',
     interval_minutes    integer NOT NULL,
     drop_existing       boolean NOT NULL DEFAULT true,
     enabled             boolean NOT NULL DEFAULT true,
     version             text NOT NULL DEFAULT 'latest',
+    config              jsonb NOT NULL DEFAULT '{}'::jsonb,
     last_run            timestamptz,
     last_status         text,
     last_message        text,
+    last_count          bigint NOT NULL DEFAULT 0,
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (registry_id, domain_name)
+    CONSTRAINT schedules_type_domain_target_key
+        UNIQUE (registry_id, task_type, domain_name, target_key)
 );
 
 -- ----------------------------------------------------------------
--- Scheduled-build run history (capped server-side per domain)
+-- Scheduled-task run history (capped server-side per schedule).
+-- ``detail`` carries the per-type counters that do not fit the
+-- generic ``triple_count`` (UC rows written, inferred triples, ...).
 -- ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS schedule_runs (
     id              bigserial PRIMARY KEY,
     registry_id     uuid NOT NULL
                     REFERENCES registries(id) ON DELETE CASCADE,
+    task_type       text NOT NULL DEFAULT 'build',
     domain_name     text NOT NULL,
+    target_key      text NOT NULL DEFAULT '',
     run_ts          timestamptz NOT NULL DEFAULT now(),
     status          text NOT NULL,
     message         text NOT NULL DEFAULT '',
     duration_s      double precision NOT NULL DEFAULT 0,
-    triple_count    bigint NOT NULL DEFAULT 0
+    triple_count    bigint NOT NULL DEFAULT 0,
+    detail          jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
-    ON schedule_runs(registry_id, domain_name, run_ts DESC);
+    ON schedule_runs(registry_id, task_type, domain_name, target_key, run_ts DESC);
 
 -- ----------------------------------------------------------------
 -- Build-run trace (one immutable row per Knowledge Graph build, all
@@ -148,7 +167,8 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
 -- domain row; grain is the tuple (domain_id, version). Many rows per
 -- tuple are expected — the "active" build for a (domain, version) is
 -- the most recent successful row by ``started_at`` (derived, no flag).
--- Powers the registry Build Analytics panel.
+-- Powers the Runs pages (per-domain under Knowledge Graph, cross-domain
+-- under Settings → Automation).
 -- ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS build_runs (
     id                  bigserial PRIMARY KEY,

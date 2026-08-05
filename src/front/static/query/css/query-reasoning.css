@@ -163,3 +163,18 @@
     cursor: pointer;
     color: var(--bs-body-color);
 }
+
+.dq-rule-item .dq-rule-family {
+    flex-shrink: 0;
+    font-size: .6rem;
+    padding: .1rem .3rem;
+}
+
+/* A failed check reports the engine's error, which runs long. Two lines keep
+   the row scannable; the full text is on the cell's tooltip. */
+.dq-col-msg {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

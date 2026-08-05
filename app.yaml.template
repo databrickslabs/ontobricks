@@ -20,14 +20,13 @@
 # lakebase = [...]`) so the Lakebase Postgres backend works in the
 # deployed app even when the `database` resource is not yet bound.
 #
-# `--extra neo4j` installs the official `neo4j` Python driver
-# (Bolt / Cypher) so the Neo4j graph DB engine works when an admin
-# selects it in **Settings → Triple store → Global**. Same rationale
-# as Lakebase: the extra costs ~5MB of unused wheels on
-# Volume/Lakebase-only deployments but Neo4j code paths are guarded
-# by `NEO4J_AVAILABLE` and never reached.
+# There is deliberately no `--extra neo4j`: the Bolt driver is a *core*
+# dependency (see `pyproject.toml`), so the Neo4j engine works when an admin
+# selects it in **Settings → Triple store → Global** without an extra. Passing
+# `--extra neo4j` makes uv abort with "Extra `neo4j` is not defined in the
+# optional-dependencies table", which crashes the app on startup.
 #
-# Both extras together power the runtime backend toggle:
+# Together with the Lakebase extra this powers the runtime backend toggle:
 # the admin can switch Volume / Lakebase / Neo4j without redeploying.
 #
 # Databricks Apps sets DATABRICKS_APP_PORT automatically.
@@ -46,8 +45,6 @@ command:
   - "--no-dev"
   - "--extra"
   - "lakebase"
-  - "--extra"
-  - "neo4j"
   - "python"
   - "run.py"
 
@@ -115,6 +112,56 @@ env:
   # MLflow — ensure traces are persisted to the workspace tracking server.
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
+  # ── Knowledge-graph analytics ─────────────────────────────────
+  # These mirror the defaults in src/shared/config/settings.py. They are
+  # spelled out here so an admin can retune a deployed app without a code
+  # change; edit the value, then re-run `make deploy`.
+  #
+  # In-memory triple cap for community detection (POST /clusters/detect).
+  # Graph analytics does not read this — it always runs in the job.
+  - name: ONTOBRICKS_ANALYTICS_MAX_TRIPLES
+    value: "500000"
+  # Top-ranked nodes per metric returned by the job.
+  # This is what keeps the persisted payload bounded on a graph of any
+  # size; the Analytics page "Top N" selector is capped well below it.
+  - name: ONTOBRICKS_ANALYTICS_TOP_N
+    value: "100"
+  #
+  # The serverless job in resources/graph_analytics.job.yml computes every
+  # graph KPI, and it is the only thing that does, so leaving this off
+  # disables the Analytics page rather than selecting a cheaper calculation.
+  #
+  # This is only the INITIAL value. Admins flip it at runtime in
+  # Settings -> Global ("Compute large-graph metrics on Databricks"), and once
+  # they have, their choice overrides this — including an explicit "off"
+  # against a "true" here. Changing this value does not un-set an admin's
+  # choice.
+  #
+  # Requires: the bundle deployed (so the job exists), and the domain built
+  # at least once. The job reads the mapped-triples snapshot every Build
+  # materialises, so it behaves identically on the Delta engine, on Lakebase
+  # in either mode, and on Neo4j. A missing prerequisite is reported on the
+  # Analytics page by name; nothing falls back to a different calculation.
+  # See docs/user-guide.md (Analytics).
+  - name: ONTOBRICKS_ANALYTICS_JOB_ENABLED
+    value: "false"
+  # Deployed name of that job. Leave empty to derive it from the app name
+  # as "<app>-graph-analytics", matching the bundle. Only set this if you
+  # renamed the job; a bundle deployed in development mode prefixes the
+  # name with "[dev <user>] ", which the lookup already allows for.
+  - name: ONTOBRICKS_ANALYTICS_JOB_NAME
+    value: ""
+  # PageRank power iterations. 20 fixes the top-N ordering; raise it only
+  # if you need converged absolute scores rather than a ranking.
+  - name: ONTOBRICKS_ANALYTICS_JOB_PAGERANK_ITERATIONS
+    value: "20"
+  # Source nodes sampled for the betweenness/closeness estimates. This is
+  # the job's dominant cost — the intermediate search holds one row per
+  # (pivot, reachable node), so raising it scales the largest shuffle
+  # linearly. "0" skips both metrics and makes the job cheaper; a value at
+  # or above the node count makes them exact instead of estimated.
+  - name: ONTOBRICKS_ANALYTICS_JOB_PIVOTS
+    value: "64"
   # ── Neo4j (optional) ──────────────────────────────────────────
   # Password sourced from a Databricks Apps secret resource (see
   # `resources:` below). The `neo4j-password` resource is unbound by

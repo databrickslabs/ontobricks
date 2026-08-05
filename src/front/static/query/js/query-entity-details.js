@@ -463,10 +463,11 @@ async function showEntityDetails(entity) {
             if (!fullName) return '';
             const label = action.function || fullName;
             const title = action.description || `Run ${fullName}`;
+            const description = action.description || '';
             return `
                 <div class="entity-detail-item">
                     <button type="button"
-                            onclick="openEntityActionModal('${escapeHtml(entity.id)}', '${escapeHtml(fullName)}', '${escapeHtml(label)}')"
+                            onclick="openEntityActionModal('${escapeHtml(entity.id)}', '${escapeHtml(fullName)}', '${escapeHtml(label)}', '${escapeHtml(description)}')"
                             class="btn btn-sm btn-outline-primary w-100"
                             title="${escapeHtml(title)}">
                         <i class="bi bi-lightning-charge me-1"></i>${escapeHtml(label)}
@@ -503,7 +504,7 @@ async function showEntityDetails(entity) {
                     <a href="${escapeHtml(resolveUrl)}" onclick="${onClickSpinner}" class="btn btn-sm btn-outline-primary w-100 text-start" title="${tooltip}">
                         <i class="bi bi-signpost-2 me-1"></i>
                         <span class="fw-semibold">${escapeHtml(bridge.target_class_name || '')}</span>
-                        <small class="text-muted ms-1"><i class="bi bi-folder2-open ms-1 me-1"></i>${escapeHtml(tgtDom)}</small>
+                        <small class="text-muted ms-1"><i class="bi bi-box ms-1 me-1"></i>${escapeHtml(tgtDom)}</small>
                         <i class="bi bi-box-arrow-up-right ms-auto float-end mt-1"></i>
                     </a>
                 </div>

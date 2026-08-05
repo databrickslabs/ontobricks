@@ -13,6 +13,7 @@ from rdflib.namespace import RDF, RDFS, XSD
 
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
+from back.core.w3c.shacl import ShapeConditions
 from back.core.w3c.shacl.constants import DATATYPE_MAP, SEVERITY_MAP, SH
 
 logger = get_logger(__name__)
@@ -55,6 +56,8 @@ class SHACLGenerator:
 
         by_class = defaultdict(list)
         for s in enabled:
+            if self._add_conditional_shape(g, s):
+                continue
             by_class[s.get("target_class_uri", "")].append(s)
 
         for cls_uri, cls_shapes in by_class.items():
@@ -73,6 +76,40 @@ class SHACLGenerator:
                 self._add_property_shape(g, node_shape_uri, s)
 
         return g.serialize(format="turtle")
+
+    def _add_conditional_shape(self, g: Graph, shape: Dict) -> bool:
+        """Emit a guarded shape as its own node shape with a SPARQL target.
+
+        A conditional shape cannot join the shared per-class node shape: its
+        focus nodes are the subset matching the conditions, not every instance
+        of the class.  Returns ``False`` when *shape* carries no usable
+        conditions, leaving it to the normal grouping.
+        """
+        cls_uri = shape.get("target_class_uri", "")
+        conditions = ShapeConditions.get_conditions(shape)
+        if not cls_uri or not conditions:
+            return False
+
+        query = ShapeConditions.sparql_target(
+            conditions, ShapeConditions.get_logic(shape), cls_uri
+        )
+        if not query:
+            return False
+
+        node = URIRef(str(self._ns) + shape.get("id", "ConditionalShape"))
+        g.add((node, RDF.type, SH.NodeShape))
+
+        target = BNode()
+        g.add((node, SH.target, target))
+        g.add((target, RDF.type, SH.SPARQLTarget))
+        g.add((target, SH.select, Literal(query)))
+
+        label = shape.get("label", "")
+        if label:
+            g.add((node, RDFS.label, Literal(label)))
+
+        self._add_property_shape(g, node, shape)
+        return True
 
     def _node_shape_uri(self, cls_uri: str) -> URIRef:
         local = uri_local_name(cls_uri)

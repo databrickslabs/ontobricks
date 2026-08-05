@@ -20,7 +20,7 @@ For every refactor request, follow the 5 steps from `.cursor/08`:
 4. Apply in **small, reviewable chunks** — one route, one method, one file at a time.
 5. After each chunk: name the refactorings applied, explain the structural improvement, list remaining smells.
 
-Run `uv run pytest -q` between chunks for non-trivial sequences. Behavior
+Run `uv run --frozen pytest -q` between chunks for non-trivial sequences. Behavior
 must stay identical — see `src/.coding_rules.md §1.1`.
 
 ## Smell → refactoring quick lookup

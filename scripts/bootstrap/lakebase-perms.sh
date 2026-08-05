@@ -65,8 +65,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+# _lakebase-diag.sh lives in scripts/_internal/ (moved there by the scripts/
+# reorg, commit 2c6ef76); this script is in scripts/bootstrap/, so reference
+# the sibling _internal dir rather than SCRIPT_DIR itself.
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/_lakebase-diag.sh"
+source "${SCRIPT_DIR}/../_internal/_lakebase-diag.sh"
 
 INSTANCE="${INSTANCE:-ontobricks-app}"
 BRANCH="${BRANCH:-${LAKEBASE_BRANCH:-production}}"

@@ -380,6 +380,7 @@ async function parseAndLoadOwl(content, filename) {
                     dashboardParams: cls.dashboardParams || {},
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
+                    actions: cls.actions || [],
                     dataProperties: merged
                 };
             });
@@ -481,7 +482,7 @@ function showOwlImportReport(filename, onto, details) {
         orphanHtml = `
             <div class="alert alert-warning mt-3">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>${details.orphanAttributes.length} attribute(s) without domain class:</strong>
+                <strong>${details.orphanAttributes.length} attribute(s) without domain entity:</strong>
                 <ul class="mb-0 mt-2">
                     ${details.orphanAttributes.map(a => `<li>${a.name} (range: ${a.range || 'unspecified'})</li>`).join('')}
                 </ul>
@@ -752,6 +753,11 @@ async function parseAndLoadRdfs(content, filename) {
                     description: cls.description || cls.comment || '',
                     parent: cls.parent || '',
                     emoji: cls.emoji || OntologyState.defaultClassEmoji,
+                    dashboard: cls.dashboard || '',
+                    dashboardParams: cls.dashboardParams || {},
+                    bridges: cls.bridges || [],
+                    dataset: cls.dataset || null,
+                    actions: cls.actions || [],
                     dataProperties: merged
                 };
             });
@@ -853,7 +859,7 @@ function showRdfsImportReport(filename, onto, details) {
         orphanHtml = `
             <div class="alert alert-warning mt-3">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                <strong>${details.orphanAttributes.length} attribute(s) without domain class:</strong>
+                <strong>${details.orphanAttributes.length} attribute(s) without domain entity:</strong>
                 <ul class="mb-0 mt-2">
                     ${details.orphanAttributes.map(a => `<li>${a.name} (range: ${a.range || 'unspecified'})</li>`).join('')}
                 </ul>

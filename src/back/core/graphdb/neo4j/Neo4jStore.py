@@ -1,11 +1,23 @@
 """Neo4j graph database backend — thin façade over three composed services.
 
-Bolt-based (Cypher) flat-triple store. Triples are persisted as
-``(:<sanitised_table_name> {subject, predicate, object})`` nodes — a
-deliberately simple schema chosen so PR 1 demonstrates the Cypher
-integration shape without committing to a typed-node graph model (which
-lands in v2 / PR 3+). One label per logical store so Neo4j 5+ ``CREATE
-CONSTRAINT`` (which only accepts single-label patterns) works.
+Bolt-based (Cypher) **typed property-graph** store (Strategy A, confirmed with
+Benoit 2026-07-28). Each subject/object URI becomes a node MERGE-keyed on its
+full URI, ``rdf:type`` becomes a Neo4j label, ``rdfs:label`` becomes the
+``name`` property, literal-object predicates become node properties, and
+URI-object predicates become real relationships ``(s)-[:reltype]->(o)``. Every
+node also carries a per-graph **marker label** (the sanitised table name) so a
+whole domain graph is one ``MATCH (n:<marker>)`` away for counting, dropping,
+and isolation — Neo4j 5+ ``CREATE CONSTRAINT`` enforces ``uri`` uniqueness on
+that marker.
+
+**Contract preservation:** reads still return the flat
+``{subject, predicate, object}`` shapes the SQL backends return — triples are
+*reconstructed* from the graph using reverse maps persisted by
+:class:`Neo4jSchemaMap` (label→class URI, reltype→predicate URI,
+prop-key→predicate URI). So the KG view / GraphQL / reasoning layers see no
+behavioural change, while traversal/reasoning now run as native relationship
+patterns. The forward transform lives in the driver-free
+:mod:`Neo4jGraphModel`.
 
 Implementation is split across three services (extracted during the PR
 #47 review — Benoit 2026-06-18 "la classe est trop grosse"):
@@ -15,13 +27,16 @@ Implementation is split across three services (extracted during the PR
   hard refusal in the deployed app without a secret resource), and the
   single :meth:`Neo4jConnection.run` execution path that emits one INFO
   log line per Cypher statement.
-- :class:`Neo4jWriteOps` — schema (constraint create/drop), bulk writes
-  (``UNWIND`` + ``MERGE`` / ``DETACH DELETE``), cohort wipes.
+- :class:`Neo4jWriteOps` — schema (constraint create/drop), typed bulk writes
+  (``UNWIND`` + ``MERGE`` nodes/labels/props then batched relationship MERGE),
+  deletes, cohort wipes, and reverse-schema-map persistence.
 - :class:`Neo4jReadOps` — the 16+ named-query methods of the
-  ``TripleStoreBackend`` contract: statistics, entity lookup, pagination,
-  KG-filter primitives (``find_seed_subjects`` / ``bfs_traversal`` /
-  ``expand_entity_neighbors``), and reasoning helpers (``transitive_closure``,
-  ``symmetric_expand``, ``shortest_path``).
+  ``TripleStoreBackend`` contract: SPO reconstruction, statistics, entity
+  lookup, pagination, KG-filter primitives (``find_seed_subjects`` /
+  ``bfs_traversal`` / ``expand_entity_neighbors``), reasoning helpers
+  (``transitive_closure``, ``symmetric_expand``, ``shortest_path``), and the
+  admin inventory used by the Settings → Neo4j tabs (``list_labels`` /
+  ``list_databases``).
 
 ``execute_query`` deliberately raises ``NotImplementedError`` — no raw
 Cypher entry point. All writes go through ``insert_triples`` after
@@ -66,7 +81,7 @@ __all__ = [
 
 
 class Neo4jStore(GraphDBBackend):
-    """Neo4j (Bolt / Cypher) graph database backend — flat triple model.
+    """Neo4j (Bolt / Cypher) graph database backend — typed property-graph model.
 
     Public façade composing :class:`Neo4jConnection`, :class:`Neo4jWriteOps`,
     and :class:`Neo4jReadOps`. Implements both the ``TripleStoreBackend``
@@ -75,9 +90,9 @@ class Neo4jStore(GraphDBBackend):
     Parameters
     ----------
     db_name:
-        Logical name for the triple set, used as the ``table`` label in the
-        Cypher schema (every triple node carries the single label
-        ``:<sanitised_db_name>``).
+        Logical name for the graph, used as the per-graph **marker label**
+        (every node of this graph carries ``:<sanitised_db_name>``) so the
+        whole domain graph is one ``MATCH`` away for counting/dropping.
     engine_config:
         JSON dict from Settings > Graph DB > Engine Configuration. Keys:
 
@@ -157,9 +172,11 @@ class Neo4jStore(GraphDBBackend):
 
     @property
     def supports_graph_model(self) -> bool:
-        # PR 1: flat-triple model (single :Triple node label).
-        # Typed-node graph model is a future PR.
-        return False
+        # Typed property-graph model: nodes keyed on full URI (Strategy A),
+        # rdf:type → labels, rdfs:label → name, literal predicates → node
+        # properties, URI-object predicates → real relationships. Reads
+        # reconstruct SPO from the graph (Neo4jReadOps + Neo4jSchemaMap).
+        return True
 
     @property
     def query_dialect(self) -> str:

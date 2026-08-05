@@ -286,8 +286,24 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
   separator, and the Domain link (`#domainL1Link`).
 - `#domainL1Link` is disabled (`.ob-nav-disabled`, `pointer-events: none`)
   when no domain is loaded. Do not enable it from page code.
-- Other menus (Digital Twin) may be hidden via `"navbar_hidden": true`
-  in `menu_config.json`.
+- Other menus (Knowledge Graph / digitaltwin) may be hidden via
+  `"navbar_hidden": true` in `menu_config.json`.
+
+**Top-level menu icons** (source of truth: `menu_config.json`; keep
+`breadcrumb.js` `_ROUTE_MAP` in sync):
+
+| Menu | `id` | Icon |
+|------|------|------|
+| Registry | `registry` | `bi-boxes` |
+| Domain | `domain` | `bi-box` |
+| Ontology | `ontology` | `bi-bezier2` |
+| Mapping | `assignment` | `bi-shuffle` |
+| Knowledge Graph | `digitaltwin` | `bi-radar` |
+| Settings | `settings` | `bi-gear` |
+
+Do not reuse Domain's `bi-box` for Knowledge Graph (or any other
+top-level menu). `tests/units/front/test_knowledge_graph_icon.py`
+asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 
 #### L2 Subnav (`#obSubnav`)
 

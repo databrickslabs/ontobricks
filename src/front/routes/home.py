@@ -1,16 +1,11 @@
 """Frontend HTML routes -- Home, About, Settings page, Access Denied."""
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from front.fastapi.dependencies import templates
 from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
-from back.core.logging import get_logger
-from back.objects.session import SessionManager, get_session_manager
 from shared.config.constants import APP_VERSION
-from shared.config.settings import Settings, get_settings
-
-logger = get_logger(__name__)
 
 router = APIRouter(tags=["Home"])
 
@@ -30,11 +25,7 @@ async def about_page(request: Request):
 
 
 @router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
-async def settings_page(
-    request: Request,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
+async def settings_page(request: Request):
     """Settings page.
 
     The graph backend *selection* now lives per-domain (Domain Information ->

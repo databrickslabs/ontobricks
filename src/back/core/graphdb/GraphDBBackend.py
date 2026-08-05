@@ -183,6 +183,372 @@ class GraphDBBackend(ABC):
         )
         return self.execute_query(sql) or []
 
+    # ------------------------------------------------------------------
+    # Graph-analytics aggregations.
+    #
+    # These compute the non-iterative half of the KG analytics page
+    # (structure counts, degree, per-type profiles) inside the engine, so
+    # they work on graphs far too large to load into memory.  The
+    # entity-entity edge definition is supplied by the caller through
+    # *excluded_predicates* — the exclusion policy belongs to the analytics
+    # layer, not to storage.
+    #
+    # Self-loops are excluded.  NetworkX counts a self-loop as degree 2, so
+    # results can differ from the in-memory path on graphs that contain
+    # self-referencing triples.
+    # ------------------------------------------------------------------
+
+    def _analytics_edge_cte(
+        self,
+        table_name: str,
+        excluded_predicates: List[str],
+        class_filter: Optional[List[str]] = None,
+    ) -> str:
+        """Return the leading ``WITH`` clause defining the analytics edge set.
+
+        Defines ``edges(src, dst)`` as the deduplicated, canonically ordered
+        set of entity-entity edges, and — when *class_filter* is given —
+        ``allowed(n)``, the instances of the selected classes.
+        """
+        rel = self._sql_relation(table_name)
+        excluded = ", ".join(
+            f"'{self._sql_escape(p)}'" for p in excluded_predicates
+        ) or "''"
+
+        parts: List[str] = []
+        edge_conditions = [
+            "t.subject <> ''",
+            "t.object <> ''",
+            "t.subject <> t.object",
+            "(t.object LIKE 'http://%' OR t.object LIKE 'https://%')",
+            f"t.predicate NOT IN ({excluded})",
+        ]
+
+        if class_filter:
+            classes = ", ".join(
+                f"'{self._sql_escape(c)}'" for c in class_filter
+            )
+            parts.append(
+                f"allowed AS (\n"
+                f"  SELECT DISTINCT subject AS n FROM {rel}\n"
+                f"  WHERE predicate = '{RDF_TYPE}' AND object IN ({classes})\n"
+                f")"
+            )
+            edge_conditions.append(
+                "(t.subject IN (SELECT n FROM allowed) "
+                "OR t.object IN (SELECT n FROM allowed))"
+            )
+
+        where_sql = "\n    AND ".join(edge_conditions)
+        parts.append(
+            f"edges AS (\n"
+            f"  SELECT DISTINCT\n"
+            f"    LEAST(t.subject, t.object) AS src,\n"
+            f"    GREATEST(t.subject, t.object) AS dst\n"
+            f"  FROM {rel} t\n"
+            f"  WHERE {where_sql}\n"
+            f")"
+        )
+        return "WITH " + ",\n".join(parts)
+
+    @staticmethod
+    def _degree_cte() -> str:
+        """Return the ``deg(n, d)`` CTE body computing raw degree per node."""
+        return (
+            "deg AS (\n"
+            "  SELECT n, COUNT(*) AS d FROM (\n"
+            "    SELECT src AS n FROM edges\n"
+            "    UNION ALL\n"
+            "    SELECT dst AS n FROM edges\n"
+            "  ) x GROUP BY n\n"
+            ")"
+        )
+
+    def get_graph_structure_stats(
+        self,
+        table_name: str,
+        *,
+        excluded_predicates: List[str],
+        class_filter: Optional[List[str]] = None,
+    ) -> Dict[str, int]:
+        """Return ``edge_count``, ``graph_node_count`` and ``node_count``.
+
+        ``graph_node_count`` counts nodes with at least one entity-entity
+        edge.  ``node_count`` is the number of nodes the analysis reports:
+        the same value unfiltered, or the full instance count of the
+        selected classes (isolated instances included) when *class_filter*
+        is given.
+        """
+        cte = self._analytics_edge_cte(
+            table_name, excluded_predicates, class_filter
+        )
+        selects = ["e.edge_count", "n.graph_node_count"]
+        froms = [
+            "(SELECT COUNT(*) AS edge_count FROM edges) e",
+            "(SELECT COUNT(*) AS graph_node_count FROM gnodes) n",
+        ]
+        if class_filter:
+            selects.append("a.filtered_node_count")
+            froms.append(
+                "(SELECT COUNT(*) AS filtered_node_count FROM allowed) a"
+            )
+
+        sql = (
+            f"{cte},\n"
+            f"gnodes AS (\n"
+            f"  SELECT src AS n FROM edges UNION SELECT dst AS n FROM edges\n"
+            f")\n"
+            f"SELECT {', '.join(selects)}\n"
+            f"FROM {' CROSS JOIN '.join(froms)}"
+        )
+        rows = self.execute_query(sql)
+        row = rows[0] if rows else {}
+        graph_node_count = int(row.get("graph_node_count", 0) or 0)
+        node_count = (
+            int(row.get("filtered_node_count", 0) or 0)
+            if class_filter
+            else graph_node_count
+        )
+        return {
+            "edge_count": int(row.get("edge_count", 0) or 0),
+            "graph_node_count": graph_node_count,
+            "node_count": node_count,
+        }
+
+    def get_top_nodes_by_degree(
+        self,
+        table_name: str,
+        *,
+        excluded_predicates: List[str],
+        class_filter: Optional[List[str]] = None,
+        top_n: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """Return the *top_n* highest-degree nodes with label and type.
+
+        The label/type join is applied **after** the ``LIMIT`` so it only
+        touches the returned rows.
+        """
+        cte = self._analytics_edge_cte(
+            table_name, excluded_predicates, class_filter
+        )
+        rel = self._sql_relation(table_name)
+        scope = (
+            " WHERE n IN (SELECT n FROM allowed)" if class_filter else ""
+        )
+        sql = (
+            f"{cte},\n"
+            f"{self._degree_cte()},\n"
+            f"top AS (\n"
+            f"  SELECT n, d FROM deg{scope} ORDER BY d DESC, n LIMIT {int(top_n)}\n"
+            f")\n"
+            f"SELECT top.n AS node_uri, top.d AS degree,\n"
+            f"       MIN(lab.object) AS label, MIN(typ.object) AS type_uri\n"
+            f"FROM top\n"
+            f"LEFT JOIN {rel} lab\n"
+            f"  ON lab.subject = top.n AND lab.predicate = '{RDFS_LABEL}'\n"
+            f"LEFT JOIN {rel} typ\n"
+            f"  ON typ.subject = top.n AND typ.predicate = '{RDF_TYPE}'\n"
+            f"GROUP BY top.n, top.d\n"
+            f"ORDER BY top.d DESC, top.n"
+        )
+        return self.execute_query(sql) or []
+
+    def get_type_edge_stats(
+        self,
+        table_name: str,
+        *,
+        excluded_predicates: List[str],
+        class_filter: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return per-class ``connected_count`` and ``degree_sum``.
+
+        ``connected_count`` is the number of instances of the class that
+        have at least one entity-entity edge; ``degree_sum`` is the total of
+        their raw degrees.  The caller turns these into a mean degree
+        centrality by dividing by ``graph_node_count - 1``.
+        """
+        cte = self._analytics_edge_cte(
+            table_name, excluded_predicates, class_filter
+        )
+        rel = self._sql_relation(table_name)
+        sql = (
+            f"{cte},\n"
+            f"{self._degree_cte()}\n"
+            f"SELECT ty.object AS type_uri,\n"
+            f"       COUNT(*) AS connected_count,\n"
+            f"       SUM(deg.d) AS degree_sum\n"
+            f"FROM deg\n"
+            f"JOIN {rel} ty\n"
+            f"  ON ty.subject = deg.n AND ty.predicate = '{RDF_TYPE}'\n"
+            f"GROUP BY ty.object"
+        )
+        return self.execute_query(sql) or []
+
+    def get_type_predicate_pairs(
+        self,
+        table_name: str,
+        *,
+        excluded_predicates: List[str],
+        class_filter: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return the distinct ``(type_uri, predicate)`` pairs used by nodes.
+
+        A predicate counts for a node whether the node is the subject or the
+        (URI-valued) object, mirroring the in-memory profile builder.  Rows
+        are aggregated in Python so no engine-specific array function is
+        needed.
+        """
+        cte = self._analytics_edge_cte(
+            table_name, excluded_predicates, class_filter
+        )
+        rel = self._sql_relation(table_name)
+        excluded = ", ".join(
+            f"'{self._sql_escape(p)}'" for p in excluded_predicates
+        ) or "''"
+        sql = (
+            f"{cte},\n"
+            f"gnodes AS (\n"
+            f"  SELECT src AS n FROM edges UNION SELECT dst AS n FROM edges\n"
+            f")\n"
+            f"SELECT DISTINCT ty.object AS type_uri, t.predicate AS predicate\n"
+            f"FROM {rel} t\n"
+            f"JOIN gnodes g ON g.n = t.subject\n"
+            f"JOIN {rel} ty\n"
+            f"  ON ty.subject = t.subject AND ty.predicate = '{RDF_TYPE}'\n"
+            f"WHERE t.predicate NOT IN ({excluded})\n"
+            f"UNION\n"
+            f"SELECT DISTINCT ty.object AS type_uri, t.predicate AS predicate\n"
+            f"FROM {rel} t\n"
+            f"JOIN gnodes g ON g.n = t.object\n"
+            f"JOIN {rel} ty\n"
+            f"  ON ty.subject = t.object AND ty.predicate = '{RDF_TYPE}'\n"
+            f"WHERE t.predicate NOT IN ({excluded})\n"
+            f"  AND (t.object LIKE 'http://%' OR t.object LIKE 'https://%')"
+        )
+        return self.execute_query(sql) or []
+
+    def query_triples_for_analysis(
+        self,
+        table_name: str,
+        *,
+        class_filter: Optional[List[str]] = None,
+        predicate_filter: Optional[List[str]] = None,
+    ) -> List[Dict[str, str]]:
+        """Return only the triples a filtered graph analysis actually needs.
+
+        Without filters this is exactly :meth:`query_triples`.  With a
+        *class_filter* the returned set is scoped to the instances of those
+        classes **plus their direct neighbours** — every triple whose subject
+        is in that scope.  That is enough to rebuild the same NetworkX graph
+        the unfiltered path would build and then restrict: edges among the
+        scope, and the ``rdf:type`` / ``rdfs:label`` triples of both the
+        selected instances and their neighbours.
+
+        This is what makes a filtered analysis viable on a large graph: the
+        volume read scales with the selected subgraph rather than the whole
+        store.
+
+        ``rdf:type`` and ``rdfs:label`` are always retained regardless of
+        *predicate_filter*, because the analysis needs them to resolve node
+        types and display labels even though they never become graph edges.
+        """
+        if not class_filter and not predicate_filter:
+            return self.query_triples(table_name)
+
+        if self.query_dialect != "sql":
+            # Non-SQL engines (Cypher, ...) have no default pushdown; fall
+            # back to loading everything and filtering in Python so the
+            # behaviour stays identical, just not cheaper.
+            return self._filter_analysis_triples_in_python(
+                self.query_triples(table_name),
+                class_filter=class_filter,
+                predicate_filter=predicate_filter,
+            )
+
+        rel = self._sql_relation(table_name)
+        keep = ", ".join(f"'{p}'" for p in (RDF_TYPE, RDFS_LABEL))
+        prefix = ""
+        conditions: List[str] = []
+
+        if class_filter:
+            classes = ", ".join(f"'{self._sql_escape(c)}'" for c in class_filter)
+            prefix = (
+                f"WITH allowed AS (\n"
+                f"  SELECT DISTINCT subject AS n FROM {rel}\n"
+                f"  WHERE predicate = '{RDF_TYPE}' AND object IN ({classes})\n"
+                f"), scope AS (\n"
+                f"  SELECT n FROM allowed\n"
+                f"  UNION\n"
+                f"  SELECT e.object AS n FROM {rel} e\n"
+                f"  WHERE e.subject IN (SELECT n FROM allowed)\n"
+                f"    AND (e.object LIKE 'http://%' OR e.object LIKE 'https://%')\n"
+                f"  UNION\n"
+                f"  SELECT e.subject AS n FROM {rel} e\n"
+                f"  WHERE e.object IN (SELECT n FROM allowed)\n"
+                f")\n"
+            )
+            conditions.append("t.subject IN (SELECT n FROM scope)")
+
+        if predicate_filter:
+            excluded = ", ".join(
+                f"'{self._sql_escape(p)}'" for p in predicate_filter
+            )
+            conditions.append(
+                f"(t.predicate NOT IN ({excluded}) OR t.predicate IN ({keep}))"
+            )
+
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+        sql = (
+            f"{prefix}"
+            f"SELECT t.subject, t.predicate, t.object FROM {rel} t{where}"
+        )
+        return self.execute_query(sql) or []
+
+    @staticmethod
+    def _filter_analysis_triples_in_python(
+        triples: List[Dict[str, str]],
+        *,
+        class_filter: Optional[List[str]] = None,
+        predicate_filter: Optional[List[str]] = None,
+    ) -> List[Dict[str, str]]:
+        """In-Python equivalent of the :meth:`query_triples_for_analysis` SQL.
+
+        Used by non-SQL backends so they return the same triple set, and by
+        the tests as the oracle the generated SQL is checked against.
+        """
+        keep = {RDF_TYPE, RDFS_LABEL}
+        out = triples
+
+        if class_filter:
+            wanted = set(class_filter)
+            allowed = {
+                t["subject"]
+                for t in out
+                if t.get("predicate") == RDF_TYPE and t.get("object") in wanted
+            }
+            scope = set(allowed)
+            for t in out:
+                subj = t.get("subject", "")
+                obj = t.get("object", "")
+                if subj in allowed and (
+                    obj.startswith("http://") or obj.startswith("https://")
+                ):
+                    scope.add(obj)
+                if obj in allowed:
+                    scope.add(subj)
+            out = [t for t in out if t.get("subject", "") in scope]
+
+        if predicate_filter:
+            excluded = set(predicate_filter)
+            out = [
+                t
+                for t in out
+                if t.get("predicate", "") not in excluded
+                or t.get("predicate", "") in keep
+            ]
+
+        return out
+
     def get_predicate_distribution(self, table_name: str) -> List[Dict[str, Any]]:
         """Return count per predicate URI, ordered descending."""
         sql = (

@@ -274,7 +274,11 @@ def _format_node_context_response(data: dict) -> str:
 def _format_node_action_response(data: dict) -> str:
     """Format the /nodes/action JSON response as LLM-friendly text."""
     if not data.get("success"):
-        return data.get("message", "Could not invoke the action.")
+        return (
+            data.get("message")
+            or (data.get("error") if isinstance(data.get("error"), str) else None)
+            or "Could not invoke the action."
+        )
 
     local_id = data.get("entity_local_id", "")
     lines: list[str] = [
@@ -1455,8 +1459,19 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         body.update(_registry_params())
         body["domain_name"] = _selected_domain["name"]
 
-        async with _client() as client:
-            data = await _post(client, API_V1_DT_NODE_ACTION, json=body)
+        try:
+            async with _client() as client:
+                data = await _post(client, API_V1_DT_NODE_ACTION, json=body)
+        except httpx.HTTPStatusError as exc:
+            try:
+                err_body = exc.response.json()
+            except Exception:
+                err_body = {}
+            return (
+                err_body.get("message")
+                or err_body.get("error")
+                or f"Could not invoke the action (HTTP {exc.response.status_code})."
+            )
 
         return _format_node_action_response(data)
 

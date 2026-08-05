@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.graphdb.lakebase._companion_ddl &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.graphdb.lakebase._companion_ddl</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;DDL helpers for the synced table, writable companion table, and union view.</span>
+
+<span class="sd">Both ``managed_synced`` and ``app_managed`` modes use the same three-object</span>
+<span class="sd">Postgres layout per graph version:</span>
+
+<span class="sd">- ``g_&lt;dom&gt;_v&lt;n&gt;_sync`` -- bulk-data table.</span>
+<span class="sd">  In ``managed_synced`` it is read-only, populated by Lakeflow.</span>
+<span class="sd">  In ``app_managed`` it is populated by the app during build (streaming from</span>
+<span class="sd">  the Delta warehouse view) and is otherwise read-only post-build.</span>
+<span class="sd">- ``g_&lt;dom&gt;_v&lt;n&gt;__app``  -- writable companion (reasoning + cohort writes).</span>
+<span class="sd">- ``g_&lt;dom&gt;_v&lt;n&gt;``       -- union view that readers query (back-compat name).</span>
+
+<span class="sd">The synced table mirrors the source Delta view&#39;s columns</span>
+<span class="sd">(``subject``, ``predicate``, ``object``); the companion carries the full</span>
+<span class="sd">``(subject, predicate, object, datatype, lang)`` shape used by reasoning</span>
+<span class="sd">output. The union view casts NULL ``datatype`` / ``lang`` for the synced</span>
+<span class="sd">side so SPARQL / KG-search readers see a uniform schema.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">safe_identifier</span><span class="p">,</span> <span class="n">sql_cast</span>
+
+<span class="c1"># Lakeflow synced-table PK (object_hash comes from the Delta warehouse view).</span>
+<span class="n">LAKEFLOW_SYNC_PRIMARY_KEY</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">&quot;subject&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;predicate&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;object_hash&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">_TRIPLE_TABLE_COLUMNS</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">            subject TEXT NOT NULL,</span>
+<span class="s2">            predicate TEXT NOT NULL,</span>
+<span class="s2">            object TEXT NOT NULL,</span>
+<span class="s2">            object_hash BYTEA GENERATED ALWAYS AS (</span>
+<span class="s2">                digest(coalesce(object, &#39;&#39;), &#39;sha256&#39;)</span>
+<span class="s2">            ) STORED,</span>
+<span class="s2">            datatype TEXT,</span>
+<span class="s2">            lang TEXT,</span>
+<span class="s2">            PRIMARY KEY (subject, predicate, object_hash)</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+<span class="n">_TRIPLE_TABLE_INDEXES</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="p">(</span><span class="s2">&quot;sp&quot;</span><span class="p">,</span> <span class="s2">&quot;subject, predicate&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;po&quot;</span><span class="p">,</span> <span class="s2">&quot;predicate, object_hash&quot;</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">&quot;oph&quot;</span><span class="p">,</span> <span class="s2">&quot;object_hash, predicate&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">safe_identifier</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;triples&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="synced_phy">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.synced_phy">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">synced_phy</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Postgres table name for the read-only synced table.</span>
+
+<span class="sd">    Uses a ``_sync`` suffix (not ``__sync``) so it does not collide with the union</span>
+<span class="sd">    view identifier (:func:`view_phy`, the legacy reader-facing name).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_safe</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="si">}</span><span class="s2">_sync&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="companion_phy">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.companion_phy">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">companion_phy</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Postgres table name for the writable companion table.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_safe</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="si">}</span><span class="s2">__app&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="view_phy">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.view_phy">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">view_phy</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Postgres view name readers see (matches the legacy single-table name).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">_safe</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_idx_name</span><span class="p">(</span><span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">suffix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;g_</span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">base</span><span class="p">[:</span><span class="mi">63</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="ensure_pgcrypto">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.ensure_pgcrypto">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ensure_pgcrypto</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Enable ``digest()`` for generated ``object_hash`` columns.&quot;&quot;&quot;</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE EXTENSION IF NOT EXISTS pgcrypto&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="wrap_triple_view_sql_for_lakeflow">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.wrap_triple_view_sql_for_lakeflow">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">wrap_triple_view_sql_for_lakeflow</span><span class="p">(</span><span class="n">spark_sql</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrap translated Spark SQL so the view exposes ``object_hash`` for Lakeflow.&quot;&quot;&quot;</span>
+    <span class="n">inner</span> <span class="o">=</span> <span class="n">spark_sql</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;;&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="s2">&quot;SELECT subject, predicate, object, &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;sha2(</span><span class="si">{</span><span class="n">sql_cast</span><span class="p">(</span><span class="s1">&#39;object&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;STRING&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">, 256) AS object_hash &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;FROM (</span><span class="si">{</span><span class="n">inner</span><span class="si">}</span><span class="s2">) AS _ob_triples&quot;</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_table_bare_name</span><span class="p">(</span><span class="n">table_ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">table_ref</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_table_exists</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">bare_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        SELECT 1</span>
+<span class="sd">        FROM pg_class c</span>
+<span class="sd">        JOIN pg_namespace n ON n.oid = c.relnamespace</span>
+<span class="sd">        WHERE c.relname = %s</span>
+<span class="sd">          AND n.nspname = ANY(current_schemas(false))</span>
+<span class="sd">          AND c.relkind = &#39;r&#39;</span>
+<span class="sd">        LIMIT 1</span>
+<span class="sd">        &quot;&quot;&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">bare_name</span><span class="p">,),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_has_object_hash_column</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">bare_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        SELECT 1</span>
+<span class="sd">        FROM information_schema.columns</span>
+<span class="sd">        WHERE table_schema = ANY(current_schemas(false))</span>
+<span class="sd">          AND table_name = %s</span>
+<span class="sd">          AND column_name = &#39;object_hash&#39;</span>
+<span class="sd">        LIMIT 1</span>
+<span class="sd">        &quot;&quot;&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">bare_name</span><span class="p">,),</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="upgrade_legacy_triple_table_to_object_hash">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.upgrade_legacy_triple_table_to_object_hash">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">upgrade_legacy_triple_table_to_object_hash</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">table_ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Migrate pre-0.6.2 triple tables that still key on full ``object`` text.</span>
+
+<span class="sd">    ``CREATE TABLE IF NOT EXISTS`` leaves legacy companions in place; without</span>
+<span class="sd">    this step ``ensure_graph_indexes`` fails with ``column &quot;object_hash&quot; does</span>
+<span class="sd">    not exist`` when (re)building managed_synced graphs.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">bare</span> <span class="o">=</span> <span class="n">_table_bare_name</span><span class="p">(</span><span class="n">table_ref</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_table_exists</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">bare</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_has_object_hash_column</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">bare</span><span class="p">):</span>
+        <span class="k">return</span>
+
+    <span class="n">ensure_pgcrypto</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">sfx</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">_TRIPLE_TABLE_INDEXES</span><span class="p">:</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DROP INDEX IF EXISTS </span><span class="si">{</span><span class="n">_idx_name</span><span class="p">(</span><span class="n">bare</span><span class="p">,</span><span class="w"> </span><span class="n">sfx</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;ALTER TABLE </span><span class="si">{</span><span class="n">table_ref</span><span class="si">}</span><span class="s2"> &quot;</span>
+        <span class="s2">&quot;ADD COLUMN IF NOT EXISTS object_hash BYTEA GENERATED ALWAYS AS &quot;</span>
+        <span class="s2">&quot;(digest(coalesce(object, &#39;&#39;), &#39;sha256&#39;)) STORED&quot;</span>
+    <span class="p">)</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ALTER TABLE </span><span class="si">{</span><span class="n">table_ref</span><span class="si">}</span><span class="s2"> ADD COLUMN IF NOT EXISTS datatype TEXT&quot;</span><span class="p">)</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ALTER TABLE </span><span class="si">{</span><span class="n">table_ref</span><span class="si">}</span><span class="s2"> ADD COLUMN IF NOT EXISTS lang TEXT&quot;</span><span class="p">)</span>
+
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        DO $$ DECLARE pk_name text;</span>
+<span class="s2">        BEGIN</span>
+<span class="s2">          SELECT c.conname INTO pk_name</span>
+<span class="s2">          FROM pg_constraint c</span>
+<span class="s2">          JOIN pg_class t ON t.oid = c.conrelid</span>
+<span class="s2">          JOIN pg_namespace n ON n.oid = t.relnamespace</span>
+<span class="s2">          WHERE c.contype = &#39;p&#39;</span>
+<span class="s2">            AND t.relname = </span><span class="si">{</span><span class="n">bare</span><span class="si">!r}</span>
+<span class="s2">            AND n.nspname = ANY(current_schemas(false))</span>
+<span class="s2">          LIMIT 1;</span>
+<span class="s2">          IF pk_name IS NOT NULL THEN</span>
+<span class="s2">            EXECUTE format(&#39;ALTER TABLE %I DROP CONSTRAINT %I&#39;, </span><span class="si">{</span><span class="n">bare</span><span class="si">!r}</span><span class="s2">, pk_name);</span>
+<span class="s2">          END IF;</span>
+<span class="s2">        END $$;</span>
+<span class="s2">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;ALTER TABLE </span><span class="si">{</span><span class="n">table_ref</span><span class="si">}</span><span class="s2"> &quot;</span>
+        <span class="s2">&quot;ADD PRIMARY KEY (subject, predicate, object_hash)&quot;</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ensure_graph_indexes">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.ensure_graph_indexes">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ensure_graph_indexes</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">table_ref</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create standard graph lookup indexes on *table_ref* if absent.</span>
+
+<span class="sd">    ``table_ref`` may be bare (``g_x_v1_sync``) or schema-qualified</span>
+<span class="sd">    (``&quot;schema&quot;.g_x_v1_sync``). Index names use the physical table name only.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">table_name</span> <span class="o">=</span> <span class="n">table_ref</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">sfx</span><span class="p">,</span> <span class="n">cols</span> <span class="ow">in</span> <span class="n">_TRIPLE_TABLE_INDEXES</span><span class="p">:</span>
+        <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;CREATE INDEX IF NOT EXISTS </span><span class="si">{</span><span class="n">_idx_name</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span><span class="w"> </span><span class="n">sfx</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;ON </span><span class="si">{</span><span class="n">table_ref</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">cols</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_create_triple_table</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">table</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;CREATE SCHEMA IF NOT EXISTS &quot;</span><span class="si">{</span><span class="n">schema</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        CREATE TABLE IF NOT EXISTS </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> (</span>
+<span class="s2">        </span><span class="si">{</span><span class="n">_TRIPLE_TABLE_COLUMNS</span><span class="si">}</span>
+<span class="s2">        )</span>
+<span class="s2">        &quot;&quot;&quot;</span>
+    <span class="p">)</span>
+    <span class="n">upgrade_legacy_triple_table_to_object_hash</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
+    <span class="n">ensure_graph_indexes</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">table</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="ensure_synced">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.ensure_synced">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ensure_synced</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">synced</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create the ``_sync`` bulk-data table + standard B-tree indexes if absent.</span>
+
+<span class="sd">    Used by the ``app_managed`` build path to provision the table that receives</span>
+<span class="sd">    warehouse-streamed triples.  In ``managed_synced`` mode this table is</span>
+<span class="sd">    created by Lakebase/Lakeflow instead.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ensure_pgcrypto</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span>
+    <span class="n">_create_triple_table</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">synced</span><span class="p">)</span></div>
+
+
+
+<span class="n">_LAKEFLOW_SYNC_OWNER_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;databricks_writer&quot;</span>
+
+
+<div class="viewcode-block" id="is_lakeflow_sync_owner">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.is_lakeflow_sync_owner">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_lakeflow_sync_owner</span><span class="p">(</span><span class="n">owner</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True when *owner* looks like a Lakeflow synced-table writer role.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">owner</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">_LAKEFLOW_SYNC_OWNER_PREFIX</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="drop_synced">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.drop_synced">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">drop_synced</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">synced</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop the ``_sync`` bulk-data table (``app_managed`` cleanup path).</span>
+
+<span class="sd">    Uses a DO block to skip the DROP when the current session does not own the</span>
+<span class="sd">    table.  This prevents ``PSQLException: must be owner of table`` when a</span>
+<span class="sd">    previous ``managed_synced`` build left behind a ``_sync`` table created by</span>
+<span class="sd">    Lakeflow under a different service principal, and the next build runs in</span>
+<span class="sd">    ``app_managed`` mode (e.g. after a config change or a transient mode-</span>
+<span class="sd">    resolution fallback).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">bare</span> <span class="o">=</span> <span class="n">synced</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="s2">&quot;DO $$ BEGIN &quot;</span>
+        <span class="s2">&quot;  IF EXISTS (&quot;</span>
+        <span class="s2">&quot;    SELECT 1 FROM pg_class c &quot;</span>
+        <span class="s2">&quot;    JOIN pg_namespace n ON n.oid = c.relnamespace &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;    WHERE c.relname = </span><span class="si">{</span><span class="n">bare</span><span class="si">!r}</span><span class="s2"> &quot;</span>
+        <span class="s2">&quot;      AND n.nspname = ANY(current_schemas(false)) &quot;</span>
+        <span class="s2">&quot;      AND c.relkind = &#39;r&#39; &quot;</span>
+        <span class="s2">&quot;      AND pg_has_role(session_user, c.relowner, &#39;MEMBER&#39;)&quot;</span>
+        <span class="s2">&quot;  ) THEN &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;    EXECUTE &#39;DROP TABLE IF EXISTS </span><span class="si">{</span><span class="n">synced</span><span class="si">}</span><span class="s2">&#39;; &quot;</span>
+        <span class="s2">&quot;  END IF; &quot;</span>
+        <span class="s2">&quot;END $$&quot;</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ensure_companion">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.ensure_companion">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ensure_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">schema</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">companion</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create the writable companion table + standard B-tree indexes if absent.&quot;&quot;&quot;</span>
+    <span class="n">ensure_pgcrypto</span><span class="p">(</span><span class="n">cur</span><span class="p">)</span>
+    <span class="n">_create_triple_table</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">companion</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="ensure_union_view">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.ensure_union_view">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">ensure_union_view</span><span class="p">(</span>
+    <span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="n">view</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">synced</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">companion</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;``CREATE OR REPLACE`` the union view that readers query.</span>
+
+<span class="sd">    The synced side is NULL-padded for ``datatype`` / ``lang`` so the view</span>
+<span class="sd">    has a uniform 5-column shape regardless of which side a row came from.</span>
+
+<span class="sd">    If ``view`` already exists as a TABLE (e.g. from an old app-managed build</span>
+<span class="sd">    before the managed_synced migration), it is dropped first — Postgres&#39;s</span>
+<span class="sd">    ``CREATE OR REPLACE VIEW`` cannot replace a table with a view.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Drop any stale TABLE that occupies the view name before (re)creating the view.</span>
+    <span class="c1"># ``CREATE OR REPLACE VIEW`` cannot replace a table — it only replaces views.</span>
+    <span class="c1"># We check pg_class using the unqualified name and the current search_path schema</span>
+    <span class="c1"># so this works regardless of whether the caller schema-qualifies the name.</span>
+    <span class="n">bare_name</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">)</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+        <span class="s2">&quot;DO $$ BEGIN &quot;</span>
+        <span class="s2">&quot;  IF EXISTS (&quot;</span>
+        <span class="s2">&quot;    SELECT 1 FROM pg_class c &quot;</span>
+        <span class="s2">&quot;    JOIN pg_namespace n ON n.oid = c.relnamespace &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;    WHERE c.relname = </span><span class="si">{</span><span class="n">bare_name</span><span class="si">!r}</span><span class="s2"> &quot;</span>
+        <span class="s2">&quot;      AND n.nspname = ANY(current_schemas(false)) &quot;</span>
+        <span class="s2">&quot;      AND c.relkind = &#39;r&#39; &quot;</span>
+        <span class="s2">&quot;      AND pg_has_role(session_user, c.relowner, &#39;MEMBER&#39;)&quot;</span>
+        <span class="s2">&quot;  ) THEN &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;    EXECUTE &#39;DROP TABLE IF EXISTS </span><span class="si">{</span><span class="n">view</span><span class="si">}</span><span class="s2"> CASCADE&#39;; &quot;</span>
+        <span class="s2">&quot;  END IF; &quot;</span>
+        <span class="s2">&quot;END $$&quot;</span>
+    <span class="p">)</span>
+    <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;CREATE OR REPLACE VIEW </span><span class="si">{</span><span class="n">view</span><span class="si">}</span><span class="s2"> AS &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;SELECT subject, predicate, object, &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;NULL::TEXT AS datatype, NULL::TEXT AS lang &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;FROM </span><span class="si">{</span><span class="n">synced</span><span class="si">}</span><span class="s2"> &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;UNION ALL &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;SELECT subject, predicate, object, datatype, lang FROM </span><span class="si">{</span><span class="n">companion</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">)</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="truncate_companion">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.truncate_companion">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">truncate_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">companion</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop all rows from the companion table (used on full rebuild).&quot;&quot;&quot;</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;TRUNCATE TABLE </span><span class="si">{</span><span class="n">companion</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="drop_companion">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.drop_companion">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">drop_companion</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">companion</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DROP TABLE IF EXISTS </span><span class="si">{</span><span class="n">companion</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="drop_view">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.lakebase.html#back.core.graphdb.lakebase._companion_ddl.drop_view">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">drop_view</span><span class="p">(</span><span class="n">cur</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">view</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DROP VIEW IF EXISTS </span><span class="si">{</span><span class="n">view</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -21,10 +21,15 @@ from back.core.databricks import VolumeFileService
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.errors import InfrastructureError, ValidationError
+from back.objects.session import is_valid_session_id
 
 logger = get_logger(__name__)
 
 _MAX_DOC_CHARS = 50_000
+# Cap PGE observability extras so repeated auto-map runs cannot grow the
+# session assignment unboundedly. ``mapping_evaluations`` is a dict keyed by
+# item id (naturally bounded); ``mapping_run_log`` is an append-only list.
+_MAX_MAPPING_RUN_LOG_ENTRIES = 500
 
 if TYPE_CHECKING:
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
@@ -1144,6 +1149,13 @@ class Mapping:
         if not session_id:
             logger.warning("save_mappings_to_session: no session_id — skipping")
             return
+        if not is_valid_session_id(session_id):
+            logger.warning(
+                "save_mappings_to_session: malformed session_id (%d chars, starts %r) — skipping",
+                len(session_id),
+                session_id[:8],
+            )
+            return
 
         settings = get_settings()
         session_path = Path(settings.session_dir) / session_id
@@ -1180,7 +1192,9 @@ class Mapping:
             # Mapping-PGE extras — persisted alongside the assignment so the
             # UI (future work) and downstream observability can surface
             # planner state, per-item evaluation reports, and the per-item
-            # attempt log without re-running the agent.
+            # attempt log without re-running the agent. ``mapping_run_log``
+            # is capped at ``_MAX_MAPPING_RUN_LOG_ENTRIES`` (newest retained)
+            # so repeated auto-map runs cannot grow the session unboundedly.
             if source_model is not None:
                 assignment["source_model"] = source_model
             if mapping_evaluations is not None:
@@ -1190,6 +1204,8 @@ class Mapping:
             if mapping_run_log is not None:
                 existing_log = list(assignment.get("mapping_run_log") or [])
                 existing_log.extend(mapping_run_log)
+                if len(existing_log) > _MAX_MAPPING_RUN_LOG_ENTRIES:
+                    existing_log = existing_log[-_MAX_MAPPING_RUN_LOG_ENTRIES:]
                 assignment["mapping_run_log"] = existing_log
 
             domain_node = bucket.setdefault("domain", {})

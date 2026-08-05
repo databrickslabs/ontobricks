@@ -128,6 +128,21 @@ def test_build_abstract_union_mapping_none_when_no_subclasses():
     assert cov.build_abstract_union_mapping(PATIENT, patient, []) is None
 
 
+def test_build_abstract_union_mapping_null_column_uses_try_cast():
+    baby_em = {
+        "ontology_class": BABY, "id_column": "ID",
+        "sql_query": "SELECT nhs AS ID FROM c.s.baby",
+        "attribute_mappings": {},  # no postcode -> NULL column for Baby
+    }
+    patient = {
+        "uri": PATIENT, "name": "Patient", "parent": "Person",
+        "attributes": [{"name": "nhsnumber"}, {"name": "postcode"}],
+    }
+    m = cov.build_abstract_union_mapping(PATIENT, patient, [baby_em])
+    assert "TRY_CAST(NULL AS STRING) AS postcode" in m["sql_query"]
+    assert "CAST(" not in m["sql_query"].replace("TRY_CAST(", "")
+
+
 def test_synthetic_endpoint_mapping_from_canonical_ids():
     em = cov.synthetic_endpoint_mapping(_source_model(), VISIT)
     assert em is not None

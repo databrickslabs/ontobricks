@@ -2,11 +2,11 @@
 E2E (LIVE) — ``test_scenario_2``: collaboration + review lifecycle on the
 domain produced by :mod:`test_scenario_01_generate_live`.
 
-This journey **reuses the durable ``test_scenario_1`` domain** (built and
+This journey **reuses the durable ``testscenario1`` domain** (built and
 persisted by scenario 1) instead of regenerating one, then exercises the
 human-in-the-loop workflow that sits on top of a built version:
 
-    1. load ``test_scenario_1`` V1 from the registry (skips if scenario 1
+    1. load ``testscenario1`` V1 from the registry (skips if scenario 1
        hasn't been run — it is the prerequisite)
     2. make sure V1 is a clean, built DRAFT (reopen it if a previous
        scenario-2 run left it elsewhere)
@@ -24,7 +24,7 @@ comment was opened from is a UI affordance, not stored on the record).
 
 Because comments are writable only while a version is DRAFT or IN-REVIEW, and
 ``submit`` requires the version to have been **built** at least once, this
-scenario depends on scenario 1 having produced a built ``test_scenario_1``.
+scenario depends on scenario 1 having produced a built ``testscenario1``.
 
 Gated behind ``ONTOBRICKS_SCENARIO_LIVE=1`` (and the ``scenario`` marker) so
 it never runs in the default matrix.
@@ -37,7 +37,7 @@ Run (against the local dev server, after scenario 1):
 
 Override the target via env:
     ONTOBRICKS_LIVE_BASE       base URL (default http://localhost:8000)
-    ONTOBRICKS_SCENARIO_DOMAIN reused domain folder (default test_scenario_1)
+    ONTOBRICKS_SCENARIO_DOMAIN reused domain folder (default testscenario1)
 """
 
 from __future__ import annotations
@@ -60,13 +60,13 @@ pytestmark = [
     pytest.mark.skipif(
         os.environ.get("ONTOBRICKS_SCENARIO_LIVE") != "1",
         reason="live scenario — set ONTOBRICKS_SCENARIO_LIVE=1 to run "
-        "(needs a running app + the test_scenario_1 domain from scenario 1)",
+        "(needs a running app + the testscenario1 domain from scenario 1)",
     ),
     *chain_marker("scenario_2", depends=("scenario_1",)),
 ]
 
 
-_DOMAIN_NAME = os.environ.get("ONTOBRICKS_SCENARIO_DOMAIN", "test_scenario_1")
+_DOMAIN_NAME = os.environ.get("ONTOBRICKS_SCENARIO_DOMAIN", "testscenario1")
 _BASE_VERSION = "1"
 
 
@@ -98,7 +98,7 @@ class TestScenario2CollabLifecycle:
         page.goto(base)
         page.wait_for_load_state("domcontentloaded")
 
-        # ── 2. Prerequisite: test_scenario_1 must exist in the registry ──────
+        # ── 2. Prerequisite: testscenario1 must exist in the registry ──────
         try:
             registry = _json(page.request.get(f"{base}/domain/list-projects"))
         except Exception as exc:  # noqa: BLE001

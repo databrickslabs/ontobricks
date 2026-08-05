@@ -1,0 +1,845 @@
+## Code-review follow-ups for v0.7.0
+
+Context: Post-review cleanup on `develop` (v0.6.3 → 0.7.0). Extract fat node
+context/action routes into a domain service, migrate remaining `success: False`
+envelopes to `OntoBricksError`, wire `bridge_depth`, bound PGE session extras,
+add missing UI contract tests, and close docs gaps.
+
+Changes:
+
+1. src/back/objects/digitaltwin/NodeContextService.py
+   Extract Class for node context resolution and UC action invocation; raise
+   ValidationError / NotFoundError / InfrastructureError on hard failures
+   (complies with `.cursor/05` / `src/.coding_rules.md §1` + §4).
+2. src/api/routers/digitaltwin.py
+   Thin `dt_nodes_context` / `dt_nodes_action` routes; wire `bridge_depth`
+   through to BFS (le=5); re-export `_RDF_TYPE` for tests.
+3. src/back/objects/digitaltwin/__init__.py
+   Re-export `NodeContextService`.
+4. src/back/objects/digitaltwin/DigitalTwin.py
+   `interpret_graph_metrics` raises `InfrastructureError` instead of returning
+   `{"success": False, ...}`.
+5. src/back/objects/domain/SettingsService.py
+   Registry check / Lakebase permission / grant helpers raise OntoBricksError
+   subclasses instead of success envelopes.
+6. src/front/templates/partials/registry/_registry_configuration.html
+   Repair-permissions UI handles HTTP ErrorResponse (`message`) from grants.
+7. src/back/objects/mapping/Mapping.py
+   Cap `assignment.mapping_run_log` at 500 newest entries across PGE runs.
+8. src/mcp-server/server/app.py
+   `invoke_entity_action` surfaces HTTP 4xx/5xx OntoBricksError messages.
+9. src/front/routes/home.py
+   Remove unused logger / session_mgr imports from settings route.
+10. docs/features.md
+    Document Unmap all, graph readiness indicator, registry navbar modal,
+    CamelCase domain names.
+11. docs/sphinx/api/app.objects.digitaltwin.rst
+    Automodule entry for `NodeContextService`.
+12. tests/units/api/test_node_context_endpoint.py
+    Patch service helpers; assert `bridge_depth` is passed to BFS.
+13. tests/units/api/test_node_action_endpoint.py
+    Expect OntoBricksError HTTP status codes (400/404/502).
+14. tests/units/front/test_unmap_all_ui.py
+    Contract tests for Unmap all buttons, confirm copy, failure restore.
+15. tests/units/front/test_kg_readiness_indicator.py
+    Contract tests for readiness badge states and backend labels.
+16. tests/units/mapping/test_pge_session_extras_retention.py
+    Regression for capped `mapping_run_log`.
+
+Modified files:
+- src/back/objects/digitaltwin/NodeContextService.py
+- src/back/objects/digitaltwin/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/digitaltwin.py
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/back/objects/mapping/Mapping.py
+- src/mcp-server/server/app.py
+- src/front/routes/home.py
+- docs/features.md
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/api/test_node_action_endpoint.py
+- tests/units/front/test_unmap_all_ui.py
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/mapping/test_pge_session_extras_retention.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3428 passed, 275 skipped, 5 deselected in 25.68s
+
+## Preserve class dataset/actions through designer sync and registry save
+
+Context: Ontology External-tab Datasets and UC Actions were saved correctly from
+the entity panel and by the registry JSONB path, but Designer sync and OWL/RDFS
+import remappers rebuilt class objects without `actions` (and sometimes
+`bridges`), so a later Save to registry dropped them.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   Preserve `bridges`, `dataset`, and `actions` when syncing Designer → ontology.
+2. src/front/static/ontology/js/ontology-information.js
+   Keep dataset/actions/bridges/dashboard on OWL and RDFS import remappers.
+3. tests/units/front/test_class_actions_ui.py
+   Contract checks that design sync and import remappers retain External fields.
+4. tests/units/domain/test_domain_session.py
+   Registry export/import round-trip for class dataset, actions, and bridges.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-information.js
+- tests/units/front/test_class_actions_ui.py
+- tests/units/domain/test_domain_session.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3431 passed, 275 skipped, 5 deselected in 27.70s
+
+## Show UC action description in KG action popup
+
+Context: When running a class Action from the Knowledge Graph (details pane
+or context menu), the result modal showed only the function label and FQN.
+Users asked to also see the configured function description in the popup.
+
+Changes:
+
+1. src/front/static/query/js/query-dashboard.js
+   Accept optional description in openEntityActionModal and render it above
+   the loading/result body.
+2. src/front/static/query/js/query-entity-details.js
+   Pass action.description into the modal opener.
+3. src/front/static/query/js/query-sigmagraph.js
+   Pass description from details buttons and context-menu data-description.
+4. tests/units/front/test_class_actions_ui.py
+   Contract coverage for description wiring and modal rendering.
+
+Modified files:
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_class_actions_ui.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3432 passed, 275 skipped, 5 deselected in 24.98s
+
+## Show external-link badge on Designer entities with External-tab data
+
+Context: Ontology Designer entity cards gave no visual cue that a class already
+had a Dashboard, Dataset, Actions, or Bridges configured under its entity
+panel's "External" tab. Users asked for a small icon near the entity icon
+signalling this without opening the panel. Implemented via subagent-driven
+development from a written spec and plan (docs/superpowers/specs and
+docs/superpowers/plans, 2026-07-29). Live browser verification (web-devloop-tester)
+caught and this session fixed a follow-on bug: the Designer's change-detection
+fingerprint didn't consider the four External fields, so the badge only
+appeared after a full page reload instead of immediately after saving.
+
+Changes:
+
+1. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   Add `.ovz-entity-external-badge` (dark badge, `--ovz-accent-purple` /
+   `--ovz-entity-header-bg` tokens, no hardcoded hex) and `position: relative`
+   on `.ovz-entity-icon` for the overlay anchor.
+2. src/front/static/global/ontoviz/ontoviz.js
+   `Entity.hasExternal` (default `false`); `_renderEntity` renders a
+   `bi-link-45deg` badge inside `.ovz-entity-icon` when `hasExternal` is true;
+   `pointer-events: none` keeps the existing icon-click-to-edit-icon behaviour
+   working.
+3. src/front/static/global/js/ontology-design.js
+   Compute `hasExternal = !!(cls.dashboard || cls.dataset ||
+   (cls.actions || []).length || (cls.bridges || []).length)` and thread it
+   into all three entity-build paths in `loadOntologyIntoDesigner` (saved
+   layout + ontology merge, saved-layout-only fallback, fresh-layout
+   generation). Also fix `_getOntologyVersion()`'s change-detection
+   fingerprint to include the four External fields per class, so editing them
+   and returning to the Design tab (no reload) now correctly refreshes the
+   badge instead of requiring a full page reload.
+
+Modified files:
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+- src/front/static/global/ontoviz/ontoviz.js
+- src/front/static/global/js/ontology-design.js
+- docs/superpowers/specs/2026-07-29-designer-external-indicator-design.md
+- docs/superpowers/plans/2026-07-29-designer-external-indicator.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3436 passed, 275 skipped, 5 deselected, 23 warnings in 26.05s
+
+## Save domain without confirmation popup
+
+Context: Clicking Save Domain (or Cmd/Ctrl+S) opened a "Save Domain to Registry"
+confirmation modal before POST /domain/save-to-uc. Users want a direct save.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   domainSave() calls doDomainSave() directly; showDomainSaveDialog is a thin
+   alias for backward compatibility.
+2. src/front/static/domain/js/domain.js
+   Update comment to match direct-save behaviour.
+3. tests/units/front/test_domain_save_no_confirm.py
+   Contract that the confirmation modal markup is gone.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain.js
+- tests/units/front/test_domain_save_no_confirm.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3434 passed, 275 skipped, 5 deselected in 22.26s
+
+## Show registry operational status line on Browse
+
+Context: Opening Registry (Browse) hid the status area when the registry was
+configured. Users want a single line stating whether the registry is
+operational or not.
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   Always render #registryStatus: green "Registry is operational" when
+   configured, otherwise "Registry is not operational" with a short reason.
+2. tests/units/front/test_registry_operational_status.py
+   Contract coverage for the status line copy and visibility.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_registry_operational_status.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3436 passed, 275 skipped, 5 deselected in 21.91s
+
+---
+
+## Final-review fix pass: entity external-link badge (OntoViz Designer)
+
+Context: A final whole-branch code review of the external-link badge feature
+found five issues to resolve before finishing the branch.
+
+Changes:
+1. src/front/static/global/js/ontology-design.js
+   Added `hasExternal` field to `_buildFreshDesignLayout`'s `classes.map(...)`,
+   the missed fourth entity-construction site (used by the create-business-view
+   and switch-to-empty-view flows).
+2. src/front/static/global/js/ontology-design.js
+   Added clarifying comment to `_getOntologyVersion()` noting that
+   dashboard/dataset collapse to a presence bit and actions/bridges to a count.
+3. src/front/static/global/ontoviz/ontoviz.js
+   Added `aria-label="Has external configuration"` to the badge `<span>` and
+   `aria-hidden="true"` to the inner `<i>` for screen reader accessibility.
+4. tests/units/front/test_designer_external_badge.py
+   New contract test: asserts the hasExternal expression is present at all four
+   construction sites, badge markup+CSS are present, and the version fingerprint
+   covers all External-tab fields.
+5. docs/superpowers/specs/2026-07-29-designer-external-indicator-design.md
+   docs/superpowers/plans/2026-07-29-designer-external-indicator.md
+   Corrected "three entity-construction sites" → "four", naming
+   `_buildFreshDesignLayout` alongside the three `loadOntologyIntoDesigner` sites.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/global/ontoviz/ontoviz.js
+- tests/units/front/test_designer_external_badge.py
+- docs/superpowers/specs/2026-07-29-designer-external-indicator-design.md
+- docs/superpowers/plans/2026-07-29-designer-external-indicator.md
+
+Tests: uv run pytest -q -m "not scenario" → 3443 passed, 275 skipped, 5 deselected in 21.21s
+
+## Correction: move external-link badge from Business Views (OntoViz) to Designer (D3 map)
+
+Context: the previous two entries built the external-link badge into the
+OntoViz canvas, whose sidebar item is labelled "Business Views"
+(`menu_config.json` item id `design`). The original request was for the
+"Ontology > Designer" sidebar item (id `map`), which is a separate D3.js
+force-directed graph (`ontology-map.js` / `_ontology_map.html`, heading
+"Ontology Designer") with its own node rendering (SVG, not HTML/CSS cards)
+and its own entity-data construction (a single `classes.map(...)` site, no
+saved-layout persistence of class fields, and no change-detection fingerprint
+to go stale). Reverted the OntoViz-side implementation and re-implemented the
+same visual concept (small dark badge, `bi-link-45deg` glyph, top-right of the
+icon, no tooltip/click handler) natively in the D3 view. Live browser
+verification (web-devloop-tester) confirmed the badge now appears only on
+Customer/Meter (the two classes with External-tab data) on the Designer graph,
+is absent from all other nodes there, and is fully gone from Business Views.
+
+Changes:
+
+1. src/front/static/global/ontoviz/css/ontoviz-entity.css
+   Removed `.ovz-entity-external-badge` and the `position: relative` added to
+   `.ovz-entity-icon` for it.
+2. src/front/static/global/ontoviz/ontoviz.js
+   Removed `Entity.hasExternal` and the badge markup from `_renderEntity`.
+3. src/front/static/global/js/ontology-design.js
+   Removed `hasExternal` computation from all four entity-construction sites
+   and reverted `_getOntologyVersion()`'s fingerprint to its prior form (no
+   longer needed once the badge left this view).
+4. tests/units/front/test_designer_external_badge.py
+   Deleted (covered the removed OntoViz implementation).
+5. src/front/static/ontology/js/ontology-map.js
+   Node data now computes `hasExternal` from the same class fields; nodes
+   with the flag get a small `<circle>` + `<text>` (bootstrap-icons
+   `\uf470` = `bi-link-45deg`) badge appended at (14, -14) relative to the
+   node's icon, filtered so only matching nodes render it. Purely visual —
+   `pointer-events: none`, no `<title>`, no click handler.
+6. src/front/static/ontology/css/ontology-map.css
+   `.map-node-external-badge-bg` / `.map-node-external-badge-icon` styles;
+   also dims the badge alongside the icon/label under `.map-node.dimmed`
+   (neighborhood-highlight mode).
+7. tests/units/front/test_ontology_map_external_badge.py
+   New contract tests: `hasExternal` computation, badge rendered only for
+   matching nodes via `.filter(...)`, no tooltip/click handler in the badge
+   block, `aria-hidden`/`aria-label` accessibility, and CSS presence
+   including the dimmed-state rule.
+
+Modified files:
+- src/front/static/global/ontoviz/css/ontoviz-entity.css
+- src/front/static/global/ontoviz/ontoviz.js
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- tests/units/front/test_ontology_map_external_badge.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Removed files:
+- tests/units/front/test_designer_external_badge.py
+
+Tests: uv run pytest -q -m "not scenario" → 3441 passed, 275 skipped, 5 deselected in 27.17s
+
+## Designer external-config badge: swap glyph to yellow lightning bolt, bigger size
+
+Context: follow-up polish request — use the same glyph/colour as the entity
+panel's own "External" tab (`bi-lightning-charge text-warning` in
+`ontology-shared-panels.js`, e.g. the Actions picker) instead of the link
+icon, and make the badge a bit bigger.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Badge circle grows `r: 7 -> 9`, offset `(14,-14) -> (16,-16)`; glyph
+   codepoint `\uf470` (bi-link-45deg) -> `\uf46d` (bi-lightning-charge).
+2. src/front/static/ontology/css/ontology-map.css
+   `.map-node-external-badge-icon`: `font-size: 9px -> 12px`, `fill: #fff ->
+   #ffc107` (Bootstrap's `text-warning` yellow, matching the External tab).
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3441 passed, 275 skipped, 5 deselected in 27.05s
+
+## Designer context menu: jump straight to a panel tab (entity + relationship)
+
+Context: right-clicking an entity or relationship on the Ontology Designer
+(D3 map) opened a context menu with structural actions only (Create
+Relationship, Delete, etc.) — there was no shortcut to a specific tab of the
+shared entity/relationship edit panel. Users asked for the right-pane tabs to
+be offered as menu items too.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   `openEntityPanelForEdit`/`openEntityPanelForView` set `_entityPanelActiveTab`
+   from `options.activeTab` when provided (same for
+   `openRelationshipPanelForEdit`/`openRelationshipPanelForView` with
+   `_relPanelActiveTab`), so the panel opens directly on the requested tab.
+   `editClassByName`/`editClass`/`editPropertyByName`/`editProperty` gained an
+   optional `activeTab` second parameter threaded into `opts.activeTab`.
+2. src/front/static/ontology/js/ontology-map.js
+   Entity context menu (`showMapContextMenu`) gained 4 new items right after
+   the header — Details (`bi-info-circle`), Attributes (`bi-tags`), External
+   (`bi-lightning`), Constraints (`bi-sliders`) — each calling
+   `editClassByName(entityData.name, tab)`. Added a `contextmenu` handler on
+   relationship link hitareas plus a new `showMapRelationshipContextMenu()`
+   function with 2 items (Details, Constraints — relationships have no
+   Attributes/External tab), calling `editPropertyByName(linkData.name, tab)`.
+   Reuses the existing `#mapContextMenu` element/outside-click-to-close
+   infrastructure.
+3. tests/units/front/test_map_context_menu_tabs.py
+   Contract tests for the 4 entity items, the 2 relationship items, the new
+   relationship `contextmenu` handler, and the `activeTab` threading through
+   both shared-panel option paths and compatibility functions.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_map_context_menu_tabs.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3447 passed, 275 skipped, 5 deselected in 22.02s
+
+## Designer "Create Relationship" dialog: split into Label + ID fields
+
+Context: the quick-create dialog shown when connecting two entities on the
+Ontology Designer (D3 map) had a single "Relationship Name" field. Users
+asked for separate editable Label and ID fields — cursor defaults to Label,
+ID mirrors the Label live (camelCase) until edited directly, and ID must be
+unique across the ontology or Create is blocked with an inline error.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   `showMapRelationshipDialog`: two fields (`mapRelationshipLabel`,
+   `mapRelationshipName`). Label auto-focuses (via `shown.bs.modal`, since a
+   synchronous `.focus()` right after `.show()` gets overridden by
+   Bootstrap's own modal focus-trap). Typing in Label mirrors into ID via
+   `columnToCamelCase()` until the user edits the ID field directly
+   (`idManuallyEdited` flag, set only by a real `input` event on the ID
+   field — programmatic mirroring doesn't trigger it). `validateName()`
+   checks the ID is non-empty and not already used by any property in
+   `OntologyState.config.properties` (Bootstrap `is-invalid` +
+   `invalid-feedback`), blocking the Create button on failure. Resolves
+   `{ name, label }` instead of a bare string.
+   `createRelationshipFromMap` updated for the new `{ name, label }` shape
+   and its duplicate check widened from domain+range-scoped to global by
+   `name` (properties are looked up by name alone everywhere else in the
+   app, e.g. `editPropertyByName`, so scoping this check to domain+range was
+   a latent bug — two properties sharing a name but different domain/range
+   would have broken those lookups).
+2. tests/units/front/test_map_relationship_dialog.py
+   Contract tests: both fields present, Label autofocus wiring (`shown.bs.modal`),
+   ID mirroring + manual-edit override, uniqueness validation blocking
+   Create, `{name, label}` resolve shape, and the widened global uniqueness
+   check + label wiring in `createRelationshipFromMap`.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_map_relationship_dialog.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3453 passed, 275 skipped, 5 deselected in 28.12s
+
+## Simplify navbar breadcrumb: main menu + sub menu only
+
+Context: the top-right breadcrumb showed "Registry > <DomainName> > <MainMenu>
+> <SubMenu>" for Ontology/Mapping/Domain/Knowledge Graph pages. Users asked
+to drop the Registry and Domain-name ancestor crumbs entirely and show only
+the current main menu (Ontology, Mapping, etc.) and the sub menu (sidebar
+section) selected within it.
+
+Changes:
+
+1. src/front/static/global/js/breadcrumb.js
+   `_buildCrumbs()` no longer walks a `_HIERARCHY` array to push ancestor
+   "Registry" / domain-name crumbs — it always returns just the single
+   matched main-menu entry from `_ROUTE_MAP`; `_updateSection()` (unchanged)
+   still appends the active sidebar section as the second/last crumb.
+   Removed the now-unused `_HIERARCHY` constant and `_getDomainName()`
+   helper. `init()`'s hide guard changed from `crumbs.length <= 1` (hid the
+   breadcrumb whenever there were no ancestors to show) to
+   `crumbs.length === 0` (hides only when the current path isn't a
+   recognized main menu at all).
+2. tests/units/front/test_breadcrumb.py
+   Contract tests: no Registry/ancestor logic in `_buildCrumbs`, removed
+   `_HIERARCHY`/`_getDomainName`/`currentDomainName` references, single-crumb
+   return shape, and the relaxed hide guard.
+
+Modified files:
+- src/front/static/global/js/breadcrumb.js
+- tests/units/front/test_breadcrumb.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3458 passed, 275 skipped, 5 deselected in 24.08s
+
+## Terminology consistency: "Class" → "Entity" in user-facing UI text
+
+Context: user-facing labels/tooltips/help text/notifications inconsistently
+mixed "Class(es)" and "Entity/Entities" for the same ontology concept (e.g.
+the Constraints tab's "Classes that have exactly the same instances" help
+text). Standardized on "Entity/Entities" everywhere the app already uses that
+term elsewhere, while leaving genuine OWL/RDF/SHACL technical identifiers
+untouched (`owl:Class`, `sh:class`, `equivalentClass`/`disjointWith` axiom
+values, RDF/Turtle sample code, and the Help glossary's explicit "Entity /
+Class" OWL-synonym explanation).
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Entity Constraints tab: "Disjoint With"/"Equivalent To" tooltips and help
+   text now say "entities/entity" instead of "classes/class".
+2. src/front/templates/partials/ontology/_ontology_axioms.html,
+   src/front/static/ontology/js/ontology-axioms.js
+   Expressions & Axioms section/modal copy, optgroup labels, "Equivalent
+   Classes" option, and Subject/Object Class(es) labels renamed to
+   Entity/Entity(ies); axiom values (`equivalentClass`, etc.) kept as-is.
+3. src/front/templates/partials/ontology/_ontology_entities.html,
+   src/front/static/ontology/js/ontology-entities.js
+   "Classes (Hierarchy)" heading → "Entities (Hierarchy)"; empty-state and
+   help copy now say "entities"/"entity inheritance hierarchy".
+4. src/front/templates/partials/ontology/_ontology_import.html,
+   _ontology_groups.html, _ontology_dataquality.html,
+   _ontology_business_rules.html, _ontology_wizard.html
+   Import help text, group-membership help text, Auto-generate/Cleanup
+   tooltips, suggested-rules banner, "Assign class"/"Result Class" business
+   rule labels, and "Suggest class hierarchy" wizard option reworded to
+   "entity"/"entities".
+5. src/front/static/ontology/js/ontology-dataquality.js
+   "Target class" labels → "Target entity" (kept the `sh:class` SHACL token);
+   cleanup-rules confirm dialog reworded.
+6. src/front/static/ontology/js/ontology-pitfalls.js,
+   src/back/core/external/pitfalls/runner.py
+   Reworded "class(es)" → "entity/entities" in pitfall titles/descriptions
+   (P1.1–P1.3, P2.1–P2.3, P3.3, P4.1–P4.3, P4.5–P4.7) and the results-summary
+   line, keeping OWL-technical wording (subclass, rdfs:subClassOf, owl:Nothing)
+   untouched.
+7. src/front/templates/settings.html, src/front/static/config/js/settings.js
+   "Default Class Icon" → "Default Entity Icon"; help text and update
+   notification reworded.
+8. src/front/static/mapping/js/mapping-design.js, mapping-autoassign.js,
+   mapping-diagnostics.js, mapping-relationship-modal.js,
+   src/front/static/global/js/mapping-core.js
+   Notification/placeholder/detail-row copy ("Class not found", "No ontology
+   classes...", "Class URI", "Select source/target class...", "class(es) not
+   mapped") reworded to "Entity".
+9. src/front/static/global/js/ontology-design.js
+   Designer description text and no-classes/import-summary notifications
+   reworded to "entities".
+10. src/front/templates/partials/registry/_registry_bridges.html,
+    src/front/static/registry/js/registry.js
+    Bridges section subtitle and "Source/Target Class" table headers renamed.
+11. src/front/static/domain/js/domain-audit.js
+    Audit feed labels "Class added/updated/removed" → "Entity
+    added/updated/removed" (action-type keys `class_added` etc. kept as-is —
+    backend-defined identifiers).
+12. src/front/templates/partials/layout/help_modal.html
+    "add classes and object properties manually" → "add entities...".
+13. src/front/static/query/js/query-graphql.js
+    GraphQL-not-ready fallback message and stats line reworded.
+14. src/front/static/ontology/js/ontology-import.js
+    Replace/FIBO/FHIR/IOF import result messages reworded.
+15. src/front/static/ontology/js/ontology-information.js
+    "attribute(s) without domain class" → "domain entity" (both renderers).
+16. src/front/templates/partials/dtwin/_query_api.html
+    GraphQL schema-generation doc copy ("every class becomes a GraphQL
+    type", "each class is a type") reworded to "entity"; left the raw
+    OWL/Turtle endpoint description (genuine OWL "class" counts) untouched.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/templates/partials/ontology/_ontology_axioms.html
+- src/front/static/ontology/js/ontology-axioms.js
+- src/front/templates/partials/ontology/_ontology_entities.html
+- src/front/static/ontology/js/ontology-entities.js
+- src/front/templates/partials/ontology/_ontology_import.html
+- src/front/templates/partials/ontology/_ontology_groups.html
+- src/front/templates/partials/ontology/_ontology_dataquality.html
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/ontology/js/ontology-dataquality.js
+- src/front/static/ontology/js/ontology-pitfalls.js
+- src/back/core/external/pitfalls/runner.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-autoassign.js
+- src/front/static/mapping/js/mapping-diagnostics.js
+- src/front/static/mapping/js/mapping-relationship-modal.js
+- src/front/static/global/js/mapping-core.js
+- src/front/static/global/js/ontology-design.js
+- src/front/templates/partials/registry/_registry_bridges.html
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-audit.js
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/query/js/query-graphql.js
+- src/front/static/ontology/js/ontology-import.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/templates/partials/dtwin/_query_api.html
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3458 passed, 275 skipped, 5 deselected in 22.06s
+
+## Relationship Constraints tab: explain each option with a visible caption
+
+Context: the relationship edit panel's Constraints tab (Ontology Designer)
+relied on hover tooltips to explain the OWL property characteristics
+(Functional, Inverse Functional, Symmetric, Transitive) and the Min/Max
+cardinality fields. Users asked for a visible caption below each option
+instead of a tooltip, so the meaning is clear without hovering.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Relationship Constraints tab: removed `title=` tooltips from the
+   Min/Max cardinality inputs and the four Property Characteristics
+   checkboxes/labels. Restructured the checkboxes from an inline
+   `form-check-inline` row into a stacked list, each with a `form-text
+   small` caption directly beneath it explaining exactly what it does
+   (e.g. Functional: "Each subject can have at most one value for this
+   relationship (forces Max cardinality to 1)"). Added matching captions
+   under the Min/Max inputs, replacing the single shared "Leave Max empty
+   for unlimited" hint.
+2. tests/units/front/test_relationship_constraints_descriptions.py
+   New contract tests: visible captions present for cardinality and all
+   four characteristics, no `title=` attributes remain on the checkboxes/
+   inputs, and consistent `form-text small mt-0` styling.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_relationship_constraints_descriptions.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3462 passed, 275 skipped, 5 deselected in 23.40s
+
+================================================================================
+Approximate betweenness & closeness in the Databricks analytics job
+================================================================================
+
+Context: after the serverless graph-analytics job landed (PageRank, clustering
+coefficient, connected components), betweenness and closeness were still the
+only two metrics with no engine-side path — an oversized graph could get three
+of the five per-node metrics and had to fall back to an entity-type filter for
+the other two. Computing them exactly needs shortest paths from every node to
+every other node (O(V*E)), which is not viable at the sizes the job exists for,
+so they are now estimated with Brandes-Pich pivot sampling and clearly labelled
+as estimates rather than presented as exact values.
+
+The design decision that makes this trustworthy: the pivot set is an *input*,
+not a hard-coded sample. Both estimators are written so that "pivots = every
+node" reduces algebraically to the exact textbook definition, which means the
+SQL can be checked against NetworkX for an exact match before any approximation
+is involved. Verified: betweenness and closeness match nx.betweenness_centrality
+and nx.closeness_centrality to 1e-9 on four graph fixtures, including a
+disconnected graph and a 4-cycle where two shortest paths tie.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Added a fifth stage to the generated SQL. `build_pivots` samples k nodes
+   deterministically (`ORDER BY md5(n)` — md5 rather than a plain hash because
+   it exists in both Spark and Postgres; ordering by the URI would sample one
+   entity type on a real KG). `bfs_init`/`bfs_iteration` run a *single*
+   multi-source breadth-first search in which all pivots advance together,
+   carrying both distance and sigma (shortest-path counts), so the loop runs
+   for the graph diameter rather than k * diameter. `delta_init`/
+   `delta_iteration` implement Brandes' backward dependency accumulation.
+   `build_centrality_rollups` reduces per-pivot results to one row per node.
+   `write_output` gained `betweenness`/`closeness` columns and the two
+   estimators; the summary gained `pivot_count` and `bfs_complete`. New
+   `--pivots` / `--max-depth` arguments; new `_run_pivot_centrality` driver.
+2. src/back/core/graph_analysis/models.py
+   `MetricsResult` gained `approximate_metrics` and `pivot_count`, kept
+   separate from `unavailable_metrics` so the UI can distinguish "sampled" from
+   "not computed" — conflating them would either hide real numbers or present
+   estimates as exact.
+3. src/back/core/graph_analysis/JobMetrics.py
+   Read-back extended to the new columns and summary fields; top-nodes query now
+   also unions the top-k by betweenness and by closeness. Job mode now reports
+   nothing unavailable when pivots were sampled. Estimates are *withheld*
+   (reported unavailable, not written onto nodes) when no pivots were sampled or
+   when the BFS hit its depth cap, since a truncated search biases the distance
+   sums — a wrong number is worse than a missing one.
+4. src/back/core/graph_analysis/LakeflowRunner.py
+   `submit`/`run_and_wait` pass a `pivots` job parameter.
+5. resources/graph_analytics.job.yml
+   New `pivots` job parameter (default 64) wired to `--pivots`.
+6. src/shared/config/settings.py
+   New `analytics_job_pivots` / `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` (default 64),
+   documented as the job's dominant cost.
+7. src/back/objects/digitaltwin/DigitalTwin.py
+   `build_job_metrics` passes the pivot setting through.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   Approximate metrics render normally but carry a standing "Estimate" note
+   stating the pivot count and warning that adjacent ranks can swap. The blue
+   over-limit banner now says betweenness/closeness are estimated rather than
+   unavailable. The amber (pushdown-only) banner now mentions that the
+   serverless job exists and names the flag that enables it — its silence about
+   that option was what made the feature undiscoverable.
+9. tests/units/core/test_graph_analytics_job_sql.py
+   New TestBetweennessAndClosenessParity: exact parity against NetworkX with a
+   full pivot set on four fixtures; disconnected-component handling; sigma
+   correctness on a 4-cycle; error decreasing as k grows (proves the n/k
+   rescaling); determinism across runs; pivots=0 skipping both; depth-cap
+   truncation reported. Dialect coverage extended to all new statements.
+10. tests/units/core/test_job_metrics.py
+   Output/summary fixtures carry the new columns; new tests for the two
+   withholding paths and for estimates landing on nodes only when available.
+11. docs/user-guide.md, docs/get-started.md
+   Documented that job-mode betweenness/closeness are estimates, how to trade
+   pivot count against cost, and that pivots >= node count makes them exact.
+
+Note on accuracy (measured, karate club, 34 nodes): with a full pivot set both
+metrics are exact. With k=8 the top betweenness node is still identified but
+its value reads 0.328 vs a true 0.438, and closeness ranks n33 above n0 when
+the truth is the reverse. Hence the UI wording: use these to find the leaders,
+not as absolute values.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/LakeflowRunner.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/shared/config/settings.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- resources/graph_analytics.job.yml
+- tests/units/core/test_graph_analytics_job_sql.py
+- tests/units/core/test_job_metrics.py
+- docs/user-guide.md
+- docs/get-started.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3616 passed, 275 skipped,
+5 deselected in 30.35s
+
+================================================================================
+Expose the analytics tunables in app.yaml.template
+================================================================================
+
+Context: closing out the Lakeflow graph-analytics plan. Every plan item was
+already implemented and committed except one gap in the final "settings and
+tests" item: `app.yaml.template` declared only
+`ONTOBRICKS_ANALYTICS_JOB_ENABLED`, so a deployed app had no visible knob for
+the other analytics settings and silently took whatever the code defaulted to.
+
+Changes:
+
+1. app.yaml.template
+   Declared the remaining analytics env vars with literal defaults mirroring
+   settings.py: `ONTOBRICKS_ANALYTICS_MAX_TRIPLES`,
+   `..._PUSHDOWN_ENABLED`, `..._TOP_N`, `..._JOB_NAME`,
+   `..._JOB_PAGERANK_ITERATIONS`, `..._JOB_PIVOTS`. Literals rather than
+   `${APP_*}` placeholders because the deploy script uses
+   `string.Template.substitute`, so every placeholder must exist in the
+   environment or the render fails. `JOB_NAME` is deliberately empty, which
+   means "derive `<app>-graph-analytics`" and matches the bundle — a
+   hard-coded name would break every renamed deploy.
+2. tests/units/settings/test_app_yaml_template.py
+   New contract tests. The template now duplicates the analytics defaults, and
+   duplication rots silently: a default changed in one place and not the other
+   makes a deployed app behave differently from a local one with nothing to
+   signal it. These assert the template renders under the same strict
+   substitution the deploy script uses, has no duplicated env names, and that
+   each analytics value *parses* to the same thing the corresponding `Settings`
+   field defaults to (comparing parsed values, not raw strings, so `"true"` vs
+   `"True"` is not a false failure). Also pins the job toggle to opt-in, since
+   job mode needs a deployed bundle and Spark-readable data.
+
+   Verified the drift test is not vacuous: changing the template's TOP_N to 250
+   fails exactly that parametrised case, and only that one.
+
+Deliberate deviation from the plan, for the record: plan todo 2 mentions "with
+a Neo4j Cypher override" for the SQL aggregations, but the plan body (B5 and
+"What genuinely cannot be saved") specifies that Neo4j is unsupported for
+pushdown and stays on the in-app path with the cap. The implementation follows
+the body — `supports_pushdown` returns False for any non-SQL dialect — so there
+is no Cypher override, and the docs say oversized Neo4j graphs are still
+rejected. The per-type rollups are also split across `get_type_edge_stats` +
+`get_type_predicate_pairs` composed in `PushdownMetrics._build_type_profiles`
+rather than a single `get_type_profiles`, which is the same SQL work under a
+different decomposition.
+
+Also note: betweenness and closeness now ship as pivot-sampled estimates
+(previous entry), which the plan had recommended against. That was an explicit
+later decision by the user; the estimates are labelled as such in the UI and
+are exact when the pivot count reaches the node count, which is how they are
+tested.
+
+Modified files:
+- app.yaml.template
+- tests/units/settings/test_app_yaml_template.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3634 passed, 275 skipped,
+5 deselected in 24.08s
+
+================================================================================
+Admin toggle for the Databricks graph-analytics job (Settings → Global)
+================================================================================
+
+Context: job mode was reachable only via the `ONTOBRICKS_ANALYTICS_JOB_ENABLED`
+env var, which meant a redeploy to turn the feature on or off. That is the wrong
+control surface for something an admin should own at runtime, and it made the
+feature effectively undiscoverable — a user hitting the over-limit banner had no
+way to act on it. Now there is a checkbox in Settings → Global, and the env var
+becomes the deployment default it overrides.
+
+Followed the existing `edit_lock_ttl_s` precedence pattern (admin global-config
+value beats env var) and the `use_cloud_fetch` shape for boolean handling.
+
+Changes:
+
+1. src/back/objects/session/GlobalConfigService.py
+   New `get_analytics_job_enabled` / `set_analytics_job_enabled`. The getter is
+   deliberately three-state (`Optional[bool]`): `None` means "no admin has
+   expressed an opinion" so the caller falls back to the env var, while a stored
+   `False` still overrides an env var that enables the job. A plain `bool` would
+   make "admin turned it off" indistinguishable from "never configured". Also
+   parses "false"/"off"/"0" strings, since JSON round-trips through a text
+   column on some backends and a bare truthiness check would read those as True.
+   Kept out of `_empty()` so a failed load yields `None` rather than masking the
+   env fallback.
+2. src/back/core/helpers/DatabricksHelpers.py
+   New `resolve_analytics_job_enabled(domain, settings)`. Bypasses
+   `_resolve_global_setting` for the documented reason `resolve_use_cloud_fetch`
+   does: its `if val: return val` short-circuit would discard an admin's
+   explicit "off". Falls back to the env default when the registry is
+   unconfigured or the lookup raises, so a registry hiccup cannot silently flip
+   the feature either way. Re-exported from `back.core.helpers`.
+3. src/api/routers/internal/dtwin.py
+   Both `settings.analytics_job_enabled` read sites (the `/metrics/compute` mode
+   decision and `analytics_job_available` in `/dtwin/sync/stats`) now go through
+   the resolver.
+4. src/back/objects/domain/SettingsService.py
+   New `get_analytics_job_enabled_result` / `save_analytics_job_enabled_result`,
+   the latter gated by `require_admin_error`. The read result carries `source`
+   ("admin" | "default") and `env_default`, because an unconfigured toggle
+   silently tracks the env var and a bare checkbox would imply somebody had
+   chosen that state.
+5. src/api/routers/internal/settings.py
+   `GET /settings/analytics-job-enabled` and
+   `POST /settings/save-analytics-job-enabled`.
+6. src/front/templates/settings.html
+   Checkbox in the Global section with the admin-only badge, what each compute
+   mode produces, and the prerequisites (deployed bundle; Delta or Lakebase
+   `managed_synced`, not `app_managed`/Neo4j), plus a line showing whether the
+   current value came from an admin or the deployment default.
+7. src/front/static/config/js/settings.js
+   `loadAnalyticsJobEnabled()` hydrates on page load; the shared
+   `.btn-save-settings` handler POSTs it. Sent unconditionally rather than only
+   when checked — a `if (checked)` guard would make the toggle one-way, unable
+   to store an "off" that overrides a `true` env var.
+8. src/front/templates/partials/dtwin/_query_analytics.html
+   The over-limit banner now points at Settings → Global instead of naming an
+   env var the reader cannot set.
+9. docs/user-guide.md, docs/get-started.md, app.yaml.template,
+   src/shared/config/settings.py
+   Documented that the env var is the initial value only and that the admin
+   toggle wins once used; the settings docstring points readers at the resolver
+   rather than the raw field.
+10. tests/units/core/test_helpers.py
+   `TestResolveAnalyticsJobEnabled`: admin-on beats env-off, admin-off beats
+   env-on (the regression the `if val` idiom would cause), unset falls through
+   in both directions, unconfigured registry and lookup failure both use the env
+   default, and a Settings object missing the field defaults off.
+11. tests/units/settings/test_analytics_job_toggle.py
+   New file: getter three-state and string parsing, absence from `_empty()`,
+   setter coercion, service read provenance, admin gating (verifying the setter
+   is *not* called when authorization fails), explicit-off persistence, store
+   failure raising, and the UI wiring including the one-way-toggle guard.
+
+Verified against the running dev server, not just in tests: GET reported
+`{"analytics_job_enabled": false, "source": "default"}`, POST true returned
+`source: "admin"`, and a follow-up GET confirmed the persisted override. The
+registry was then reset to false so the instance is left as found — job mode
+should be switched on from the UI after `make deploy`, not before, or the banner
+promises Databricks and the run falls back to engine-side aggregation.
+
+Modified files:
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/shared/config/settings.py
+- app.yaml.template
+- docs/user-guide.md
+- docs/get-started.md
+- tests/units/core/test_helpers.py
+- tests/units/settings/test_analytics_job_toggle.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-29.log
+
+Tests: uv run pytest -q -m "not scenario" → 3673 passed, 275 skipped,
+5 deselected in 29.87s

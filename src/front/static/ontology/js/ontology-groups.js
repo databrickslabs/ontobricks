@@ -289,7 +289,7 @@ var OntologyGroups = (function () {
         deleteGroup: function (idx) {
             showConfirmDialog({
                 title: 'Delete Group',
-                message: 'Delete this group? Member classes will not be removed from the ontology.',
+                message: 'Delete this group? Member entities will not be removed from the ontology.',
                 confirmText: 'Delete',
                 confirmClass: 'btn-danger'
             }).then(function (confirmed) {

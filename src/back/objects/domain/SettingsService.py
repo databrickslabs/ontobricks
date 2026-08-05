@@ -504,15 +504,14 @@ class SettingsService:
 
         Delegates to :meth:`LakebaseRegistryStore.check_permissions` which
         probes connection, schema existence/privileges, and per-table CRUD
-        rights in a single round-trip. Returns ``{"success": False, ...}``
-        when psycopg is not installed or the Lakebase resource is unbound.
+        rights in a single round-trip. Raises ``ValidationError`` /
+        ``InfrastructureError`` when the registry is unbound or Lakebase is unavailable.
         """
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         if not rcfg.is_configured:
-            return {
-                "success": False,
-                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
-            }
+            raise ValidationError(
+                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA"
+            )
         try:
             from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
             store = RegistryFactory.lakebase(
@@ -521,14 +520,15 @@ class SettingsService:
                 database=rcfg.lakebase_database,
             )
             return await run_blocking(store.check_permissions)
-        except ImportError:
-            return {
-                "success": False,
-                "error": "psycopg is not installed — Lakebase backend unavailable.",
-            }
+        except ImportError as exc:
+            raise InfrastructureError(
+                "psycopg is not installed — Lakebase backend unavailable."
+            ) from exc
         except Exception as exc:
             logger.warning("check_lakebase_permissions failed: %s", exc)
-            return {"success": False, "error": str(exc)}
+            raise InfrastructureError(
+                str(exc) or "Lakebase permission check failed", detail=str(exc)
+            ) from exc
 
     @staticmethod
     async def check_registry_access(
@@ -563,14 +563,13 @@ class SettingsService:
         """
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         if not rcfg.is_configured:
-            return {
-                "success": False,
-                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME",
-            }
+            raise ValidationError(
+                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME"
+            )
 
         client = get_databricks_client(get_domain(session_mgr), settings)
         if not client:
-            return {"success": False, "error": "Databricks client not available"}
+            raise InfrastructureError("Databricks client not available")
 
         schema_result = await run_blocking(
             client.catalog.check_schema_access, rcfg.catalog, rcfg.schema
@@ -920,15 +919,9 @@ class SettingsService:
             return None
         app_names = SettingsService._registry_grant_app_names(settings)
         if not app_names:
-            return {
-                "success": False,
-                "granted": [],
-                "warnings": [],
-                "error": (
-                    "Could not determine the app name to grant — set "
-                    "ONTOBRICKS_APP_NAME."
-                ),
-            }
+            raise ValidationError(
+                "Could not determine the app name to grant — set ONTOBRICKS_APP_NAME."
+            )
         try:
             from back.objects.registry.store import RegistryFactory  # noqa: PLC0415
 
@@ -937,13 +930,10 @@ class SettingsService:
                 schema=rcfg.lakebase_schema,
                 database=rcfg.lakebase_database,
             )
-        except ImportError:
-            return {
-                "success": False,
-                "granted": [],
-                "warnings": [],
-                "error": "psycopg is not installed — Lakebase backend unavailable.",
-            }
+        except ImportError as exc:
+            raise InfrastructureError(
+                "psycopg is not installed — Lakebase backend unavailable."
+            ) from exc
         return store.grant_app_permissions(
             app_names=app_names,
             uc_catalog=(rcfg.catalog or "").strip(),
@@ -962,22 +952,22 @@ class SettingsService:
         """
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         if not rcfg.is_configured:
-            return {
-                "success": False,
-                "error": "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA",
-            }
+            raise ValidationError(
+                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA"
+            )
         try:
             summary = await run_blocking(
                 SettingsService._grant_registry_permissions, session_mgr, settings
             )
+        except (ValidationError, InfrastructureError):
+            raise
         except Exception as exc:  # noqa: BLE001
             logger.warning("grant_registry_permissions failed: %s", exc)
-            return {"success": False, "error": str(exc)}
+            raise InfrastructureError(
+                str(exc) or "Permission grant failed", detail=str(exc)
+            ) from exc
         if summary is None:
-            return {
-                "success": False,
-                "error": "Lakebase registry backend is not available.",
-            }
+            raise InfrastructureError("Lakebase registry backend is not available.")
         return summary
 
     @staticmethod
@@ -1513,6 +1503,75 @@ class SettingsService:
             )
         return {"success": True, "edit_lock_ttl_s": ttl_s}
 
+    @staticmethod
+    def get_analytics_job_enabled_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the effective graph-analytics job toggle plus its provenance.
+
+        ``source`` lets the Settings UI say whether the value in force came from
+        an admin or from the deployment default, which matters because an
+        unconfigured toggle silently tracks the env var — showing a bare
+        checkbox would imply someone had chosen it.
+        """
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        configured = None
+        try:
+            configured = global_config_service.get_analytics_job_enabled(
+                host, token, registry_cfg
+            )
+        except Exception as exc:  # noqa: BLE001 - fall back to the env default
+            logger.debug("Analytics-job toggle lookup skipped: %s", exc)
+
+        env_default = bool(getattr(settings, "analytics_job_enabled", False))
+        return {
+            "success": True,
+            "analytics_job_enabled": (
+                env_default if configured is None else bool(configured)
+            ),
+            "source": "default" if configured is None else "admin",
+            "env_default": env_default,
+        }
+
+    @staticmethod
+    def save_analytics_job_enabled_result(
+        enabled: bool,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the graph-analytics job toggle globally (admin only)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        domain, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        enabled = bool(enabled)
+        ok, msg = global_config_service.set_analytics_job_enabled(
+            host, token, registry_cfg, enabled
+        )
+        if not ok:
+            raise InfrastructureError(
+                "Failed to save the graph-analytics job setting", detail=msg
+            )
+
+        # The Analytics banner reads job availability from the cached
+        # ``/dtwin/sync/stats`` payload, which the page fetches without
+        # ``refresh`` because the counts behind it are expensive. Left in place,
+        # it would keep telling an admin to enable what they just enabled.
+        try:
+            from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+
+            DigitalTwin(domain).clear_ts_cache("stats")
+        except Exception as exc:  # noqa: BLE001 - the value is already stored
+            logger.debug("Could not drop the cached stats payload: %s", exc)
+
+        return {"success": True, "analytics_job_enabled": enabled, "source": "admin"}
+
     # ------------------------------------------------------------------
     #  Graph DB Engine
     # ------------------------------------------------------------------
@@ -1568,9 +1627,11 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        """List triple-store UC objects in the Registry schema, grouped by domain version."""
+        """List triple-store and analytics UC objects, grouped by domain version."""
         from back.core.graphdb.delta.objects import (
+            domain_match_key,
             fetch_uc_schema_tables,
+            group_analytics_objects,
             group_triplestore_objects,
         )
 
@@ -1590,6 +1651,10 @@ class SettingsService:
                 "registry_catalog": catalog,
                 "registry_schema": schema,
                 "domains": [],
+                "analytics": [],
+                "orphans": [],
+                "analytics_location": "",
+                "analytics_message": "",
                 "message": (
                     "Registry catalog/schema is not configured "
                     "(Settings → Registry)"
@@ -1602,6 +1667,7 @@ class SettingsService:
             domains = [
                 {
                     "base": grp["base"],
+                    "key": domain_match_key(grp["base"]),
                     "items": [
                         {
                             "kind": item["kind"],
@@ -1613,6 +1679,12 @@ class SettingsService:
                 }
                 for grp in sorted(groups.values(), key=lambda g: g["base"])
             ]
+            analytics_location, analytics, analytics_message = (
+                SettingsService._analytics_objects(
+                    settings, catalog, schema, raw_tables
+                )
+            )
+            domain_keys = {d["key"] for d in domains if d["key"]}
             return {
                 "success": True,
                 "registry_configured": True,
@@ -1620,12 +1692,74 @@ class SettingsService:
                 "registry_catalog": catalog,
                 "registry_schema": schema,
                 "domains": domains,
+                "analytics": analytics,
+                "orphans": [a for a in analytics if a["key"] not in domain_keys],
+                "analytics_location": analytics_location,
+                "analytics_message": analytics_message,
             }
         except Exception as exc:
             logger.warning("triple_store_databricks_objects failed: %s", exc)
             raise InfrastructureError(
                 "list Delta triple-store objects failed", detail=str(exc)
             ) from exc
+
+    @staticmethod
+    def _analytics_objects(
+        settings: Settings,
+        registry_catalog: str,
+        registry_schema: str,
+        registry_tables: List[Dict[str, Any]],
+    ) -> Tuple[str, List[Dict[str, Any]], str]:
+        """Group the analytics job's UC output tables, best-effort.
+
+        The job writes to ``analytics_job_output_schema`` when set and to the
+        registry schema otherwise, so the common case reuses the enumeration the
+        caller already performed. A scan that fails returns its reason instead of
+        raising — the triple-store listing must still render.
+        """
+        from back.core.graphdb.delta.objects import (
+            fetch_uc_schema_tables,
+            group_analytics_objects,
+        )
+
+        configured = (
+            getattr(settings, "analytics_job_output_schema", "") or ""
+        ).strip()
+        location = configured or f"{registry_catalog}.{registry_schema}"
+        if location.count(".") != 1:
+            return (
+                location,
+                [],
+                f"Analytics output schema '{location}' is not a catalog.schema pair",
+            )
+
+        catalog, schema = location.split(".", 1)
+        try:
+            if (catalog, schema) == (registry_catalog, registry_schema):
+                raw_tables = registry_tables
+            else:
+                raw_tables = fetch_uc_schema_tables(catalog, schema)
+        except Exception as exc:
+            logger.warning("analytics object listing failed for %s: %s", location, exc)
+            return (location, [], f"Could not list analytics tables in {location}")
+
+        groups = group_analytics_objects(raw_tables, catalog, schema)
+        analytics = [
+            {
+                "key": grp["key"],
+                "base": grp["base"],
+                "items": [
+                    {
+                        "kind": item["kind"],
+                        "name": item["name"],
+                        "full_name": item["full_name"],
+                    }
+                    for item in grp["sorted_items"]
+                ],
+            }
+            for grp in sorted(groups.values(), key=lambda g: g["base"])
+        ]
+        return (location, analytics, "")
 
     @staticmethod
     def get_graph_engine_config_result(
@@ -1880,13 +2014,16 @@ class SettingsService:
         ``verify_connectivity()`` (a lightweight Bolt handshake — no Cypher
         is executed, no data is touched).
 
-        Returns one of:
+        Returns one of::
 
-        - ``{"success": True, "ok": True, "uri": ..., "database": ...,
-           "latency_ms": ..., "credentials_source": "env var" | "engine_config"}``
-        - ``{"success": True, "ok": False, "error": ..., "category": ...}``
-          for clean error states (auth failure, DNS unresolvable, bad config) —
-          surfaces a friendly UI message without 5xx-ing the route.
+            {"success": True, "ok": True, "uri": ..., "database": ...,
+             "latency_ms": ..., "credentials_source": "env var" | "engine_config"}
+
+            {"success": True, "ok": False, "error": ..., "category": ...}
+
+        The second form covers clean error states (auth failure, DNS
+        unresolvable, bad config) — it surfaces a friendly UI message without
+        5xx-ing the route.
         """
         import time as _time
 
@@ -2003,6 +2140,133 @@ class SettingsService:
                 else "engine_config (local-dev fallback)"
             ),
         }
+
+    @staticmethod
+    def _neo4j_connection_from_config(session_mgr, settings):
+        """Build a :class:`Neo4jConnection` from the persisted Neo4j engine config.
+
+        Shared by the Neo4j admin endpoints (databases list, objects list,
+        health, drop). Returns ``(conn, gcfg)`` or raises the mapped error.
+        """
+        from back.core.graphdb.engine_config import neo4j_section
+        from back.core.graphdb.neo4j.Neo4jConnection import (
+            Neo4jConnection,
+            resolve_neo4j_database,
+        )
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        global_config_service.load(host, token, registry_cfg, force=True)
+        gcfg = neo4j_section(
+            global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        )
+        if not isinstance(gcfg, dict) or not gcfg.get("uri"):
+            raise ValidationError(
+                "Neo4j engine_config is empty — set the Bolt URI/Username and Save first."
+            )
+        conn = Neo4jConnection(
+            uri=str(gcfg["uri"]).strip(),
+            database=resolve_neo4j_database(gcfg),
+            auth_method=str(gcfg.get("auth_method") or "basic").strip() or "basic",
+            engine_config=gcfg,
+            encrypted=bool(gcfg.get("encrypted", True)),
+        )
+        return conn, gcfg
+
+    @staticmethod
+    def graph_engine_neo4j_databases_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List Neo4j databases on the server for the Domain Info DB selector (P4)."""
+        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+
+        conn, gcfg = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        try:
+            names = Neo4jReadOps(conn).list_databases()
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        # Always include the configured database so the selector is never empty.
+        configured = conn.database
+        if configured and configured not in names:
+            names = [configured] + names
+        return {"success": True, "databases": names, "configured": configured}
+
+    @staticmethod
+    def graph_engine_neo4j_labels_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List materialised Neo4j graphs (marker labels) + counts for the admin Objects tab (P5)."""
+        from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+
+        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        try:
+            labels = Neo4jReadOps(conn).list_labels()
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return {"success": True, "graphs": labels, "database": conn.database}
+
+    @staticmethod
+    def graph_engine_neo4j_health_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Bolt health probe for the Neo4j admin Health tab (P5)."""
+        import time as _time
+
+        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        t0 = _time.monotonic()
+        try:
+            conn.get_driver().verify_connectivity()
+            conn.run("RETURN 1 AS probe")
+            ok, err = True, None
+        except Exception as exc:  # noqa: BLE001
+            ok, err = False, "%s: %s" % (type(exc).__name__, exc)
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return {
+            "success": True,
+            "ok": ok,
+            "error": err,
+            "uri": conn.uri,
+            "database": conn.database,
+            "latency_ms": round((_time.monotonic() - t0) * 1000.0, 1),
+        }
+
+    @staticmethod
+    def graph_engine_neo4j_drop_label_result(
+        label: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Drop one Neo4j graph (marker label): its nodes, rels, constraint, schema map (P5)."""
+        from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps, sanitise_label
+
+        clean = (label or "").strip()
+        if not clean:
+            raise ValidationError("No graph label provided to drop.")
+        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        try:
+            # drop_table sanitises internally; pass the label through unchanged
+            # (it already equals the sanitised marker as listed by list_labels).
+            Neo4jWriteOps(conn).drop_table(clean)
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return {"success": True, "dropped": sanitise_label(clean)}
 
     @staticmethod
     def graph_engine_uc_catalogs_result(
@@ -2614,6 +2878,7 @@ class SettingsService:
         """List UC Delta tables in the configured graph schema, plus Lakeflow state.
 
         Approach:
+
         1. Resolve ``sync_uc_catalog`` and ``uc_schema`` from engine config,
            falling back to the registry catalog when the former is unset.
         2. Call the UC REST API (``/api/2.1/unity-catalog/tables``) to enumerate
@@ -3584,13 +3849,25 @@ class SettingsService:
     def list_schedules_result(
         session_mgr: SessionManager, settings: Settings
     ) -> Dict[str, Any]:
+        """Every schedule of every task type, plus the type catalogue.
+
+        The catalogue lets the settings UI build its type selector and
+        per-type columns from the backend registry instead of hardcoding
+        the list a second time.
+        """
+        from back.objects.registry.scheduler_tasks import task_type_catalog
+
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
         scheduler = SettingsService._get_scheduler()
         try:
             entries = scheduler.get_all_schedules(host, token, registry_cfg)
-            return {"success": True, "schedules": entries}
+            return {
+                "success": True,
+                "schedules": entries,
+                "task_types": task_type_catalog(),
+            }
         except OntoBricksError:
             raise
         except Exception as e:
@@ -3603,14 +3880,23 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
+        """Create or update a schedule of any task type.
+
+        Per-type options arrive in ``config`` and are validated by the
+        task type itself, so this method never branches on the type.
+        """
         try:
+            task_type = (data.get("task_type") or "build").strip()
             domain_name = (
                 data.get("domain_name") or data.get("project_name") or ""
             ).strip()
+            target_key = (data.get("target_key") or "").strip()
             interval_minutes = int(data.get("interval_minutes", 60))
-            drop_existing = bool(data.get("drop_existing", True))
             enabled = bool(data.get("enabled", True))
             version = (data.get("version") or "latest").strip()
+            config = data.get("config")
+            if not isinstance(config, dict):
+                config = {}
 
             if not domain_name:
                 raise ValidationError("Domain name is required")
@@ -3625,14 +3911,16 @@ class SettingsService:
                 token,
                 registry_cfg,
                 settings,
+                task_type,
                 domain_name,
                 interval_minutes,
-                drop_existing,
-                enabled,
+                target_key=target_key,
+                enabled=enabled,
                 version=version,
+                config=config,
             )
             if not ok:
-                raise InfrastructureError("Failed to save schedule", detail=msg)
+                raise ValidationError(msg)
             return {"success": ok, "message": msg}
         except OntoBricksError:
             raise
@@ -3642,9 +3930,12 @@ class SettingsService:
 
     @staticmethod
     def get_schedule_history_result(
+        task_type: str,
         domain_name: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        target_key: str = "",
     ) -> Dict[str, Any]:
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
@@ -3652,9 +3943,15 @@ class SettingsService:
         scheduler = SettingsService._get_scheduler()
         try:
             entries = scheduler.get_schedule_history(
-                host, token, registry_cfg, domain_name
+                host, token, registry_cfg, task_type, domain_name, target_key
             )
-            return {"success": True, "domain_name": domain_name, "history": entries}
+            return {
+                "success": True,
+                "task_type": task_type,
+                "domain_name": domain_name,
+                "target_key": target_key,
+                "history": entries,
+            }
         except OntoBricksError:
             raise
         except Exception as e:
@@ -3694,6 +3991,82 @@ class SettingsService:
             ) from e
 
     @staticmethod
+    def _all_runs_result(
+        kind: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        folder: Optional[str],
+        limit: int,
+        offset: int,
+    ) -> Dict[str, Any]:
+        """One page of registry-wide run history for the admin Runs page.
+
+        *kind* is ``"build"`` or ``"analytics"``. ``folder=None`` spans every
+        domain. The two kinds share every step but the registry method, so
+        they share one body rather than two near-copies.
+        """
+        try:
+            domain = get_domain(session_mgr)
+            svc = RegistryService.from_context(domain, settings)
+            if not svc.cfg.is_configured:
+                raise ValidationError("Registry not configured")
+            reader = (
+                svc.load_all_build_runs
+                if kind == "build"
+                else svc.load_all_graph_analytics_runs
+            )
+            runs, total = reader(folder=folder, limit=limit, offset=offset)
+            return {
+                "success": True,
+                "domain": folder,
+                "runs": runs,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        except OntoBricksError:
+            raise
+        except Exception as e:
+            logger.exception("get_all_%s_runs failed: %s", kind, e)
+            raise InfrastructureError(
+                f"Failed to load {kind} runs", detail=str(e)
+            ) from e
+
+    @staticmethod
+    def get_all_build_runs_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """One page of build runs across every domain in the registry."""
+        return SettingsService._all_runs_result(
+            "build", session_mgr, settings, folder=folder, limit=limit, offset=offset
+        )
+
+    @staticmethod
+    def get_all_analytics_runs_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """One page of analytics runs across every domain in the registry."""
+        return SettingsService._all_runs_result(
+            "analytics",
+            session_mgr,
+            settings,
+            folder=folder,
+            limit=limit,
+            offset=offset,
+        )
+
+    @staticmethod
     def get_build_analytics_result(
         domain_name: str,
         session_mgr: SessionManager,
@@ -3729,9 +4102,12 @@ class SettingsService:
 
     @staticmethod
     def delete_schedule_result(
+        task_type: str,
         domain_name: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        target_key: str = "",
     ) -> Dict[str, Any]:
         try:
             _, host, token, registry_cfg = SettingsService._resolve_context(
@@ -3739,9 +4115,11 @@ class SettingsService:
             )
 
             scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.remove_schedule(host, token, registry_cfg, domain_name)
+            ok, msg = scheduler.remove_schedule(
+                host, token, registry_cfg, task_type, domain_name, target_key
+            )
             if not ok:
-                raise InfrastructureError("Failed to remove schedule", detail=msg)
+                raise NotFoundError(msg)
             return {"success": ok, "message": msg}
         except OntoBricksError:
             raise
@@ -3751,23 +4129,24 @@ class SettingsService:
 
     @staticmethod
     def trigger_schedule_now_result(
+        task_type: str,
         domain_name: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        target_key: str = "",
     ) -> Dict[str, Any]:
-        """Fire the build schedule for *domain_name* immediately."""
+        """Fire a schedule immediately, without touching its own clock."""
         try:
             _, host, token, registry_cfg = SettingsService._resolve_context(
                 session_mgr, settings
             )
             scheduler = SettingsService._get_scheduler()
             ok, msg = scheduler.run_schedule_now(
-                host, token, registry_cfg, settings, domain_name
+                host, token, registry_cfg, settings, task_type, domain_name, target_key
             )
             if not ok:
-                raise InfrastructureError(
-                    "Failed to trigger schedule", detail=msg
-                )
+                raise InfrastructureError("Failed to trigger schedule", detail=msg)
             return {"success": True, "message": msg}
         except OntoBricksError:
             raise
@@ -3775,29 +4154,6 @@ class SettingsService:
             logger.exception("trigger_schedule_now failed: %s", e)
             raise InfrastructureError(
                 "Failed to trigger schedule", detail=str(e)
-            ) from e
-
-    # ------------------------------------------------------------------
-    # Cohort schedules — periodic Cohort analysis + materialisation
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def list_cohort_schedules_result(
-        session_mgr: SessionManager, settings: Settings
-    ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        scheduler = SettingsService._get_scheduler()
-        try:
-            entries = scheduler.get_all_cohort_schedules(host, token, registry_cfg)
-            return {"success": True, "schedules": entries}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("list_cohort_schedules failed: %s", e)
-            raise InfrastructureError(
-                "Failed to list cohort schedules", detail=str(e)
             ) from e
 
     @staticmethod
@@ -3894,152 +4250,6 @@ class SettingsService:
             )
             raise InfrastructureError(
                 "Failed to list cohort rules", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def save_cohort_schedule_result(
-        data: Dict[str, Any],
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        try:
-            domain_name = (data.get("domain_name") or "").strip()
-            rule_id = (data.get("rule_id") or "").strip()
-            interval_minutes = int(data.get("interval_minutes", 60))
-            enabled = bool(data.get("enabled", True))
-            version = (data.get("version") or "latest").strip()
-            output_graph = bool(data.get("output_graph", True))
-            output_uc = bool(data.get("output_uc", True))
-
-            if not domain_name:
-                raise ValidationError("Domain name is required")
-            if not rule_id:
-                raise ValidationError("Cohort rule id is required")
-            if not output_graph and not output_uc:
-                raise ValidationError(
-                    "At least one output target (graph or UC table) is required"
-                )
-
-            _, host, token, registry_cfg = SettingsService._resolve_context(
-                session_mgr, settings
-            )
-
-            scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.save_cohort_schedule(
-                host,
-                token,
-                registry_cfg,
-                settings,
-                domain_name,
-                rule_id,
-                interval_minutes,
-                enabled,
-                version=version,
-                output_graph=output_graph,
-                output_uc=output_uc,
-            )
-            if not ok:
-                raise InfrastructureError(
-                    "Failed to save cohort schedule", detail=msg
-                )
-            return {"success": ok, "message": msg}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("save_cohort_schedule failed: %s", e)
-            raise InfrastructureError(
-                "Failed to save cohort schedule", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def get_cohort_schedule_history_result(
-        domain_name: str,
-        rule_id: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        scheduler = SettingsService._get_scheduler()
-        try:
-            entries = scheduler.get_cohort_schedule_history(
-                host, token, registry_cfg, domain_name, rule_id
-            )
-            return {
-                "success": True,
-                "domain_name": domain_name,
-                "rule_id": rule_id,
-                "history": entries,
-            }
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception(
-                "get_cohort_schedule_history failed for '%s/%s': %s",
-                domain_name,
-                rule_id,
-                e,
-            )
-            raise InfrastructureError(
-                "Failed to load cohort schedule history", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def delete_cohort_schedule_result(
-        domain_name: str,
-        rule_id: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        try:
-            _, host, token, registry_cfg = SettingsService._resolve_context(
-                session_mgr, settings
-            )
-            scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.remove_cohort_schedule(
-                host, token, registry_cfg, domain_name, rule_id
-            )
-            if not ok:
-                raise InfrastructureError(
-                    "Failed to remove cohort schedule", detail=msg
-                )
-            return {"success": ok, "message": msg}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("delete_cohort_schedule failed: %s", e)
-            raise InfrastructureError(
-                "Failed to remove cohort schedule", detail=str(e)
-            ) from e
-
-    @staticmethod
-    def trigger_cohort_schedule_now_result(
-        domain_name: str,
-        rule_id: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        """Fire the cohort materialisation schedule for *(domain, rule)* now."""
-        try:
-            _, host, token, registry_cfg = SettingsService._resolve_context(
-                session_mgr, settings
-            )
-            scheduler = SettingsService._get_scheduler()
-            ok, msg = scheduler.run_cohort_schedule_now(
-                host, token, registry_cfg, settings, domain_name, rule_id
-            )
-            if not ok:
-                raise InfrastructureError(
-                    "Failed to trigger cohort schedule", detail=msg
-                )
-            return {"success": True, "message": msg}
-        except OntoBricksError:
-            raise
-        except Exception as e:
-            logger.exception("trigger_cohort_schedule_now failed: %s", e)
-            raise InfrastructureError(
-                "Failed to trigger cohort schedule", detail=str(e)
             ) from e
 
     # ===========================================

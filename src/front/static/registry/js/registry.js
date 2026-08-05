@@ -177,28 +177,35 @@ document.addEventListener('DOMContentLoaded', function () {
         const configDiv = document.getElementById('registryConfigStatus');
         registryConfigured = !!cfg.configured;
 
+        const setStatus = (html) => {
+            if (div) { div.style.display = 'block'; div.innerHTML = html; }
+            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = html; }
+        };
+
         if (cfg.configured) {
-            if (div) div.style.display = 'none';
-            if (configDiv) configDiv.style.display = 'none';
+            setStatus(
+                '<p class="small text-success mb-0">' +
+                '<i class="bi bi-check-circle-fill me-1"></i>Registry is operational</p>'
+            );
             loadRegistryDomains();
         } else if (cfg.catalog && cfg.schema) {
             const msg = registryLocked
                 ? 'Registry volume is set via Databricks App resource but not yet initialized. Click <strong>Initialize</strong> to set up the registry.'
                 : 'Registry location set but not initialized yet. Click <strong>Initialize</strong> to create the volume.';
-            const alertHtml = '<div class="alert alert-warning small mb-0">' +
-                '<i class="bi bi-exclamation-triangle me-1"></i> ' + msg + '</div>';
-            if (div) { div.style.display = 'block'; div.innerHTML = alertHtml; }
-            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = alertHtml; }
+            setStatus(
+                '<p class="small text-warning mb-0">' +
+                '<i class="bi bi-exclamation-triangle-fill me-1"></i>Registry is not operational — ' + msg + '</p>'
+            );
             const section = document.getElementById('registryDomainsSection');
             if (section) section.style.display = 'none';
         } else {
-            const notConfiguredAlert = '<div class="alert alert-warning small mb-0">' +
-                '<i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. ' +
+            setStatus(
+                '<p class="small text-danger mb-0">' +
+                '<i class="bi bi-x-circle-fill me-1"></i>Registry is not operational — not configured. ' +
                 'Set <code>REGISTRY_CATALOG</code> / <code>REGISTRY_SCHEMA</code> / <code>LAKEBASE_SCHEMA</code> in <code>.env</code> ' +
                 '(local development) or bind the Volume and Lakebase resources in <code>app.yaml</code> ' +
-                '(Databricks Apps deployment), then restart the app.</div>';
-            if (div) { div.style.display = 'block'; div.innerHTML = notConfiguredAlert; }
-            if (configDiv) { configDiv.style.display = 'block'; configDiv.innerHTML = notConfiguredAlert; }
+                '(Databricks Apps deployment), then restart the app.</p>'
+            );
             const section = document.getElementById('registryDomainsSection');
             if (section) section.style.display = 'none';
         }
@@ -343,7 +350,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '<tr class="registry-domain-row" data-target="' + rowId + '" style="cursor:pointer;">' +
                     '<td class="ps-3 fw-semibold text-nowrap">' +
                         '<i class="bi bi-chevron-right me-1 text-muted registry-chevron" style="font-size:0.7rem;transition:transform 0.15s;"></i>' +
-                        '<i class="bi bi-folder2 me-1 text-primary"></i>' +
+                        '<i class="bi bi-box me-1 text-primary"></i>' +
                         nameLabel +
                     '</td>' +
                     '<td class="text-muted text-truncate">' + uri + '</td>' +
@@ -589,8 +596,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">' +
             '<span class="spinner-border spinner-border-sm me-1"></span> Loading…</td></tr>';
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
+        showStackedModal(modalEl);
 
         try {
             const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
@@ -620,7 +626,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ).join('');
                 return '<tr class="export-obx-row" data-domain="' + escapeHtml(d.name) + '">' +
                     '<td class="text-center"><input type="checkbox" class="form-check-input export-obx-pick" checked></td>' +
-                    '<td class="fw-semibold"><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(d.name) + '</td>' +
+                    '<td class="fw-semibold"><i class="bi bi-box me-1 text-primary"></i>' + escapeHtml(d.name) + '</td>' +
                     '<td class="text-center">' + verBadges + '</td>' +
                     '<td>' +
                         '<select class="form-select form-select-sm export-obx-mode">' +
@@ -727,7 +733,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('importObxFile').value = '';
         document.getElementById('importObxPreviewError').style.display = 'none';
         document.getElementById('btnImportObxConfirm').style.display = 'none';
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        showStackedModal(modalEl);
     }
 
     document.getElementById('importObxFile')?.addEventListener('change', async (e) => {
@@ -780,7 +786,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 : '<span class="badge bg-success-subtle text-success border-success">New</span>';
             const defaultAction = d.exists ? 'skip' : 'overwrite';
             return '<tr class="import-obx-row" data-name="' + escapeHtml(d.name) + '" data-suggested="' + escapeHtml(d.suggested_new_name || '') + '">' +
-                '<td><i class="bi bi-folder2 me-1 text-primary"></i>' + escapeHtml(d.name) +
+                '<td><i class="bi bi-box me-1 text-primary"></i>' + escapeHtml(d.name) +
                     (d.original_name && d.original_name !== d.name
                         ? '<div class="small text-muted">from <code>' + escapeHtml(d.original_name) + '</code></div>'
                         : '') +
@@ -1351,7 +1357,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 summaryEl.innerHTML = '<div class="bridges-summary-bar">' +
                     '<div class="summary-item"><i class="bi bi-signpost-split text-primary"></i> ' +
                         '<span class="summary-value">' + totalBridges + '</span> bridge' + (totalBridges !== 1 ? 's' : '') + '</div>' +
-                    '<div class="summary-item"><i class="bi bi-folder2 text-secondary"></i> ' +
+                    '<div class="summary-item"><i class="bi bi-box text-secondary"></i> ' +
                         '<span class="summary-value">' + domainsWithBridges.length + '</span> domain' + (domainsWithBridges.length !== 1 ? 's' : '') +
                         ' with bridges</div>' +
                     '<div class="summary-item"><i class="bi bi-globe text-secondary"></i> ' +
@@ -1372,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     '<div class="bridges-domain-header" data-bs-toggle="collapse" data-bs-target="#' + cardId + '">' +
                         '<div class="d-flex align-items-center gap-2">' +
                             '<i class="bi bi-chevron-right text-muted bridges-chevron" style="font-size:0.7rem;transition:transform 0.15s;"></i>' +
-                            '<i class="bi bi-folder2 text-primary"></i>' +
+                            '<i class="bi bi-box text-primary"></i>' +
                             '<span class="domain-name">' + escapeHtml(d.name) + '</span>';
 
                 if (d.base_uri) {
@@ -1392,10 +1398,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     html += '<table class="table table-sm table-hover bridges-table">' +
                         '<thead><tr>' +
-                            '<th>Source Class</th>' +
+                            '<th>Source Entity</th>' +
                             '<th style="width:3rem;"></th>' +
                             '<th>Target Domain</th>' +
-                            '<th>Target Class</th>' +
+                            '<th>Target Entity</th>' +
                             '<th>Label</th>' +
                         '</tr></thead><tbody>';
 
@@ -1407,7 +1413,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         html += '<tr>' +
                             '<td><span class="me-1">' + srcEmoji + '</span> ' + escapeHtml(b.source_class) + '</td>' +
                             '<td class="text-center bridge-arrow"><i class="bi bi-arrow-right"></i></td>' +
-                            '<td><i class="bi bi-folder2 text-secondary me-1"></i>' + escapeHtml(b.target_domain) + '</td>' +
+                            '<td><i class="bi bi-box text-secondary me-1"></i>' + escapeHtml(b.target_domain) + '</td>' +
                             '<td>' + escapeHtml(b.target_class_name) + '</td>' +
                             '<td>' + label + '</td>' +
                         '</tr>';

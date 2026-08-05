@@ -8,6 +8,7 @@ from back.core.logging import get_logger
 from back.core.helpers import (
     sql_escape as _escape_sql,
     extract_local_name as _extract_local,
+    sql_cast as _sql_cast,
 )
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 
@@ -26,12 +27,12 @@ class SparqlTranslator:
 
     @staticmethod
     def _cast_str(expr: str, dialect: str = DIALECT_SPARK) -> str:
-        """CAST(<expr> AS STRING) for Spark SQL."""
-        return f"CAST({expr} AS {SparqlTranslator._string_type(dialect)})"
+        """TRY_CAST(<expr> AS STRING) for Spark SQL (ANSI-safe stringification)."""
+        return _sql_cast(expr, SparqlTranslator._string_type(dialect))
 
     @staticmethod
     def _coalesce_cast_str(expr: str, dialect: str = DIALECT_SPARK) -> str:
-        """COALESCE(CAST(<expr> AS STRING), '')."""
+        """COALESCE(TRY_CAST(<expr> AS STRING), '')."""
         return f"COALESCE({SparqlTranslator._cast_str(expr, dialect)}, '')"
 
     @staticmethod
@@ -68,7 +69,7 @@ class SparqlTranslator:
         alias: str = "",
         dialect: str = DIALECT_SPARK,
     ) -> str:
-        """Build a subject expression from a URI template, like CONCAT(base, CAST(col AS STRING))."""
+        """Build a subject expression from a URI template, like CONCAT(base, TRY_CAST(col AS STRING))."""
         col_ref = f"{alias}.{id_column}" if alias else id_column
         if uri_template and "{" in uri_template:
             base_uri = uri_template.split("{")[0]

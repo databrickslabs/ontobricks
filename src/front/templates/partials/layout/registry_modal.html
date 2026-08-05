@@ -1,10 +1,10 @@
-<!-- Registry modal — Browse + Bridges (opened from navbar archive icon) -->
+<!-- Registry modal — Browse + Bridges (opened from navbar boxes icon) -->
 <div class="modal fade" id="registryModal" tabindex="-1" aria-labelledby="registryModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content registry-modal-content">
             <div class="modal-header align-items-center py-3">
                 <h5 class="modal-title mb-0" id="registryModalLabel">
-                    <i class="bi bi-archive me-2"></i>Registry
+                    <i class="bi bi-boxes me-2"></i>Registry
                 </h5>
                 <div class="d-flex align-items-center gap-2 ms-auto">
                     <button type="button" class="btn btn-sm btn-primary" id="btnRegistryModalNewDomain"
@@ -47,3 +47,6 @@
         </div>
     </div>
 </div>
+
+{% include 'partials/registry/_export_obx_modal.html' %}
+{% include 'partials/registry/_import_obx_modal.html' %}

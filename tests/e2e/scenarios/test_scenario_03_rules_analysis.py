@@ -3,7 +3,7 @@ E2E (LIVE) — ``test_scenario_3``: rules → quality → reasoning → analysis
 domain produced by :mod:`test_scenario_01_generate_live` and versioned by
 :mod:`test_scenario_02_collab_lifecycle`.
 
-This journey **reuses the durable ``test_scenario_1`` domain** and operates on
+This journey **reuses the durable ``testscenario1`` domain** and operates on
 the fresh DRAFT version scenario 2 branched off (V2). It exercises the
 "governed enrichment" loop that sits on top of a built knowledge graph:
 
@@ -46,7 +46,7 @@ Run (against the local dev server, after scenarios 1 and 2):
 
 Override the target / timeouts via env:
     ONTOBRICKS_LIVE_BASE              base URL (default http://localhost:8000)
-    ONTOBRICKS_SCENARIO_DOMAIN        reused domain folder (default test_scenario_1)
+    ONTOBRICKS_SCENARIO_DOMAIN        reused domain folder (default testscenario1)
     ONTOBRICKS_SCENARIO_BUILD_TIMEOUT     max seconds for a KG build (default 420)
     ONTOBRICKS_SCENARIO_RULES_TIMEOUT     max seconds for business-rule generation (default 600)
     ONTOBRICKS_SCENARIO_DQ_TIMEOUT        max seconds for the data-quality run (default 300)
@@ -75,13 +75,13 @@ pytestmark = [
     pytest.mark.skipif(
         os.environ.get("ONTOBRICKS_SCENARIO_LIVE") != "1",
         reason="live scenario — set ONTOBRICKS_SCENARIO_LIVE=1 to run "
-        "(needs a running app + the test_scenario_1 domain from scenarios 1 & 2)",
+        "(needs a running app + the testscenario1 domain from scenarios 1 & 2)",
     ),
     *chain_marker("scenario_3", depends=("scenario_2",)),
 ]
 
 
-_DOMAIN_NAME = os.environ.get("ONTOBRICKS_SCENARIO_DOMAIN", "test_scenario_1")
+_DOMAIN_NAME = os.environ.get("ONTOBRICKS_SCENARIO_DOMAIN", "testscenario1")
 _BUILD_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_BUILD_TIMEOUT", "420"))
 _RULES_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_RULES_TIMEOUT", "600"))
 _DQ_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_DQ_TIMEOUT", "300"))

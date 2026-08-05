@@ -166,7 +166,7 @@ function getOrCreateDetailPanel() {
         <div class="panel-footer" id="sharedPanelFooter">
             <button type="button" class="btn btn-secondary btn-sm" id="sharedCancelPanelBtn">Cancel</button>
             <button type="button" class="btn btn-dark btn-sm" id="sharedSavePanelBtn">
-                <i class="bi bi-check-circle"></i> Save
+                <i class="bi bi-check-circle"></i> Apply
             </button>
         </div>
     `;
@@ -247,9 +247,9 @@ function attachDirtyTracking() {
 async function guardedCloseSharedPanel() {
     if (sharedPanelDirty) {
         const save = await showConfirmDialog({
-            title: 'Unsaved Changes',
-            message: 'You have unsaved changes. Do you want to save before closing?',
-            confirmText: 'Save',
+            title: 'Unapplied Changes',
+            message: 'You have unapplied changes. Do you want to apply them before closing?',
+            confirmText: 'Apply',
             cancelText: 'Discard',
             confirmClass: 'btn-primary',
             icon: 'exclamation-triangle'
@@ -320,9 +320,9 @@ function panelGetById(id) {
 async function checkDirtyBeforeSwitch() {
     if (!sharedPanelDirty) return true;
     const save = await showConfirmDialog({
-        title: 'Unsaved Changes',
-        message: 'You have unsaved changes. Do you want to save before continuing?',
-        confirmText: 'Save',
+        title: 'Unapplied Changes',
+        message: 'You have unapplied changes. Do you want to apply them before continuing?',
+        confirmText: 'Apply',
         cancelText: 'Discard',
         confirmClass: 'btn-primary',
         icon: 'exclamation-triangle'
@@ -498,6 +498,9 @@ async function openEntityPanelForEdit(idx, options = {}) {
         .map(p => ({ name: p.name || p.localName || p }))
         .filter(a => !inheritedNames.has(a.name));
     
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _entityPanelActiveTab = options.activeTab;
+    
     openSharedPanel();
     
     const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
@@ -534,6 +537,9 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelOwnAttributes = (cls.dataProperties || [])
         .map(p => ({ name: p.name || p.localName || p }))
         .filter(a => !inheritedNames.has(a.name));
+    
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _entityPanelActiveTab = options.activeTab;
     
     openSharedPanel();
     
@@ -609,7 +615,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
             <ul class="form-tabs-nav">
                 <li><a class="form-tab-link ${_eTab === 'details' ? 'active' : ''}" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
                 <li><a class="form-tab-link ${_eTab === 'attributes' ? 'active' : ''}" data-form-tab="attributes" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-tags me-1"></i>Attributes</a></li>
-                <li><a class="form-tab-link ${_eTab === 'actions' ? 'active' : ''}" data-form-tab="actions" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-lightning me-1"></i>External</a></li>
+                <li><a class="form-tab-link ${_eTab === 'actions' ? 'active' : ''}" data-form-tab="actions" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-lightning me-1"></i>References</a></li>
                 <li><a class="form-tab-link ${_eTab === 'constraints' ? 'active' : ''}" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
             </ul>
 
@@ -713,24 +719,24 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
 
             <div class="form-tab-pane ${_eTab === 'constraints' ? 'active' : ''}" data-form-tab-content="constraints">
                 <div class="mb-3">
-                    <label class="form-label small text-muted mb-1" title="Classes that share no instances with this class">
+                    <label class="form-label small text-muted mb-1" title="Entities that share no instances with this entity">
                         <i class="bi bi-x-circle me-1"></i>Disjoint With
                     </label>
                     <select class="form-select form-select-sm" id="sharedEntityDisjointWith" ${disabled} multiple size="3" 
-                            title="Select classes that cannot share instances with this class">
+                            title="Select entities that cannot share instances with this entity">
                         ${otherClassOptions}
                     </select>
-                    <div class="form-text small">No instance can belong to both this class and the selected classes</div>
+                    <div class="form-text small">No instance can belong to both this entity and the selected entities</div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small text-muted mb-1" title="Classes that have exactly the same instances as this class">
+                    <label class="form-label small text-muted mb-1" title="Entities that have exactly the same instances as this entity">
                         <i class="bi bi-arrows-angle-expand me-1"></i>Equivalent To
                     </label>
                     <select class="form-select form-select-sm" id="sharedEntityEquivalentTo" ${disabled} multiple size="3"
-                            title="Select classes that are equivalent to this class">
+                            title="Select entities that are equivalent to this entity">
                         ${otherClassOptions}
                     </select>
-                    <div class="form-text small">Classes that have exactly the same instances</div>
+                    <div class="form-text small">Entities that have exactly the same instances</div>
                 </div>
             </div>
         </form>
@@ -1714,7 +1720,7 @@ function renderSharedEntityBridges(viewOnly = false) {
                         <span class="fw-semibold ms-1">${escapeHtml(bridge.target_class_name || '')}</span>
                     </small>
                     <small class="text-muted d-block ms-3">
-                        <i class="bi bi-folder2-open me-1"></i>${escapeHtml(bridge.target_domain || bridge.target_project || '')}
+                        <i class="bi bi-box me-1"></i>${escapeHtml(bridge.target_domain || bridge.target_project || '')}
                         ${bridge.label ? ` &mdash; ${escapeHtml(bridge.label)}` : ''}
                     </small>
                 </div>
@@ -1820,7 +1826,7 @@ async function openBridgeSelectorModal() {
         list.innerHTML = bridgeRows.map(p => `
             <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
                     onclick="_bridgeSelectDomain('${escapeHtml(p.name)}')">
-                <i class="bi bi-folder2-open text-primary"></i>
+                <i class="bi bi-box text-primary"></i>
                 <div class="flex-grow-1">
                     <div class="fw-semibold">${escapeHtml(p.name)}</div>
                     ${p.description ? `<small class="text-muted">${escapeHtml(p.description)}</small>` : ''}
@@ -1894,7 +1900,7 @@ function _bridgeSelectClass(cls) {
     document.getElementById('bridgeStepClass').style.display = 'none';
     document.getElementById('bridgeStepLabel').style.display = '';
     document.getElementById('bridgeSummary').innerHTML =
-        `<i class="bi bi-folder2-open me-1"></i>${escapeHtml(_bridgePendingDomain)} <i class="bi bi-arrow-right mx-1"></i> ${cls.emoji || '📦'} ${escapeHtml(cls.name)}`;
+        `<i class="bi bi-box me-1"></i>${escapeHtml(_bridgePendingDomain)} <i class="bi bi-arrow-right mx-1"></i> ${cls.emoji || '📦'} ${escapeHtml(cls.name)}`;
 }
 
 function _bridgeBackToDomains() {
@@ -2549,6 +2555,9 @@ async function openRelationshipPanelForEdit(idx, options = {}) {
     sharedPanelViewOnly = false;
     sharedPanelOnSaveCallback = options.onSave || null;
     
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _relPanelActiveTab = options.activeTab;
+    
     openSharedPanel();
     
     const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
@@ -2573,6 +2582,9 @@ async function openRelationshipPanelForView(idx, options = {}) {
     sharedPanelEditIndex = idx;
     sharedPanelViewOnly = true;
     sharedPanelOnSaveCallback = null;
+    
+    // Jump straight to a specific tab (e.g. Designer context-menu shortcuts)
+    if (options.activeTab) _relPanelActiveTab = options.activeTab;
     
     openSharedPanel();
     
@@ -2668,58 +2680,47 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="input-group input-group-sm">
-                                <span class="input-group-text" title="Minimum cardinality">Min</span>
+                                <span class="input-group-text">Min</span>
                                 <input type="number" class="form-control" id="sharedRelMinCard" 
                                        value="${minCard}" min="0" placeholder="0" ${disabled}>
                             </div>
+                            <div class="form-text small">Minimum number of values required per subject (0 = optional)</div>
                         </div>
                         <div class="col-6">
                             <div class="input-group input-group-sm">
-                                <span class="input-group-text" title="Maximum cardinality">Max</span>
+                                <span class="input-group-text">Max</span>
                                 <input type="number" class="form-control" id="sharedRelMaxCard" 
                                        value="${maxCard}" min="0" placeholder="*" ${disabled}>
                             </div>
+                            <div class="form-text small">Maximum number of values allowed; leave empty for unlimited (*)</div>
                         </div>
                     </div>
-                    <div class="form-text small">Leave Max empty for unlimited (*)</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label small text-muted mb-1">Property Characteristics</label>
-                    <div class="d-flex flex-wrap gap-2">
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelFunctional" 
-                                   ${isFunctional ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelFunctional" 
-                                   title="Each subject can have at most one value for this property">
-                                Functional
-                            </label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelInverseFunctional" 
-                                   ${isInverseFunctional ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelInverseFunctional"
-                                   title="Each value can be linked to at most one subject">
-                                Inverse Functional
-                            </label>
-                        </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="sharedRelFunctional" 
+                               ${isFunctional ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelFunctional">Functional</label>
+                        <div class="form-text small mt-0">Each subject can have at most one value for this relationship (forces Max cardinality to 1)</div>
                     </div>
-                    <div class="d-flex flex-wrap gap-2 mt-1">
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelSymmetric" 
-                                   ${isSymmetric ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelSymmetric"
-                                   title="If A relates to B, then B also relates to A">
-                                Symmetric
-                            </label>
-                        </div>
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" id="sharedRelTransitive" 
-                                   ${isTransitive ? 'checked' : ''} ${disabled}>
-                            <label class="form-check-label small" for="sharedRelTransitive"
-                                   title="If A relates to B and B relates to C, then A relates to C">
-                                Transitive
-                            </label>
-                        </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="sharedRelInverseFunctional" 
+                               ${isInverseFunctional ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelInverseFunctional">Inverse Functional</label>
+                        <div class="form-text small mt-0">Each target value can be linked back to at most one subject (this relationship is one-to-one on the target side)</div>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="sharedRelSymmetric" 
+                               ${isSymmetric ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelSymmetric">Symmetric</label>
+                        <div class="form-text small mt-0">If A is related to B, then B is automatically related to A too (the relationship reads the same in both directions)</div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="sharedRelTransitive" 
+                               ${isTransitive ? 'checked' : ''} ${disabled}>
+                        <label class="form-check-label small fw-semibold" for="sharedRelTransitive">Transitive</label>
+                        <div class="form-text small mt-0">If A is related to B, and B is related to C, then A is automatically related to C (chains propagate through the relationship)</div>
                     </div>
                 </div>
             </div>
@@ -2943,26 +2944,38 @@ async function saveSharedPanelItem() {
 // COMPATIBILITY FUNCTIONS
 // =====================================================
 
-function editClassByName(className) {
+function editClassByName(className, activeTab) {
     const idx = OntologyState.config.classes.findIndex(cls => cls.name === className);
     if (idx >= 0) {
-        if (_canEditOntologyPanel()) openEntityPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
-        else openEntityPanelForView(idx);
+        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        if (activeTab) opts.activeTab = activeTab;
+        if (_canEditOntologyPanel()) openEntityPanelForEdit(idx, opts);
+        else openEntityPanelForView(idx, opts);
     }
 }
 
-function editClass(idx) { openEntityPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } }); }
+function editClass(idx, activeTab) {
+    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    if (activeTab) opts.activeTab = activeTab;
+    openEntityPanelForEdit(idx, opts);
+}
 function viewClass(idx) { openEntityPanelForView(idx); }
 
-function editPropertyByName(propertyName) {
+function editPropertyByName(propertyName, activeTab) {
     const idx = OntologyState.config.properties.findIndex(prop => prop.name === propertyName);
     if (idx >= 0) {
-        if (_canEditOntologyPanel()) openRelationshipPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } });
-        else openRelationshipPanelForView(idx);
+        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        if (activeTab) opts.activeTab = activeTab;
+        if (_canEditOntologyPanel()) openRelationshipPanelForEdit(idx, opts);
+        else openRelationshipPanelForView(idx, opts);
     }
 }
 
-function editProperty(idx) { openRelationshipPanelForEdit(idx, { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } }); }
+function editProperty(idx, activeTab) {
+    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    if (activeTab) opts.activeTab = activeTab;
+    openRelationshipPanelForEdit(idx, opts);
+}
 function viewProperty(idx) { openRelationshipPanelForView(idx); }
 
 

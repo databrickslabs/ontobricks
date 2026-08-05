@@ -180,7 +180,7 @@ async function autoValidateMappings() {
     if (mappedClasses === 0) {
         issues.push('No entity mappings defined.');
     } else if (mappedClasses < totalClasses) {
-        issues.push(`${totalClasses - mappedClasses} class(es) not mapped.`);
+        issues.push(`${totalClasses - mappedClasses} entity(ies) not mapped.`);
     }
     
     // Check relationship mappings - same as validateMapping()

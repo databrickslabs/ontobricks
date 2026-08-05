@@ -182,6 +182,7 @@ class LakebaseAuth:
         """Return True when the Lakebase connection can be established.
 
         Accepts either:
+
         - ``PGHOST`` + ``PGUSER`` (auto-injected by Databricks Apps, or set
           directly in ``.env`` with the raw endpoint URL), or
         - ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH`` + ``PGUSER``

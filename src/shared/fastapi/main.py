@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 
 from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
-from back.objects.session import FileSessionMiddleware
+from back.objects.session import FileSessionMiddleware, reap_expired_sessions
 from back.core.logging import setup_logging, get_logger
 
 setup_logging()
@@ -104,6 +104,12 @@ async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown events."""
     settings = get_settings()
     os.makedirs(settings.session_dir, exist_ok=True)
+    try:
+        reaped = reap_expired_sessions(settings.session_dir, settings.session_max_age)
+        if reaped:
+            logger.info("Removed %d expired session file(s) at startup", reaped)
+    except Exception as e:
+        logger.warning("Session sweep failed, continuing startup: %s", e)
     logger.info("OntoBricks FastAPI starting — session_dir=%s", settings.session_dir)
     logger.info("App docs: /docs | External REST: /api/docs")
 

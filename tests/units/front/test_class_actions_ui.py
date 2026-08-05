@@ -9,6 +9,8 @@ LOADERS_JS = REPO_ROOT / "src/front/static/query/js/query-loaders.js"
 DETAILS_JS = REPO_ROOT / "src/front/static/query/js/query-entity-details.js"
 SIGMA_JS = REPO_ROOT / "src/front/static/query/js/query-sigmagraph.js"
 DASHBOARD_JS = REPO_ROOT / "src/front/static/query/js/query-dashboard.js"
+DESIGN_JS = REPO_ROOT / "src/front/static/global/js/ontology-design.js"
+INFO_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-information.js"
 
 
 def test_external_tab_has_actions_box_with_add_button():
@@ -54,10 +56,27 @@ def test_loaders_retain_class_actions():
     assert "actions: classInfo?.actions || []" in js
 
 
+def test_designer_sync_preserves_dataset_actions_and_bridges():
+    """Designer → ontology sync must not wipe References-tab metadata."""
+    js = DESIGN_JS.read_text(encoding="utf-8")
+    assert "bridges: existing.bridges || []" in js
+    assert "dataset: existing.dataset || null" in js
+    assert "actions: existing.actions || []" in js
+
+
+def test_owl_and_rdfs_import_preserve_dataset_and_actions():
+    """Import remappers must keep OntoBricks External fields for registry save."""
+    js = INFO_JS.read_text(encoding="utf-8")
+    assert js.count("dataset: cls.dataset || null") >= 2
+    assert js.count("actions: cls.actions || []") >= 2
+    assert js.count("bridges: cls.bridges || []") >= 2
+
+
 def test_entity_details_renders_actions_section():
     js = DETAILS_JS.read_text(encoding="utf-8")
     assert "entityMapping?.actions || classInfo?.actions" in js
     assert "openEntityActionModal(" in js
+    assert "action.description" in js
     assert "bi bi-lightning-charge" in js
 
 
@@ -72,8 +91,9 @@ def test_sigmagraph_context_menu_has_action_items_and_dispatch():
     js = SIGMA_JS.read_text(encoding="utf-8")
     assert 'data-sg-node-action="action-invoke"' in js
     assert "data-action=" in js
+    assert "data-description=" in js
     assert "action === 'action-invoke'" in js
-    assert "openEntityActionModal(actUri, actName, actLbl)" in js
+    assert "openEntityActionModal(actUri, actName, actLbl, actDesc)" in js
 
 
 def test_action_modal_posts_to_the_invoke_endpoint():
@@ -83,6 +103,14 @@ def test_action_modal_posts_to_the_invoke_endpoint():
     assert "/api/v1/digitaltwin/nodes/action" in js
     assert "method: 'POST'" in js
     assert "action_full_name" in js
+
+
+def test_action_modal_shows_function_description():
+    js = DASHBOARD_JS.read_text(encoding="utf-8")
+    assert "description" in js
+    assert "safeDescription" in js
+    assert "descriptionBlock" in js
+    assert 'class="text-muted small mb-3"' in js
 
 
 def test_action_modal_has_loading_scalar_table_and_error_states():

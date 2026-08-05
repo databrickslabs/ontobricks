@@ -1,0 +1,129 @@
+## Neo4j as a first-class typed property-graph backend (feature/neo4j-typed-nodes)
+
+Context: Neo4j was wired as a *flat triple store* — every triple became a
+`(:Label {subject, predicate, object})` node with zero relationships, so none of
+Neo4j's graph-traversal strengths were used. This change converts the Neo4j
+backend to a proper **typed property graph** (Strategy A, confirmed with Benoit
+2026-07-28: nodes keyed on the full entity URI, no class-stripping, no A/B
+toggle) and completes the feature end-to-end for the v0.7 release: the write/read
+model, the per-domain database selector, and the Settings admin tabs. Reads still
+return the exact `{subject, predicate, object}` contract (reconstructed from the
+graph), so the KG view / GraphQL / reasoning layers are unchanged, while
+traversal and reasoning now run as native Cypher.
+
+Changes:
+
+1. src/back/core/graphdb/neo4j/Neo4jGraphModel.py (new)
+   Pure, driver-free RDF→property-graph transform: `plan_writes` maps rdf:type→
+   label, rdfs:label→name, literal predicates→node properties, URI-object
+   predicates→relationships, and emits reverse maps for exact SPO reconstruction.
+2. src/back/core/graphdb/neo4j/Neo4jSchemaMap.py (new)
+   Per-graph reverse-map registry persisted on a `:__GraphSchema` node
+   (label→classURI, reltype→predURI, propkey→predURI); idempotent merge/save.
+3. src/back/core/graphdb/neo4j/Neo4jWriteOps.py
+   Rewritten for the typed model: `uri` uniqueness constraint per graph marker
+   label; `_merge_nodes` groups by label-set and inlines sanitised labels
+   (no APOC — Aura Free / Community safe); relationships MERGEd in bulk, one
+   `UNWIND` per reltype (was one round-trip per edge — O(distinct reltypes) now);
+   typed deletes, orphan sweep, cohort wipe; persists the reverse schema map.
+4. src/back/core/graphdb/neo4j/Neo4jReadOps.py
+   Rewritten SPO reconstruction for all ~16 named-query methods; native Cypher
+   traversal/reasoning (`bfs_traversal`, `transitive_closure`, `shortest_path`,
+   `expand_entity_neighbors`); new admin methods `list_labels()` (graphs +
+   node/edge counts) and `list_databases()` (with graceful fallback).
+5. src/back/core/graphdb/neo4j/Neo4jStore.py
+   `supports_graph_model` → True; module/class docstrings rewritten to describe
+   the typed model (were still describing the old flat store).
+6. src/back/core/graphdb/GraphDBFactory.py
+   `_create_neo4j` applies the per-domain `info.neo4j_database` override onto the
+   connection config (empty → keep the workspace-global default).
+7. src/back/objects/domain/Domain.py
+   `save_domain_info` persists `neo4j_database`; added to the read/serialize
+   blocks alongside `graph_backend`.
+8. src/back/objects/session/DomainSession.py
+   `neo4j_database` added to the empty-domain default and to
+   `export_for_save` / `import_from_file` so the per-domain database choice
+   survives a UC version save/load round-trip (was dropped — gap vs graph_backend).
+9. src/back/objects/domain/SettingsService.py
+   New probe/admin results: `_neo4j_connection_from_config` (shared),
+   `graph_engine_neo4j_databases_result` (P4), `_labels_result`, `_health_result`,
+   `_drop_label_result` (P5).
+10. src/api/routers/internal/settings.py
+    Routes: GET `/graph-engine/neo4j-databases`, `/neo4j-labels`, `/neo4j-health`;
+    POST `/graph-engine/neo4j-drop-label`.
+11. src/front/templates/partials/domain/_domain_information.html,
+    src/front/static/domain/js/domain-information.js, .../domain/js/domain.js
+    P4: per-domain Neo4j database selector (parity with Lakebase), shown only when
+    backend=neo4j, populated from the server via SHOW DATABASES, persisted in the
+    domain-info save payload.
+12. src/front/templates/settings.html, src/front/static/config/js/settings.js
+    P5: Settings → Neo4j gains a tab strip (Connection | Objects | Health). Objects
+    lists every materialised graph with node/edge counts and per-row drop (reuses
+    the shared drop-confirm modal); Health runs a Bolt handshake. Connection tab
+    adds a server-requirements/portability note.
+13. docs/neo4j-requirements.md (new)
+    Multi-flavor compatibility + requirements for the first release: Neo4j server
+    5.x required, multi-database (DB selector) is Enterprise/Aura-only with graceful
+    Community fallback, OntoBricks assumes it owns the connected database, breaking
+    storage change (rebuild old flat graphs), no APOC. Linked from the Settings UI.
+14. tests/units/graphdb/test_neo4j_graph_model.py, test_neo4j_typed_write.py,
+    test_neo4j_roundtrip.py, test_neo4j_admin.py (new) + test_neo4j_store.py,
+    test_domain_session.py (updated)
+    Transform unit tests; typed write-path Cypher assertions incl. batched-edge
+    and cross-batch edge-object node creation; in-memory round-trip SPO parity;
+    admin list_labels/list_databases parsing + fallback; factory neo4j_database
+    override precedence; DomainSession neo4j_database export/import round-trip.
+15. src/back/objects/digitaltwin/DigitalTwin.py
+    `_fetch_neo4j_existence` used the explicit `engine="neo4j"` factory path,
+    which hands `_create_neo4j` an empty engine_config (no URI) → None, so the
+    Build page reported "Neo4j backend unavailable" and the existence badge read
+    "Unable to check" even though Settings → Neo4j → Test/Health were green.
+    Switched to the AUTO path (`get_graphdb(domain, settings)`) which resolves the
+    per-domain backend and loads the saved connection config, guarded by a
+    `Neo4jStore` class check. Verified live on the deployed app (497 triples,
+    Graph DB (Neo4j) → Exists).
+16. scripts/bootstrap/lakebase-perms.sh
+    Fixed a stale `source` path: `_lakebase-diag.sh` moved to `scripts/_internal/`
+    in the scripts reorg (commit 2c6ef76) but this bootstrap script still sourced
+    it from its own dir, breaking the Lakebase grant step on a fresh deploy.
+17. tests/units/graphdb/test_neo4j_store.py
+    Fixed `TestCypherLogging::test_run_emits_info_log_with_cypher_and_metrics`:
+    the test attached caplog's handler to the `ontobricks.*` logger while
+    `propagate` was still True (LogManager.setup() doesn't run in unit tests), so
+    the single INFO line was captured twice (target + root). Now sets
+    `propagate=False` during capture and restores it — the production code always
+    emitted exactly one line; this was purely a test-capture artifact.
+
+Modified files:
+- src/back/objects/digitaltwin/DigitalTwin.py
+- scripts/bootstrap/lakebase-perms.sh
+- src/back/core/graphdb/neo4j/Neo4jGraphModel.py (new)
+- src/back/core/graphdb/neo4j/Neo4jSchemaMap.py (new)
+- src/back/core/graphdb/neo4j/Neo4jWriteOps.py
+- src/back/core/graphdb/neo4j/Neo4jReadOps.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- docs/neo4j-requirements.md (new)
+- scripts/_internal/_deploy-preflight.sh
+- tests/units/graphdb/test_neo4j_graph_model.py (new)
+- tests/units/graphdb/test_neo4j_typed_write.py (new)
+- tests/units/graphdb/test_neo4j_roundtrip.py (new)
+- tests/units/graphdb/test_neo4j_admin.py (new)
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/domain/test_domain_session.py
+
+Test result: `PYTHONPATH=src python3 -m pytest tests/units/graphdb tests/units/domain/test_domain_session.py`
+→ 150 passed (was 148 passed / 1 failed; the Cypher-logging capture artifact is
+fixed per item 17 above). The `tests/units/api/*` modules are skipped in this
+run — they import `strawberry`, which is absent from the ad-hoc pyenv used here;
+they collect fine under the uv-managed CI environment and are untouched by this
+change.

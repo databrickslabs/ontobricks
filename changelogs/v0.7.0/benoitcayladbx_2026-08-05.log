@@ -1,0 +1,546 @@
+# Cover the scheduler's generic CRUD and job-registration path
+
+Context: the generic-task-type work (commit `ddd9b19`) shipped 84 tests
+across five files covering the store, the task registry, the run harness,
+the five routes and the settings UI. It did not cover `scheduler.py`'s own
+CRUD path — `save_schedule`, `remove_schedule`, `run_schedule_now`,
+`get_all_schedules`, `_restore_jobs` and the APScheduler job ids — which is
+precisely the code that went from two hardcoded copies (build, cohort) to
+one parameterised by `task_type` and `target_key`. That generalisation was
+verified only indirectly, by the routes above it and the harness below it.
+
+Changes:
+
+1. `tests/units/registry/test_scheduler_crud.py` (new, 43 tests)
+   Drives each CRUD entry point with more than one task type, so the
+   generalisation is exercised rather than merely compiled:
+   - Job ids: all four types and two cohort rules on one domain produce
+     distinct ids — the in-memory half of lifting the old
+     `UNIQUE (registry_id, domain_name)` limit.
+   - Save validation: unknown type, missing domain, the 2-minute interval
+     floor and its boundary, a cohort without a rule, a stray `target_key`
+     on a type that has none (it is dropped, or it would land in the
+     composite key and create a second unreachable schedule), and config
+     rejected/normalised by the type's own `normalize_config`.
+   - Save persistence: a disabled save stores the row but registers no job,
+     disabling an existing one unregisters it, a failed store write
+     registers nothing (a job whose definition never persisted would vanish
+     on restart while still firing until then), an update preserves the
+     `last_run`/`last_status`/`last_count` columns, and all four types
+     coexist on one domain.
+   - Remove: drops row and job, leaves the other types alone, reports an
+     absent schedule, and keeps the job when the write fails.
+   - Run-now: queues a one-shot carrying the *stored* config rather than
+     defaults, leaves the recurring job and the persisted row untouched,
+     refuses an unscheduled domain and a stopped scheduler, and works on a
+     disabled schedule (that is how you test one before switching it on).
+   - Listing: label and next-run per type, lazy registration of a job
+     missing after a boot without env credentials, nothing registered when
+     the scheduler is stopped, empty list rather than an error when
+     credentials are absent.
+   - Entry shape, history ordering and scoping, status write-back
+     (including a run whose schedule was deleted mid-flight — the history
+     row must survive or the failure is invisible), and startup restore.
+
+   The fixture starts APScheduler *paused*: jobs get real triggers and
+   next-run times, so assertions are against the real scheduler, but
+   nothing executes — including the immediate one-shot `run_schedule_now`
+   queues. Marking `_started = True` without starting APScheduler was the
+   obvious shortcut and a lie: pending jobs have no `next_run_time` at all.
+
+Verified by mutation rather than by coverage: reverting three behaviours in
+`scheduler.py` — dropping `task_type` from the job id, registering the job
+even when the store write failed, and skipping `normalize_config` — turns
+13 of the 43 into failures. `scheduler.py` was restored byte-identical
+afterwards.
+
+Modified files:
+- `tests/units/registry/test_scheduler_crud.py` (new)
+- `changelogs/v0.7.0/benoitcayladbx_2026-08-05.log` (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4648 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 39.40s
+
+# Use TRY_CAST for remaining Spark SQL emitters
+
+Context: Databricks warehouses run with ANSI mode on, where a bare `CAST`
+aborts the whole statement on the first value that will not convert.
+Rule/DQ SQL (SWRL, decision tables, aggregates, SHACL guards) already used
+`TRY_CAST` via `SQLHelpers.sql_numeric` (2026-08-03). Three more Spark SQL
+emitters still used a bare `CAST` for stringification and typed NULLs.
+
+Changes:
+
+1. `src/back/core/helpers/SQLHelpers.py` — added `sql_cast(expr, sql_type)`
+   emitting `TRY_CAST`; `sql_numeric` is now a thin wrapper over it (same
+   signature, same behavior, no caller changes anywhere else in the
+   codebase).
+2. `src/back/core/helpers/__init__.py` — re-exported `sql_cast`.
+3. `src/back/core/w3c/sparql/SparqlTranslator.py` — `_cast_str` (backs every
+   SPARQL-to-Spark stringification/subject-URI path: `CONCAT`, `COALESCE`,
+   value-filter equality) now emits `TRY_CAST(... AS STRING)`.
+4. `src/agents/agent_mapping_pge/coverage.py` — the abstract-union builder's
+   placeholder columns for subclasses missing an attribute now emit
+   `TRY_CAST(NULL AS STRING)`.
+5. `src/back/core/graphdb/lakebase/_companion_ddl.py` —
+   `wrap_triple_view_sql_for_lakeflow`'s `object_hash` expression now uses
+   `TRY_CAST(object AS STRING)`.
+6. `tests/units/core/test_try_cast_policy.py` (new) — guards that these three
+   emitters never regress to a bare `CAST`; manually verified the guard
+   fails when `_cast_str` is reverted to bare `CAST`.
+
+Deliberately excluded: `src/jobs/graph_analytics_job.py` and
+`src/back/core/graph_analysis/JobMetrics.py`. Found during planning: their
+generated SQL executes literally against SQLite in tests
+(`test_graph_analytics_job_sql.py`, `test_job_metrics.py`) and is
+parse-checked under a Postgres sqlglot dialect; `TRY_CAST` is valid in
+neither. Every cast in those two files is also on already-numeric data
+(`COUNT(*)`-derived columns, Python-interpolated integer literals, float
+literals, typed NULLs) rather than raw triple-store strings, so the
+ANSI-abort risk `TRY_CAST` guards against does not apply there. Confirmed
+locally that SQLite (3.51.0, this environment) rejects `TRY_CAST` syntax.
+Full analysis in
+`documentation/superpowers/specs/2026-08-05-spark-try-cast-design.md`
+("Amendment" section).
+
+Modified files:
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/w3c/sparql/SparqlTranslator.py`
+- `src/agents/agent_mapping_pge/coverage.py`
+- `src/back/core/graphdb/lakebase/_companion_ddl.py`
+- `tests/units/core/test_uri_sql_helpers.py`
+- `tests/units/ontology/test_sparql_service.py`
+- `tests/agents/agent_mapping_pge/test_coverage.py`
+- `tests/units/core/test_lakebase_flat_store.py`
+- `tests/units/core/test_try_cast_policy.py` (new)
+- `documentation/superpowers/specs/2026-08-05-spark-try-cast-design.md` (new)
+- `documentation/superpowers/plans/2026-08-05-spark-try-cast.md` (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4658 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 39.88s
+
+## Keep New Version ungated on ontology/mapping readiness
+
+Context: Domain → Versions → New Version must remain usable even when the
+ontology or mapping is incomplete. Audit confirmed the backend already
+ignored readiness; dead UI code still targeted a removed `#btnCreateVersion`
+and would have re-gated branching if the ID were "fixed". Explicitly keep
+`#btnAddVersion` enabled and lock the contract with regression tests.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-actions.js`
+   Point at `#btnAddVersion` and always force-enable it; never disable New
+   Version based on DRAFT/read-only or readiness.
+2. `src/front/templates/partials/domain/_domain_versions.html`
+   Clarify tooltip that branching is allowed with incomplete ontology/mapping.
+3. `tests/units/front/test_create_version_ungated.py` (new)
+   UI + backend regression: button not CSS-gated, JS ignores mapping/ontology
+   flags, `create_new_domain_version` succeeds with empty mappings.
+
+Modified files:
+- `src/front/static/domain/js/domain-actions.js`
+- `src/front/templates/partials/domain/_domain_versions.html`
+- `tests/units/front/test_create_version_ungated.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4664 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.90s
+
+## Center and blur Registry child modals
+
+Context: Registry Export and Import opened off-center and did not visually
+separate themselves from the Registry modal behind them. Nested modal markup
+also caused the active child to inherit the Registry blur and sit beneath its
+backdrop.
+
+Changes:
+
+1. `src/front/static/global/js/utils.js`
+   Extracted the confirmation stacking lifecycle into reusable
+   `showStackedModal`, preserving idempotent cleanup.
+2. `src/front/static/registry/js/registry.js`
+   Routed Registry Export and Import through the shared stacked-modal helper.
+3. `src/front/templates/partials/layout/registry_modal.html` and
+   `src/front/templates/partials/registry/_registry_domains.html`
+   Rendered the child modals as siblings of Registry so they remain sharp and
+   clickable above the stacked backdrop.
+4. `src/front/templates/partials/registry/_export_obx_modal.html` and
+   `src/front/templates/partials/registry/_import_obx_modal.html`
+   Centered both large, scrollable child dialogs.
+5. `tests/units/front/test_stacked_confirm_modal.py` and
+   `tests/units/front/test_registry_stacked_obx_modals.py`
+   Added shared lifecycle, centering, DOM hierarchy, integration, and cleanup
+   regression contracts.
+
+Modified files:
+- `src/front/static/global/js/utils.js`
+- `src/front/static/registry/js/registry.js`
+- `src/front/templates/partials/layout/registry_modal.html`
+- `src/front/templates/partials/registry/_registry_domains.html`
+- `src/front/templates/partials/registry/_export_obx_modal.html`
+- `src/front/templates/partials/registry/_import_obx_modal.html`
+- `tests/units/front/test_stacked_confirm_modal.py`
+- `tests/units/front/test_registry_stacked_obx_modals.py` (new)
+- `documentation/superpowers/specs/2026-08-05-registry-stacked-modals-design.md` (new)
+- `documentation/superpowers/plans/2026-08-05-registry-stacked-modals.md` (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 33.77s
+
+## Change Registry icon to bi-boxes
+
+Context: User picked `bi-boxes` from a set of proposed alternatives to
+`bi-diagram-3` for the Registry navbar button, communicating "stored domain
+packages" more clearly than a connected-nodes glyph.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Registry navbar entry icon changed from `bi-diagram-3` to `bi-boxes`.
+2. `src/front/templates/partials/layout/registry_modal.html`
+   Registry popup header icon changed from `bi-archive` to `bi-boxes` to
+   match the navbar button; updated the stale "archive icon" comment.
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/templates/partials/layout/registry_modal.html`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 34.05s
+
+## Shrink Registry navbar icon
+
+Context: The `bi-boxes` Registry navbar icon at 1.75rem read as oversized next
+to the OntoBricks brand.
+
+Changes:
+
+1. `src/front/static/global/css/registry-modal.css`
+   `#registryModalToggle i` font-size reduced from `1.75rem` to `1.4rem`.
+
+Modified files:
+- `src/front/static/global/css/registry-modal.css`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 34.25s
+
+## Align Domain icon with Knowledge Graph (bi-box)
+
+Context: Every place representing "Domain" (navbar, breadcrumb, help modal,
+Registry rows, bridges, query "Domain: X" labels, settings domain lists) used
+a folder glyph (`bi-folder2` / `bi-folder2-open`), inconsistent with the
+Knowledge Graph menu entry's `bi-box`. Changed all Domain-representing icons
+to `bi-box` to visually align the two concepts. Folder icons that represent
+generic file/document browsing (`_domain_documents.html` "Browse Files",
+`uc_file_browser_modal.html`, `domain-documents.js` "No documents uploaded
+yet.") were intentionally left unchanged since they denote files, not the
+Domain entity.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Top navbar `domain` menu icon and Settings `domain-main` group icon:
+   `bi-folder2`/`bi-folder2-open` → `bi-box`.
+2. `src/front/static/global/js/breadcrumb.js`
+   `/domain/` route icon → `bi-box`.
+3. `src/front/templates/partials/layout/help_modal.html`
+   Workflow step "2. Domain" icon → `bi-box`.
+4. `src/front/templates/partials/dtwin/_query_api.html`,
+   `_query_reasoning.html`, `_query_chat.html`, `_query_sigmagraph.html`,
+   `_query_dataquality.html`, `_query_graphql.html`, `_query_cohorts.html`,
+   `src/front/templates/partials/ontology/_ontology_cohorts.html`
+   "Domain: {{ domain_name }}" labels → `bi-box`.
+5. `src/front/static/global/js/uc-location-widget.js`
+   "Domain Location:" label icon → `bi-box`.
+6. `src/front/templates/partials/registry/_registry_domains.html`,
+   `src/front/static/registry/js/registry.js`
+   Domains header and every domain-name row (Browse list, Export/Import
+   pickers, bridges summary + cards + table) → `bi-box`.
+7. `src/front/static/config/js/schedule.js`, `settings.js`
+   Domain name in schedule listing and Lakebase/Lakeflow object-drop domain
+   cards → `bi-box`.
+8. `src/front/templates/partials/settings/_settings_teams.html`
+   "Filter domains…" input icon → `bi-box`.
+9. `src/front/static/ontology/js/ontology-shared-panels.js`,
+   `src/front/static/query/js/query-entity-details.js`,
+   `src/front/static/query/js/query-sigmagraph.js`,
+   `src/front/static/home/js/home.js`
+   Bridge target-domain labels, bridge domain picker, target-domain badges on
+   graph nodes, and the empty-state "No domains yet." icon → `bi-box`.
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/static/global/js/breadcrumb.js`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/dtwin/_query_api.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/templates/partials/dtwin/_query_graphql.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/templates/partials/ontology/_ontology_cohorts.html`
+- `src/front/static/global/js/uc-location-widget.js`
+- `src/front/templates/partials/registry/_registry_domains.html`
+- `src/front/static/registry/js/registry.js`
+- `src/front/static/config/js/schedule.js`
+- `src/front/static/config/js/settings.js`
+- `src/front/templates/partials/settings/_settings_teams.html`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/query/js/query-entity-details.js`
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/static/home/js/home.js`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4670 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.50s
+
+## Give Knowledge Graph its own icon (`bi-radar`)
+
+Context: Domain took `bi-box`, which Knowledge Graph still used in the menu
+and as `bi-box-fill` in the breadcrumb, help walkthrough and Domain
+validation card. Pick was `bi-radar` — exploration surface, no collision
+with Domain / Registry / Ontology / Designer / Mapping.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   `digitaltwin` top-level icon → `bi-radar` (navbar + level-2 subnav inherit).
+2. `src/front/static/global/js/breadcrumb.js`
+   `/dtwin/` icon → `bi-radar` (aligned with the menu; no fill variant exists).
+3. `src/front/templates/partials/layout/help_modal.html`
+   Walkthrough step 5 icon → `bi-radar`.
+4. `src/front/templates/partials/domain/_domain_validation.html`
+   Knowledge Graph validation card header icon → `bi-radar`.
+5. `tests/units/front/test_knowledge_graph_icon.py` (new)
+   Static contract: digitaltwin is `bi-radar`, differs from Domain, matches
+   breadcrumb, and the two hardcoded labels use the same glyph.
+6. `documentation/superpowers/specs/2026-08-05-knowledge-graph-icon-design.md`
+   Design record for the choice and edit surface.
+7. `documentation/superpowers/plans/2026-08-05-knowledge-graph-icon.md`
+   Implementation plan (TDD + four edits).
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/static/global/js/breadcrumb.js`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/domain/_domain_validation.html`
+- `tests/units/front/test_knowledge_graph_icon.py`
+- `documentation/superpowers/specs/2026-08-05-knowledge-graph-icon-design.md`
+- `documentation/superpowers/plans/2026-08-05-knowledge-graph-icon.md`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 34.08s
+
+## Document top-level menu icon identities
+
+Context: After Registry/Domain/Knowledge Graph icon realignment, development
+and architecture docs still described the Registry control as an "archive
+icon", and there was no written map of which Bootstrap Icons own each
+top-level menu — the collision that forced the Knowledge Graph change.
+
+Changes:
+
+1. `documentation/development.md`
+   Registry modal test table: "archive icon" → boxes icon (`bi-boxes`).
+2. `documentation/architecture.md`
+   `menu_config.json` row: navbar+sidebar, with the distinct top-level
+   icon set and breadcrumb sync note.
+3. `documentation/code_organization.md`
+   Menu section: icons are part of the source of truth; changing them
+   requires breadcrumb/help updates and cites the KG icon contract test.
+4. `.cursor/11-frontend-design.mdc`
+   L1 navbar: top-level icon table + Domain≠KG rule.
+
+Modified files:
+- `documentation/development.md`
+- `documentation/architecture.md`
+- `documentation/code_organization.md`
+- `.cursor/11-frontend-design.mdc`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 33.25s
+
+## Rebuild Sphinx HTML for menu-icon doc updates
+
+Context: Source Markdown for development / architecture / code_organization
+was updated for the Registry/Domain/Knowledge Graph icon map. The tracked
+Sphinx site under `documentation/sphinx/_build/` still showed the old
+"archive icon" wording until rebuilt.
+
+Changes:
+
+1. `ci/build_docs.sh` (ran)
+   Regenerated Sphinx HTML so guides pick up the icon identity wording.
+2. `documentation/sphinx/_build/html/guides/development.html`
+   Registry row → Navbar boxes icon (`bi-boxes`).
+3. `documentation/sphinx/_build/html/guides/architecture.html`
+   `menu_config.json` row lists distinct top-level icons.
+4. `documentation/sphinx/_build/html/guides/code_organization.html`
+   Declarative-menu paragraph includes icon/breadcrumb sync + contract test.
+5. Remaining `documentation/sphinx/_build/html/**`
+   Full rebuild artifacts (doctrees, modules, search index) refreshed with
+   the same Sphinx run.
+
+Modified files:
+- `documentation/sphinx/_build/html/guides/development.html`
+- `documentation/sphinx/_build/html/guides/architecture.html`
+- `documentation/sphinx/_build/html/guides/code_organization.html`
+- `documentation/sphinx/_build/html/**` (Sphinx rebuild)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.97s
+
+## Point GitHub Pages docs hub at develop
+
+Context: Pages publishes from `develop` `/docs`, but the marketing docs hub
+and related CTAs still linked `blob/master/…`, so Architecture (and the rest)
+showed the pre-icon-map Markdown even after the Sphinx rebuild on develop.
+The live site was also returning 404 for the Pages root. Help Center "Open on
+GitHub" pointed at a non-default `main` branch.
+
+Changes:
+
+1. `docs/docs/index.html`
+   Doc cards → `blob/develop/…`; added Development and Code map cards that
+   carry the menu-icon identity wording.
+2. `docs/get-started/index.html`
+   Setup guide CTAs → `blob/develop/…`.
+3. `docs/about/index.html`
+   Contributors link → `blob/develop/…`.
+4. `src/front/static/global/js/help-docs.js`
+   Help Center GitHub deep-link base → `blob/develop/documentation/`.
+
+Modified files:
+- `docs/docs/index.html`
+- `docs/get-started/index.html`
+- `docs/about/index.html`
+- `src/front/static/global/js/help-docs.js`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.85s
+
+## Surface Neo4j in the Help Center
+
+Context: The in-app Help Center FAQ and glossary still described Graph DB as
+"currently Lakebase Postgres" only, and `neo4j-requirements.md` was not in
+the `/api/help/docs` catalog — so users searching Help for Neo4j found nothing
+even though the backend and Markdown guide already exist.
+
+Changes:
+
+1. `src/api/routers/internal/help.py`
+   Catalogued `neo4j-requirements.md` and `lakebase-graphdb.md` under Guides.
+2. `src/front/templates/partials/layout/help_modal.html`
+   FAQ backends answer, glossary (Graph DB + Neo4j), UC/SWRL/Inference copy,
+   and Resources shortcuts now name Lakebase / Lakehouse / Neo4j.
+3. `documentation/neo4j-requirements.md`
+   Fixed stale `docs/pr47-neo4j-demo/` path → `documentation/pr47-neo4j-demo/`.
+4. `documentation/README.md`
+   Added Neo4j Backend to the topic index.
+5. `tests/units/front/test_help_center_neo4j.py` (new)
+   Static contract that FAQ/glossary/resources mention Neo4j.
+6. `tests/units/api/test_help_api.py`
+   Asserts Neo4j and Lakebase guides are catalogued and Neo4j markdown serves.
+
+Modified files:
+- `src/api/routers/internal/help.py`
+- `src/front/templates/partials/layout/help_modal.html`
+- `documentation/neo4j-requirements.md`
+- `documentation/README.md`
+- `tests/units/front/test_help_center_neo4j.py`
+- `tests/units/api/test_help_api.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4681 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 33.02s
+
+## General Help Center review: fix drift, catalogue missing guides
+
+Context: a full read-through of `help_modal.html` against `menu_config.json`
+turned up drift that predated the Neo4j pass — labels and icons that had
+been renamed in the app but never updated in the docs, plus two shipped
+guides (`cohort_discovery.md`, `import-export.md`) and a contributor
+reference (`code_organization.md`) that were never added to the Help
+Center's doc allow-list.
+
+Changes:
+
+1. `src/front/templates/partials/layout/help_modal.html`
+   - Workflow step 1 (Registry): icon `bi-archive` → `bi-boxes` (matches the
+     current navbar icon); removed "Schedule" / "API" / "Registry Location"
+     bullets that actually live under Settings, not the Registry modal;
+     added the real "Export / Import" `.obx` feature with a link to the new
+     Import / Export guide.
+   - Workflow step 3 (Ontology): "Advanced section" list incorrectly claimed
+     Groups and Business Views (they're in the main editor sidebar, not
+     Advanced) and omitted Cohorts and Pitfalls (which really are in
+     Advanced). Split into "Additional sidebar sections" (Groups, Business
+     Views) and a corrected Advanced list (Data Quality, Business Rules,
+     Cohorts, Expr. & Axioms, Pitfalls), linking to the new Cohort Discovery
+     guide.
+   - Workflow step 5 (Knowledge Graph): renamed "Graph Viewer" → "Explorer"
+     and "GraphQL" → "Query" to match the current menu labels; added the
+     previously unmentioned Build/Runs, Analytics, Chat and Cohorts
+     sub-items.
+   - Feature Guide: added "Graph Chat" and "Cohort Discovery" cards (both
+     shipped features that had no entry anywhere in the Help Center).
+   - Glossary: added a "Cohort Discovery" definition.
+   - Resources: added Cohort Discovery, Import / Export and Code Map doc
+     links.
+2. `src/api/routers/internal/help.py`
+   Catalogued `cohort_discovery.md` → `cohort-discovery` and
+   `import-export.md` → `import-export` under Guides, and
+   `code_organization.md` → `code-organization` under Reference & Ops (all
+   three already existed on disk and in the Sphinx toctree, just missing
+   from the in-app allow-list).
+3. `tests/units/front/test_help_center_menu_sync.py` (new)
+   Static contract deriving expected labels/icons straight from
+   `menu_config.json` for Registry, Ontology-Advanced and Knowledge Graph,
+   so this class of drift fails CI instead of being found by inspection.
+4. `tests/units/api/test_help_api.py`
+   Added `test_cohort_and_import_export_guides_are_catalogued`.
+
+Modified files:
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/api/routers/internal/help.py`
+- `tests/units/front/test_help_center_menu_sync.py` (new)
+- `tests/units/api/test_help_api.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4688 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 36.73s
+
+## Rename Ontology Designer entity panel tab: External → References
+
+Context: user request — the entity edit panel's fourth tab (Dashboard /
+Dataset / Actions / Bridges configuration) was labelled "External", which
+read as ambiguous next to Details/Attributes/Constraints. Renamed to
+"References" without touching the `data-form-tab="actions"` id, internal
+`hasExternal`/`externalBadgeNodes` variables, or `map-node-external-badge-*`
+CSS classes (out of scope for a label-only rename).
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Tab link label "External" → "References" (`data-form-tab="actions"`).
+2. `src/front/static/ontology/js/ontology-map.js`
+   Designer canvas right-click context-menu shortcut label, and three code
+   comments referencing the tab by name, updated to "References".
+3. `src/front/static/ontology/css/ontology-map.css`
+   Comment referencing the tab by name updated to "References".
+4. `tests/units/front/test_map_context_menu_tabs.py`
+   Updated the asserted tab label and docstrings.
+5. `tests/units/front/test_ontology_map_external_badge.py`,
+   `tests/units/front/test_class_actions_ui.py`
+   Updated docstrings referencing the tab by its old name (assertions on
+   internal identifiers/CSS classes untouched).
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/js/ontology-map.js`
+- `src/front/static/ontology/css/ontology-map.css`
+- `tests/units/front/test_map_context_menu_tabs.py`
+- `tests/units/front/test_ontology_map_external_badge.py`
+- `tests/units/front/test_class_actions_ui.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4688 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 38.07s

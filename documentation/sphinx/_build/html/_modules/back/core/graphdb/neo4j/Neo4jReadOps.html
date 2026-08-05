@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.graphdb.neo4j.Neo4jReadOps &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.graphdb.neo4j.Neo4jReadOps</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Neo4j read-side queries over the **typed property-graph** model.</span>
+
+<span class="sd">Implements the named-query methods of the ``GraphDBBackend`` contract against</span>
+<span class="sd">the property graph written by :class:`Neo4jWriteOps`: nodes keyed on ``uri``</span>
+<span class="sd">carry a graph **marker label**, class labels (from ``rdf:type``), a ``name``</span>
+<span class="sd">property (from ``rdfs:label``), literal properties, and outgoing relationships.</span>
+
+<span class="sd">**Contract preservation:** every method still returns the same</span>
+<span class="sd">``{subject, predicate, object}`` / entity shapes the SQL backends return — the</span>
+<span class="sd">triples are *reconstructed* from the graph. Reverse mappings (label→class URI,</span>
+<span class="sd">reltype→predicate URI, property-key→predicate URI) come from</span>
+<span class="sd">:class:`Neo4jSchemaMap`.</span>
+
+<span class="sd">Traversal/reasoning (``bfs_traversal``, ``transitive_closure``,</span>
+<span class="sd">``shortest_path``, ``expand_entity_neighbors``) now use **native relationship</span>
+<span class="sd">patterns** — the whole point of the typed model — instead of self-joining flat</span>
+<span class="sd">triple nodes.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Set</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="n">RDFS_LABEL</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jConnection</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jConnection</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jSchemaMap</span><span class="w"> </span><span class="kn">import</span> <span class="n">Neo4jSchemaMap</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jWriteOps</span><span class="w"> </span><span class="kn">import</span> <span class="n">sanitise_label</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1"># Reserved node/label names that are never business predicates/properties.</span>
+<span class="n">_MARKER_INTERNAL_PROPS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;uri&quot;</span><span class="p">}</span>
+<span class="n">_SCHEMA_LABEL</span> <span class="o">=</span> <span class="s2">&quot;__GraphSchema&quot;</span>
+
+
+<div class="viewcode-block" id="Neo4jReadOps">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Neo4jReadOps</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read queries against the typed property-graph Neo4j backend.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">connection</span><span class="p">:</span> <span class="n">Neo4jConnection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span> <span class="o">=</span> <span class="n">connection</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span> <span class="o">=</span> <span class="n">Neo4jSchemaMap</span><span class="p">(</span><span class="n">connection</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1">#  SPO reconstruction core</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reconstruct_triples_for_nodes</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">node_uris</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild flat SPO triples for the given node URIs (or the whole graph).</span>
+
+<span class="sd">        Emits, per node: one ``rdf:type`` triple per class label; one</span>
+<span class="sd">        ``rdfs:label`` triple if it has a ``name``; one triple per literal</span>
+<span class="sd">        property; and one triple per outgoing relationship (reversed to the</span>
+<span class="sd">        predicate URI via the schema map).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>        <span class="c1"># sanitised label → class URI</span>
+        <span class="n">reltype_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>    <span class="c1"># sanitised reltype → predicate URI</span>
+        <span class="n">prop_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;prop_map&quot;</span><span class="p">]</span>          <span class="c1"># sanitised prop key → predicate URI</span>
+
+        <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">node_uris</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;WHERE n.uri IN $uris &quot;</span>
+            <span class="n">params</span><span class="p">[</span><span class="s2">&quot;uris&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">node_uris</span>
+
+        <span class="c1"># Pull node identity, labels, properties.</span>
+        <span class="n">node_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS uri, labels(n) AS labels, properties(n) AS props&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">params</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">triples</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">node_rows</span><span class="p">:</span>
+            <span class="n">uri</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;labels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+                <span class="k">if</span> <span class="n">lbl</span> <span class="o">==</span> <span class="n">label</span> <span class="ow">or</span> <span class="n">lbl</span> <span class="o">==</span> <span class="n">_SCHEMA_LABEL</span><span class="p">:</span>
+                    <span class="k">continue</span>  <span class="c1"># marker / schema labels are not rdf:type</span>
+                <span class="n">class_uri</span> <span class="o">=</span> <span class="n">label_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">class_uri</span><span class="p">:</span>
+                    <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">RDF_TYPE</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">class_uri</span><span class="p">}</span>
+                    <span class="p">)</span>
+            <span class="n">props</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;props&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">props</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_MARKER_INTERNAL_PROPS</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">pred</span> <span class="o">=</span> <span class="n">Neo4jSchemaMap</span><span class="o">.</span><span class="n">predicate_for_property</span><span class="p">(</span><span class="n">prop_map</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+                <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">uri</span><span class="p">,</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">pred</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)}</span>
+                <span class="p">)</span>
+
+        <span class="c1"># Pull outgoing relationships → object-property triples.</span>
+        <span class="n">rel_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[rel]-&gt;(m:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="o">+</span> <span class="p">(</span><span class="s2">&quot;WHERE n.uri IN $uris &quot;</span> <span class="k">if</span> <span class="n">node_uris</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;RETURN n.uri AS subject, type(rel) AS reltype, m.uri AS object&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">params</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_rows</span><span class="p">:</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">reltype_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">])</span>
+            <span class="n">triples</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span><span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">],</span> <span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">pred</span><span class="p">,</span> <span class="s2">&quot;object&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;object&quot;</span><span class="p">]}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">triples</span>
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  Basic CRUD reads</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.query_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.query_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">query_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruct_triples_for_nodes</span><span class="p">(</span><span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.count_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.count_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count_triples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count reconstructed triples: type-labels + name + literal props + rels.&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH n, [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS classes &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size(classes)) AS type_triples, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size([k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;])) AS prop_triples, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  count(n) AS nodes&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">rel_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[r]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(r) AS rels&quot;</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">type_triples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type_triples&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">prop_triples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prop_triples&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># includes &#39;name&#39;</span>
+        <span class="n">rels</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rel_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="n">rel_rows</span> <span class="k">else</span> <span class="mi">0</span>
+        <span class="k">return</span> <span class="n">type_triples</span> <span class="o">+</span> <span class="n">prop_triples</span> <span class="o">+</span> <span class="n">rels</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.table_exists">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.table_exists">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">table_exists</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="s2">&quot;SHOW CONSTRAINTS YIELD name WHERE name = $cname RETURN name&quot;</span><span class="p">,</span>
+            <span class="n">cname</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;node_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">_uri&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="c1"># Fall back to node presence (constraint may have been created under a</span>
+        <span class="c1"># legacy name, or dropped while data remains).</span>
+        <span class="n">node_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(n) &gt; 0 AS present&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">node_rows</span> <span class="ow">and</span> <span class="n">node_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;present&quot;</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.get_status">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_status">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;count&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">count_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span>
+            <span class="s2">&quot;last_modified&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;neo4j&quot;</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  Statistics</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.get_aggregate_stats">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_aggregate_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_aggregate_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="c1"># Distinct subjects = nodes that carry at least one class label or a name</span>
+        <span class="c1"># or an outgoing rel (i.e. real triple subjects). Distinct predicates =</span>
+        <span class="c1"># distinct property keys + relationship types + (rdf:type if any labels).</span>
+        <span class="n">node_stats</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH n, [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS classes &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  count(n) AS distinct_subjects, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size(classes)) AS type_assertion_count, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(CASE WHEN n.name IS NULL THEN 0 ELSE 1 END) AS label_count, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  sum(size([k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;])) AS prop_triples, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  collect(DISTINCT [k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;]) AS prop_key_sets, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  size(collect(DISTINCT [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema])) AS _ignore&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">rel_stats</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[r]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN count(r) AS rels, collect(DISTINCT type(r)) AS rel_types&quot;</span>
+        <span class="p">)</span>
+        <span class="n">has_labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE any(x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN count(n) AS c&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">node_stats</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">node_stats</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="n">rel_row</span> <span class="o">=</span> <span class="n">rel_stats</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">rel_stats</span> <span class="k">else</span> <span class="p">{}</span>
+
+        <span class="n">type_assertions</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type_assertion_count&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">label_count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;label_count&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">prop_triples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prop_triples&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># includes name</span>
+        <span class="n">rels</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rel_row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">total</span> <span class="o">=</span> <span class="n">type_assertions</span> <span class="o">+</span> <span class="n">prop_triples</span> <span class="o">+</span> <span class="n">rels</span>
+
+        <span class="c1"># distinct predicate URIs: property keys + rel types + rdf:type-if-present</span>
+        <span class="n">prop_keys</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">ks</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;prop_key_sets&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">prop_keys</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">ks</span> <span class="k">if</span> <span class="n">k</span> <span class="o">!=</span> <span class="s2">&quot;uri&quot;</span><span class="p">)</span>
+        <span class="n">rel_types</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">rel_row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rel_types&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])</span>
+        <span class="n">distinct_predicates</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">prop_keys</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">rel_types</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">int</span><span class="p">((</span><span class="n">has_labels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;c&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">has_labels</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">distinct_predicates</span> <span class="o">+=</span> <span class="mi">1</span>  <span class="c1"># rdf:type</span>
+
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="n">total</span><span class="p">,</span>
+            <span class="s2">&quot;distinct_subjects&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;distinct_subjects&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="s2">&quot;distinct_predicates&quot;</span><span class="p">:</span> <span class="n">distinct_predicates</span><span class="p">,</span>
+            <span class="s2">&quot;type_assertion_count&quot;</span><span class="p">:</span> <span class="n">type_assertions</span><span class="p">,</span>
+            <span class="s2">&quot;label_count&quot;</span><span class="p">:</span> <span class="n">label_count</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.get_type_distribution">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_type_distribution">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_type_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count nodes per class label, mapped back to class URIs.&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;UNWIND [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS cls &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN cls AS class_label, count(*) AS cnt ORDER BY cnt DESC&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="bp">cls</span> <span class="o">=</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;class_label&quot;</span><span class="p">]</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;type_uri&quot;</span><span class="p">:</span> <span class="n">label_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="bp">cls</span><span class="p">),</span> <span class="s2">&quot;cnt&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">])})</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.get_predicate_distribution">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_predicate_distribution">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_predicate_distribution</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Count per predicate: literal props + rel types + rdf:type, as URIs.&quot;&quot;&quot;</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">prop_map</span><span class="p">,</span> <span class="n">reltype_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;prop_map&quot;</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>
+        <span class="n">counts</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="n">prop_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) UNWIND [k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;] AS key &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN key, count(*) AS cnt&quot;</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">prop_rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">Neo4jSchemaMap</span><span class="o">.</span><span class="n">predicate_for_property</span><span class="p">(</span><span class="n">prop_map</span><span class="p">,</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;key&quot;</span><span class="p">])</span>
+            <span class="n">counts</span><span class="p">[</span><span class="n">pred</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">])</span>
+
+        <span class="n">rel_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[rel]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN type(rel) AS reltype, count(*) AS cnt&quot;</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rel_rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">pred</span> <span class="o">=</span> <span class="n">reltype_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">],</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;reltype&quot;</span><span class="p">])</span>
+            <span class="n">counts</span><span class="p">[</span><span class="n">pred</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">])</span>
+
+        <span class="n">type_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH sum(size([x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema])) AS c &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN c&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">tc</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">type_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;c&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">type_rows</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">tc</span><span class="p">:</span>
+            <span class="n">counts</span><span class="p">[</span><span class="n">RDF_TYPE</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">RDF_TYPE</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">tc</span>
+
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="p">({</span><span class="s2">&quot;predicate&quot;</span><span class="p">:</span> <span class="n">k</span><span class="p">,</span> <span class="s2">&quot;cnt&quot;</span><span class="p">:</span> <span class="n">v</span><span class="p">}</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">counts</span><span class="o">.</span><span class="n">items</span><span class="p">()),</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">d</span><span class="p">:</span> <span class="n">d</span><span class="p">[</span><span class="s2">&quot;cnt&quot;</span><span class="p">],</span>
+            <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  Entity lookup</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.find_subjects_by_type">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.find_subjects_by_type">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_subjects_by_type</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">search</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">search</span><span class="p">:</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;WHERE any(k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39; AND toLower(toString(n[k])) CONTAINS toLower($search)) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS subject ORDER BY subject SKIP $offset LIMIT $limit&quot;</span>
+            <span class="p">)</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="n">cypher</span><span class="p">,</span> <span class="n">search</span><span class="o">=</span><span class="n">search</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS subject ORDER BY subject SKIP $offset LIMIT $limit&quot;</span>
+            <span class="p">)</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])]</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.resolve_subject_by_id">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.resolve_subject_by_id">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">resolve_subject_by_id</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">id_fragment</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE n.uri ENDS WITH (&#39;/&#39; + $idf) OR n.uri ENDS WITH (&#39;#&#39; + $idf) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS subject LIMIT 1&quot;</span><span class="p">,</span>
+            <span class="n">idf</span><span class="o">=</span><span class="n">id_fragment</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">rows</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.get_entity_metadata">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_entity_metadata">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_entity_metadata</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">subjects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">subjects</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE n.uri IN $subjects &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN n.uri AS uri, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  [x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema] AS classes, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  n.name AS name&quot;</span><span class="p">,</span>
+            <span class="n">subjects</span><span class="o">=</span><span class="n">subjects</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">classes</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;classes&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">classes</span><span class="p">:</span>
+                <span class="k">continue</span>  <span class="c1"># parity with SQL backend: only typed subjects returned</span>
+            <span class="n">first</span> <span class="o">=</span> <span class="n">classes</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">label_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">first</span><span class="p">),</span>
+                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.get_triples_for_subjects">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_triples_for_subjects">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_triples_for_subjects</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">subjects</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">subjects</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruct_triples_for_nodes</span><span class="p">(</span>
+            <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">),</span> <span class="n">node_uris</span><span class="o">=</span><span class="n">subjects</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.get_predicates_for_type">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.get_predicates_for_type">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_predicates_for_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">type_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+        <span class="n">prop_map</span><span class="p">,</span> <span class="n">reltype_map</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;prop_map&quot;</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>
+        <span class="c1"># Sample one instance of the class; return its predicates (props + rels).</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH n LIMIT 1 &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;OPTIONAL MATCH (n)-[rel]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN [k IN keys(n) WHERE k &lt;&gt; &#39;uri&#39;] AS keys, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  collect(DISTINCT type(rel)) AS reltypes, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  size([x IN labels(n) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema]) AS n_classes&quot;</span><span class="p">,</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">preds</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;n_classes&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">RDF_TYPE</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;keys&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Neo4jSchemaMap</span><span class="o">.</span><span class="n">predicate_for_property</span><span class="p">(</span><span class="n">prop_map</span><span class="p">,</span> <span class="n">k</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">rt</span> <span class="ow">in</span> <span class="n">row</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;reltypes&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="k">if</span> <span class="n">rt</span><span class="p">:</span>
+                <span class="n">preds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reltype_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">rt</span><span class="p">,</span> <span class="n">rt</span><span class="p">))</span>
+        <span class="c1"># de-dup, preserve order</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">preds</span> <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">p</span> <span class="ow">in</span> <span class="n">seen</span> <span class="ow">or</span> <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">p</span><span class="p">))]</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  Pagination</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.paginated_triples">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.paginated_triples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">paginated_triples</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="c1"># SQL WHERE fragments are not translated (parity with prior behaviour);</span>
+        <span class="c1"># paginate over nodes and reconstruct their triples.</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">conditions</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;paginated_triples received </span><span class="si">%d</span><span class="s2"> SQL conditions; Neo4j backend &quot;</span>
+                <span class="s2">&quot;ignores them. Use find_subjects_by_type / find_seed_subjects.&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">conditions</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="n">page</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN n.uri AS uri ORDER BY n.uri &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;SKIP $offset LIMIT $limit&quot;</span><span class="p">,</span>
+            <span class="n">offset</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span>
+            <span class="n">limit</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">uris</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;uri&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">page</span> <span class="ow">or</span> <span class="p">[])]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">uris</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reconstruct_triples_for_nodes</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">node_uris</span><span class="o">=</span><span class="n">uris</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.paginated_count">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.paginated_count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">paginated_count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">conditions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">conditions</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;paginated_count received </span><span class="si">%d</span><span class="s2"> SQL conditions; Neo4j backend &quot;</span>
+                <span class="s2">&quot;returns the unfiltered count.&quot;</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="n">conditions</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">count_triples</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  Knowledge-Graph filter primitives — native relationship traversal</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.bfs_traversal">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.bfs_traversal">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bfs_traversal</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">seed_where</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">search</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">search</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">entity_type</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">seed_where</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                    <span class="s2">&quot;bfs_traversal: Neo4j backend requires structured &quot;</span>
+                    <span class="s2">&quot;search/entity_type params; SQL seed_where is not translated.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">seeds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">find_seed_subjects</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="p">,</span>
+            <span class="n">entity_type</span><span class="o">=</span><span class="n">entity_type</span><span class="p">,</span>
+            <span class="n">field</span><span class="o">=</span><span class="s2">&quot;any&quot;</span><span class="p">,</span>
+            <span class="n">match_type</span><span class="o">=</span><span class="s2">&quot;contains&quot;</span><span class="p">,</span>
+            <span class="n">value</span><span class="o">=</span><span class="n">search</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">seeds</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="c1"># Native variable-length traversal over real relationships, both directions.</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (seed:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE seed.uri IN $seeds &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH path = (seed)-[*0..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">depth</span><span class="p">)</span><span class="si">}</span><span class="s2">]-(reached:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WITH reached.uri AS entity, min(length(path)) AS lvl &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN entity, lvl AS min_lvl&quot;</span><span class="p">,</span>
+            <span class="n">seeds</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">seeds</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">rows</span> <span class="ow">or</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.find_seed_subjects">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.find_seed_subjects">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_seed_subjects</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">entity_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">field</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;any&quot;</span><span class="p">,</span>
+        <span class="n">match_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;contains&quot;</span><span class="p">,</span>
+        <span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">search_label</span> <span class="o">=</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;any&quot;</span><span class="p">)</span>
+        <span class="n">search_id</span> <span class="o">=</span> <span class="n">field</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;any&quot;</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_clause</span><span class="p">(</span><span class="n">expr</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">match_type</span> <span class="o">==</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) = $val&quot;</span>
+            <span class="k">if</span> <span class="n">match_type</span> <span class="o">==</span> <span class="s2">&quot;starts&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) STARTS WITH $val&quot;</span>
+            <span class="k">if</span> <span class="n">match_type</span> <span class="o">==</span> <span class="s2">&quot;ends&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) ENDS WITH $val&quot;</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;toLower(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">) CONTAINS $val&quot;</span>
+
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s2">&quot;val&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+        <span class="n">class_label</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">entity_type</span><span class="p">:</span>
+            <span class="n">class_label</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_class_label_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">entity_type</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">class_label</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="n">node_match</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`:`</span><span class="si">{</span><span class="n">class_label</span><span class="si">}</span><span class="s2">`)&quot;</span> <span class="k">if</span> <span class="n">class_label</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;(n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)&quot;</span>
+
+        <span class="k">if</span> <span class="n">value</span><span class="p">:</span>
+            <span class="n">conds</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">if</span> <span class="n">search_label</span><span class="p">:</span>
+                <span class="n">conds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_clause</span><span class="p">(</span><span class="s2">&quot;coalesce(n.name, &#39;&#39;)&quot;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">search_id</span><span class="p">:</span>
+                <span class="n">conds</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_clause</span><span class="p">(</span><span class="s2">&quot;n.uri&quot;</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">conds</span><span class="p">:</span>
+                <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH </span><span class="si">{</span><span class="n">node_match</span><span class="si">}</span><span class="s2"> WHERE </span><span class="si">{</span><span class="s1">&#39; OR &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">conds</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT n.uri AS subject&quot;</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">entity_type</span><span class="p">:</span>
+            <span class="n">cypher</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;MATCH </span><span class="si">{</span><span class="n">node_match</span><span class="si">}</span><span class="s2"> RETURN DISTINCT n.uri AS subject&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">limit</span> <span class="ow">and</span> <span class="n">limit</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">cypher</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot; LIMIT </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.find_subjects_by_patterns">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.find_subjects_by_patterns">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_subjects_by_patterns</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">like_patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">like_patterns</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">clauses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">raw</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">like_patterns</span><span class="p">):</span>
+            <span class="n">pkey</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;p</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="n">params</span><span class="p">[</span><span class="n">pkey</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">,</span> <span class="s2">&quot;.*&quot;</span><span class="p">)</span>
+            <span class="n">clauses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;n.uri =~ $</span><span class="si">{</span><span class="n">pkey</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) WHERE </span><span class="si">{</span><span class="s1">&#39; OR &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">clauses</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT n.uri AS subject&quot;</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">params</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])}</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.expand_entity_neighbors">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.expand_entity_neighbors">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">expand_entity_neighbors</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entity_uris</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">entity_uris</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="c1"># One hop over real relationships (both directions); only typed nodes</span>
+        <span class="c1"># (carrying a class label) count as entity neighbours.</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[]-(m:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE n.uri IN $seeds &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;AND any(x IN labels(m) WHERE x &lt;&gt; $marker AND x &lt;&gt; $schema) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT m.uri AS entity&quot;</span><span class="p">,</span>
+            <span class="n">seeds</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">entity_uris</span><span class="p">),</span>
+            <span class="n">marker</span><span class="o">=</span><span class="n">label</span><span class="p">,</span>
+            <span class="n">schema</span><span class="o">=</span><span class="n">_SCHEMA_LABEL</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;entity&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])}</span></div>
+
+
+    <span class="c1"># ======================================================================</span>
+    <span class="c1">#  Reasoning — native relationship patterns</span>
+    <span class="c1"># ======================================================================</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.transitive_closure">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.transitive_closure">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">transitive_closure</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">start_uri</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">reltype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reltype_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reltype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">start_clause</span> <span class="o">=</span> <span class="s2">&quot;WHERE a.uri = $start_uri &quot;</span> <span class="k">if</span> <span class="n">start_uri</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">params</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">start_uri</span><span class="p">:</span>
+            <span class="n">params</span><span class="p">[</span><span class="s2">&quot;start_uri&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">start_uri</span>
+        <span class="c1"># Reachable pairs 2..max_depth along the typed relationship that are not</span>
+        <span class="c1"># already directly connected.</span>
+        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) </span><span class="si">{</span><span class="n">start_clause</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`*2..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)</span><span class="si">}</span><span class="s2">]-&gt;(b:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE NOT (a)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`]-&gt;(b) AND a &lt;&gt; b &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT a.uri AS subject, $pred AS predicate, b.uri AS object&quot;</span>
+        <span class="p">)</span>
+        <span class="n">params</span><span class="p">[</span><span class="s2">&quot;pred&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">predicate_uri</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="o">**</span><span class="n">params</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;transitive_closure failed on </span><span class="si">%s</span><span class="s2"> (predicate=</span><span class="si">%s</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.symmetric_expand">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.symmetric_expand">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">symmetric_expand</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="n">reltype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reltype_for_uri</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reltype</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (a:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`]-&gt;(b:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;WHERE NOT (b)-[:`</span><span class="si">{</span><span class="n">reltype</span><span class="si">}</span><span class="s2">`]-&gt;(a) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN DISTINCT b.uri AS subject, $pred AS predicate, a.uri AS object&quot;</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">pred</span><span class="o">=</span><span class="n">predicate_uri</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;symmetric_expand failed on </span><span class="si">%s</span><span class="s2"> (predicate=</span><span class="si">%s</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">table_name</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.shortest_path">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.shortest_path">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">shortest_path</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">target_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+        <span class="k">if</span> <span class="n">source_uri</span> <span class="o">==</span> <span class="n">target_uri</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[{</span><span class="s2">&quot;hop&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">source_uri</span><span class="p">}]</span>
+        <span class="n">label</span> <span class="o">=</span> <span class="n">sanitise_label</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="c1"># Native shortestPath over real relationships — the typed-model win.</span>
+        <span class="n">cypher</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;MATCH (s:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $src</span><span class="se">}}</span><span class="s2">), (t:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">` </span><span class="se">{{</span><span class="s2">uri: $tgt</span><span class="se">}}</span><span class="s2">), &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;p = shortestPath((s)-[*..</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">max_depth</span><span class="p">)</span><span class="si">}</span><span class="s2">]-(t)) &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RETURN [x IN nodes(p) | x.uri] AS uris&quot;</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cypher</span><span class="p">,</span> <span class="n">src</span><span class="o">=</span><span class="n">source_uri</span><span class="p">,</span> <span class="n">tgt</span><span class="o">=</span><span class="n">target_uri</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;shortest_path failed on </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">table_name</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">rows</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;uris&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="p">[{</span><span class="s2">&quot;hop&quot;</span><span class="p">:</span> <span class="n">i</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">:</span> <span class="n">u</span><span class="p">}</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">u</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;uris&quot;</span><span class="p">])]</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1">#  Admin: graph inventory + server databases (Settings UI, P5)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="Neo4jReadOps.list_labels">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.list_labels">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_labels</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List every materialised graph (marker label) with node/edge counts.</span>
+
+<span class="sd">        A &quot;graph&quot; is a node label backed by a ``node_&lt;label&gt;_uri`` uniqueness</span>
+<span class="sd">        constraint (created by :meth:`Neo4jWriteOps.create_table`). Returns one</span>
+<span class="sd">        row per graph: ``{label, nodes, edges}``. Powers the Settings → Neo4j</span>
+<span class="sd">        → Objects admin tab (list + delete), parity with Lakebase objects.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">constraint_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="s2">&quot;SHOW CONSTRAINTS YIELD name, labelsOrTypes &quot;</span>
+            <span class="s2">&quot;WHERE name STARTS WITH &#39;node_&#39; AND name ENDS WITH &#39;_uri&#39; &quot;</span>
+            <span class="s2">&quot;RETURN labelsOrTypes AS labels&quot;</span>
+        <span class="p">)</span>
+        <span class="n">labels</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">constraint_rows</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;labels&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]:</span>
+                <span class="k">if</span> <span class="n">lbl</span> <span class="ow">and</span> <span class="n">lbl</span> <span class="o">!=</span> <span class="n">_SCHEMA_LABEL</span><span class="p">:</span>
+                    <span class="n">labels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">lbl</span><span class="p">)</span>
+
+        <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">label</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">labels</span><span class="p">)):</span>
+            <span class="n">node_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (n:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(n) AS nodes&quot;</span>
+            <span class="p">)</span>
+            <span class="n">edge_rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;MATCH (:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`)-[r]-&gt;(:`</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">`) RETURN count(r) AS edges&quot;</span>
+            <span class="p">)</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">,</span>
+                    <span class="s2">&quot;nodes&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">node_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;nodes&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">node_rows</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+                    <span class="s2">&quot;edges&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">edge_rows</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;edges&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">edge_rows</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="Neo4jReadOps.list_databases">
+<a class="viewcode-back" href="../../../../../api/app.core.graphdb.neo4j.html#back.core.graphdb.neo4j.Neo4jReadOps.list_databases">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_databases</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List Neo4j databases available on the server (for the DB selector, P4).</span>
+
+<span class="sd">        Uses ``SHOW DATABASES``; filters out system/internal databases. On</span>
+<span class="sd">        instances that disallow the call (e.g. some Aura tiers), returns an</span>
+<span class="sd">        empty list so the caller falls back to the configured database name.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="s2">&quot;SHOW DATABASES YIELD name RETURN DISTINCT name&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;SHOW DATABASES unavailable (</span><span class="si">%s</span><span class="s2">); DB selector will fallback&quot;</span><span class="p">,</span> <span class="n">exc</span><span class="p">)</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rows</span> <span class="ow">or</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)]</span>
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">names</span> <span class="k">if</span> <span class="n">n</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;system&quot;</span><span class="p">,))</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1">#  Reverse-map helpers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_class_label_for_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graph_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">class_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sanitised Neo4j label for a class URI (via schema map, else derive).&quot;&quot;&quot;</span>
+        <span class="n">label_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">graph_label</span><span class="p">)[</span><span class="s2">&quot;label_map&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">sanitised</span><span class="p">,</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">label_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">uri</span> <span class="o">==</span> <span class="n">class_uri</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">sanitised</span>
+        <span class="c1"># Fallback: derive from the URI&#39;s local name (schema map may lag).</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jGraphModel</span><span class="w"> </span><span class="kn">import</span> <span class="n">label_from_class_uri</span>
+
+        <span class="k">return</span> <span class="n">label_from_class_uri</span><span class="p">(</span><span class="n">class_uri</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reltype_for_uri</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">graph_label</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">predicate_uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="n">reltype_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">graph_label</span><span class="p">)[</span><span class="s2">&quot;reltype_map&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">sanitised</span><span class="p">,</span> <span class="n">uri</span> <span class="ow">in</span> <span class="n">reltype_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">uri</span> <span class="o">==</span> <span class="n">predicate_uri</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">sanitised</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">back.core.graphdb.neo4j.Neo4jGraphModel</span><span class="w"> </span><span class="kn">import</span> <span class="n">reltype_from_predicate</span>
+
+        <span class="k">return</span> <span class="n">reltype_from_predicate</span><span class="p">(</span><span class="n">predicate_uri</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

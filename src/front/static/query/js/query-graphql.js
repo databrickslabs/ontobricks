@@ -136,9 +136,9 @@ const GraphQLPlayground = (() => {
                     const stats = schemaData.stats || {};
                     msg.innerHTML =
                         '<strong>GraphQL not ready</strong> — ' +
-                        (schemaData.message || 'ontology missing classes or properties.') +
+                        (schemaData.message || 'ontology missing entities or properties.') +
                         '<br><small class="text-muted">Ontology has ' +
-                        (stats.classes || 0) + ' class(es), ' +
+                        (stats.classes || 0) + ' entity(ies), ' +
                         (stats.properties || 0) + ' propert(ies). ' +
                         'Reason: <code>' + (schemaData.reason || 'unknown') + '</code></small>';
                 }

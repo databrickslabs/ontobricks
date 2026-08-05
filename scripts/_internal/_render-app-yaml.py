@@ -32,7 +32,8 @@ import string
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# This file lives in scripts/_internal/, so the root is three levels up.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _RENDERS: list[tuple[Path, Path]] = [
     (REPO_ROOT / "app.yaml.template",                     REPO_ROOT / "app.yaml"),

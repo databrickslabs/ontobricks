@@ -60,6 +60,17 @@ class TestSQLHelpers:
     def test_sql_escape_normal(self):
         assert SQLHelpers.sql_escape("hello") == "hello"
 
+    def test_sql_cast_emits_try_cast(self):
+        assert SQLHelpers.sql_cast("t2.object", "DOUBLE") == "TRY_CAST(t2.object AS DOUBLE)"
+
+    def test_sql_numeric_delegates_to_sql_cast(self):
+        assert SQLHelpers.sql_numeric("t2.object") == SQLHelpers.sql_cast("t2.object", "DOUBLE")
+
+    def test_sql_numeric_custom_type_delegates_to_sql_cast(self):
+        assert SQLHelpers.sql_numeric("t2.object", "BIGINT") == SQLHelpers.sql_cast(
+            "t2.object", "BIGINT"
+        )
+
     def test_validate_table_name_valid(self):
         SQLHelpers.validate_table_name("catalog.schema.table")
 

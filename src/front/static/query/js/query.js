@@ -177,7 +177,13 @@ async function _switchDomainForBridge(domainName, focusUri) {
         });
         const data = await resp.json();
         if (data.success) {
-            if (typeof fetchCachedInvalidate === 'function') fetchCachedInvalidate('/navbar/state');
+            // Bust name/version caches before navigation — same contract as
+            // Registry load / Graph Switcher (see navbar.js invalidateDomainCaches).
+            if (typeof invalidateDomainCaches === 'function') {
+                invalidateDomainCaches();
+            } else if (typeof fetchCachedInvalidate === 'function') {
+                fetchCachedInvalidate('/navbar/state');
+            }
             console.log('[Bridge] Switched to domain:', domainName);
             var target = '/dtwin/?section=sigmagraph';
             if (focusUri) target += '&focus=' + encodeURIComponent(focusUri);

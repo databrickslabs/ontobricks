@@ -58,10 +58,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (section === 'versions' && typeof loadVersionsList === 'function') {
                 loadVersionsList();
             }
-            // Load build runs when switching to runs section
-            if (section === 'runs' && typeof loadDomainRuns === 'function') {
-                loadDomainRuns();
-            }
             // Load the unified audit trail when switching to audit section
             if (section === 'audit' && typeof window.loadDomainAudit === 'function') {
                 window.loadDomainAudit();
@@ -275,6 +271,7 @@ async function saveDomainInfo() {
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
     const graphBackendEl = document.getElementById('domainGraphBackend');
+    const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
 
     if (!nameEl || !descEl || !authorEl) {
         showNotification('Form fields not found', 'error');
@@ -301,6 +298,8 @@ async function saveDomainInfo() {
         llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
         review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
         graph_backend: graphBackendEl ? graphBackendEl.value : 'lakebase',
+        neo4j_database: (graphBackendEl && graphBackendEl.value === 'neo4j' && neo4jDbEl)
+            ? neo4jDbEl.value : '',
     };
     
     try {
@@ -482,8 +481,8 @@ async function saveDomainFromSettings() {
         baseUriEl.addEventListener('input', () => baseUriEl.classList.remove('is-invalid'), { once: true });
     }
     
-    // Save domain info to session and open Unity Catalog save dialog
-    // (saveDomainInfo only saves to session; domainSave opens the UC dialog for actual persistence)
+    // Save domain info to session and persist to the registry (no confirmation popup)
+    // (saveDomainInfo only saves to session; domainSave writes to the registry)
     if (typeof domainSave === 'function') {
         await domainSave();
     } else {

@@ -1,6 +1,7 @@
 /**
- * Breadcrumb — auto-populated from the current URL path, loaded domain
- * name, and active sidebar section.
+ * Breadcrumb — shows only the current main menu (Ontology, Mapping, ...)
+ * and the sub menu (sidebar section) selected within it. No Registry/Domain
+ * ancestor crumbs.
  */
 
 const Breadcrumb = {
@@ -8,14 +9,12 @@ const Breadcrumb = {
     // so the breadcrumb visually matches the navbar/sidebar menus.
     _ROUTE_MAP: {
         '/registry/': { label: 'Registry',     icon: 'bi-archive' },
-        '/domain/':   { label: 'Domain',       icon: 'bi-folder2' },
+        '/domain/':   { label: 'Domain',       icon: 'bi-box' },
         '/ontology/': { label: 'Ontology',     icon: 'bi-bezier2' },
         '/mapping/':  { label: 'Mapping',      icon: 'bi-shuffle' },
-        '/dtwin/':    { label: 'Knowledge Graph', icon: 'bi-box-fill' },
+        '/dtwin/':    { label: 'Knowledge Graph', icon: 'bi-radar' },
         '/settings':  { label: 'Settings',     icon: 'bi-gear-fill' },
     },
-
-    _HIERARCHY: ['/registry/', '/domain/', '/ontology/', '/mapping/', '/dtwin/'],
 
     init() {
         const wrap = document.getElementById('obBreadcrumbWrap');
@@ -29,7 +28,7 @@ const Breadcrumb = {
 
         const path = window.location.pathname;
         const crumbs = this._buildCrumbs(path);
-        if (crumbs.length <= 1) return;
+        if (crumbs.length === 0) return;
 
         list.innerHTML = crumbs.map((c, i) => {
             const isLast = i === crumbs.length - 1;
@@ -50,35 +49,12 @@ const Breadcrumb = {
     },
 
     _buildCrumbs(path) {
-        const crumbs = [];
-
         const matched = this._ROUTE_MAP[path] || this._ROUTE_MAP[path + '/'];
-        if (!matched) return crumbs;
+        if (!matched) return [];
 
-        const idx = this._HIERARCHY.indexOf(path.endsWith('/') ? path : path + '/');
-
-        if (idx > 0) {
-            crumbs.push({ label: 'Registry', icon: 'bi-folder2-open', href: '/registry/' });
-        }
-        if (idx > 1) {
-            const domainName = this._getDomainName();
-            crumbs.push({
-                label: domainName || 'Domain',
-                icon: 'bi-folder2',
-                href: '/domain/'
-            });
-        }
-
-        crumbs.push({ label: matched.label, icon: matched.icon, href: path });
-
-        return crumbs;
-    },
-
-    _getDomainName() {
-        const el = document.getElementById('currentDomainName');
-        if (!el) return '';
-        const text = el.textContent.trim();
-        return (text && text !== 'Domain') ? text : '';
+        // Only the current main menu — no Registry/Domain ancestor crumbs.
+        // The active sub menu (sidebar section) is appended by _updateSection.
+        return [{ label: matched.label, icon: matched.icon, href: path }];
     },
 
     _updateChromeHeight() {

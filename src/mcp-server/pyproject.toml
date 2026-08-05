@@ -19,6 +19,9 @@ constraint-dependencies = [
     # followed, enabling local file read and bypassing secrets_dir_max_size.
     # Pulled in transitively (fastmcp/databricks-sdk). Dependabot #60/#61.
     "pydantic-settings>=2.14.2",
+    # Security floors for transitive dependencies reported by Dependabot.
+    "mcp>=1.28.1",
+    "pyasn1>=0.6.4",
 ]
 
 [project.scripts]

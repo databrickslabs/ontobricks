@@ -921,3 +921,43 @@
     opacity: 0.6;
     vertical-align: middle;
 }
+
+/* ==========================================================================
+   Stacked confirmation over an open modal
+   Applied by showConfirmDialog() in global/js/utils.js when another
+   .modal.show already exists. Classes: ob-modal-underlying (parent),
+   ob-modal-stacked (confirm), ob-modal-stacked-backdrop (its backdrop).
+   ========================================================================== */
+
+.modal.ob-modal-underlying .modal-content {
+    filter: blur(2px);
+    opacity: 0.72;
+    transition: var(--db-transition-fast);
+    pointer-events: none;
+}
+
+.modal.ob-modal-underlying::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(var(--db-dark-rgb), 0.28);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.modal.ob-modal-stacked {
+    z-index: 1065 !important;
+}
+
+.modal-backdrop.ob-modal-stacked-backdrop {
+    z-index: 1060 !important;
+    background-color: rgba(var(--db-dark-rgb), 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal.ob-modal-underlying .modal-content {
+        filter: none;
+        transition: none;
+        opacity: 0.55;
+    }
+}

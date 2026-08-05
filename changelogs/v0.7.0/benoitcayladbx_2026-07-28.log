@@ -114,3 +114,155 @@ Modified files:
 - tests/back/core/digitaltwin/test_digitaltwin_units.py
 
 Tests: uv run pytest -q -m "not scenario" → 3415 passed, 275 skipped, 5 deselected in 23.27s
+
+---
+
+## chore(review): repair the live scenario campaign and the Sphinx build
+
+Context: a full review pass — run every suite including the opt-in live
+scenario campaign, then audit code and docs against `.cursorrules` and
+`src/.coding_rules.md`. Two things were actually broken, both silently:
+the scenario campaign could not create its domain, and the Sphinx build was
+dropping roughly a third of the API reference without failing.
+
+### 1. Scenario campaign — domain name rejected by CamelCase validation
+
+The campaign used the domain name `test_scenario_1`, which
+`is_valid_domain_name` (`^[A-Z][a-zA-Z0-9]*$`) has rejected since CamelCase
+enforcement was added on creation. Scenario 1 failed at `POST /domain/info`
+with a 400, and scenarios 2, 3 and validation skipped because they depend on
+it — so the whole campaign had been dead, not merely unrun.
+
+Domain *names* and registry *folders* are different strings (the folder is the
+sanitized lowercase form and is what appears in registry listings and REST
+paths). The suites conflated them into a single constant, so the fix separates
+the two rather than just renaming.
+
+1. `tests/e2e/scenarios/test_scenario_01_generate_live.py`
+   `_DOMAIN_NAME = "TestScenario1"` for creation and assertions, plus a new
+   `_DOMAIN_FOLDER` (its lowercase form) for the registry lookup, the delete
+   path, and the final listing assertion.
+2. `tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py`,
+   `test_scenario_03_rules_analysis.py`, `test_scenario_validation.py`
+   These only ever use the value as a registry folder, so the
+   `ONTOBRICKS_SCENARIO_DOMAIN` default becomes `testscenario1`.
+3. `tests/e2e/scenarios/README.md`
+   Documents the name/folder distinction so the next author does not re-merge
+   them.
+
+### 2. Sphinx build — `pyarrow` must not be mocked
+
+`autodoc_mock_imports` listed `pyarrow`. `pandas` is pulled in transitively by
+`neo4j._optional_deps` and evaluates `Version(pyarrow.__version__)` at import
+time, which raises `TypeError` on a mock object. Thirty modules — every HTML
+route, every internal router, the graphdb backends, `shared.fastapi.main` —
+failed to import and were emitted as empty stubs behind a `--keep-going`
+warning nobody read.
+
+4. `docs/sphinx/conf.py`
+   Dropped `pyarrow` from the mock list (with a comment explaining why it must
+   stay out), added `myst_heading_anchors = 4` so the `file.md#heading` links
+   used throughout `/docs` resolve at all, read `release`/`version` from
+   `pyproject.toml` instead of the hard-coded and long-stale `0.1.1`,
+   registered `mermaid`/`csv` as plain-text lexers, and suppressed
+   `misc.highlighting_failure` (the Turtle lexer rejects legal prefixed names
+   such as `ex:person/p1`, costing ~100 warnings that buried the real ones).
+
+### 3. Docs that were absent, mis-linked or mis-rendered
+
+5. `docs/sphinx/guides/{code_organization,lakebase-graphdb,graphdb-integration,cohort_discovery,features,sizing}.md`
+   New include wrappers; six substantive guides existed in `/docs` but were in
+   no toctree, so they were never published and every link into them broke.
+   Registered in `docs/sphinx/index.rst`.
+6. `docs/sphinx/api/app.core.industry.rst`, `api_external.rst`
+   Pointed at modules renamed long ago (`*.service` → `*ImportService`,
+   `api.routers.projects` → `api.routers.domains`); FHIR was missing entirely.
+7. `docs/sizing.md`
+   Fifteen fill-in blanks were bare underscore runs on their own line, which
+   Markdown renders as horizontal rules — on GitHub as well as in Sphinx. Now
+   wrapped in code spans so they render as blanks.
+8. `docs/get-started.md`, `docs/architecture.md`, `docs/lakebase-graphdb.md`
+   Broken anchors repaired (`#data-quality`, `#reasoning`,
+   `#ontoviz---visual-ontology-editor`, `#9-digital-twin-build--step-by-step`
+   — the last two stale from the OntoViz and Digital-Twin→Knowledge-Graph
+   renames).
+9. `docs/screenshots/*.png`, `docs/INFO.md`, `docs/architecture.md`
+   Renamed the three screenshots containing spaces; MyST percent-encodes the
+   destination, so `Ontology%20design.png` never resolved.
+10. `docs/sphinx/api/app.core.{errors,sqlwizard,rst}`,
+    `app.core.graphdb.{neo4j,lakebase}.rst`, `app.core.external.pitfalls.rst`
+    Package-level `automodule` directives re-documented the classes their
+    per-module directives already own; marked `:no-index:` (18 duplicate-object
+    warnings).
+11. `docs/sphinx/api/app.objects.{digitaltwin,mapping,ontology,session}.rst`
+    Title underlines were one character short. The digitaltwin title also still
+    said "Digital twin".
+12. Docstring RST repairs in `src/` — missing blank line before a bullet or
+    enumerated list, and inline literals that never closed:
+    `back/core/databricks/lakebase/LakebaseAuth.py`,
+    `back/core/graphdb/lakebase/_companion_ddl.py` (`*_sync` opened RST
+    emphasis), `back/objects/domain/SettingsService.py`,
+    `back/objects/ontology/Ontology.py`,
+    `back/objects/registry/PermissionService.py`,
+    `api/routers/internal/ontology.py`.
+13. `.cursor/08-testing-and-deployment.mdc`, `ci/build_docs.sh`
+    The rule told agents to run `scripts/build_docs.sh`, which does not exist —
+    the script is `ci/build_docs.sh`, and its own usage header was wrong too.
+14. `src/back/core/graphdb/lakebase/SyncedTableManager.py`
+    `:doc:`/graphdb-integration`` → `/guides/graphdb-integration`.
+
+Sphinx warnings: 198 → 14. The remaining 14 are 11 repo-relative links that
+resolve on GitHub but point outside the Sphinx tree (`../src/`, `../tests/`,
+`../data/`), and 3 ambiguous cross-references where an attribute named
+`object` and eight classes named `AgentResult` shadow the intended targets.
+
+Modified files:
+- .cursor/08-testing-and-deployment.mdc
+- ci/build_docs.sh
+- docs/INFO.md
+- docs/architecture.md
+- docs/get-started.md
+- docs/lakebase-graphdb.md
+- docs/sizing.md
+- docs/user-guide.md
+- docs/screenshots/{Graph-result,Ontology-Mapping,Ontology-design}.png (renamed)
+- docs/sphinx/conf.py
+- docs/sphinx/index.rst
+- docs/sphinx/_static/.gitkeep
+- docs/sphinx/api/api_external.rst
+- docs/sphinx/api/app.core.rst
+- docs/sphinx/api/app.core.errors.rst
+- docs/sphinx/api/app.core.external.pitfalls.rst
+- docs/sphinx/api/app.core.graphdb.lakebase.rst
+- docs/sphinx/api/app.core.graphdb.neo4j.rst
+- docs/sphinx/api/app.core.industry.rst
+- docs/sphinx/api/app.core.sqlwizard.rst
+- docs/sphinx/api/app.objects.digitaltwin.rst
+- docs/sphinx/api/app.objects.mapping.rst
+- docs/sphinx/api/app.objects.ontology.rst
+- docs/sphinx/api/app.objects.session.rst
+- docs/sphinx/guides/code_organization.md
+- docs/sphinx/guides/cohort_discovery.md
+- docs/sphinx/guides/features.md
+- docs/sphinx/guides/graphdb-integration.md
+- docs/sphinx/guides/lakebase-graphdb.md
+- docs/sphinx/guides/sizing.md
+- src/api/routers/internal/ontology.py
+- src/back/core/databricks/lakebase/LakebaseAuth.py
+- src/back/core/graphdb/lakebase/SyncedTableManager.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/registry/PermissionService.py
+- tests/e2e/scenarios/README.md
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- tests/e2e/scenarios/test_scenario_validation.py
+
+Tests:
+- uv run pytest -q -m "not scenario" → 3415 passed, 275 skipped, 5 deselected in 25.90s
+- make scenario-campaign (live, billable) → 4 passed, 1 skipped in 738.90s;
+  validation report 13 passed / 0 failed / 2 info. V1 built 51,802 triples,
+  V2 53,896.
+- ci/build_docs.sh → success, 14 warnings (was 198)

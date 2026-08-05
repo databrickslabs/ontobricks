@@ -126,7 +126,11 @@ async function loadDatabricksBuildInfo() {
 
         const statusText = document.getElementById('dbxBuildStatusText');
         if (statusText) {
-            statusText.textContent = ts.has_data ? count + ' triples loaded' : 'No data yet';
+            // has_data is tri-state: null means the probe could not reach the
+            // engine, which is not the same as an empty graph.
+            statusText.textContent = ts.has_data === null
+                ? 'Status unavailable'
+                : (ts.has_data ? count + ' triples loaded' : 'No data yet');
         }
     } catch (e) {
         console.error('[DatabricksBuild] info failed', e);

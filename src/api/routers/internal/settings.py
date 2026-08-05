@@ -707,6 +707,32 @@ async def save_edit_lock_ttl(
     )
 
 
+@router.get("/analytics-job-enabled")
+async def get_analytics_job_enabled(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get whether oversized graphs may use the serverless analytics job."""
+    return config_service.get_analytics_job_enabled_result(session_mgr, settings)
+
+
+@router.post("/save-analytics-job-enabled")
+async def save_analytics_job_enabled(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the serverless analytics job toggle (admin only, global)."""
+    data = await request.json()
+    enabled = bool(data.get("analytics_job_enabled", False))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_analytics_job_enabled_result(
+        enabled, email, user_token, session_mgr, settings
+    )
+
+
 # ===========================================
 # Permissions Management
 # ===========================================
@@ -970,6 +996,53 @@ async def post_graph_engine_neo4j_test(
         return config_service.graph_engine_neo4j_test_result(session_mgr, settings)
 
 
+@router.get("/graph-engine/neo4j-databases")
+async def get_graph_engine_neo4j_databases(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Neo4j databases on the server for the Domain Info DB selector (P4)."""
+    with map_route_errors("graph engine Neo4j databases", logger):
+        return config_service.graph_engine_neo4j_databases_result(session_mgr, settings)
+
+
+@router.get("/graph-engine/neo4j-labels")
+async def get_graph_engine_neo4j_labels(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List materialised Neo4j graphs (marker labels) with node/edge counts (admin Objects tab, P5)."""
+    with map_route_errors("graph engine Neo4j labels", logger):
+        return config_service.graph_engine_neo4j_labels_result(session_mgr, settings)
+
+
+@router.get("/graph-engine/neo4j-health")
+async def get_graph_engine_neo4j_health(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Bolt health probe for the Neo4j admin Health tab (P5)."""
+    with map_route_errors("graph engine Neo4j health", logger):
+        return config_service.graph_engine_neo4j_health_result(session_mgr, settings)
+
+
+@router.post("/graph-engine/neo4j-drop-label")
+async def post_graph_engine_neo4j_drop_label(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Drop one Neo4j graph (marker label) and its schema map (admin, P5).
+
+    Body: ``{ "label": "<marker label>" }``
+    """
+    with map_route_errors("graph engine Neo4j drop label", logger):
+        data = await request.json()
+        return config_service.graph_engine_neo4j_drop_label_result(
+            (data.get("label") or "").strip(), session_mgr, settings
+        )
+
+
 @router.get("/graph-engine/uc-catalogs")
 async def get_graph_engine_uc_catalogs(
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -1194,7 +1267,10 @@ async def set_graph_engine_config(
 
 
 # ===========================================
-# Scheduled Builds
+# Scheduled tasks (builds, cohorts, analytics, inference)
+#
+# One generic surface for every task type: the type is a path/body
+# field, and its options travel in the ``config`` object.
 # ===========================================
 
 
@@ -1203,7 +1279,7 @@ async def list_schedules(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return all per-domain build schedules."""
+    """Return every schedule, of every task type, plus the type catalogue."""
     return config_service.list_schedules_result(session_mgr, settings)
 
 
@@ -1213,27 +1289,106 @@ async def save_schedule(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Create or update a build schedule for a domain."""
+    """Create or update a schedule of any task type."""
     data = await request.json()
     return config_service.save_schedule_result(data, session_mgr, settings)
-
-
-@router.get("/schedules/{domain_name}/history")
-async def get_schedule_history(
-    domain_name: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Return the run history for a single domain schedule."""
-    return config_service.get_schedule_history_result(
-        domain_name, session_mgr, settings
-    )
 
 
 @router.get("/schedules/status")
 async def scheduler_status():
     """Diagnostic: return the APScheduler internal state (running, jobs, next-run times)."""
     return config_service.scheduler_status_payload()
+
+
+@router.get("/schedules/rules/{domain_name}")
+async def list_cohort_rules_for_domain(
+    domain_name: str,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List saved cohort rules for *domain_name* (used by the schedule modal)."""
+    return config_service.list_cohort_rules_for_domain_result(
+        domain_name, session_mgr, settings
+    )
+
+
+@router.get("/schedules/{task_type}/{domain_name}/history")
+async def get_schedule_history(
+    task_type: str,
+    domain_name: str,
+    target: str = Query(default=""),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return the run history for a single schedule."""
+    return config_service.get_schedule_history_result(
+        task_type, domain_name, session_mgr, settings, target_key=target
+    )
+
+
+@router.delete("/schedules/{task_type}/{domain_name}")
+async def delete_schedule(
+    task_type: str,
+    domain_name: str,
+    target: str = Query(default=""),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Remove a schedule."""
+    return config_service.delete_schedule_result(
+        task_type, domain_name, session_mgr, settings, target_key=target
+    )
+
+
+@router.post("/schedules/{task_type}/{domain_name}/run-now")
+async def run_schedule_now(
+    task_type: str,
+    domain_name: str,
+    target: str = Query(default=""),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Fire a schedule immediately (one-shot, off its own clock)."""
+    return config_service.trigger_schedule_now_result(
+        task_type, domain_name, session_mgr, settings, target_key=target
+    )
+
+
+@router.get("/runs/build")
+async def get_all_build_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of build runs across every domain (newest-first).
+
+    Backs the build tab of Settings → Automation → Runs. ``domain`` is
+    optional: absent or empty means every domain in the registry. Admin-only
+    by virtue of the ``/settings`` prefix.
+    """
+    return config_service.get_all_build_runs_result(
+        session_mgr, settings, folder=domain or None, limit=limit, offset=offset
+    )
+
+
+@router.get("/runs/analytics")
+async def get_all_analytics_runs(
+    domain: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """One page of analytics runs across every domain (newest-first).
+
+    The analytics tab's counterpart to :func:`get_all_build_runs`; spans every
+    version, since the Runs page has no version filter.
+    """
+    return config_service.get_all_analytics_runs_result(
+        session_mgr, settings, folder=domain or None, limit=limit, offset=offset
+    )
 
 
 @router.get("/build-runs/{domain_name}")
@@ -1260,28 +1415,6 @@ async def get_build_analytics(
     """Return aggregate build statistics for a domain (optional version)."""
     return config_service.get_build_analytics_result(
         domain_name, session_mgr, settings, version=version
-    )
-
-
-@router.delete("/schedules/{domain_name}")
-async def delete_schedule(
-    domain_name: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Remove a build schedule for a domain."""
-    return config_service.delete_schedule_result(domain_name, session_mgr, settings)
-
-
-@router.post("/schedules/{domain_name}/run-now")
-async def run_schedule_now(
-    domain_name: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Fire the build schedule for *domain_name* immediately (one-shot)."""
-    return config_service.trigger_schedule_now_result(
-        domain_name, session_mgr, settings
     )
 
 
@@ -1440,77 +1573,3 @@ async def download_app_logs():
     )
 
 
-# ===========================================
-# Scheduled Cohort Materialisations
-# ===========================================
-
-
-@router.get("/cohort-schedules")
-async def list_cohort_schedules(
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Return all per-(domain, rule) cohort schedules."""
-    return config_service.list_cohort_schedules_result(session_mgr, settings)
-
-
-@router.get("/cohort-schedules/rules/{domain_name}")
-async def list_cohort_rules_for_domain(
-    domain_name: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """List saved cohort rules for *domain_name* (used by the schedule modal)."""
-    return config_service.list_cohort_rules_for_domain_result(
-        domain_name, session_mgr, settings
-    )
-
-
-@router.post("/cohort-schedules")
-async def save_cohort_schedule(
-    request: Request,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Create or update a cohort materialisation schedule."""
-    data = await request.json()
-    return config_service.save_cohort_schedule_result(data, session_mgr, settings)
-
-
-@router.get("/cohort-schedules/{domain_name}/{rule_id}/history")
-async def get_cohort_schedule_history(
-    domain_name: str,
-    rule_id: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Return the run history for a single cohort schedule."""
-    return config_service.get_cohort_schedule_history_result(
-        domain_name, rule_id, session_mgr, settings
-    )
-
-
-@router.delete("/cohort-schedules/{domain_name}/{rule_id}")
-async def delete_cohort_schedule(
-    domain_name: str,
-    rule_id: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Remove a cohort schedule for *(domain_name, rule_id)*."""
-    return config_service.delete_cohort_schedule_result(
-        domain_name, rule_id, session_mgr, settings
-    )
-
-
-@router.post("/cohort-schedules/{domain_name}/{rule_id}/run-now")
-async def run_cohort_schedule_now(
-    domain_name: str,
-    rule_id: str,
-    session_mgr: SessionManager = Depends(get_session_manager),
-    settings: Settings = Depends(get_settings),
-):
-    """Fire the cohort schedule for *(domain_name, rule_id)* immediately."""
-    return config_service.trigger_cohort_schedule_now_result(
-        domain_name, rule_id, session_mgr, settings
-    )

@@ -56,7 +56,7 @@ class TestDialectHelpers:
 
     def test_cast_str_spark(self):
         result = _cast_str("col", DIALECT_SPARK)
-        assert "CAST(col AS STRING)" == result
+        assert "TRY_CAST(col AS STRING)" == result
 
 
 class TestExtractR2RMLMappings:

@@ -130,15 +130,15 @@
                         <div id="tripleStoreStatusArea" class="d-none"></div>
                     </div>
 
-                    <!-- Architecture diagram: Triple Store → Sync → Graph DB (Lakebase) -->
+                    <!-- Architecture diagram: Triple-Store Gateway → Sync → Graph DB (Lakebase) -->
                     <div id="dtColumnsArea" class="d-none">
                         <div class="dt-arch-diagram">
 
-                            <!-- Card 1: Triple Store (Unity Catalog VIEW) -->
+                            <!-- Card 1: Triple-Store Gateway (Unity Catalog VIEW) -->
                             <div class="dt-arch-node" id="dtZeroCopyCard">
                                 <div class="dt-arch-header">
                                     <i class="bi bi-database fs-4 dt-arch-icon-triplestore flex-shrink-0"></i>
-                                    <span class="dt-arch-title">Triple Store</span>
+                                    <span class="dt-arch-title">Triple-Store Gateway</span>
                                     <span class="dt-arch-badge" id="dtExistView"></span>
                                 </div>
                                 <code class="dt-arch-name" id="dtViewName">N/A</code>
@@ -149,7 +149,7 @@
                                  vs Neo4j Bolt writer (transient Cypher UNWIND/MERGE at build time). -->
                             <div id="dtLakebaseDetails" class="d-none dt-arch-lakebase-section">
 
-                                <!-- Arrow: Triple Store → Bridge -->
+                                <!-- Arrow: Triple-Store Gateway → Bridge -->
                                 <div class="dt-arch-connector">
                                     <i class="bi bi-arrow-right"></i>
                                 </div>
@@ -196,6 +196,15 @@
                                 <i class="bi bi-info-circle me-1"></i>
                                 Build writes graph triples to Lakebase
                                 (<code id="fnLkDatabase2">…</code>.<code id="fnLkSchema2">…</code>.<code id="fnLkTable2">…</code>)<span id="fnLkSyncNote" class="d-none"> and registers a Lakeflow synced table as <code id="fnLkSyncedUc2"></code></span>.
+                            </div>
+
+                            <!-- Neo4j build note (engine=neo4j; JS toggles vs the Lakebase one) -->
+                            <div class="dt-arch-build-note w-100 d-none" id="dtNeo4jBuildNote">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Build writes a typed property graph to Neo4j over Bolt — nodes
+                                (keyed on entity URI), <code>rdf:type</code> labels, and relationships —
+                                into database <code id="fnNeo4jDatabase">neo4j</code> under marker label
+                                <code id="fnNeo4jLabel">…</code>. No SQL view or UC-synced table is used on this path.
                             </div>
 
                             <!-- Hidden: individual fields + compat elements -->

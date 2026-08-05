@@ -3,7 +3,7 @@
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-1"><i class="bi bi-diagram-2 me-2"></i>Expressions & Axioms</h4>
-        <p class="text-muted mb-0 small">Build class definitions with set operations, and assert logical relationships between classes and properties</p>
+        <p class="text-muted mb-0 small">Build entity definitions with set operations, and assert logical relationships between entities and properties</p>
     </div>
     <button class="btn btn-sm btn-outline-primary ontology-edit-btn" onclick="AxiomsModule.addForActiveTab()">
         <i class="bi bi-plus-lg me-1"></i> Add
@@ -34,13 +34,13 @@
             <div class="tab-pane fade show active" id="expressionsPane" role="tabpanel">
                 <p class="text-muted small mb-3">
                     <i class="bi bi-info-circle"></i>
-                    Define how a class is <em>composed</em> from other classes — union, intersection, complement, or enumeration.
+                    Define how an entity is <em>composed</em> from other entities — union, intersection, complement, or enumeration.
                 </p>
                 <div id="expressionsList">
                     <div class="text-center py-4 text-muted" id="noExpressionsMessage">
                         <i class="bi bi-collection fs-4"></i>
                         <p class="mt-2 mb-0 small">No expressions defined</p>
-                        <small>Click <strong>+ Expression</strong> to compose classes with set operations (union, intersection, ...)</small>
+                        <small>Click <strong>+ Expression</strong> to compose entities with set operations (union, intersection, ...)</small>
                     </div>
                 </div>
             </div>
@@ -48,7 +48,7 @@
             <div class="tab-pane fade" id="axiomsPane" role="tabpanel">
                 <p class="text-muted small mb-3">
                     <i class="bi bi-info-circle"></i>
-                    Assert logical <em>facts</em> — equivalence, disjointness, inverse, or property chains between existing classes and properties.
+                    Assert logical <em>facts</em> — equivalence, disjointness, inverse, or property chains between existing entities and properties.
                 </p>
                 <div id="axiomsList">
                     <div class="text-center py-4 text-muted" id="noAxiomsMessage">
@@ -78,14 +78,14 @@
                     <label class="form-label">Type</label>
                     <select class="form-select" id="axiomType" onchange="AxiomsModule.onTypeChange()">
                         <option value="">Select type...</option>
-                        <optgroup label="Expressions — compose a class from other classes">
+                        <optgroup label="Expressions — compose an entity from other entities">
                             <option value="unionOf">Union Of (⊔)</option>
                             <option value="intersectionOf">Intersection Of (⊓)</option>
                             <option value="complementOf">Complement Of (¬)</option>
                             <option value="oneOf">One Of (Enumeration)</option>
                         </optgroup>
-                        <optgroup label="Axioms — class relationships">
-                            <option value="equivalentClass">Equivalent Classes (≡)</option>
+                        <optgroup label="Axioms — entity relationships">
+                            <option value="equivalentClass">Equivalent Entities (≡)</option>
                             <option value="disjointWith">Disjoint With</option>
                             <option value="disjointUnion">Disjoint Union</option>
                         </optgroup>
@@ -98,17 +98,17 @@
                     </select>
                 </div>
                 
-                <!-- Subject Class/Property -->
+                <!-- Subject Entity/Property -->
                 <div class="mb-3" id="subjectGroup">
-                    <label class="form-label" id="subjectLabel">Subject Class</label>
+                    <label class="form-label" id="subjectLabel">Subject Entity</label>
                     <select class="form-select" id="axiomSubject">
                         <option value="">Select...</option>
                     </select>
                 </div>
                 
-                <!-- Object Class(es)/Property(ies) -->
+                <!-- Object Entity(ies)/Property(ies) -->
                 <div class="mb-3" id="objectGroup">
-                    <label class="form-label" id="objectLabel">Object Class(es)</label>
+                    <label class="form-label" id="objectLabel">Object Entity(ies)</label>
                     <div id="objectSelectContainer">
                         <select class="form-select mb-2" id="axiomObject">
                             <option value="">Select...</option>
