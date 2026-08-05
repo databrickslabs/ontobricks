@@ -115,40 +115,54 @@ def _function_body(source: str, name: str) -> str:
     return _brace_block_after(source, match.end() - 1)
 
 
+def _named_function_body(source: str, name: str) -> str:
+    match = re.search(
+        rf"function\s+{re.escape(name)}\s*\([^)]*\)\s*\{{",
+        source,
+    )
+    if not match:
+        return ""
+    return _brace_block_after(source, match.end() - 1)
+
+
+def _stack_helper_body() -> str:
+    return _named_function_body(_utils(), "showStackedModal")
+
+
 def _removals_cover_classes(text: str, classes: tuple[str, ...]) -> bool:
     removal_text = " ".join(re.findall(r"classList\.remove\([^)]+\)", text))
     return all(cls in removal_text for cls in classes)
 
 
-def test_confirm_detects_visible_parent_modal():
-    body = _confirm_body()
+def test_shared_helper_detects_visible_parent_modal():
+    body = _stack_helper_body()
+    assert body, "showStackedModal helper must exist"
     assert ".modal.show" in body
     assert "ob-modal-underlying" in body
 
 
-def test_confirm_marks_itself_stacked():
-    body = _confirm_body()
+def test_shared_helper_marks_child_and_backdrop_stacked():
+    body = _stack_helper_body()
     assert "ob-modal-stacked" in body
     assert "ob-modal-stacked-backdrop" in body
 
 
-def test_confirm_cleans_stack_on_hidden():
-    body = _confirm_body()
+def test_shared_helper_cleans_stack_on_hidden():
+    body = _stack_helper_body()
     assert "hidden.bs.modal" in body
-    handler = _hidden_modal_handler_body(body)
-    assert handler, "hidden.bs.modal listener callback required"
+    assert re.search(
+        r"addEventListener\(\s*['\"]hidden\.bs\.modal['\"]\s*,\s*clearStack",
+        body,
+    ), "hidden.bs.modal must invoke clearStack"
+    clear_body = _function_body(body, "clearStack")
+    assert clear_body, "clearStack helper must be defined"
+    assert _removals_cover_classes(clear_body, _STACK_CLASSES), (
+        "clearStack must remove every stacked-modal class"
+    )
 
-    uses_clear_stack = re.search(r"\bclearStack\b", handler) is not None
-    if uses_clear_stack:
-        clear_body = _function_body(body, "clearStack")
-        assert clear_body, "clearStack helper must be defined in showConfirmDialog"
-        assert _removals_cover_classes(clear_body, _STACK_CLASSES), (
-            "clearStack must remove all stack classes via classList.remove"
-        )
-    else:
-        assert _removals_cover_classes(handler, _STACK_CLASSES), (
-            "hidden.bs.modal handler must remove all stack classes via classList.remove"
-        )
+
+def test_confirm_uses_shared_stacked_modal_helper():
+    assert "showStackedModal(modalEl)" in _confirm_body()
 
 
 def test_css_defines_underlying_blur():

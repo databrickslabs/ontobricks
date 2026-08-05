@@ -363,6 +363,49 @@ function extractLocalName(uri) {
 // ========== CONFIRMATION DIALOG ==========
 
 /**
+ * Show a Bootstrap modal above the currently visible modal, if any.
+ * @param {HTMLElement} modalEl - Child modal element to display
+ * @returns {bootstrap.Modal} Bootstrap modal instance
+ */
+function showStackedModal(modalEl) {
+    const openModals = Array.from(document.querySelectorAll('.modal.show'))
+        .filter((el) => el !== modalEl);
+    const parentModal = openModals.length
+        ? openModals[openModals.length - 1]
+        : null;
+    let stackApplied = false;
+
+    const applyStack = () => {
+        if (!parentModal || stackApplied) return;
+        parentModal.classList.add('ob-modal-underlying');
+        modalEl.classList.add('ob-modal-stacked');
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        const topBackdrop = backdrops.length
+            ? backdrops[backdrops.length - 1]
+            : null;
+        topBackdrop?.classList.add('ob-modal-stacked-backdrop');
+        stackApplied = true;
+    };
+
+    const clearStack = () => {
+        if (!stackApplied) return;
+        parentModal?.classList.remove('ob-modal-underlying');
+        modalEl.classList.remove('ob-modal-stacked');
+        document.querySelectorAll('.modal-backdrop.ob-modal-stacked-backdrop')
+            .forEach((el) => el.classList.remove('ob-modal-stacked-backdrop'));
+        stackApplied = false;
+    };
+
+    modalEl.addEventListener('shown.bs.modal', applyStack, { once: true });
+    modalEl.addEventListener('hidden.bs.modal', clearStack, { once: true });
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    applyStack();
+    return modal;
+}
+
+/**
  * Show a confirmation dialog (replaces native confirm())
  * @param {Object} options - Dialog options
  * @param {string} options.title - Dialog title (default: 'Confirm')
@@ -418,37 +461,6 @@ function showConfirmDialog(options = {}) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
 
         const modalEl = document.getElementById(modalId);
-        const modal = new bootstrap.Modal(modalEl);
-
-        // Topmost already-visible modal becomes the blurred underlay.
-        const openModals = document.querySelectorAll('.modal.show');
-        const parentModal = openModals.length
-            ? openModals[openModals.length - 1]
-            : null;
-        let stackApplied = false;
-
-        const applyStack = () => {
-            if (!parentModal || stackApplied) return;
-            parentModal.classList.add('ob-modal-underlying');
-            modalEl.classList.add('ob-modal-stacked');
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            const topBackdrop = backdrops.length
-                ? backdrops[backdrops.length - 1]
-                : null;
-            if (topBackdrop) {
-                topBackdrop.classList.add('ob-modal-stacked-backdrop');
-            }
-            stackApplied = true;
-        };
-
-        const clearStack = () => {
-            if (!stackApplied) return;
-            parentModal?.classList.remove('ob-modal-underlying');
-            modalEl.classList.remove('ob-modal-stacked');
-            document.querySelectorAll('.modal-backdrop.ob-modal-stacked-backdrop')
-                .forEach((el) => el.classList.remove('ob-modal-stacked-backdrop'));
-            stackApplied = false;
-        };
 
         let resolved = false;
 
@@ -458,20 +470,14 @@ function showConfirmDialog(options = {}) {
             resolve(true);
         });
 
-        modalEl.addEventListener('shown.bs.modal', applyStack);
-
         modalEl.addEventListener('hidden.bs.modal', () => {
-            clearStack();
             if (!resolved) {
                 resolve(false);
             }
             setTimeout(() => modalEl.remove(), 100);
         });
 
-        modal.show();
-        // Backdrop exists immediately after show(); tag it even if shown
-        // fires slightly later in some browsers.
-        applyStack();
+        const modal = showStackedModal(modalEl);
     });
 }
 

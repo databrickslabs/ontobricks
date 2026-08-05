@@ -596,8 +596,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">' +
             '<span class="spinner-border spinner-border-sm me-1"></span> Loading…</td></tr>';
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
+        showStackedModal(modalEl);
 
         try {
             const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
@@ -734,7 +733,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('importObxFile').value = '';
         document.getElementById('importObxPreviewError').style.display = 'none';
         document.getElementById('btnImportObxConfirm').style.display = 'none';
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        showStackedModal(modalEl);
     }
 
     document.getElementById('importObxFile')?.addEventListener('change', async (e) => {
