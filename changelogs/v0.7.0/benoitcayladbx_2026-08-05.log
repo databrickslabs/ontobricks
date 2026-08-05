@@ -390,3 +390,32 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.97s
+
+## Point GitHub Pages docs hub at develop
+
+Context: Pages publishes from `develop` `/docs`, but the marketing docs hub
+and related CTAs still linked `blob/master/…`, so Architecture (and the rest)
+showed the pre-icon-map Markdown even after the Sphinx rebuild on develop.
+The live site was also returning 404 for the Pages root. Help Center "Open on
+GitHub" pointed at a non-default `main` branch.
+
+Changes:
+
+1. `docs/docs/index.html`
+   Doc cards → `blob/develop/…`; added Development and Code map cards that
+   carry the menu-icon identity wording.
+2. `docs/get-started/index.html`
+   Setup guide CTAs → `blob/develop/…`.
+3. `docs/about/index.html`
+   Contributors link → `blob/develop/…`.
+4. `src/front/static/global/js/help-docs.js`
+   Help Center GitHub deep-link base → `blob/develop/documentation/`.
+
+Modified files:
+- `docs/docs/index.html`
+- `docs/get-started/index.html`
+- `docs/about/index.html`
+- `src/front/static/global/js/help-docs.js`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4675 passed, 276
+skipped, 5 deselected, 1 xfailed, 23 warnings in 32.85s

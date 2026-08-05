@@ -17,7 +17,7 @@
     var SCREENSHOT_PREFIX = '/api/help/docs/screenshots/';
     var STATIC_PREFIX = '/static/';
     var GITHUB_BASE =
-        'https://github.com/databrickslabs/ontobricks/blob/main/documentation/';
+        'https://github.com/databrickslabs/ontobricks/blob/develop/documentation/';
 
     var state = {
         loadedIndex: false,
