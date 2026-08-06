@@ -457,9 +457,74 @@ CREATE TABLE IF NOT EXISTS "${SCHEMA}".domain_change_events (
 );
 CREATE INDEX IF NOT EXISTS idx_change_events_domain_version
     ON "${SCHEMA}".domain_change_events(domain_id, version, occurred_at);
+
+-- schedules / schedule_runs generic task registry (v0.7 — mirrors
+-- schema.sql + LakebaseRegistryStore._ensure_schedule_task_columns).
+-- Widens the build-only scheduler to (task_type, domain, target_key) so
+-- Analytics / Inference / Cohort share the same tables. Applied here as
+-- the schema owner because the unique-constraint swap needs ownership;
+-- without this, make deploy alone leaves an in-place 0.6→0.7 registry
+-- on the legacy UNIQUE (registry_id, domain_name) shape.
+ALTER TABLE "${SCHEMA}".schedules
+    ADD COLUMN IF NOT EXISTS task_type text NOT NULL DEFAULT 'build',
+    ADD COLUMN IF NOT EXISTS target_key text NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS config jsonb NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS last_count bigint NOT NULL DEFAULT 0;
+ALTER TABLE "${SCHEMA}".schedule_runs
+    ADD COLUMN IF NOT EXISTS task_type text NOT NULL DEFAULT 'build',
+    ADD COLUMN IF NOT EXISTS target_key text NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS detail jsonb NOT NULL DEFAULT '{}'::jsonb;
+-- Fold the legacy build-only column into config (idempotent: only rows
+-- still holding the empty default).
+UPDATE "${SCHEMA}".schedules
+SET config = jsonb_build_object('drop_existing', COALESCE(drop_existing, true))
+WHERE config = '{}'::jsonb AND task_type = 'build';
+DO \$sched\$
+DECLARE
+    cname text;
+BEGIN
+    FOR cname IN
+        SELECT con.conname
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+        WHERE ns.nspname = '${SCHEMA}'
+          AND rel.relname = 'schedules'
+          AND con.contype = 'u'
+          AND pg_get_constraintdef(con.oid)
+              = 'UNIQUE (registry_id, domain_name)'
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE %I.schedules DROP CONSTRAINT IF EXISTS %I',
+            '${SCHEMA}', cname
+        );
+    END LOOP;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+        WHERE ns.nspname = '${SCHEMA}'
+          AND rel.relname = 'schedules'
+          AND con.conname = 'schedules_type_domain_target_key'
+    ) THEN
+        EXECUTE format(
+            'ALTER TABLE %I.schedules
+                ADD CONSTRAINT schedules_type_domain_target_key
+                UNIQUE (registry_id, task_type, domain_name, target_key)',
+            '${SCHEMA}'
+        );
+    END IF;
+END
+\$sched\$;
+DROP INDEX IF EXISTS "${SCHEMA}".idx_schedule_runs_domain;
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
+    ON "${SCHEMA}".schedule_runs(
+        registry_id, task_type, domain_name, target_key, run_ts DESC
+    );
 SQL
     then
-        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events)"
+        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
     else
         echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
     fi

@@ -112,6 +112,7 @@ _KNOWN_TABLES = frozenset(
         "graph_analytics",
         "graph_analytics_runs",
         "domain_review_events",
+        "domain_change_events",
         "domain_comments",
         "domain_tasks",
         "domain_edit_locks",

@@ -1,0 +1,44 @@
+## Close 0.7 registry SQL deploy gap (schedules generic tasks)
+
+Context: The 0.7 registry schema delta — widening `schedules` /
+`schedule_runs` to the generic `(task_type, domain, target_key)` shape —
+lived only in `schema.sql` and the app's `_ensure_schedule_task_columns`
+self-heal. `make deploy` / `make bootstrap-lakebase` did not apply it, there
+was no `upgrade_0.6_to_0.7.sql`, and preflight did not detect the pending
+columns. An in-place 0.6→0.7 deploy could therefore leave the registry on
+the legacy unique constraint until an admin re-ran Initialize.
+
+Changes:
+
+1. `scripts/bootstrap/lakebase-perms.sh`
+   Step 2b now adds the schedules/schedule_runs columns, folds
+   `drop_existing` into `config`, swaps the unique constraint, and widens
+   `idx_schedule_runs_domain` (as schema owner on every Lakebase deploy).
+2. `scripts/migrations/upgrade_0.6_to_0.7.sql`
+   New auditable one-shot DBA migration mirroring the same DDL.
+3. `scripts/_internal/_lakebase_preflight.py`
+   Expects the new columns + `schedules_type_domain_target_key` so deploy
+   preflight reports them as pending until bootstrap applies them.
+4. `scripts/_internal/_deploy-preflight.sh`
+   Requires `upgrade_0.6_to_0.7.sql` among Lakebase project files.
+5. `tests/units/scripts/test_lakebase_preflight.py`
+   Asserts the new EXPECTED_COLUMNS entries stay aligned with bootstrap.
+6. `src/back/objects/registry/store/lakebase/store.py`
+   Adds missing `domain_change_events` to `_KNOWN_TABLES` (diagnostics).
+7. `documentation/DEPLOY_CHECKLIST.md`
+   Documents the 0.6→0.7 upgrade path and lists the new migration script.
+8. `scripts/update-deployed-app.sh`
+   Comment now mentions the v0.7 schedules migration in the SQL step.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/migrations/upgrade_0.6_to_0.7.sql
+- scripts/_internal/_lakebase_preflight.py
+- scripts/_internal/_deploy-preflight.sh
+- tests/units/scripts/test_lakebase_preflight.py
+- src/back/objects/registry/store/lakebase/store.py
+- documentation/DEPLOY_CHECKLIST.md
+- scripts/update-deployed-app.sh
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4688 passed, 276 skipped, 5 deselected, 1 xfailed in 33.53s

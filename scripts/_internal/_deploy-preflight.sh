@@ -102,6 +102,7 @@ _preflight_check_deploy_files() {
         _preflight_require_file "scripts/_internal/_lakebase_preflight.py"
         _preflight_require_file "scripts/migrations/upgrade_0.4_to_0.5.sql"
         _preflight_require_file "scripts/migrations/upgrade_0.5_to_0.6.sql"
+        _preflight_require_file "scripts/migrations/upgrade_0.6_to_0.7.sql"
     fi
     _preflight_ok "required project files present"
 }
