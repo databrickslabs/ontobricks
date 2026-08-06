@@ -41,6 +41,61 @@ def test_dtwin_classes_returns_session_actions(client, domain, monkeypatch):
     assert body["classes"][0]["actions"][0]["fullName"] == "main.ops.recompute_risk"
 
 
+# A class with a malformed action fullName (must be dropped) and a bridge
+# authored with the legacy ``target_project`` key only (no ``target_domain``),
+# to exercise the NodeContextService normalization used by GET /dtwin/classes.
+_CLASSES_WITH_MALFORMED_ACTION_AND_LEGACY_BRIDGE = [
+    {
+        "name": "Customer",
+        "uri": "https://example.com/Customer",
+        "dataset": None,
+        "bridges": [
+            {
+                "target_project": "Finance",
+                "target_class_name": "Contract",
+                "target_class_uri": "https://example.com/Contract",
+                "label": "Owns contracts",
+            }
+        ],
+        "actions": [
+            {"fullName": "main.ops.bad;DROP TABLE x", "description": "malformed"},
+            {
+                "fullName": "main.ops.recompute_risk",
+                "description": "valid",
+                "returns_table": False,
+            },
+        ],
+    },
+]
+
+
+def test_dtwin_classes_normalizes_bridges_and_drops_malformed_actions(
+    client, monkeypatch
+):
+    from api.routers.internal import dtwin
+
+    mock_domain = MagicMock()
+    mock_domain.info = {"name": "Customer 360"}
+    mock_domain.domain_folder = "customer-360"
+    mock_domain.get_classes.return_value = (
+        _CLASSES_WITH_MALFORMED_ACTION_AND_LEGACY_BRIDGE
+    )
+    monkeypatch.setattr(dtwin, "get_domain", lambda _session_mgr: mock_domain)
+
+    response = client.get("/dtwin/classes")
+
+    assert response.status_code == 200
+    cls = response.json()["classes"][0]
+
+    # The malformed fullName is dropped; only the valid action remains.
+    assert [a["fullName"] for a in cls["actions"]] == ["main.ops.recompute_risk"]
+
+    # ``target_project`` alias is normalized to ``target_domain`` so
+    # downstream formatters (which only read ``target_domain``) still work.
+    assert cls["bridges"][0]["target_domain"] == "Finance"
+    assert "target_project" not in cls["bridges"][0]
+
+
 def test_dtwin_nodes_context_returns_metadata_without_rows(client, domain, monkeypatch):
     from api.routers.internal import dtwin
 

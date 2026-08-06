@@ -524,3 +524,14 @@ class TestToolDefinitions:
             params = fn["parameters"]
             assert params["type"] == "object"
             assert "properties" in params
+
+    def test_invoke_entity_action_is_not_exposed_to_the_llm(self):
+        """Graph Chat may only *request* an action (human-confirmed two-step
+        flow); it must never get a tool that invokes a Unity Catalog
+        function directly, or a prompt-injected entity could trigger a
+        write/side-effecting action with no confirmation step.
+        """
+        assert "invoke_entity_action" not in chat_tools.TOOL_HANDLERS
+        assert "invoke_entity_action" not in {
+            d["function"]["name"] for d in chat_tools.TOOL_DEFINITIONS
+        }

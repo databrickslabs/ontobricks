@@ -1846,8 +1846,8 @@ async def dtwin_classes(
                 "name": cls.get("name", ""),
                 "uri": cls.get("uri", ""),
                 "dataset": cls.get("dataset") or None,
-                "bridges": cls.get("bridges") or [],
-                "actions": cls.get("actions") or [],
+                "bridges": NodeContextService.class_bridge_entries(cls),
+                "actions": NodeContextService.class_action_entries(cls),
             }
             for cls in (domain.get_classes() or [])
         ],
@@ -2319,6 +2319,12 @@ async def dtwin_assistant_chat(
     # entry that accidentally echoes the current user_message so we
     # never double-record the same question (also self-heals any pre-
     # existing sessions that were written with the old contract).
+    #
+    # Re-read the cache instead of reusing the pre-agent ``chat_cache``
+    # snapshot: the agent's tool calls loop back into this same process
+    # (e.g. ``POST /dtwin/nodes/action/request``) and may have minted a
+    # ``pending_actions`` token into the session while ``run_agent`` was
+    # running. Saving the stale snapshot would clobber that token.
     prior = list(history)
     if prior and prior[-1].get("role") == "user" and (
         prior[-1].get("content") or ""
@@ -2326,6 +2332,7 @@ async def dtwin_assistant_chat(
         prior = prior[:-1]
     prior.append({"role": "user", "content": user_message})
     prior.append({"role": "assistant", "content": agent_result.reply or ""})
+    chat_cache = _chat_cache(session_mgr)
     chat_cache["history"][domain_key] = _chat_trim(prior, limit)
     _chat_save_cache(session_mgr, chat_cache)
 
@@ -2459,7 +2466,11 @@ async def dtwin_assistant_chat_stream(
                     kind, payload = item
                     if kind == "done":
                         agent_result = payload
-                        # Update session cache exactly like the blocking endpoint
+                        # Update session cache exactly like the blocking endpoint.
+                        # Re-read the cache instead of reusing the pre-agent
+                        # snapshot: the agent's tool calls loop back into this
+                        # same process and may have minted a pending_actions
+                        # token into the session while run_agent was running.
                         prior = list(history)
                         if prior and prior[-1].get("role") == "user" and (
                             prior[-1].get("content") or ""
@@ -2467,8 +2478,9 @@ async def dtwin_assistant_chat_stream(
                             prior = prior[:-1]
                         prior.append({"role": "user", "content": user_message})
                         prior.append({"role": "assistant", "content": agent_result.reply or ""})
-                        chat_cache["history"][domain_key] = _chat_trim(prior, limit)
-                        _chat_save_cache(session_mgr, chat_cache)
+                        fresh_cache = _chat_cache(session_mgr)
+                        fresh_cache["history"][domain_key] = _chat_trim(prior, limit)
+                        _chat_save_cache(session_mgr, fresh_cache)
 
                         yield "data: " + _json.dumps(
                             _chat_response_payload(agent_result, event_type="done")

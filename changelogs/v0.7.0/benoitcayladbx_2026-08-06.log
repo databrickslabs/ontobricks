@@ -512,3 +512,67 @@ Modified files:
 Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 32.60s
 Dry-run eval: uv run --frozen python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS on all 12 examples
 
+
+## Fix whole-branch review findings for Graph Chat MCP alignment
+
+Context: Whole-branch review of the Graph Chat MCP alignment feature flagged
+a critical-for-UX lost-update bug plus two smaller alignment/safety gaps.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   `POST /dtwin/assistant/chat` and `.../chat/stream` snapshotted the Graph
+   Chat session cache *before* `run_agent`, then saved that stale snapshot
+   back *after*. A nested loopback tool call during the agent run (e.g.
+   `POST /dtwin/nodes/action/request`) writes a `pending_actions` token into
+   the shared session cache; the post-agent save then clobbered it. Both
+   routes now re-read the cache via `_chat_cache(session_mgr)` right before
+   writing the trimmed history, so a token minted mid-turn survives.
+   `GET /dtwin/classes` now normalizes `actions`/`bridges` through
+   `NodeContextService.class_action_entries` / the new
+   `class_bridge_entries` instead of passing the raw class dict through,
+   matching the traversal path's malformed-action-drop and
+   `target_project`→`target_domain` alias behavior.
+2. `src/back/objects/digitaltwin/NodeContextService.py`
+   Add `class_bridge_entries` — a shallow (no-traversal) bridge normalizer
+   mirroring the `target_domain`/`target_project` alias resolution
+   `_resolve_bridges` already does, so `GET /dtwin/classes` and
+   `GET /dtwin/nodes/context` stay consistent for downstream formatters.
+3. `tests/units/api/test_dtwin_chat_pending_action_cache.py`
+   New regression tests (blocking + stream routes) that call the real chat
+   route with `run_agent` patched to invoke the real
+   `dtwin_nodes_action_request` route mid-turn against a shared session
+   dict, then assert the minted token is still present in
+   `pending_actions` after the chat route finishes. Confirmed these fail
+   without the fix (`assert token in {}`) and pass with it.
+4. `tests/units/api/test_dtwin_nodes_context.py`
+   Add coverage for `GET /dtwin/classes` dropping a malformed action
+   `fullName` and normalizing a bridge authored with only the legacy
+   `target_project` key.
+5. `tests/units/agents/test_agent_dtwin_chat.py`
+   Add an explicit `TestToolDefinitions` safety assertion that
+   `invoke_entity_action` is absent from both `TOOL_HANDLERS` and the tool
+   definition names — Graph Chat may only *request* an action, never
+   invoke one directly.
+6. `.superpowers/sdd/task-6-report.md`
+   Untrack from git (`git rm --cached`) — `.superpowers/` is a local
+   session-notes directory (already gitignored) and was tracked by mistake.
+
+Not fixed (tracked as follow-ups per review triage): empty class-actions
+cache sentinel, `does_not_invent_entities` placeholder, pending-action
+prune-on-cancel, Pydantic request-body validation, SPEC-vs-runner weight
+reconciliation, live MLflow eval URI. Manual browser smoke also remains a
+follow-up — the regression test above supersedes it for this fix pass.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/NodeContextService.py
+- tests/units/api/test_dtwin_chat_pending_action_cache.py
+- tests/units/api/test_dtwin_nodes_context.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+- .superpowers/sdd/task-6-report.md (untracked)
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_chat_pending_action_cache.py tests/units/api/test_dtwin_nodes_context.py tests/units/api/test_node_context_endpoint.py tests/units/agents/test_agent_dtwin_chat.py tests/units/api/test_dtwin_assistant_chat.py → 56 passed in 1.21s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4740 passed, 276 skipped, 5 deselected, 1 xfailed in 32.20s
+
