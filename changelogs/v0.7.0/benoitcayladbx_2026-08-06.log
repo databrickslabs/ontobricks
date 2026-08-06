@@ -145,3 +145,22 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4706 passed, 276 skipped, 5 deselected, 1 xfailed in 32.78s
+
+## Document single-process assumption for pending actions
+
+Context: Code review (Task 4) flagged that double-invoke protection and
+pending-action tokens rely on in-memory per-process session cache; scaling
+Uvicorn workers would silently break unless documented.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Comment near `_PENDING_ACTION_TTL_SEC` noting per-process cache, single-
+   worker / one-event-loop assumption, and need for sticky sessions or shared
+   state when scaling workers.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_nodes_action_confirm.py → 10 passed in 1.21s

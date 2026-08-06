@@ -2038,6 +2038,10 @@ _CHAT_MAX_LIMIT = 100
 # How long a minted Action confirmation token stays valid. Short enough that
 # a stale browser tab can't replay a UC function call long after the user
 # looked away, long enough to click "Confirm" on a rendered chat card.
+# pending_actions live in the in-memory session cache (per-process); the
+# used-before-invoke guard assumes a single Uvicorn worker / one event loop.
+# Multiple workers need sticky sessions or shared state so request and confirm
+# hit the same process.
 _PENDING_ACTION_TTL_SEC = 120
 
 
