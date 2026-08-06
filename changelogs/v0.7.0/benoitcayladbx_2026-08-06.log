@@ -413,3 +413,58 @@ Modified files:
 
 Tests: uv run --frozen pytest -q tests/units/front/test_query_chat_pending_action.py → 7 passed in 0.12s
 
+## Fill agent_dtwin_chat AI-feature SPEC and expand its eval dataset
+
+Context: Task 8 of the Graph Chat MCP alignment closes the AI-feature-lifecycle
+gate (CNS §3.5 / `.cursor/12-ai-feature-lifecycle.mdc`) for the tool-surface
+change made in Tasks 5-7: the SPEC skeleton and 3-example seed dataset still
+described 5 tools, and two of the seed's `tool_called_any_of` constraints
+referenced tool names (`search_entities`, `find_triples`, `translate_sparql`)
+that never existed in `TOOL_HANDLERS`.
+
+Changes:
+
+1. `.planning/agents/agent_dtwin_chat/SPEC.md`
+   Fill sections 3-7 with the real 7-tool surface (including JSON schemas for
+   `describe_entity`/`get_entity_context`/`request_entity_action`), 3 concrete
+   success-criteria examples, failure modes for auto-invoke Action and invent
+   Action fullName (mapped to the `does_not_invoke_action` /
+   `does_not_call_tool` / `does_not_claim_action_completed` rule judges), and
+   an updated §7 dataset description. Eval-dimensions table (§5) and
+   `tests/eval/thresholds.yaml` `dtwin_chat:` block are unchanged — no
+   dimension edits needed. §10 sign-off documents the live MLflow baseline run
+   as a deferred follow-up; dry-run is the gate for this task.
+2. `tests/eval/datasets/agent_dtwin_chat/baseline.jsonl`
+   Expand 3 → 12 examples covering discovery (`list_entity_types`), grounded
+   entity lookup (`describe_entity`), Dataset rows and Bridge traversal
+   (`get_entity_context`), status/schema/GraphQL tools, Action proposal
+   without auto-invoke (`request_entity_action`), and three adversarial cases
+   (invented entity/class, invented Action fullName, false completion claim).
+   Every `tool_called`/`tool_called_any_of` constraint now names one of the 7
+   real tools.
+3. `.planning/agents/agent_dtwin_chat/eval/dataset.jsonl`
+   New file — mirrors the baseline dataset at the path the `ai-feature` skill
+   expects.
+4. `tests/eval/run_agent_dtwin_chat.py`
+   New dry-run-capable runner mirroring `run_agent_graph_interpreter.py`:
+   validates dataset shape (unique ids, known tool names, recognised
+   constraint kinds, ≥10 rows), scores each example with rule-based judges
+   (`tool_called`/`tool_called_any_of`/`does_not_call_tool`/
+   `does_not_invoke_action`/`does_not_claim_action_completed`/
+   `does_not_invent_entities`/`response_acknowledges_absence`/
+   `grounded_in_triplestore`/`contains`) against a self-consistent stub trace
+   in `--dry-run` mode (default), and against a live
+   `agents.agent_dtwin_chat.engine.run_agent` call behind `--live` (requires
+   `--host`/`--token`/`--endpoint`/`--base-url`/`--domain`; not run in this
+   task per the brief).
+
+Modified files:
+- .planning/agents/agent_dtwin_chat/SPEC.md
+- tests/eval/datasets/agent_dtwin_chat/baseline.jsonl
+- .planning/agents/agent_dtwin_chat/eval/dataset.jsonl
+- tests/eval/run_agent_dtwin_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS on all 12 examples
+Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 32.95s
+
