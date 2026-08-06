@@ -12,6 +12,30 @@
     display: none;
 }
 
+/* Local color brand marks, sized and aligned like Bootstrap Icons. */
+.ob-brand-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    vertical-align: -0.125em;
+}
+
+.ob-icon-postgresql {
+    background-image: url("/static/global/img/lakebase-icon.svg");
+}
+
+.ob-icon-databricks {
+    background-image: url("/static/global/img/databricks-icon.svg");
+}
+
+.ob-icon-neo4j {
+    background-image: url("/static/global/img/neo4j-icon.svg");
+}
+
 /* Display utilities */
 .d-hidden {
     display: none;

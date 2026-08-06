@@ -203,7 +203,7 @@
                         {
                             "id": "map",
                             "label": "Designer",
-                            "icon": "bi-diagram-3",
+                            "icon": "bi-pencil",
                             "default": false,
                             "requires": null
                         },
@@ -217,14 +217,14 @@
                         {
                             "id": "design",
                             "label": "Business Views",
-                            "icon": "bi-pencil-square",
+                            "icon": "bi-yelp",
                             "default": false,
                             "requires": null
                         },
                         {
                             "id": "entities",
                             "label": "Entities",
-                            "icon": "bi-box",
+                            "icon": "bi-list-nested",
                             "default": false,
                             "requires": null
                         },
@@ -330,7 +330,7 @@
                         {
                             "id": "design",
                             "label": "Designer",
-                            "icon": "bi-diagram-3",
+                            "icon": "bi-pencil",
                             "default": false,
                             "requires": null,
                             "disabled_during": "autoassign"
@@ -432,21 +432,21 @@
                         {
                             "id": "lakebase",
                             "label": "Lakebase",
-                            "icon": "bi-diagram-3",
+                            "icon": "ob-brand-icon ob-icon-postgresql",
                             "default": false,
                             "requires": null
                         },
                         {
                             "id": "delta",
                             "label": "Lakehouse",
-                            "icon": "bi-layers",
+                            "icon": "ob-brand-icon ob-icon-databricks",
                             "default": false,
                             "requires": null
                         },
                         {
                             "id": "neo4j",
                             "label": "Neo4j",
-                            "icon": "bi-bezier2",
+                            "icon": "ob-brand-icon ob-icon-neo4j",
                             "default": false,
                             "requires": null
                         }
@@ -548,7 +548,7 @@
                         {
                             "id": "sync",
                             "label": "Build",
-                            "icon": "bi-arrow-repeat",
+                            "icon": "bi-fast-forward",
                             "default": false,
                             "requires": null
                         },
@@ -590,7 +590,7 @@
                         {
                             "id": "sigmagraph",
                             "label": "Explorer",
-                            "icon": "bi-layers-half",
+                            "icon": "bi-share",
                             "default": true,
                             "requires": null
                         },

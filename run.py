@@ -78,14 +78,26 @@ if __name__ == '__main__':
         # Pass env_file so uvicorn reload workers also see the .env
         # variables without re-running load_dotenv inside the app module.
         _env_file = os.path.join(os.path.dirname(__file__), ".env")
+        # Auto-reload restarts the process on any src/ save, which kills
+        # in-flight background task threads (Auto-Map, KG build) and drops the
+        # in-memory TaskManager state. Set ONTOBRICKS_NO_RELOAD=1 when running
+        # long live jobs — notably `make scenario-campaign` — so a concurrent
+        # edit cannot abort them mid-run.
+        _no_reload = os.getenv("ONTOBRICKS_NO_RELOAD", "").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
         _uvicorn_kwargs = dict(
             host='127.0.0.1',
             port=port,
-            reload=True,
-            reload_dirs=["src/back", "src/front", "src/api", "src/shared", "src/agents"],
             log_level="info",
             log_config=None,
         )
+        if not _no_reload:
+            _uvicorn_kwargs["reload"] = True
+            _uvicorn_kwargs["reload_dirs"] = [
+                "src/back", "src/front", "src/api", "src/shared", "src/agents"
+            ]
+        _log.info("Uvicorn auto-reload %s", "DISABLED" if _no_reload else "enabled")
         if os.path.isfile(_env_file):
             _uvicorn_kwargs["env_file"] = _env_file
         uvicorn.run("shared.fastapi.main:app", **_uvicorn_kwargs)

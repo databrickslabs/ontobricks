@@ -199,6 +199,17 @@ function _setArchRetrievalLoading(on) {
 /**
  * Build page: labels and options depend on the per-domain Graph DB engine.
  */
+function _setBackendBrandIcon(element, backend) {
+    if (!element) return;
+    element.classList.remove(
+        'ob-icon-postgresql',
+        'ob-icon-databricks',
+        'ob-icon-neo4j',
+        'd-none'
+    );
+    element.classList.add(_backendBrandIconClass(backend));
+}
+
 function _applyBuildGraphEngineUi(dtExist) {
     var dt = dtExist || {};
     var cfg = window.__TRIPLESTORE_CONFIG || {};
@@ -212,7 +223,12 @@ function _applyBuildGraphEngineUi(dtExist) {
     if (fnLk) fnLk.classList.remove('d-none');
 
     var title = document.getElementById('dtGraphBackendTitle');
-    var labels = { 'lakebase': 'Graph DB (Lakebase)', 'neo4j': 'Graph DB (Neo4j)' };
+    var labels = {
+        'lakebase': 'Graph DB (Lakebase)',
+        'databricks': 'Graph DB (Lakehouse)',
+        'delta': 'Graph DB (Lakehouse)',
+        'neo4j': 'Graph DB (Neo4j)'
+    };
     if (title) {
         title.textContent = labels[eng] || 'Graph DB Digital Twin';
     }
@@ -224,19 +240,19 @@ function _applyBuildGraphEngineUi(dtExist) {
     function _renderEngineUi(activeEng) {
         var container = document.getElementById('dtLakebaseDetails');
         var titleEl   = document.getElementById('dtGraphBackendTitle');
-        var lkIcon    = document.querySelector('#dtGraphCard .dt-arch-icon-lakebase-img');
+        var graphIcon = document.getElementById('dtGraphBackendIcon');
         var syncRow   = document.getElementById('dtLakebaseSyncedUcRow');
         var boltRow   = document.getElementById('dtNeo4jBoltCard');
         var lkBuild   = document.getElementById('dtLakebaseBuildNote');
         var graphFn   = document.getElementById('dtLakebaseFullName');
         if (container) container.classList.remove('d-none');
         if (titleEl)   titleEl.textContent = labels[activeEng] || ('Graph DB (' + activeEng + ')');
+        _setBackendBrandIcon(graphIcon, activeEng);
         if (activeEng === 'neo4j') {
-            // Show the Bolt writer card, hide the Lakebase Sync card + build note + icon
+            // Show the Bolt writer card and hide Lakebase-only details.
             if (syncRow) syncRow.classList.add('d-none');
             if (boltRow) boltRow.classList.remove('d-none');
             if (lkBuild) lkBuild.classList.add('d-none');
-            if (lkIcon) lkIcon.classList.add('d-none');
             // Neo4j Graph DB card: show the marker label (or FQN display) and a
             // Neo4j-specific build note. No Postgres/UC concepts apply here.
             if (graphFn) {
@@ -262,7 +278,6 @@ function _applyBuildGraphEngineUi(dtExist) {
             if (syncRow) syncRow.classList.remove('d-none');
             if (boltRow) boltRow.classList.add('d-none');
             if (lkBuild) lkBuild.classList.remove('d-none');
-            if (lkIcon) lkIcon.classList.remove('d-none');
             var neoBuild2 = document.getElementById('dtNeo4jBuildNote');
             if (neoBuild2) neoBuild2.classList.add('d-none');
         }
@@ -726,13 +741,34 @@ function updateDataMenus() {
  * Friendly label for the triple-store backend / graph engine in use, from the
  * injected triplestore-config: "Lakehouse" (Delta), "Neo4j", or "Lakebase".
  */
-function _kgBackendLabel() {
+function _kgBackendKey() {
     var cfg = window.__TRIPLESTORE_CONFIG || {};
     var backend = String(cfg.triple_store_backend || 'lakebase').toLowerCase();
     var engine = String(cfg.graph_engine || 'lakebase').toLowerCase();
-    if (backend === 'databricks' || engine === 'delta') return 'Lakehouse';
-    if (engine === 'neo4j') return 'Neo4j';
+    if (backend === 'databricks' || engine === 'delta') return 'databricks';
+    if (backend === 'neo4j' || engine === 'neo4j') return 'neo4j';
+    return 'lakebase';
+}
+
+function _backendBrandIconClass(backend) {
+    var key = String(backend || 'lakebase').toLowerCase();
+    if (key === 'databricks' || key === 'delta' || key === 'lakehouse') {
+        return 'ob-icon-databricks';
+    }
+    if (key === 'neo4j') return 'ob-icon-neo4j';
+    return 'ob-icon-postgresql';
+}
+
+function _kgBackendLabel() {
+    var backend = _kgBackendKey();
+    if (backend === 'databricks') return 'Lakehouse';
+    if (backend === 'neo4j') return 'Neo4j';
     return 'Lakebase';
+}
+
+function _kgBackendIconMarkup() {
+    return '<i class="ob-brand-icon ' + _backendBrandIconClass(_kgBackendKey())
+        + ' ms-1 me-1" aria-hidden="true"></i>';
 }
 
 function updateKgReadyIndicators() {
@@ -748,7 +784,7 @@ function updateKgReadyIndicators() {
         html = '<span class="badge bg-success bg-opacity-10 text-success border border-success fw-normal" '
             + 'title="The Knowledge Graph is built and ready to use (backend: ' + backend + ').">'
             + '<i class="bi bi-check-circle-fill me-1"></i>Graph ready'
-            + '<span class="opacity-75 ms-1">· ' + backend + '</span></span>';
+            + '<span class="opacity-75 ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
     } else if (tripleStoreStatusUnknown) {
         // The probe could not reach the engine, so we do not know either way.
         // Offering "Go to Build" here would invite a needless rebuild.
@@ -756,13 +792,13 @@ function updateKgReadyIndicators() {
             + 'title="Could not reach the ' + backend + ' backend to check the graph. '
             + 'This is a connection problem, not a missing graph — retry in a moment.">'
             + '<i class="bi bi-question-circle me-1"></i>Status unavailable'
-            + '<span class="opacity-75 ms-1">· ' + backend + '</span></span>';
+            + '<span class="opacity-75 ms-1">·' + _kgBackendIconMarkup() + backend + '</span></span>';
     } else {
         html = '<span class="kg-not-built d-inline-flex align-items-center gap-2">'
             + '<span class="badge bg-secondary-subtle text-secondary border fw-normal">'
             + '<i class="bi bi-slash-circle me-1"></i>Graph not built</span>'
             + '<button type="button" class="btn btn-sm btn-primary py-0 px-2 kg-go-build-btn">'
-            + '<i class="bi bi-arrow-repeat me-1"></i>Go to Build</button>'
+            + '<i class="bi bi-fast-forward me-1"></i>Go to Build</button>'
             + '</span>';
     }
 

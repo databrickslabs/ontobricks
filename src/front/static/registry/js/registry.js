@@ -304,6 +304,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 databricks: 'Lakehouse',
                 neo4j: 'Neo4j',
             };
+            const backendIconClasses = {
+                lakebase: 'ob-icon-postgresql',
+                databricks: 'ob-icon-databricks',
+                neo4j: 'ob-icon-neo4j',
+            };
             let html = '<div class="table-responsive registry-domain-table-wrapper">' +
                 '<table class="table table-sm table-hover align-middle mb-0 registry-domain-table">' +
                 '<thead><tr>' +
@@ -323,7 +328,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     ? '<span class="font-monospace small">' + escapeHtml(d.base_uri) + '</span>'
                     : '<span class="fst-italic text-muted">—</span>';
                 const backendKey = (d.graph_backend || 'lakebase').toLowerCase();
-                const backend = '<span class="badge bg-light text-dark border">' +
+                const backendIcon = backendIconClasses[backendKey] || 'ob-icon-postgresql';
+                const backend = '<span class="badge bg-light text-dark border d-inline-flex align-items-center">' +
+                    '<i class="ob-brand-icon ' + backendIcon + ' me-1" aria-hidden="true"></i>' +
                     escapeHtml(backendLabels[backendKey] || backendKey) + '</span>';
                 const versions = d.versions || [];
                 const vCount = versions.length;

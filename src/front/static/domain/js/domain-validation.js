@@ -560,27 +560,46 @@ function updateDtwinCard(data) {
     var eng = dt.graph_engine || 'lakebase';
     var engineLabels = {
         'lakebase': 'Graph DB (Lakebase)',
+        'databricks': 'Graph DB (Lakehouse)',
+        'delta':     'Graph DB (Lakehouse)',
         'neo4j':    'Graph DB (Neo4j)'
     };
+
+    function _psSetBackendBrandIcon(element, backend) {
+        if (!element) return;
+        var key = String(backend || 'lakebase').toLowerCase();
+        var iconClass = 'ob-icon-postgresql';
+        if (key === 'databricks' || key === 'delta' || key === 'lakehouse') {
+            iconClass = 'ob-icon-databricks';
+        } else if (key === 'neo4j') {
+            iconClass = 'ob-icon-neo4j';
+        }
+        element.classList.remove(
+            'ob-icon-postgresql',
+            'ob-icon-databricks',
+            'ob-icon-neo4j',
+            'd-none'
+        );
+        element.classList.add(iconClass);
+    }
 
     function _psRenderEngineUi(activeEng) {
         var container = document.getElementById('psDtLakebaseDetails');
         var titleEl   = document.getElementById('psDtGraphBackendTitle');
-        var lkIcon    = document.querySelector('#psDtGraphCard .dt-arch-icon-lakebase-img');
+        var graphIcon = document.getElementById('psDtGraphBackendIcon');
         var syncRow   = document.getElementById('psDtLakebaseSyncedUcRow');
         var boltRow   = document.getElementById('psDtNeo4jBoltCard');
         var graphFn   = document.getElementById('psDtLakebaseFullName');
         if (container) container.classList.remove('d-none');
         if (titleEl)   titleEl.textContent = engineLabels[activeEng] || ('Graph DB (' + activeEng + ')');
+        _psSetBackendBrandIcon(graphIcon, activeEng);
         if (activeEng === 'neo4j') {
             if (syncRow) syncRow.classList.add('d-none');
             if (boltRow) boltRow.classList.remove('d-none');
-            if (lkIcon)  lkIcon.classList.add('d-none');
             if (graphFn) graphFn.textContent = (dt.graph_name || 'Knowledge Graph');
         } else {
             if (syncRow) syncRow.classList.remove('d-none');
             if (boltRow) boltRow.classList.add('d-none');
-            if (lkIcon)  lkIcon.classList.remove('d-none');
         }
     }
     _psRenderEngineUi(eng);

@@ -512,6 +512,173 @@ Modified files:
 Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 32.60s
 Dry-run eval: uv run --frozen python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS on all 12 examples
 
+## Add color brand icons to Back end settings
+
+Context: Replace the generic Back end glyphs with recognizable product marks
+while preserving the compact sizing and alignment of the existing Bootstrap
+icons. Assets are bundled locally so icon rendering has no runtime CDN
+dependency.
+
+Changes:
+
+1. `src/front/static/global/img/{lakebase,databricks,neo4j}-icon.svg`
+   Add color PostgreSQL, Databricks, and Neo4j glyphs for the three back ends.
+2. `src/front/static/global/css/components.css`
+   Add a shared `1em` brand-icon component and product-specific local asset classes.
+3. `src/front/config/menu_config.json`
+   Apply the brand classes to the Lakebase, Lakehouse, and Neo4j menu items.
+4. `src/front/templates/settings.html`
+   Match the three settings section headers to their sidebar brand icons.
+5. `tests/units/front/test_backend_brand_icons.py`
+   Add regression coverage for mapping, local color assets, headers, and sizing.
+6. `documentation/superpowers/plans/2026-08-06-branded-backend-icons.md`
+   Document the implementation and verification plan.
+
+Modified files:
+- src/front/static/global/img/lakebase-icon.svg
+- src/front/static/global/img/databricks-icon.svg
+- src/front/static/global/img/neo4j-icon.svg
+- src/front/static/global/css/components.css
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- tests/units/front/test_backend_brand_icons.py
+- documentation/superpowers/plans/2026-08-06-branded-backend-icons.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_backend_brand_icons.py → 4 passed in 0.13s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 34.40s
+Visual: Settings sidebar, dropdown, and section headers verified after app restart; all SVG requests returned 200 with no icon-related console errors.
+
+## Align Explorer and Ontology viewer button icons
+
+Context: The Explorer canvas empty state and Ontology buttons still used the
+generic `bi-diagram-3` glyph, while the GraphQL playground button was labeled
+"View Ontology". Align both surfaces with the sidebar Explorer (`bi-share`) and
+Ontology (`bi-bezier2`) icons and rename the GraphQL button to "Ontology".
+
+Changes:
+
+1. `src/front/static/query/js/query-sigmagraph.js`
+   Use the Explorer `bi-share` icon above the Graph Viewer empty-state title.
+2. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Use the Ontology `bi-bezier2` icon on the Explorer Ontology button.
+3. `src/front/templates/partials/dtwin/_query_graphql.html`
+   Match the Ontology icon and rename the button from "View Ontology" to "Ontology".
+4. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage locking these icons and the GraphQL button label to the menu config.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_graphql.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 5 passed in 0.11s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4732 passed, 276 skipped, 5 deselected, 1 xfailed in 34.68s
+
+## Use fast-forward for Build
+
+Context: Align the Knowledge Graph Build navigation and controls around a
+single action-oriented `bi-fast-forward` glyph instead of mixing repeat,
+layers, and database icons.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Knowledge Graph Build navigation icon to `bi-fast-forward`.
+2. `src/front/templates/partials/dtwin/_query_sync.html`
+   Apply the icon to the Lakebase Build heading and action button.
+3. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Apply the icon to the Lakehouse Build heading and action button.
+4. `src/front/static/query/js/query-sync.js`
+   Match the generated “Go to Build” action to the same icon.
+5. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for consistent Build icon usage.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/static/query/js/query-sync.js
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 6 passed in 0.11s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4733 passed, 276 skipped, 5 deselected, 1 xfailed in 33.33s
+
+## Use pencil for Designer pages
+
+Context: Give the Ontology and Mapping Designer navigation items and headings
+the same direct editing metaphor by replacing their diagram and pencil-square
+glyphs with `bi-pencil`.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set both sidebar items labeled Designer to `bi-pencil`.
+2. `src/front/templates/partials/ontology/_ontology_map.html`
+   Match the Ontology Designer heading to the pencil icon.
+3. `src/front/templates/partials/mapping/_mapping_design.html`
+   Match the Visual Mapping Designer heading to the pencil icon.
+4. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for both menu and heading icons.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 7 passed in 0.11s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4734 passed, 276 skipped, 5 deselected, 1 xfailed in 34.00s
+
+## Use yelp for Business Views
+
+Context: Distinguish Ontology → Business Views from the Designer pencil glyph by
+giving it the Bootstrap Yelp icon in navigation and on the page heading.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Business Views navigation icon to `bi-yelp`.
+2. `src/front/templates/partials/ontology/_ontology_design.html`
+   Match the Business Views heading to the yelp icon.
+3. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for the Business Views icon mapping.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_design.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 8 passed in 0.14s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4735 passed, 276 skipped, 5 deselected, 1 xfailed in 38.75s
+
+## Use list-nested for Ontology Entities
+
+Context: Make the Ontology Entities navigation and hierarchy heading use the
+requested nested-list metaphor instead of unrelated box and diagram glyphs.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Ontology Entities navigation icon to `bi-list-nested`.
+2. `src/front/templates/partials/ontology/_ontology_entities.html`
+   Match the Entities hierarchy heading to the same icon.
+3. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for the Entities icon mapping.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_entities.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 9 passed in 0.15s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4738 passed, 276 skipped, 5 deselected, 1 xfailed in 37.90s
 
 ## Fix whole-branch review findings for Graph Chat MCP alignment
 
@@ -575,4 +742,43 @@ Modified files:
 
 Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_chat_pending_action_cache.py tests/units/api/test_dtwin_nodes_context.py tests/units/api/test_node_context_endpoint.py tests/units/agents/test_agent_dtwin_chat.py tests/units/api/test_dtwin_assistant_chat.py → 56 passed in 1.21s
 Tests: uv run --frozen pytest -q -m "not scenario" → 4740 passed, 276 skipped, 5 deselected, 1 xfailed in 32.20s
+
+## Show backend brands wherever backends are surfaced
+
+Context: Extend the color PostgreSQL, Databricks, and Neo4j visual language
+beyond Settings. Backend status badges, Registry domain rows, and architecture
+cards now identify the active backend with its corresponding local brand icon.
+
+Changes:
+
+1. `src/front/static/query/js/query-sync.js`
+   Resolve backend icon classes for readiness badges and dynamically update the Build architecture Graph DB card.
+2. `src/front/static/registry/js/registry.js`
+   Add matching color brand icons to Registry domain Backend badges.
+3. `src/front/static/domain/js/domain-validation.js`
+   Dynamically update the Domain Validation Graph DB card icon for Lakebase, Lakehouse, or Neo4j.
+4. `src/front/templates/partials/dtwin/_query_sync.html`
+   Replace the fixed Lakebase image with an engine-aware brand-icon element.
+5. `src/front/templates/partials/domain/_domain_validation.html`
+   Replace the fixed Lakebase image with an engine-aware brand-icon element.
+6. `src/front/templates/partials/registry/_registry_configuration.html`
+   Use the PostgreSQL icon on the Lakebase Connection card.
+7. `tests/units/front/test_{kg_readiness_indicator,registry_backend_column,backend_brand_icons}.py`
+   Add regression coverage for badge, Registry, and architecture-card icon mapping.
+
+Modified files:
+- src/front/static/query/js/query-sync.js
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/registry/_registry_configuration.html
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_registry_backend_column.py
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_kg_readiness_indicator.py tests/units/front/test_registry_backend_column.py tests/units/front/test_backend_brand_icons.py → 27 passed in 0.18s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4730 passed, 276 skipped, 5 deselected, 1 xfailed in 33.93s
+Visual: Registry badges, Build and Validation architecture cards, readiness badge variants, and the Lakebase Connection card verified with local assets returning 200 and no icon-related console errors.
 
