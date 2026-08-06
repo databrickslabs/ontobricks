@@ -215,7 +215,7 @@ if [[ ${#_missing_soft[@]} -gt 0 ]]; then
     warn "the following optional dependencies are NOT installed:"
     for _m in "${_missing_soft[@]}"; do echo "      • ${_m}" >&2; done
     if $IS_LAKEBASE && $DO_BOOTSTRAP; then
-        warn "psql is required for the Lakebase schema GRANT bootstrap (step 10)."
+        warn "psql is required for the Lakebase schema GRANT bootstrap (step 11)."
         warn "If you continue, the Lakebase bootstrap step will be skipped for this run."
         warn "Install libpq first: brew install libpq && brew link --force libpq"
     fi
@@ -319,8 +319,8 @@ ok "deploy.config values present"
 
 # 1d. Target sanity (soft — bundle validate is the source of truth).
 case "$TARGET" in
-    dev|dev-lakebase) : ;;
-    *) warn "target '${TARGET}' is not one of the documented targets (dev, dev-lakebase) — continuing; bundle validate will confirm it exists." ;;
+    dev|dev-lakebase|dev-lakebase-*) : ;;
+    *) warn "target '${TARGET}' is not one of the documented targets (dev, dev-lakebase, dev-lakebase-<id>) — continuing; bundle validate will confirm it exists." ;;
 esac
 
 # ── 2. Verify Databricks authentication ─────────────────────────────
@@ -425,6 +425,10 @@ fi
 
 # ── 4. Validate bundle ──────────────────────────────────────────────
 begin_step "Validate bundle"
+# Re-materialise immediately before validate: unit tests may unlink the
+# gitignored generated target between the early ensure (step 0) and here.
+ensure_instance_target "$TARGET" \
+    || die "failed to materialise DAB target '${TARGET}' before validate"
 databricks bundle validate -t "$TARGET" "${_dab_var_overrides[@]}" \
     || die "bundle validation failed for target '${TARGET}'. Fix the errors above (commonly a bad --var or a target not declared in databricks.yml)."
 ok "bundle valid"
@@ -468,11 +472,6 @@ if $IS_LAKEBASE; then
             # Auto-derive the PostgreSQL datname from the resource segment when the
             # user left LAKEBASE_DATABASE at the default (app-name slug).
             # This avoids "database does not exist" on first deploy.
-            _derived_datname="$(printf '%s' "$_pg_dbs" \
-                | python3 -c "
-import sys, json
-dbs = json.load(sys.stdin) if isinstance(json.load(open('/dev/stdin')), list) else json.load(sys.stdin).get('databases', [])
-" 2>/dev/null || true)"
             _derived_datname="$(printf '%s' "$_pg_dbs" \
                 | python3 -c "
 import sys, json

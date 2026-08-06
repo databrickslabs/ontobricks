@@ -801,3 +801,123 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4743 passed, 276 skipped, 5 deselected, 1 xfailed in 37.33s
+
+
+## Fix deploy script instance-target drift
+
+Context: Review of `scripts/deploy.sh` found four concrete bugs after the
+per-INSTANCE_ID DAB target change: a dead broken Python snippet, a target
+sanity check that warned on every `dev-lakebase-<id>` deploy, a cwd bug in
+`check-deploy-prerequisites.sh` (cd'd into `scripts/` instead of repo root),
+and Makefile `bundle-validate`/`bundle-summary` still hardcoded to unsuffixed
+`dev-lakebase` without `neo4j_secret_scope`. Also re-materialise the generated
+target immediately before validate so parallel unit tests cannot race-delete
+the gitignored file.
+
+Changes:
+
+1. `scripts/deploy.sh`
+   Drop dead datname-derivation snippet; accept `dev-lakebase-*` in target
+   sanity; fix soft-dep step number (11); re-call `ensure_instance_target`
+   immediately before `bundle validate`.
+2. `scripts/_internal/check-deploy-prerequisites.sh`
+   `cd` two levels up to the repo root; clarify that `make deploy-check`
+   runs `deploy.sh --dry-run` instead.
+3. `Makefile`
+   `bundle-validate` / `bundle-summary` use `DAB_TARGET` from config,
+   call `ensure_instance_target`, and pass `neo4j_secret_scope`.
+
+Modified files:
+- scripts/deploy.sh
+- scripts/_internal/check-deploy-prerequisites.sh
+- Makefile
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4743 passed, 276 skipped, 5 deselected, 1 xfailed in 34.54s
+Deploy check: make deploy-dry-run → Dry run OK (target dev-lakebase-07x, resources verified)
+
+## Stop blaming the SQL warehouse for a snapshot that was never built
+
+Context: Running Graph Analytics on a deployed domain reported "The mapped-triples
+table benoit_cayla.ontobricks_demo.triplestore_cust360auto_V5_data could not be
+reached. The SQL warehouse may be starting up — retry in a moment." The warehouse
+(OntoBricks Engine, d2096aa075ad44a3) was RUNNING. Probing the table directly
+returned `[TABLE_OR_VIEW_NOT_FOUND] ... SQLSTATE: 42P01`: only the R2RML view
+`triplestore_cust360auto_v5` exists, the `_data` snapshot does not (the domain was
+built before commit b0ad51b added the materialise step to the non-Delta build
+pipeline). `data_table_has_rows` swallowed every exception into `None`, so a table
+that is definitively absent was reported as a warehouse that could not be reached —
+the message asserted a cause it had never checked, and hid the one remedy that
+would have worked (rebuild the domain).
+
+Changes:
+
+1. `src/back/core/graph_analysis/preflight.py`
+   Rename `data_table_has_rows` to `probe_data_table` and return
+   `(answer, failure_detail)`. Classify `TABLE_OR_VIEW_NOT_FOUND` /
+   `SCHEMA_NOT_FOUND` / `CATALOG_NOT_FOUND` / SQLSTATE 42P01 / 42704 as
+   `False` (the question *was* answered: no rows, because no table), so the
+   existing "missing or empty — run Knowledge Graph → Build" remedy renders.
+   Reserve `None` for probes that got no answer at all, and carry the engine's
+   own error text in the detail.
+2. `src/back/core/graph_analysis/preflight.py`
+   `analytics_job_status` now quotes that detail ("could not be probed: <detail>")
+   instead of asserting the warehouse is starting up. Module docstring notes the
+   misdiagnosis cuts both ways.
+3. `src/back/core/graph_analysis/__init__.py`
+   Re-export `probe_data_table` in place of `data_table_has_rows`.
+4. `tests/units/dtwin/test_analytics_job_status.py`
+   New `TestTheProbeClassifiesTheFailure` covering missing table, missing schema,
+   connectivity failure and permission failure; new assertions that a failed probe
+   quotes the engine rather than guessing. Mutation-checked: stubbing the
+   classifier out fails the two "reads as not built" tests.
+5. `tests/units/api/test_dtwin_analytics.py`
+   Update the `probe_data_table` monkeypatch to the tuple return.
+
+Note: the deployed domain still needs a Knowledge Graph → Build to materialise
+`triplestore_cust360auto_V5_data`; this change makes the app say so.
+
+Modified files:
+- src/back/core/graph_analysis/preflight.py
+- src/back/core/graph_analysis/__init__.py
+- tests/units/dtwin/test_analytics_job_status.py
+- tests/units/api/test_dtwin_analytics.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4750 passed, 276 skipped, 5 deselected, 1 xfailed in 32.91s
+
+## Document Lakehouse UC objects (_data / _inferred / _graph)
+
+Context: After clarifying why analytics failed on a domain that only had the
+R2RML VIEW, the same object-role explanation needed to live in the product docs.
+Several guides still described the triple store as a single Delta VIEW.
+
+Changes:
+
+1. `documentation/architecture.md`
+   Expand "Triple Store & Graph DB Backends" with a "Lakehouse Unity Catalog
+   objects" section (roles of the R2RML VIEW, `_data`, `_inferred`, `_graph`,
+   and why analytics reads `_data`). Correct the backend table so Lakehouse is
+   not described as a mirror of a lone view.
+2. `documentation/graphdb-integration.md`
+   Add the same object map under §1 (Key files + Lakehouse UC objects), and
+   note that a missing `_data` must surface as a rebuild requirement, not a
+   warehouse failure.
+3. `documentation/user-guide.md`
+   Rewrite the Domain Information → Triple Store tab to list all four objects
+   and point at architecture.md.
+4. `documentation/get-started.md`
+   Prerequisites: registry catalog/schema hosts the full triple-store family,
+   not only VIEWs.
+5. `documentation/README.md`
+   Topic index link to the new architecture anchor.
+
+Modified files:
+- documentation/architecture.md
+- documentation/graphdb-integration.md
+- documentation/user-guide.md
+- documentation/get-started.md
+- documentation/README.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4750 passed, 276 skipped, 5 deselected, 1 xfailed in 31.47s

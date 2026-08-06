@@ -3,9 +3,10 @@ set -euo pipefail
 
 # ── OntoBricks — deployment prerequisite checker ────────────────────
 # Read-only validation before install / deploy / bootstrap. Run this
-# (or `make deploy-check`) before your first deploy to catch missing
-# tooling, auth problems, unreachable Lakebase endpoints, and registry
-# schema migration blockers early.
+# before your first deploy to catch missing tooling, auth problems,
+# unreachable Lakebase endpoints, and registry schema migration blockers
+# early. (`make deploy-check` runs `scripts/deploy.sh --dry-run` instead —
+# a fuller check that also validates the DAB bundle.)
 #
 # Usage:
 #   scripts/_internal/check-deploy-prerequisites.sh              # full deploy preflight (default target)
@@ -19,7 +20,8 @@ set -euo pipefail
 # the Lakebase preflight module.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR/.."
+# This file lives in scripts/_internal/ — repo root is two levels up.
+cd "$SCRIPT_DIR/../.."
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/_deploy-preflight.sh"

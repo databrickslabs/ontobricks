@@ -53,8 +53,9 @@ help:
 	@echo "    make render-app-yaml     - Re-render app.yaml from template + config"
 	@echo "    make bootstrap-perms     - Grant app SP CAN_MANAGE on itself + CAN_MANAGE_RUN on the analytics job"
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
-	@echo "    make bundle-validate     - Validate the bundle config (Lakebase target)"
-	@echo "    make deploy-check      - Read-only deploy prerequisite check (see documentation/DEPLOY_CHECKLIST.md)"
+	@echo "    make bundle-validate     - Validate the bundle config (target from deploy.config.sh)"
+	@echo "    make bundle-summary      - Preview what will deploy (target from deploy.config.sh)"
+	@echo "    make deploy-check        - Read-only deploy prerequisite check (see documentation/DEPLOY_CHECKLIST.md)"
 	@echo ""
 	@echo "  Maintenance:"
 	@echo "    make clean        - Remove generated files"
@@ -194,22 +195,40 @@ bootstrap-lakebase:
 	    -a "$$APP_NAME" -a "$$MCP_APP_NAME"
 
 bundle-validate:
-	@echo "Validating Databricks Asset Bundle (target: dev-lakebase)..."
-	@. ./$(CONFIG) && databricks bundle validate -t dev-lakebase \
+	@echo "Validating Databricks Asset Bundle (target from $(CONFIG))..."
+	@. ./$(CONFIG) && \
+	  . ./scripts/_internal/_ensure-instance-target.sh && \
+	  ensure_instance_target "$$DAB_TARGET" && \
+	  databricks bundle validate -t "$$DAB_TARGET" \
 	    --var=app_name="$$APP_NAME" \
 	    --var=mcp_app_name="$$MCP_APP_NAME" \
 	    --var=warehouse_id="$$WAREHOUSE_ID" \
 	    --var=registry_catalog="$$REGISTRY_CATALOG" \
 	    --var=registry_schema="$$REGISTRY_SCHEMA" \
 	    --var=registry_volume="$$REGISTRY_VOLUME" \
+	    --var=neo4j_secret_scope="$$NEO4J_SECRET_SCOPE" \
 	    --var=lakebase_project="$$LAKEBASE_PROJECT" \
 	    --var=lakebase_branch="$$LAKEBASE_BRANCH" \
 	    --var=lakebase_database_resource_segment="$$LAKEBASE_DATABASE_RESOURCE_SEGMENT" \
 	    --var=lakebase_registry_schema="$$LAKEBASE_SCHEMA"
 
 bundle-summary:
-	@echo "Bundle summary (target: dev-lakebase)..."
-	databricks bundle summary -t dev-lakebase
+	@echo "Bundle summary (target from $(CONFIG))..."
+	@. ./$(CONFIG) && \
+	  . ./scripts/_internal/_ensure-instance-target.sh && \
+	  ensure_instance_target "$$DAB_TARGET" && \
+	  databricks bundle summary -t "$$DAB_TARGET" \
+	    --var=app_name="$$APP_NAME" \
+	    --var=mcp_app_name="$$MCP_APP_NAME" \
+	    --var=warehouse_id="$$WAREHOUSE_ID" \
+	    --var=registry_catalog="$$REGISTRY_CATALOG" \
+	    --var=registry_schema="$$REGISTRY_SCHEMA" \
+	    --var=registry_volume="$$REGISTRY_VOLUME" \
+	    --var=neo4j_secret_scope="$$NEO4J_SECRET_SCOPE" \
+	    --var=lakebase_project="$$LAKEBASE_PROJECT" \
+	    --var=lakebase_branch="$$LAKEBASE_BRANCH" \
+	    --var=lakebase_database_resource_segment="$$LAKEBASE_DATABASE_RESOURCE_SEGMENT" \
+	    --var=lakebase_registry_schema="$$LAKEBASE_SCHEMA"
 
 # Check deployment prerequisites (read-only — see documentation/DEPLOY_CHECKLIST.md)
 deploy-check:
