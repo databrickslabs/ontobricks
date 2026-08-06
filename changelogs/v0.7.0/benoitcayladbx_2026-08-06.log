@@ -66,3 +66,27 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4692 passed, 276 skipped, 5 deselected, 1 xfailed in 33.53s
+
+## Add ToolContext class-actions and pending_action fields
+
+Context: Task 2 of Graph Chat MCP alignment — storage fields on
+`ToolContext` and `AgentResult` so later tasks can populate class-action
+metadata and surface pending entity-action tokens from the agent loop.
+
+Changes:
+
+1. `src/agents/tools/context.py`
+   Add `dtwin_class_actions` and `pending_action` fields to `ToolContext`.
+2. `src/agents/agent_dtwin_chat/engine.py`
+   Add `pending_action` to `AgentResult`; copy `ctx.pending_action` onto
+   the result on success and max-iteration exit paths.
+3. `tests/units/agents/test_agent_dtwin_chat_engine.py`
+   Unit test asserting default field values and `AgentResult.pending_action`.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/agent_dtwin_chat/engine.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4693 passed, 276 skipped, 5 deselected, 1 xfailed in 32.65s

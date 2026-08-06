@@ -56,6 +56,8 @@ class ToolContext:
     dtwin_registry_params: dict = field(default_factory=dict)
     dtwin_domain_name: str = ""
     dtwin_ontology_labels: dict = field(default_factory=dict)  # uri/name → display label
+    dtwin_class_actions: dict = field(default_factory=dict)
+    pending_action: dict | None = None
 
     # Mapping PGE planner output (``agent_mapping_pge``) – populated by the
     # ``submit_source_model`` terminal tool. Forward-ref string typing avoids a

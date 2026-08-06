@@ -2,7 +2,16 @@
 
 import pytest
 
-from agents.agent_dtwin_chat.engine import normalize_reply_content
+from agents.agent_dtwin_chat.engine import AgentResult, normalize_reply_content
+from agents.tools.context import ToolContext
+
+
+def test_agent_result_and_context_carry_pending_action():
+    ctx = ToolContext(host="h", token="t")
+    assert ctx.dtwin_class_actions == {}
+    assert ctx.pending_action is None
+    result = AgentResult(success=True, pending_action={"token": "abc"})
+    assert result.pending_action["token"] == "abc"
 
 
 @pytest.mark.parametrize(

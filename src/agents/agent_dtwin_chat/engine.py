@@ -75,6 +75,7 @@ class AgentResult:
     iterations: int = 0
     error: str = ""
     usage: Dict[str, int] = field(default_factory=dict)
+    pending_action: Optional[dict] = None
 
 
 SYSTEM_PROMPT = """\
@@ -356,6 +357,7 @@ def run_agent(
                 result.iterations,
                 len(content),
             )
+            result.pending_action = ctx.pending_action
             return result
 
     result.error = "Max iterations reached"
@@ -363,4 +365,5 @@ def run_agent(
         "I ran out of steps before I could answer. "
         "Could you simplify or narrow down your question?"
     )
+    result.pending_action = ctx.pending_action
     return result
