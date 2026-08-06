@@ -112,3 +112,36 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4696 passed, 276 skipped, 5 deselected, 1 xfailed in 37.97s
+
+## Add pending-action request/confirm/cancel routes
+
+Context: Task 4 of Graph Chat MCP alignment adds the Action confirmation
+flow so Graph Chat can propose a Unity Catalog function call without ever
+auto-invoking it — a one-time token gates the actual invocation behind an
+explicit UI confirm click.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Add `POST /dtwin/nodes/action/request` (validates entity + allow-listed
+   action, mints a session-bound single-use token, no invoke),
+   `POST /dtwin/nodes/action/confirm` (consumes the token, marks it used
+   before invoking so a double-click can't double-invoke, calls
+   `NodeContextService.invoke_action` once), and
+   `POST /dtwin/nodes/action/cancel` (best-effort discard, always 200).
+   Extend the Graph Chat session cache with `pending_actions` keyed by
+   token (`domain`, `entity_uri`, `action_full_name`, `expires_at`,
+   `used`), a 120s TTL (`_PENDING_ACTION_TTL_SEC`), and a
+   `_pending_actions_prune` helper so expired tokens don't accumulate.
+2. `tests/units/api/test_dtwin_nodes_action_confirm.py`
+   TDD coverage: mint-without-invoke, confirm-invokes-once-then-rejects-
+   reuse, unknown action / unmatched entity rejection, missing/unknown/
+   expired/domain-mismatched token rejection, and cancel discarding a
+   token before it can be confirmed.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_nodes_action_confirm.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4706 passed, 276 skipped, 5 deselected, 1 xfailed in 32.78s

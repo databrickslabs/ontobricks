@@ -6,6 +6,7 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 
 from dataclasses import dataclass
 import os
+import secrets
 import time
 from typing import Any, Optional
 
@@ -1853,6 +1854,146 @@ async def dtwin_classes(
     }
 
 
+@router.post("/nodes/action/request")
+async def dtwin_nodes_action_request(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Validate an entity + allow-listed action and mint a one-time pending token.
+
+    Does **not** invoke the Unity Catalog function — this only checks that
+    the entity resolves to an ontology class and that the action is declared
+    on that class, then stores a pending entry in the session cache. Call
+    ``POST /dtwin/nodes/action/confirm`` with the returned token to execute.
+    """
+    data = await request.json()
+    entity_uri = (data.get("entity_uri") or "").strip()
+    action_full_name = (data.get("action_full_name") or "").strip()
+    if not entity_uri or not action_full_name:
+        raise ValidationError("entity_uri and action_full_name are required")
+
+    domain = get_domain(session_mgr)
+    raw_classes = domain.get_classes() or []
+    matched_cls = NodeContextService.match_ontology_class(entity_uri, raw_classes)
+    if matched_cls is None:
+        raise ValidationError("No ontology class matches this entity URI")
+
+    class_name = matched_cls.get("name", "")
+    action = next(
+        (
+            a
+            for a in NodeContextService.class_action_entries(matched_cls)
+            if a["fullName"] == action_full_name
+        ),
+        None,
+    )
+    if action is None:
+        raise ValidationError(
+            f"Action {action_full_name!r} is not configured on class {class_name!r}"
+        )
+
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+
+    token = secrets.token_urlsafe(24)
+    cache["pending_actions"][token] = {
+        "domain": domain_key,
+        "entity_uri": entity_uri,
+        "action_full_name": action["fullName"],
+        "expires_at": time.time() + _PENDING_ACTION_TTL_SEC,
+        "used": False,
+    }
+    _chat_save_cache(session_mgr, cache)
+
+    entity_label = DigitalTwin.extract_local_id(entity_uri)
+
+    logger.info(
+        "nodes/action/request: minted pending token for entity=%s action=%s domain=%s",
+        entity_label,
+        action["fullName"],
+        domain_key,
+    )
+
+    return {
+        "success": True,
+        "pending_action": {
+            "token": token,
+            "entity_uri": entity_uri,
+            "entity_label": entity_label,
+            "action": action["fullName"],
+            "description": action.get("description"),
+            "expires_in_sec": _PENDING_ACTION_TTL_SEC,
+        },
+        "message": f"Confirm to run {action['fullName']} on {entity_label}.",
+    }
+
+
+@router.post("/nodes/action/confirm")
+async def dtwin_nodes_action_confirm(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Consume a pending-action token and invoke the Unity Catalog function once.
+
+    The token is marked ``used`` **before** invocation so a double-click or
+    retried request cannot invoke the action twice. If the invocation itself
+    fails, the token stays used and the caller must ``request`` a fresh one —
+    tokens are not refunded on failure.
+    """
+    data = await request.json()
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise ValidationError("token is required")
+
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+
+    entry = cache["pending_actions"].get(token)
+    if (
+        not entry
+        or entry.get("used")
+        or entry.get("domain") != domain_key
+        or entry.get("expires_at", 0) <= time.time()
+    ):
+        raise ValidationError("Action expired — request again")
+
+    entry["used"] = True
+    _chat_save_cache(session_mgr, cache)
+
+    return await NodeContextService.invoke_action(
+        domain,
+        settings,
+        entity_uri=entry["entity_uri"],
+        action_full_name=entry["action_full_name"],
+    )
+
+
+@router.post("/nodes/action/cancel")
+async def dtwin_nodes_action_cancel(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Discard a pending-action token if present. Always returns success.
+
+    Best-effort UI cleanup: the token also self-expires via TTL, so a missing
+    or already-consumed token is not an error.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    token = (data.get("token") or "").strip()
+    if token:
+        cache = _chat_cache(session_mgr)
+        if cache["pending_actions"].pop(token, None) is not None:
+            _chat_save_cache(session_mgr, cache)
+    return {"success": True}
+
+
 @router.get("/nodes/context", response_model=NodeContextResponse, response_model_exclude_none=True)
 async def dtwin_nodes_context(
     entity_uri: str,
@@ -1881,23 +2022,48 @@ async def dtwin_nodes_context(
     return NodeContextResponse(**payload)
 
 
-# Session key for the Graph Chat cache (history + limit).
-# Shape: {"limit": int, "history": {<domain_name>: [{"role", "content"}, ...]}}
+# Session key for the Graph Chat cache (history + limit + pending actions).
+# Shape: {
+#   "limit": int,
+#   "history": {<domain_name>: [{"role", "content"}, ...]},
+#   "pending_actions": {
+#       <token>: {"domain", "entity_uri", "action_full_name", "expires_at", "used"},
+#   },
+# }
 _CHAT_SESSION_KEY = "graph_chat"
 _CHAT_DEFAULT_LIMIT = 20         # number of user+assistant turns kept per domain
 _CHAT_MIN_LIMIT = 5
 _CHAT_MAX_LIMIT = 100
+
+# How long a minted Action confirmation token stays valid. Short enough that
+# a stale browser tab can't replay a UC function call long after the user
+# looked away, long enough to click "Confirm" on a rendered chat card.
+_PENDING_ACTION_TTL_SEC = 120
 
 
 def _chat_cache(session_mgr: SessionManager) -> dict:
     """Return the Graph Chat session cache, creating an empty one if absent."""
     cache = session_mgr.get(_CHAT_SESSION_KEY)
     if not isinstance(cache, dict):
-        cache = {"limit": _CHAT_DEFAULT_LIMIT, "history": {}}
+        cache = {"limit": _CHAT_DEFAULT_LIMIT, "history": {}, "pending_actions": {}}
     else:
         cache.setdefault("limit", _CHAT_DEFAULT_LIMIT)
         cache.setdefault("history", {})
+        cache.setdefault("pending_actions", {})
     return cache
+
+
+def _pending_actions_prune(cache: dict) -> None:
+    """Drop expired pending-action tokens in place so the cache stays bounded.
+
+    Called on every request/confirm/cancel so a session that mints many
+    tokens over time doesn't accumulate stale entries forever.
+    """
+    now = time.time()
+    pending = cache.get("pending_actions") or {}
+    expired = [tok for tok, entry in pending.items() if entry.get("expires_at", 0) <= now]
+    for tok in expired:
+        pending.pop(tok, None)
 
 
 def _chat_save_cache(session_mgr: SessionManager, cache: dict) -> None:
