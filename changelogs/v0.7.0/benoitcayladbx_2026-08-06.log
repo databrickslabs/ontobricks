@@ -249,3 +249,57 @@ Modified files:
 - tests/units/agents/test_agent_dtwin_chat_engine.py
 
 Tests: `uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat_engine.py tests/units/api/test_dtwin_assistant_chat.py` → 14 passed in 1.07s
+
+## Add Graph Chat Confirm/Cancel action card
+
+Context: Task 7 of the Graph Chat MCP alignment renders the `pending_action`
+payload minted by Task 4/6 as an inline card so a proposed UC Action never
+runs without an explicit click — typed chat text (e.g. "yes") is never
+treated as confirmation.
+
+Changes:
+
+1. `src/front/static/query/js/query-chat.js`
+   Add `buildPendingActionCardModel` (pure payload→display-model helper),
+   `buildPendingActionCard`, `confirmPendingAction`/`cancelPendingAction`,
+   and `formatActionResultText`. `finalizeStreamingBubble` now appends the
+   card under the assistant bubble when the SSE `done` event carries a
+   `pending_action`. Confirm POSTs `{token}` to
+   `/dtwin/nodes/action/confirm`, appends the formatted result as a new
+   assistant message, and disables the card; Cancel POSTs `{token}` to
+   `/dtwin/nodes/action/cancel` (best effort) and removes the card.
+2. `src/front/static/query/css/query-chat.css`
+   Minimal `.graph-chat-pending-action*` rules matching the existing
+   assistant/graph-chat visual language (amber "needs attention" card,
+   pill buttons consistent with the send button gradient).
+3. `tests/units/front/test_query_chat_pending_action.py`
+   Source-level contract tests (same style as
+   `test_query_chat_rendering.py`, no JS runtime in this repo): card
+   wiring on `done`, confirm/cancel routes + `same-origin` credentials,
+   no typed-"yes" auto-confirm shortcut, dedicated CSS classes, plus a
+   pure-Python port of `buildPendingActionCardModel` pinning its
+   default-filling contract.
+
+Modified files:
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_query_chat_pending_action.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4727 passed, 276 skipped, 5 deselected, 1 xfailed in 33.15s
+
+Manual smoke checklist (not run in this session — no live Databricks
+workspace / running `./scripts/start.sh` instance available):
+- [ ] Ask Graph Chat to run an allow-listed Action on an entity → card
+      appears under the assistant bubble with action name, entity, and
+      description.
+- [ ] Click Confirm → buttons disable, status shows "Running…", then
+      "Confirmed" once `/dtwin/nodes/action/confirm` resolves, and a new
+      assistant message shows the formatted result rows.
+- [ ] Click Cancel on a fresh pending card → card is removed immediately
+      and no Confirm network call fires.
+- [ ] Type "yes" in the chat input instead of clicking Confirm → message
+      is sent as ordinary chat text; the action is NOT invoked.
+- [ ] Reload the page after a pending card is shown (or wait >120s) →
+      clicking the stale Confirm button surfaces the "Action expired"
+      error message instead of silently succeeding.

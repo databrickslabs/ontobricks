@@ -595,6 +595,85 @@
 
 
 /* ---------------------------------------------------
+   Pending action card (Confirm / Cancel before invoking a UC Action)
+--------------------------------------------------- */
+
+.graph-chat-pending-action {
+    margin-top: 0.65rem;
+    padding: 0.65rem 0.8rem;
+    background: #fff8f0;
+    border: 1px solid #fcd9a8;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    color: #7c2d12;
+}
+
+.graph-chat-pending-action-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    color: #b45309;
+    margin-bottom: 0.35rem;
+}
+
+.graph-chat-pending-action-name code {
+    font-size: 0.8rem;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: rgba(180, 83, 9, 0.1);
+}
+
+.graph-chat-pending-action-desc {
+    margin-top: 0.25rem;
+    color: #92400e;
+}
+
+.graph-chat-pending-action-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.55rem;
+}
+.graph-chat-pending-action-actions button {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.graph-chat-pending-action-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.graph-chat-pending-action-confirm {
+    background: linear-gradient(135deg, var(--gc-user-start, #FF3621), var(--gc-user-end, #E5341F));
+    color: #fff;
+}
+.graph-chat-pending-action-confirm:hover:not(:disabled) { transform: translateY(-1px); }
+.graph-chat-pending-action-cancel {
+    background: #ffffff;
+    border-color: #fcd9a8;
+    color: #92400e;
+}
+.graph-chat-pending-action-cancel:hover:not(:disabled) { background: #fff1e0; }
+
+.graph-chat-pending-action-status {
+    margin-top: 0.4rem;
+    font-size: 0.76rem;
+    font-style: italic;
+    color: #92400e;
+}
+.graph-chat-pending-action-status:empty { display: none; }
+.graph-chat-pending-action-status.is-success { color: #15803d; }
+.graph-chat-pending-action-status.is-error { color: #b91c1c; }
+
+.graph-chat-pending-action.is-resolved {
+    opacity: 0.9;
+}
+
+
+/* ---------------------------------------------------
    Entity links: jump to the knowledge-graph viewer
 --------------------------------------------------- */
 
