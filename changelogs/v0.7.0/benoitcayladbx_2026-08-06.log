@@ -921,3 +921,57 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4750 passed, 276 skipped, 5 deselected, 1 xfailed in 31.47s
+
+## Scenario 3 asked the wrong store whether a version was built
+
+Context: The live campaign failed at `POST /dtwin/metrics/compute` with "The
+mapped-triples table benoit_cayla.ontobricks.triplestore_testscenario1_V2_data
+could not be reached", and reproduced on retry with a fresh request id, so it
+was not a warehouse cold start. `SHOW TABLES IN benoit_cayla.ontobricks LIKE
+'triplestore_testscenario1*'` returned `_v1`, `_v1_data` and `_v2` — the V2
+`_data` snapshot had never been created.
+
+Root cause: scenario 3 decided whether the working DRAFT was built from
+`/dtwin/sync/status`, which reports the **graph engine** row count. The
+campaign domain is durable and its Lakebase graph `testscenario1_V2` still held
+56,407 triples accumulated by earlier runs, so the scenario logged "already
+built — reusing its graph" and skipped Build. Analytics never reads the engine:
+`resolve_analytics_source` always resolves the UC `…_data` snapshot (that is
+what makes a KPI identical across Lakehouse, Lakebase and Neo4j), and only
+Build materialises it. Skipping the Build therefore guaranteed the failure
+minutes later. The downstream `test_scenario_validation` failure ("analysis
+recorded in audit trail — 0 analysis event(s)") was the same cause: scenario 3
+aborted before writing its analysis write-up.
+
+Verified on the live app against the broken V2: `/dtwin/sync/status` answered
+`has_data=True count=56407` while `/dtwin/databricks-build/info` answered
+`exists=False count=0` for `triplestore_testscenario1_V2_data` — the old check
+passed and the new one correctly requires a Build.
+
+Changes:
+
+1. `tests/e2e/scenarios/test_scenario_03_rules_analysis.py`
+   Split `_graph_built` into `_engine_graph_built` (unchanged
+   `/dtwin/sync/status` probe) and `_analytics_snapshot_built` (new
+   `/dtwin/databricks-build/info` probe of `triplestore_status.has_data`).
+   `_graph_built` now requires both, so a stale engine graph can no longer
+   skip the Build that materialises the snapshot the analysis step reads.
+2. `tests/e2e/scenarios/test_scenario_03_rules_analysis.py`
+   The readiness assertion now names which store is missing (engine graph vs
+   analytics snapshot) instead of a single opaque "no knowledge-graph data".
+
+Note: the messaging half of this was already fixed separately in fd96483
+(`probe_data_table` classifies TABLE_OR_VIEW_NOT_FOUND as "missing or empty —
+run Knowledge Graph → Build"). The campaign ran against an app started at
+14:34, before that commit landed at 15:12, which is why the old warehouse
+wording appeared.
+
+Not addressed here: `ONTOBRICKS_SCENARIO_DQ_TIMEOUT` defaults to 300s and the
+data-quality run is marginal against it (one run timed out at 99%, another
+finished in ~130s). `make scenario-campaign` does not override it.
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4750 passed, 276 skipped, 5 deselected, 1 xfailed in 32.73s
