@@ -33,11 +33,17 @@ def test_confirm_posts_token_to_confirm_route():
     assert "credentials: 'same-origin'" in source
 
 
-def test_cancel_posts_token_to_cancel_route_and_removes_card():
+def test_cancel_removes_card_then_posts_cancel_best_effort():
     source = _source()
-    assert "async function cancelPendingAction(card, model)" in source
+    assert "function cancelPendingAction(card, model)" in source
     assert "'/dtwin/nodes/action/cancel'" in source
-    assert "card.remove()" in source
+    cancel_fn_start = source.index("function cancelPendingAction")
+    cancel_fn_end = source.index("function buildPendingActionCard", cancel_fn_start)
+    cancel_block = source[cancel_fn_start:cancel_fn_end]
+    assert cancel_block.index("card.remove()") < cancel_block.index(
+        "'/dtwin/nodes/action/cancel'"
+    )
+    assert "await fetch('/dtwin/nodes/action/cancel'" not in cancel_block
 
 
 def test_never_auto_confirms_or_treats_typed_yes_as_confirmation():

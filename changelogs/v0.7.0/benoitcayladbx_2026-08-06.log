@@ -250,6 +250,32 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat_engine.py tests/units/api/test_dtwin_assistant_chat.py` → 14 passed in 1.07s
 
+## Use the share icon for Graph Explorer
+
+Context: Replace the layered-view glyph with a connected-node share glyph so
+the Explorer navigation and supporting UI more clearly communicate graph
+relationships.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Explorer navigation item icon to `bi-share`.
+2. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Match the Graph Explorer page heading to the new icon.
+3. `src/front/templates/partials/layout/help_modal.html`
+   Match the Interactive Graph Viewer feature card to the new icon.
+4. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage keeping the menu, page heading, and Help Center icon aligned.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4720 passed, 276 skipped, 5 deselected, 1 xfailed in 33.65s
+
 ## Add Graph Chat Confirm/Cancel action card
 
 Context: Task 7 of the Graph Chat MCP alignment renders the `pending_action`
@@ -303,3 +329,87 @@ workspace / running `./scripts/start.sh` instance available):
 - [ ] Reload the page after a pending card is shown (or wait >120s) →
       clicking the stale Confirm button surfaces the "Action expired"
       error message instead of silently succeeding.
+
+## Let the dev server run without auto-reload (unblocks scenario campaign)
+
+Context: `make scenario-campaign` failed repeatedly at Auto-Map with
+"Auto-Map produced no entity SQL within 600s", which wrongly points at the
+serving endpoint or warehouse. Root cause was the local dev server: `run.py`
+hardcoded `reload=True` over `reload_dirs` covering `src/back` and
+`src/agents`, and Auto-Map / the KG build run for minutes in background
+threads whose state lives in the in-memory `TaskManager`. Any concurrent
+`src/` save restarted uvicorn, killed the thread and orphaned the task
+(`GET /tasks/<id>` → 404), so the poll loop burned its full budget. Observed
+seven reloads from three parallel workstreams inside one 25-minute window;
+OWL generation survived only because it finishes in ~80s.
+
+Changes:
+
+1. `run.py`
+   Honour `ONTOBRICKS_NO_RELOAD` (`1/true/yes/on`) to start uvicorn without
+   the reloader; only set `reload`/`reload_dirs` when it is unset. Log the
+   resolved state as `Uvicorn auto-reload enabled|DISABLED` so the mode is
+   verifiable from the log.
+2. `scripts/start.sh`
+   Add a `--no-reload` flag (exports `ONTOBRICKS_NO_RELOAD=1`) and document
+   it in `--help`.
+3. `Makefile`
+   `scenario-campaign` now warns when the target app is running *with*
+   auto-reload, detecting it by topology (a reload-enabled `run.py` forks
+   child processes; a no-reload one has none) since the children are plain
+   `python3` and reload is enabled in-code, not via `--reload`. Header
+   comment documents running the campaign against a no-reload server.
+
+Modified files:
+- run.py
+- scripts/start.sh
+- Makefile
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4706 passed, 276 skipped, 5 deselected, 1 xfailed in 35.12s
+
+Live verification (campaign against a no-reload server, reload count 0):
+- scenario_1 PASSED — Auto-Map completed all 4 chunks (11 entities, 9
+  relationships) and the KG build wrote 54,627 triples in 87.6s. Previously
+  died in chunk 1/4 on every attempt.
+- scenario_2 PASSED.
+- scenario_3 FAILED, for two causes unrelated to reload (both pre-existing):
+  1. `ONTOBRICKS_SCENARIO_DQ_TIMEOUT` default of 300s is too tight — the run
+     was still progressing (89%) when the budget expired. Re-running with
+     900s passed in ~190s (122 checks: 99 passed, 22 failed, 1 warning),
+     then reasoning inferred 2,381 triples and materialised 2,320.
+  2. Graph analysis then 400s: `triplestore_testscenario1_V2_data` does not
+     exist. The `_data` snapshot is created by the build pipeline, but
+     scenario 3 skips the build when `_graph_built()` (which probes
+     `/dtwin/sync/status` on the Lakebase graph) reports data — that is not a
+     sufficient proxy for "the UC mapped snapshot exists" on a freshly
+     branched version. Left unfixed pending a decision on whether the fix
+     belongs in the scenario precondition or in the product.
+
+## Fix Graph Chat pending-action cancel and card styling
+
+Context: Task 7 review — Cancel awaited the server before removing the card,
+leaving a disabled card stuck on a stalled request. Confirm button also used
+primary-red gradient, which violates `.cursor/11-frontend-design.mdc` (plain
+buttons stay neutral grey).
+
+Changes:
+
+1. `src/front/static/query/js/query-chat.js`
+   `cancelPendingAction` now removes the card immediately and fire-and-forgets
+   the `/dtwin/nodes/action/cancel` POST (no await).
+2. `src/front/static/query/css/query-chat.css`
+   Pending-action card/buttons use `--db-*` / Bootstrap tokens; Confirm is
+   outline/secondary instead of primary-red gradient.
+3. `tests/units/front/test_query_chat_pending_action.py`
+   Contract test asserts `card.remove()` precedes the cancel fetch and that
+   cancel does not await the network call.
+
+Modified files:
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_query_chat_pending_action.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_query_chat_pending_action.py → 7 passed in 0.12s
+

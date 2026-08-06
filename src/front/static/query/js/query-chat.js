@@ -374,17 +374,14 @@
         _setPendingCardStatus(card, data.success ? 'Confirmed' : 'Failed', data.success ? 'is-success' : 'is-error');
     }
 
-    async function cancelPendingAction(card, model) {
-        _disablePendingCardButtons(card);
-        try {
-            await fetch('/dtwin/nodes/action/cancel', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ token: model.token }),
-            });
-        } catch (_) { /* best effort -- server TTL still expires the token */ }
+    function cancelPendingAction(card, model) {
         card.remove();
+        fetch('/dtwin/nodes/action/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ token: model.token }),
+        }).catch(function () { /* best effort -- server TTL still expires the token */ });
     }
 
     /**
