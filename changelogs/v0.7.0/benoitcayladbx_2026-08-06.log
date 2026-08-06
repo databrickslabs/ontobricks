@@ -468,3 +468,47 @@ Modified files:
 Tests: uv run --frozen python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS on all 12 examples
 Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 32.95s
 
+## Graph Chat MCP alignment — complete
+
+Context: Graph Chat now matches MCP discovery for configured Dataset, Bridge,
+and Action metadata while retaining session-aware draft-domain behavior.
+Actions are proposed through a one-time token and execute only after the user
+selects Confirm; Cancel, expiry, and token reuse never invoke Unity Catalog.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Add session-aware node-context and class metadata routes plus token-gated
+   Action request, confirm, and cancel endpoints.
+2. `src/agents/agent_dtwin_chat/{tools.py,engine.py}` and `src/agents/tools/{context.py,graph_formatting.py}`
+   Add Dataset/Bridge/Action discovery and context tools, pending-action
+   response plumbing, confirmation-aware prompt guidance, and shared formatters.
+3. `src/front/static/query/{js,css}/query-chat.*`
+   Render a Confirm/Cancel Action card from structured chat responses and
+   display confirmation results without typed-message auto-confirmation.
+4. `.planning/agents/agent_dtwin_chat/SPEC.md`, `tests/eval/datasets/agent_dtwin_chat/baseline.jsonl`, `tests/eval/run_agent_dtwin_chat.py`
+   Document the seven-tool contract and validate 12 discovery, context, safety,
+   and adversarial eval cases.
+5. `tests/units/{agents,api,front}/test_*dtwin*` and `tests/units/agents/test_graph_formatting_context.py`
+   Cover route, token lifecycle, tool, formatter, SSE payload, and UI card
+   contracts.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/tools/context.py
+- src/agents/tools/graph_formatting.py
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- .planning/agents/agent_dtwin_chat/SPEC.md
+- tests/eval/datasets/agent_dtwin_chat/baseline.jsonl
+- tests/eval/run_agent_dtwin_chat.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- tests/units/api/test_dtwin_nodes_action_confirm.py
+- tests/units/front/test_query_chat_pending_action.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 32.60s
+Dry-run eval: uv run --frozen python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS on all 12 examples
+
