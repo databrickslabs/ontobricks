@@ -42,3 +42,27 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4688 passed, 276 skipped, 5 deselected, 1 xfailed in 33.53s
+
+## Add shared graph context/action formatters
+
+Context: Task 1 of Graph Chat MCP alignment — port MCP server class/node
+context formatting into shared `graph_formatting` helpers so Graph Chat
+agents can render dataset/bridge/action metadata with a parameterized
+action-invoke hint (`request_entity_action` vs MCP's `invoke_entity_action`).
+
+Changes:
+
+1. `src/agents/tools/graph_formatting.py`
+   Add `format_class_context_block`, `format_node_context_response`,
+   `format_node_action_response`; extend `format_find_response` with
+   `class_actions` and `action_invoke_hint`.
+2. `tests/units/agents/test_graph_formatting_context.py`
+   Unit tests for class context blocks, find-response enrichment, and
+   node context/action formatters (TDD).
+
+Modified files:
+- src/agents/tools/graph_formatting.py
+- tests/units/agents/test_graph_formatting_context.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4692 passed, 276 skipped, 5 deselected, 1 xfailed in 33.53s

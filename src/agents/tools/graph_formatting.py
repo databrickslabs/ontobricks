@@ -18,6 +18,10 @@ from back.core.w3c.rdf_utils import uri_local_name
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
+DEFAULT_ACTION_INVOKE_HINT = (
+    "call request_entity_action(entity_uri, action) to propose one (UI confirmation required)"
+)
+
 
 # ── URI helpers ───────────────────────────────────────────────────────────
 
@@ -144,6 +148,153 @@ def _format_entity_block(
     return "\n".join(lines)
 
 
+# ── Class / node context formatters ───────────────────────────────────────
+
+
+def format_class_context_block(
+    local_id: str,
+    cls_actions: dict,
+    *,
+    action_invoke_hint: str = DEFAULT_ACTION_INVOKE_HINT,
+) -> str:
+    """Append a [Context] block for a node's class Actions metadata."""
+    dataset = cls_actions.get("dataset")
+    bridges = cls_actions.get("bridges") or []
+    actions = cls_actions.get("actions") or []
+    if not dataset and not bridges and not actions:
+        return ""
+
+    lines: list[str] = []
+    lines.append(f"  [Context — class: {cls_actions.get('name', '')}]")
+
+    if dataset and dataset.get("fullName"):
+        key_col = dataset.get("key_column")
+        if key_col:
+            lines.append(f"  Dataset: {dataset['fullName']}  (key: {key_col} = '{local_id}')")
+            lines.append(
+                "    → call get_entity_context(fetch_dataset_rows=True) to retrieve rows"
+            )
+        else:
+            lines.append(f"  Dataset: {dataset['fullName']}  (key_column not configured)")
+        purpose = (dataset.get("description") or "").strip()
+        if purpose:
+            lines.append(f"  Description: {purpose}")
+
+    if bridges:
+        lines.append("  Bridges:")
+        for b in bridges:
+            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            label = f"  \"{b['label']}\"" if b.get("label") else ""
+            lines.append(f"    → {target}{label}")
+        lines.append(
+            "    → call get_entity_context(follow_bridges=True) to load cross-domain data"
+        )
+
+    if actions:
+        lines.append("  Actions:")
+        for a in actions:
+            lines.append(f"    → {a.get('fullName', '')}: {a.get('description', '')}")
+        lines.append(f"    → {action_invoke_hint}")
+
+    return "\n".join(lines)
+
+
+def format_node_context_response(
+    data: dict,
+    *,
+    action_invoke_hint: str | None = None,
+) -> str:
+    """Format a node-context JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return data.get("message", "Could not retrieve node context.")
+
+    entity_uri = data.get("entity_uri", "")
+    local_id = data.get("entity_local_id", "") or local_name(entity_uri)
+    class_name = data.get("class_name", "Unknown")
+    hint = action_invoke_hint or DEFAULT_ACTION_INVOKE_HINT
+
+    lines: list[str] = [
+        f"Node Context — {local_id}  ({class_name})",
+        f"URI: {entity_uri}",
+        "",
+    ]
+
+    dataset = data.get("dataset")
+    if dataset:
+        lines.append(f"Dataset: {dataset.get('fullName', '')}")
+        key_col = dataset.get("key_column")
+        if key_col:
+            lines.append(f"  Key: {key_col} = '{local_id}'")
+        purpose = (dataset.get("description") or "").strip()
+        if purpose:
+            lines.append(f"  Description: {purpose}")
+        if dataset.get("key_column_missing"):
+            lines.append("  ⚠ key_column not configured — row fetch skipped")
+        rows = dataset.get("rows")
+        if rows:
+            lines.append(f"  Rows ({len(rows)}):")
+            for row in rows:
+                lines.append("    " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
+        lines.append("")
+
+    bridges = data.get("bridges") or []
+    if bridges:
+        lines.append("Cross-domain Bridges:")
+        for b in bridges:
+            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            label = f"  \"{b['label']}\"" if b.get("label") else ""
+            lines.append(f"  → {target}{label}")
+            entities = b.get("entities")
+            if entities:
+                lines.append(f"    Entities ({len(entities)}):")
+                for e in entities:
+                    lines.append(
+                        f"      • {local_name(e.get('uri', ''))}  "
+                        f"{e.get('predicate', '')} → {e.get('object', '')}"
+                    )
+        lines.append("")
+
+    actions = data.get("actions") or []
+    if actions:
+        lines.append("Actions (Unity Catalog functions):")
+        for a in actions:
+            lines.append(f"  → {a.get('fullName', '')}")
+            desc = (a.get("description") or "").strip()
+            if desc:
+                lines.append(f"    Description: {desc}")
+        lines.append(f"  → {hint}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def format_node_action_response(data: dict) -> str:
+    """Format a node-action JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return (
+            data.get("message")
+            or (data.get("error") if isinstance(data.get("error"), str) else None)
+            or "Could not invoke the action."
+        )
+
+    local_id = data.get("entity_local_id", "")
+    lines: list[str] = [
+        f"Action: {data.get('action', '')}",
+        f"Entity: {local_id}  ({data.get('class_name', 'Unknown')})",
+        "",
+    ]
+
+    rows = data.get("rows") or []
+    if not rows:
+        lines.append("Completed — no result rows returned.")
+        return "\n".join(lines)
+
+    lines.append(f"Result ({len(rows)} row{'s' if len(rows) != 1 else ''}):")
+    for row in rows:
+        lines.append("  " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
+    return "\n".join(lines)
+
+
 def _merge_uri_aliases(by_subject: dict[str, list[dict]]) -> dict[str, list[dict]]:
     """Merge triples from URI aliases into a single entity."""
     groups: dict[str, list[str]] = {}
@@ -166,7 +317,13 @@ def _merge_uri_aliases(by_subject: dict[str, list[dict]]) -> dict[str, list[dict
     return merged
 
 
-def format_find_response(data: dict, ontology_labels: dict | None = None) -> str:
+def format_find_response(
+    data: dict,
+    ontology_labels: dict | None = None,
+    class_actions: dict | None = None,
+    *,
+    action_invoke_hint: str = DEFAULT_ACTION_INVOKE_HINT,
+) -> str:
     """Convert a /triples/find JSON response into a full-text description."""
     if not data.get("success"):
         return data.get("message", "Search failed.")
@@ -225,6 +382,19 @@ def format_find_response(data: dict, ontology_labels: dict | None = None) -> str
             inbound_triples=by_object.get(uri, []),
             ontology_labels=ontology_labels,
         ))
+        if class_actions:
+            triples_for_uri = by_subject.get(uri, [])
+            type_uris = [t["object"] for t in triples_for_uri if t["predicate"] == RDF_TYPE]
+            for type_uri in type_uris:
+                if type_uri in class_actions:
+                    ctx = format_class_context_block(
+                        local_name(uri),
+                        class_actions[type_uri],
+                        action_invoke_hint=action_invoke_hint,
+                    )
+                    if ctx:
+                        parts.append(ctx)
+                    break
         parts.append("")
 
     if related_uris:
