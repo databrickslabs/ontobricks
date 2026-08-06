@@ -35,8 +35,14 @@ from back.core.graph_analysis import (
     analytics_job_configured,
     analytics_job_status,
 )
-from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
+from back.objects.digitaltwin import (
+    CohortService,
+    DigitalTwin,
+    DomainSnapshot,
+    NodeContextService,
+)
 from back.objects.domain import HomeService, Domain
+from api.routers.digitaltwin import NodeContextResponse
 from back.core.helpers import (
     effective_databricks_table,
     effective_graph_name,
@@ -1823,6 +1829,56 @@ async def get_inferred_triples(
 # ===========================================
 # Graph Chat Assistant (LLM over the knowledge graph)
 # ===========================================
+
+
+@router.get("/classes")
+async def dtwin_classes(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Return session-domain classes and Graph Chat action metadata."""
+    domain = get_domain(session_mgr)
+    return {
+        "success": True,
+        "domain_name": _chat_resolve_domain_name(domain),
+        "classes": [
+            {
+                "name": cls.get("name", ""),
+                "uri": cls.get("uri", ""),
+                "dataset": cls.get("dataset") or None,
+                "bridges": cls.get("bridges") or [],
+                "actions": cls.get("actions") or [],
+            }
+            for cls in (domain.get_classes() or [])
+        ],
+    }
+
+
+@router.get("/nodes/context", response_model=NodeContextResponse, response_model_exclude_none=True)
+async def dtwin_nodes_context(
+    entity_uri: str,
+    fetch_dataset_rows: bool = False,
+    dataset_row_limit: int = 5,
+    follow_bridges: bool = False,
+    bridge_depth: int = 1,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Resolve node context against the active session domain."""
+    domain = get_domain(session_mgr)
+    payload = await NodeContextService.resolve_context(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        session_mgr=session_mgr,
+        fetch_dataset_rows=fetch_dataset_rows,
+        dataset_row_limit=max(1, min(dataset_row_limit or 5, 20)),
+        follow_bridges=follow_bridges,
+        bridge_depth=max(1, min(bridge_depth or 1, 1)),
+        registry_catalog=None,
+        registry_schema=None,
+        registry_volume=None,
+    )
+    return NodeContextResponse(**payload)
 
 
 # Session key for the Graph Chat cache (history + limit).

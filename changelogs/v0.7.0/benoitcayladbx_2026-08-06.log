@@ -90,3 +90,25 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4693 passed, 276 skipped, 5 deselected, 1 xfailed in 32.65s
+
+## Add session-aware node context routes
+
+Context: Task 3 of Graph Chat MCP alignment needs session-scoped class and
+node-context discovery so Graph Chat can inspect an active draft domain without
+resolving a published registry version.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Add `/dtwin/classes` and `/dtwin/nodes/context`, resolving their domain with
+   `get_domain(session_mgr)` and capping row and bridge traversal limits.
+2. `tests/units/api/test_dtwin_nodes_context.py`
+   Add route-level tests for class actions, metadata-only node context, and
+   route-side limit capping.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_nodes_context.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4696 passed, 276 skipped, 5 deselected, 1 xfailed in 37.97s
