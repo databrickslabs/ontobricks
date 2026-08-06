@@ -6,6 +6,7 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 
 from dataclasses import dataclass
 import os
+import secrets
 import time
 from typing import Any, Optional
 
@@ -35,8 +36,14 @@ from back.core.graph_analysis import (
     analytics_job_configured,
     analytics_job_status,
 )
-from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
+from back.objects.digitaltwin import (
+    CohortService,
+    DigitalTwin,
+    DomainSnapshot,
+    NodeContextService,
+)
 from back.objects.domain import HomeService, Domain
+from api.routers.digitaltwin import NodeContextResponse
 from back.core.helpers import (
     effective_databricks_table,
     effective_graph_name,
@@ -1825,23 +1832,242 @@ async def get_inferred_triples(
 # ===========================================
 
 
-# Session key for the Graph Chat cache (history + limit).
-# Shape: {"limit": int, "history": {<domain_name>: [{"role", "content"}, ...]}}
+@router.get("/classes")
+async def dtwin_classes(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Return session-domain classes and Graph Chat action metadata."""
+    domain = get_domain(session_mgr)
+    return {
+        "success": True,
+        "domain_name": _chat_resolve_domain_name(domain),
+        "classes": [
+            {
+                "name": cls.get("name", ""),
+                "uri": cls.get("uri", ""),
+                "dataset": cls.get("dataset") or None,
+                "bridges": NodeContextService.class_bridge_entries(cls),
+                "actions": NodeContextService.class_action_entries(cls),
+            }
+            for cls in (domain.get_classes() or [])
+        ],
+    }
+
+
+@router.post("/nodes/action/request")
+async def dtwin_nodes_action_request(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Validate an entity + allow-listed action and mint a one-time pending token.
+
+    Does **not** invoke the Unity Catalog function — this only checks that
+    the entity resolves to an ontology class and that the action is declared
+    on that class, then stores a pending entry in the session cache. Call
+    ``POST /dtwin/nodes/action/confirm`` with the returned token to execute.
+    """
+    data = await request.json()
+    entity_uri = (data.get("entity_uri") or "").strip()
+    action_full_name = (data.get("action_full_name") or "").strip()
+    if not entity_uri or not action_full_name:
+        raise ValidationError("entity_uri and action_full_name are required")
+
+    domain = get_domain(session_mgr)
+    raw_classes = domain.get_classes() or []
+    matched_cls = NodeContextService.match_ontology_class(entity_uri, raw_classes)
+    if matched_cls is None:
+        raise ValidationError("No ontology class matches this entity URI")
+
+    class_name = matched_cls.get("name", "")
+    action = next(
+        (
+            a
+            for a in NodeContextService.class_action_entries(matched_cls)
+            if a["fullName"] == action_full_name
+        ),
+        None,
+    )
+    if action is None:
+        raise ValidationError(
+            f"Action {action_full_name!r} is not configured on class {class_name!r}"
+        )
+
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+
+    token = secrets.token_urlsafe(24)
+    cache["pending_actions"][token] = {
+        "domain": domain_key,
+        "entity_uri": entity_uri,
+        "action_full_name": action["fullName"],
+        "expires_at": time.time() + _PENDING_ACTION_TTL_SEC,
+        "used": False,
+    }
+    _chat_save_cache(session_mgr, cache)
+
+    entity_label = DigitalTwin.extract_local_id(entity_uri)
+
+    logger.info(
+        "nodes/action/request: minted pending token for entity=%s action=%s domain=%s",
+        entity_label,
+        action["fullName"],
+        domain_key,
+    )
+
+    return {
+        "success": True,
+        "pending_action": {
+            "token": token,
+            "entity_uri": entity_uri,
+            "entity_label": entity_label,
+            "action": action["fullName"],
+            "description": action.get("description"),
+            "expires_in_sec": _PENDING_ACTION_TTL_SEC,
+        },
+        "message": f"Confirm to run {action['fullName']} on {entity_label}.",
+    }
+
+
+@router.post("/nodes/action/confirm")
+async def dtwin_nodes_action_confirm(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Consume a pending-action token and invoke the Unity Catalog function once.
+
+    The token is marked ``used`` **before** invocation so a double-click or
+    retried request cannot invoke the action twice. If the invocation itself
+    fails, the token stays used and the caller must ``request`` a fresh one —
+    tokens are not refunded on failure.
+    """
+    data = await request.json()
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise ValidationError("token is required")
+
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+
+    entry = cache["pending_actions"].get(token)
+    if (
+        not entry
+        or entry.get("used")
+        or entry.get("domain") != domain_key
+        or entry.get("expires_at", 0) <= time.time()
+    ):
+        raise ValidationError("Action expired — request again")
+
+    entry["used"] = True
+    _chat_save_cache(session_mgr, cache)
+
+    return await NodeContextService.invoke_action(
+        domain,
+        settings,
+        entity_uri=entry["entity_uri"],
+        action_full_name=entry["action_full_name"],
+    )
+
+
+@router.post("/nodes/action/cancel")
+async def dtwin_nodes_action_cancel(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Discard a pending-action token if present. Always returns success.
+
+    Best-effort UI cleanup: the token also self-expires via TTL, so a missing
+    or already-consumed token is not an error.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    token = (data.get("token") or "").strip()
+    if token:
+        cache = _chat_cache(session_mgr)
+        if cache["pending_actions"].pop(token, None) is not None:
+            _chat_save_cache(session_mgr, cache)
+    return {"success": True}
+
+
+@router.get("/nodes/context", response_model=NodeContextResponse, response_model_exclude_none=True)
+async def dtwin_nodes_context(
+    entity_uri: str,
+    fetch_dataset_rows: bool = False,
+    dataset_row_limit: int = 5,
+    follow_bridges: bool = False,
+    bridge_depth: int = 1,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Resolve node context against the active session domain."""
+    domain = get_domain(session_mgr)
+    payload = await NodeContextService.resolve_context(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        session_mgr=session_mgr,
+        fetch_dataset_rows=fetch_dataset_rows,
+        dataset_row_limit=max(1, min(dataset_row_limit or 5, 20)),
+        follow_bridges=follow_bridges,
+        bridge_depth=max(1, min(bridge_depth or 1, 1)),
+        registry_catalog=None,
+        registry_schema=None,
+        registry_volume=None,
+    )
+    return NodeContextResponse(**payload)
+
+
+# Session key for the Graph Chat cache (history + limit + pending actions).
+# Shape: {
+#   "limit": int,
+#   "history": {<domain_name>: [{"role", "content"}, ...]},
+#   "pending_actions": {
+#       <token>: {"domain", "entity_uri", "action_full_name", "expires_at", "used"},
+#   },
+# }
 _CHAT_SESSION_KEY = "graph_chat"
 _CHAT_DEFAULT_LIMIT = 20         # number of user+assistant turns kept per domain
 _CHAT_MIN_LIMIT = 5
 _CHAT_MAX_LIMIT = 100
+
+# How long a minted Action confirmation token stays valid. Short enough that
+# a stale browser tab can't replay a UC function call long after the user
+# looked away, long enough to click "Confirm" on a rendered chat card.
+# pending_actions live in the in-memory session cache (per-process); the
+# used-before-invoke guard assumes a single Uvicorn worker / one event loop.
+# Multiple workers need sticky sessions or shared state so request and confirm
+# hit the same process.
+_PENDING_ACTION_TTL_SEC = 120
 
 
 def _chat_cache(session_mgr: SessionManager) -> dict:
     """Return the Graph Chat session cache, creating an empty one if absent."""
     cache = session_mgr.get(_CHAT_SESSION_KEY)
     if not isinstance(cache, dict):
-        cache = {"limit": _CHAT_DEFAULT_LIMIT, "history": {}}
+        cache = {"limit": _CHAT_DEFAULT_LIMIT, "history": {}, "pending_actions": {}}
     else:
         cache.setdefault("limit", _CHAT_DEFAULT_LIMIT)
         cache.setdefault("history", {})
+        cache.setdefault("pending_actions", {})
     return cache
+
+
+def _pending_actions_prune(cache: dict) -> None:
+    """Drop expired pending-action tokens in place so the cache stays bounded.
+
+    Called on every request/confirm/cancel so a session that mints many
+    tokens over time doesn't accumulate stale entries forever.
+    """
+    now = time.time()
+    pending = cache.get("pending_actions") or {}
+    expired = [tok for tok, entry in pending.items() if entry.get("expires_at", 0) <= now]
+    for tok in expired:
+        pending.pop(tok, None)
 
 
 def _chat_save_cache(session_mgr: SessionManager, cache: dict) -> None:
@@ -1897,6 +2123,26 @@ def _chat_trim(messages: list, limit: int) -> list:
         return []
     keep = 2 * limit
     return messages[-keep:] if len(messages) > keep else list(messages)
+
+
+def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
+    """Build the common blocking or SSE-completion Graph Chat response."""
+    payload = {
+        "success": agent_result.success,
+        "reply": agent_result.reply or "",
+        "tools": [
+            {"name": step.tool_name, "duration_ms": step.duration_ms}
+            for step in agent_result.steps
+            if step.step_type == "tool_result"
+        ],
+        "iterations": agent_result.iterations,
+        "usage": agent_result.usage,
+    }
+    if event_type:
+        payload["type"] = event_type
+    if agent_result.pending_action:
+        payload["pending_action"] = agent_result.pending_action
+    return payload
 
 
 def _auto_discover_llm_endpoint(domain, settings) -> str:
@@ -2067,21 +2313,18 @@ async def dtwin_assistant_chat(
             detail=agent_result.error or None,
         )
 
-    tool_calls = [
-        {
-            "name": step.tool_name,
-            "duration_ms": step.duration_ms,
-        }
-        for step in agent_result.steps
-        if step.step_type == "tool_result"
-    ]
-
     # Persist the exchange in the session cache (per-domain, trimmed to
     # the configured limit) so the discussion survives page navigation.
     # ``history`` is expected to hold PRIOR turns only; drop a trailing
     # entry that accidentally echoes the current user_message so we
     # never double-record the same question (also self-heals any pre-
     # existing sessions that were written with the old contract).
+    #
+    # Re-read the cache instead of reusing the pre-agent ``chat_cache``
+    # snapshot: the agent's tool calls loop back into this same process
+    # (e.g. ``POST /dtwin/nodes/action/request``) and may have minted a
+    # ``pending_actions`` token into the session while ``run_agent`` was
+    # running. Saving the stale snapshot would clobber that token.
     prior = list(history)
     if prior and prior[-1].get("role") == "user" and (
         prior[-1].get("content") or ""
@@ -2089,16 +2332,11 @@ async def dtwin_assistant_chat(
         prior = prior[:-1]
     prior.append({"role": "user", "content": user_message})
     prior.append({"role": "assistant", "content": agent_result.reply or ""})
+    chat_cache = _chat_cache(session_mgr)
     chat_cache["history"][domain_key] = _chat_trim(prior, limit)
     _chat_save_cache(session_mgr, chat_cache)
 
-    return {
-        "success": True,
-        "reply": agent_result.reply,
-        "tools": tool_calls,
-        "iterations": agent_result.iterations,
-        "usage": agent_result.usage,
-    }
+    return _chat_response_payload(agent_result)
 
 
 @router.post("/assistant/chat/stream")
@@ -2228,7 +2466,11 @@ async def dtwin_assistant_chat_stream(
                     kind, payload = item
                     if kind == "done":
                         agent_result = payload
-                        # Update session cache exactly like the blocking endpoint
+                        # Update session cache exactly like the blocking endpoint.
+                        # Re-read the cache instead of reusing the pre-agent
+                        # snapshot: the agent's tool calls loop back into this
+                        # same process and may have minted a pending_actions
+                        # token into the session while run_agent was running.
                         prior = list(history)
                         if prior and prior[-1].get("role") == "user" and (
                             prior[-1].get("content") or ""
@@ -2236,22 +2478,13 @@ async def dtwin_assistant_chat_stream(
                             prior = prior[:-1]
                         prior.append({"role": "user", "content": user_message})
                         prior.append({"role": "assistant", "content": agent_result.reply or ""})
-                        chat_cache["history"][domain_key] = _chat_trim(prior, limit)
-                        _chat_save_cache(session_mgr, chat_cache)
+                        fresh_cache = _chat_cache(session_mgr)
+                        fresh_cache["history"][domain_key] = _chat_trim(prior, limit)
+                        _chat_save_cache(session_mgr, fresh_cache)
 
-                        tool_calls = [
-                            {"name": s.tool_name, "duration_ms": s.duration_ms}
-                            for s in agent_result.steps
-                            if s.step_type == "tool_result"
-                        ]
-                        yield "data: " + _json.dumps({
-                            "type": "done",
-                            "reply": agent_result.reply or "",
-                            "tools": tool_calls,
-                            "iterations": agent_result.iterations,
-                            "usage": agent_result.usage,
-                            "success": agent_result.success,
-                        }) + "\n\n"
+                        yield "data: " + _json.dumps(
+                            _chat_response_payload(agent_result, event_type="done")
+                        ) + "\n\n"
                         break
 
                     else:  # error
