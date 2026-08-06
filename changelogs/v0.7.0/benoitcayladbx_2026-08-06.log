@@ -782,3 +782,22 @@ Tests: uv run --frozen pytest -q tests/units/front/test_kg_readiness_indicator.p
 Tests: uv run --frozen pytest -q -m "not scenario" → 4730 passed, 276 skipped, 5 deselected, 1 xfailed in 33.93s
 Visual: Registry badges, Build and Validation architecture cards, readiness badge variants, and the Lakebase Connection card verified with local assets returning 200 and no icon-related console errors.
 
+
+## Use 123 icon for Domain Versions
+
+Context: The Domain navbar Versions action and Domain → Versions navigation
+item used different icons. Switch both to Bootstrap Icons `bi-123` so the
+controls consistently read as version numbering.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Domain `navbar_actions` Versions icon from `bi-arrow-repeat` to
+   `bi-123`, and the Domain → Versions item from `bi-clock-history` to
+   `bi-123`.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4743 passed, 276 skipped, 5 deselected, 1 xfailed in 37.33s

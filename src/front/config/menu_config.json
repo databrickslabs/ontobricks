@@ -34,7 +34,7 @@
                 },
                 {
                     "label": "Versions",
-                    "icon": "bi-arrow-repeat",
+                    "icon": "bi-123",
                     "action": "domainSwitch",
                     "element_id": "menuSwitchDomain"
                 },
@@ -61,7 +61,7 @@
                         {
                             "id": "versions",
                             "label": "Versions",
-                            "icon": "bi-clock-history",
+                            "icon": "bi-123",
                             "default": false,
                             "requires": "domain_saved"
                         },
