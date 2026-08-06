@@ -1,9 +1,106 @@
 """Unit tests for Graph Chat final-answer normalization."""
 
+import json
+from unittest.mock import patch
+
 import pytest
 
-from agents.agent_dtwin_chat.engine import AgentResult, normalize_reply_content
+from agents.agent_dtwin_chat.engine import AgentResult, normalize_reply_content, run_agent
 from agents.tools.context import ToolContext
+
+_PENDING_ACTION = {
+    "token": "tok",
+    "entity_uri": "https://ex/Customer/CUST1",
+    "entity_label": "CUST1",
+    "action": "main.ops.recompute_risk",
+    "description": "Risk",
+    "expires_in_sec": 120,
+}
+
+
+def _tool_call_response():
+    return {
+        "choices": [
+            {
+                "message": {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "tc1",
+                            "function": {
+                                "name": "request_entity_action",
+                                "arguments": json.dumps(
+                                    {
+                                        "entity_uri": "https://ex/Customer/CUST1",
+                                        "action": "main.ops.recompute_risk",
+                                    }
+                                ),
+                            },
+                        }
+                    ],
+                }
+            }
+        ],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    }
+
+
+def _fake_dispatch(_handlers, ctx, _tool_name, _arguments, *, trace_name=""):
+    ctx.pending_action = _PENDING_ACTION
+    return '{"success": true}'
+
+
+def _run_with_scripted_llm(llm_side_effect):
+    with (
+        patch(
+            "agents.agent_dtwin_chat.engine.call_serving_endpoint",
+            side_effect=llm_side_effect,
+        ),
+        patch(
+            "agents.agent_dtwin_chat.engine.dispatch_tool",
+            side_effect=_fake_dispatch,
+        ),
+    ):
+        return run_agent(
+            host="https://example.invalid",
+            token="token",
+            endpoint_name="endpoint",
+            base_url="http://localhost:8000",
+            domain_name="main",
+            registry_params={},
+            session_cookies={},
+            user_message="recompute risk",
+        )
+
+
+def test_run_agent_preserves_pending_action_on_llm_error():
+    def llm_side_effect(*_args, **_kwargs):
+        if llm_side_effect.calls == 0:
+            llm_side_effect.calls += 1
+            return _tool_call_response()
+        raise RuntimeError("LLM unavailable")
+
+    llm_side_effect.calls = 0
+    result = _run_with_scripted_llm(llm_side_effect)
+
+    assert result.success is False
+    assert "LLM request failed" in result.error
+    assert result.pending_action == _PENDING_ACTION
+
+
+def test_run_agent_preserves_pending_action_on_empty_choices():
+    def llm_side_effect(*_args, **_kwargs):
+        if llm_side_effect.calls == 0:
+            llm_side_effect.calls += 1
+            return _tool_call_response()
+        return {"choices": [], "usage": {}}
+
+    llm_side_effect.calls = 0
+    result = _run_with_scripted_llm(llm_side_effect)
+
+    assert result.success is False
+    assert result.error == "No choices in LLM response"
+    assert result.pending_action == _PENDING_ACTION
 
 
 def test_agent_result_and_context_carry_pending_action():

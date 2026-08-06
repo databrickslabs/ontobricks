@@ -78,6 +78,12 @@ class AgentResult:
     pending_action: Optional[dict] = None
 
 
+def _finalize_result(result: AgentResult, ctx: ToolContext) -> AgentResult:
+    """Copy session-side state onto the result before any return path."""
+    result.pending_action = ctx.pending_action
+    return result
+
+
 SYSTEM_PROMPT = """\
 You are the Graph Chat assistant for OntoBricks. You help the user
 explore a Knowledge Graph with natural-language questions.
@@ -278,7 +284,7 @@ def run_agent(
                 "dtwin_chat: %s at iteration %d", error_msg, iteration + 1
             )
             result.error = error_msg
-            return result
+            return _finalize_result(result, ctx)
 
         accumulate_usage(result.usage, llm_response.get("usage", {}))
 
@@ -289,7 +295,7 @@ def run_agent(
                 iteration + 1,
             )
             result.error = "No choices in LLM response"
-            return result
+            return _finalize_result(result, ctx)
 
         message = choices[0].get("message", {})
         content = message.get("content", "") or ""
@@ -368,13 +374,11 @@ def run_agent(
                 result.iterations,
                 len(content),
             )
-            result.pending_action = ctx.pending_action
-            return result
+            return _finalize_result(result, ctx)
 
     result.error = "Max iterations reached"
     result.reply = (
         "I ran out of steps before I could answer. "
         "Could you simplify or narrow down your question?"
     )
-    result.pending_action = ctx.pending_action
-    return result
+    return _finalize_result(result, ctx)

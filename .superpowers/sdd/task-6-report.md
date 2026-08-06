@@ -28,3 +28,13 @@ into both blocking Graph Chat responses and SSE `done` events.
 The AI-feature lifecycle baseline specification and eval dataset remain
 incomplete from prior work, so no remote MLflow eval delta was run for this
 prompt-only change.
+
+## Review fix — pending_action on early exits
+
+- Added `_finalize_result` in `engine.py` so every `run_agent` return path
+  copies `ctx.pending_action` onto `AgentResult` (LLM error, empty choices,
+  success, max iterations).
+- Added unit tests: tool sets `ctx.pending_action`, then LLM fails or returns
+  empty choices; `AgentResult` still carries `pending_action`.
+
+Tests: `uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat_engine.py tests/units/api/test_dtwin_assistant_chat.py` → 14 passed in 1.07s

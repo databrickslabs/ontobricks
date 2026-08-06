@@ -230,3 +230,22 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4717 passed, 276 skipped, 5 deselected, 1 xfailed in 35.49s
+
+## Preserve pending_action on early run_agent exits
+
+Context: Graph Chat could mint a pending action mid-turn via a tool call, then
+drop it when the LLM failed or returned empty choices because only success and
+max-iteration return paths copied `ctx.pending_action` onto `AgentResult`.
+
+Changes:
+
+1. src/agents/agent_dtwin_chat/engine.py
+   Add `_finalize_result` and use it on every `run_agent` return path.
+2. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Add tests for LLM error and empty-choices exits preserving `pending_action`.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+
+Tests: `uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat_engine.py tests/units/api/test_dtwin_assistant_chat.py` → 14 passed in 1.07s
