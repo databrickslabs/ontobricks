@@ -75,6 +75,8 @@ class TestListEntityTypes:
                         ],
                     },
                 )
+            if request.url.path == "/dtwin/classes":
+                return httpx.Response(200, json={"success": True, "classes": []})
             # ontology/load or other calls: return empty ok
             return httpx.Response(200, json={"success": True, "config": {"classes": [], "properties": []}})
 
@@ -99,6 +101,61 @@ class TestListEntityTypes:
         out = chat_tools.tool_list_entity_types(_ctx())
         assert "500" in out
         assert "boom" in out
+
+
+class TestListEntityTypesEnrichment:
+    def test_shows_dataset_and_action_lines(self, patch_client):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/dtwin/sync/stats":
+                return httpx.Response(
+                    200,
+                    json={
+                        "success": True,
+                        "total_triples": 10,
+                        "distinct_subjects": 1,
+                        "distinct_predicates": 1,
+                        "label_count": 1,
+                        "type_assertion_count": 1,
+                        "relationship_count": 0,
+                        "entity_types": [
+                            {"uri": "http://example.org/Customer", "count": 42},
+                        ],
+                        "top_predicates": [],
+                    },
+                )
+            if request.url.path == "/dtwin/classes":
+                return httpx.Response(
+                    200,
+                    json={
+                        "success": True,
+                        "classes": [
+                            {
+                                "name": "Customer",
+                                "uri": "http://example.org/Customer",
+                                "dataset": {
+                                    "fullName": "main.crm.customers",
+                                    "key_column": "id",
+                                    "description": "CRM customer master data",
+                                },
+                                "bridges": [],
+                                "actions": [
+                                    {
+                                        "fullName": "main.ops.recompute_risk",
+                                        "description": "Recompute risk score",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                )
+            return httpx.Response(200, json={"success": True, "config": {"classes": [], "properties": []}})
+
+        patch_client(handler)
+        out = chat_tools.tool_list_entity_types(_ctx())
+        assert "main.crm.customers" in out
+        assert "CRM customer master data" in out
+        assert "main.ops.recompute_risk" in out
+        assert "Recompute risk score" in out
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +192,55 @@ class TestDescribeEntity:
         patch_client(handler)
         chat_tools.tool_describe_entity(_ctx(), search="Jacob Martinez", depth=1)
         assert captured["params"]["search"] == "Jacob Martinez"
+
+    def test_class_actions_are_appended(self, patch_client):
+        rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "/triples/find" in request.url.path:
+                return httpx.Response(
+                    200,
+                    json={
+                        "success": True,
+                        "seed_count": 1,
+                        "total": 1,
+                        "depth": 1,
+                        "triples": [
+                            {
+                                "subject": "http://example.org/Customer/CUST1",
+                                "predicate": rdf_type,
+                                "object": "http://example.org/Customer",
+                            },
+                        ],
+                    },
+                )
+            if request.url.path == "/dtwin/classes":
+                return httpx.Response(
+                    200,
+                    json={
+                        "success": True,
+                        "classes": [
+                            {
+                                "name": "Customer",
+                                "uri": "http://example.org/Customer",
+                                "dataset": None,
+                                "bridges": [],
+                                "actions": [
+                                    {
+                                        "fullName": "main.ops.recompute_risk",
+                                        "description": "Recompute risk score",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                )
+            return httpx.Response(200, json={"success": True, "config": {"classes": [], "properties": []}})
+
+        patch_client(handler)
+        out = chat_tools.tool_describe_entity(_ctx(), search="CUST1")
+        assert "main.ops.recompute_risk" in out
+        assert "request_entity_action" in out
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +393,116 @@ class TestRunSparql:
         assert chat_tools.tool_run_sparql(_ctx(), query="ASK { ?s ?p ?o }") == (
             "query failed"
         )
+
+
+# ---------------------------------------------------------------------------
+# get_entity_context
+# ---------------------------------------------------------------------------
+
+
+class TestGetEntityContext:
+    def test_forwards_flags(self, patch_client):
+        captured = {}
+
+        def handler(request):
+            if request.url.path == "/dtwin/nodes/context":
+                captured["params"] = dict(request.url.params)
+                return httpx.Response(
+                    200,
+                    json={
+                        "success": True,
+                        "entity_uri": "https://ex/Customer/CUST1",
+                        "entity_local_id": "CUST1",
+                        "class_name": "Customer",
+                        "dataset": {"fullName": "main.crm.customers", "key_column": "id", "rows": []},
+                    },
+                )
+            return httpx.Response(200, json={"success": True, "classes": []})
+
+        patch_client(handler)
+        out = chat_tools.tool_get_entity_context(
+            _ctx(), entity_uri="https://ex/Customer/CUST1", fetch_dataset_rows=True
+        )
+        assert captured["params"]["fetch_dataset_rows"] == "true"
+        assert "Node Context" in out or "CUST1" in out
+
+    def test_missing_entity_uri_returns_error(self, patch_client):
+        patch_client(lambda _r: httpx.Response(500))  # never reached
+        out = chat_tools.tool_get_entity_context(_ctx(), entity_uri="")
+        assert json.loads(out)["error"].startswith("Missing")
+
+    def test_http_error_is_surfaced(self, patch_client):
+        patch_client(lambda _r: httpx.Response(500, text="boom"))
+        out = chat_tools.tool_get_entity_context(_ctx(), entity_uri="https://ex/Customer/CUST1")
+        assert "500" in out
+        assert "boom" in out
+
+
+# ---------------------------------------------------------------------------
+# request_entity_action
+# ---------------------------------------------------------------------------
+
+
+class TestRequestEntityAction:
+    def test_sets_pending_on_context(self, patch_client):
+        captured = {}
+
+        def handler(request):
+            captured["body"] = json.loads(request.content.decode())
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "pending_action": {
+                        "token": "tok",
+                        "entity_uri": "https://ex/Customer/CUST1",
+                        "entity_label": "CUST1",
+                        "action": "main.ops.recompute_risk",
+                        "description": "Risk",
+                        "expires_in_sec": 120,
+                    },
+                },
+            )
+
+        patch_client(handler)
+        ctx = _ctx()
+        out = chat_tools.tool_request_entity_action(
+            ctx, entity_uri="https://ex/Customer/CUST1", action="main.ops.recompute_risk"
+        )
+        assert captured["body"] == {
+            "entity_uri": "https://ex/Customer/CUST1",
+            "action_full_name": "main.ops.recompute_risk",
+        }
+        assert ctx.pending_action["token"] == "tok"
+        assert "confirm" in out.lower() or "Confirm" in out
+
+    def test_missing_args_returns_error(self, patch_client):
+        patch_client(lambda _r: httpx.Response(500))  # never reached
+        out = chat_tools.tool_request_entity_action(_ctx(), entity_uri="", action="")
+        assert json.loads(out)["error"].startswith("Missing")
+
+    def test_backend_failure_does_not_set_pending(self, patch_client):
+        patch_client(
+            lambda _r: httpx.Response(
+                200, json={"success": False, "message": "No ontology class matches this entity URI"}
+            )
+        )
+        ctx = _ctx()
+        out = chat_tools.tool_request_entity_action(
+            ctx, entity_uri="https://ex/Customer/CUST1", action="main.ops.recompute_risk"
+        )
+        assert ctx.pending_action is None
+        assert "No ontology class matches" in out
+
+    def test_http_error_is_surfaced(self, patch_client):
+        patch_client(lambda _r: httpx.Response(500, text="boom"))
+        ctx = _ctx()
+        out = chat_tools.tool_request_entity_action(
+            ctx, entity_uri="https://ex/Customer/CUST1", action="main.ops.recompute_risk"
+        )
+        assert "500" in out
+        assert "boom" in out
+        assert ctx.pending_action is None
 
 
 # ---------------------------------------------------------------------------

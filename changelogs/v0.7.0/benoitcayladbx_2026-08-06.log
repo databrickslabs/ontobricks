@@ -164,3 +164,41 @@ Modified files:
 - changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
 
 Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_nodes_action_confirm.py → 10 passed in 1.21s
+
+## Wire Graph Chat tools to session-aware node context and pending-action routes
+
+Context: Task 5 of Graph Chat MCP alignment enriches the existing
+`agent_dtwin_chat` tools with per-class Actions metadata and adds the two
+tools the LLM needs to inspect and propose Actions on a node, mirroring the
+MCP server's `get_entity_context` (but deliberately NOT porting
+`invoke_entity_action` — invocation stays gated behind UI confirmation via
+`request_entity_action`, handled by Task 6/7).
+
+Changes:
+
+1. `src/agents/agent_dtwin_chat/tools.py`
+   Add `_get_class_actions` (GET `/dtwin/classes`, cached on
+   `ctx.dtwin_class_actions`) and the `_ACTION_HINT` constant. Enrich
+   `tool_list_entity_types` with per-type dataset/action lines (same text
+   style as the MCP server) and `tool_describe_entity` with
+   `class_actions=`/`action_invoke_hint=` via `format_find_response`. Add
+   `tool_get_entity_context` (GET `/dtwin/nodes/context`, forwards
+   `fetch_dataset_rows`/`dataset_row_limit`/`follow_bridges`, formats via
+   `format_node_context_response`) and `tool_request_entity_action` (POST
+   `/dtwin/nodes/action/request`, sets `ctx.pending_action` on success and
+   returns a short message telling the model the UI will render a
+   confirmation card). Register both in `TOOL_DEFINITIONS`/`TOOL_HANDLERS`.
+2. `tests/units/agents/test_agent_dtwin_chat.py`
+   TDD coverage: `list_entity_types` dataset/action enrichment,
+   `describe_entity` class-actions enrichment, `get_entity_context`
+   flag-forwarding/validation/HTTP-error paths, `request_entity_action`
+   pending-token capture, missing-args guard, and backend-failure /
+   HTTP-error paths that leave `ctx.pending_action` unset.
+
+Modified files:
+- src/agents/agent_dtwin_chat/tools.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat.py tests/units/agents/test_graph_formatting_context.py → 38 passed in 0.85s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4715 passed, 276 skipped, 5 deselected, 1 xfailed in 34.00s
