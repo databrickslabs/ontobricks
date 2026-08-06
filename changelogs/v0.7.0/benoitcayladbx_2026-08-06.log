@@ -202,3 +202,31 @@ Modified files:
 
 Tests: uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat.py tests/units/agents/test_graph_formatting_context.py → 38 passed in 0.85s
 Tests: uv run --frozen pytest -q -m "not scenario" → 4715 passed, 276 skipped, 5 deselected, 1 xfailed in 34.00s
+
+## Complete Graph Chat action response plumbing
+
+Context: Task 6 of the Graph Chat MCP alignment makes proposed class Actions
+available to both blocking and streaming chat clients. The prompt now explains
+the Dataset, Bridge, and confirmation-gated Action workflow.
+
+Changes:
+
+1. `src/agents/agent_dtwin_chat/engine.py`
+   Document the ontology-design context tools and rules that prevent the agent
+   from claiming an Action executed before UI confirmation.
+2. `src/api/routers/internal/dtwin.py`
+   Centralize Graph Chat completion payload construction and include
+   `pending_action` in blocking responses and SSE `done` events when present.
+3. `src/agents/agent_dtwin_chat/__init__.py`
+   Correct the package documentation to cover internal `/dtwin/...` routes.
+4. `tests/units/api/test_dtwin_assistant_chat.py`
+   Add TDD coverage for the prompt guidance and JSON/SSE pending-action payloads.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+- src/agents/agent_dtwin_chat/__init__.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4717 passed, 276 skipped, 5 deselected, 1 xfailed in 35.49s

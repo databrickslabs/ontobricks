@@ -2125,6 +2125,26 @@ def _chat_trim(messages: list, limit: int) -> list:
     return messages[-keep:] if len(messages) > keep else list(messages)
 
 
+def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
+    """Build the common blocking or SSE-completion Graph Chat response."""
+    payload = {
+        "success": agent_result.success,
+        "reply": agent_result.reply or "",
+        "tools": [
+            {"name": step.tool_name, "duration_ms": step.duration_ms}
+            for step in agent_result.steps
+            if step.step_type == "tool_result"
+        ],
+        "iterations": agent_result.iterations,
+        "usage": agent_result.usage,
+    }
+    if event_type:
+        payload["type"] = event_type
+    if agent_result.pending_action:
+        payload["pending_action"] = agent_result.pending_action
+    return payload
+
+
 def _auto_discover_llm_endpoint(domain, settings) -> str:
     """Best-effort auto-selection of a serving endpoint for Graph Chat.
 
@@ -2293,15 +2313,6 @@ async def dtwin_assistant_chat(
             detail=agent_result.error or None,
         )
 
-    tool_calls = [
-        {
-            "name": step.tool_name,
-            "duration_ms": step.duration_ms,
-        }
-        for step in agent_result.steps
-        if step.step_type == "tool_result"
-    ]
-
     # Persist the exchange in the session cache (per-domain, trimmed to
     # the configured limit) so the discussion survives page navigation.
     # ``history`` is expected to hold PRIOR turns only; drop a trailing
@@ -2318,13 +2329,7 @@ async def dtwin_assistant_chat(
     chat_cache["history"][domain_key] = _chat_trim(prior, limit)
     _chat_save_cache(session_mgr, chat_cache)
 
-    return {
-        "success": True,
-        "reply": agent_result.reply,
-        "tools": tool_calls,
-        "iterations": agent_result.iterations,
-        "usage": agent_result.usage,
-    }
+    return _chat_response_payload(agent_result)
 
 
 @router.post("/assistant/chat/stream")
@@ -2465,19 +2470,9 @@ async def dtwin_assistant_chat_stream(
                         chat_cache["history"][domain_key] = _chat_trim(prior, limit)
                         _chat_save_cache(session_mgr, chat_cache)
 
-                        tool_calls = [
-                            {"name": s.tool_name, "duration_ms": s.duration_ms}
-                            for s in agent_result.steps
-                            if s.step_type == "tool_result"
-                        ]
-                        yield "data: " + _json.dumps({
-                            "type": "done",
-                            "reply": agent_result.reply or "",
-                            "tools": tool_calls,
-                            "iterations": agent_result.iterations,
-                            "usage": agent_result.usage,
-                            "success": agent_result.success,
-                        }) + "\n\n"
+                        yield "data: " + _json.dumps(
+                            _chat_response_payload(agent_result, event_type="done")
+                        ) + "\n\n"
                         break
 
                     else:  # error
