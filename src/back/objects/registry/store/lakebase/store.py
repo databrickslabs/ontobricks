@@ -856,6 +856,7 @@ class LakebaseRegistryStore(RegistryStore):
                 description = d["description"] or ""
                 base_uri = d["base_uri"] or ""
                 graph_backend = normalize_graph_backend(None)
+                neo4j_connection = ""
                 if versions:
                     latest = versions[0]
                     info = latest["info"] or {}
@@ -863,12 +864,14 @@ class LakebaseRegistryStore(RegistryStore):
                     ont = latest["ontology"] or {}
                     base_uri = base_uri or ont.get("base_uri", "")
                     graph_backend = normalize_graph_backend(info.get("graph_backend"))
+                    neo4j_connection = str(info.get("neo4j_connection") or "").strip()
                 result.append(
                     {
                         "name": d["folder"],
                         "base_uri": base_uri,
                         "description": description,
                         "graph_backend": graph_backend,
+                        "neo4j_connection": neo4j_connection,
                         "review_quorum": max(1, int(d.get("review_quorum") or 1)),
                         "versions": [
                             {

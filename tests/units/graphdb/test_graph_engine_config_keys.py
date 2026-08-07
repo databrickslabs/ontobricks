@@ -6,9 +6,11 @@ from back.core.graphdb.engine_config import (
     is_nested_graph_engine_config,
     lakebase_section,
     lakehouse_section,
+    list_neo4j_connections,
     neo4j_section,
     normalize_graph_engine_config,
     resolve_lakehouse_warehouse_id,
+    resolve_neo4j_connection,
 )
 from back.core.graphdb.lakebase.LakebaseBase import resolve_postgres_database_override
 from back.core.graphdb.neo4j.Neo4jConnection import resolve_neo4j_database
@@ -113,3 +115,74 @@ class TestResolveWithNested:
         flat = {"database": "neo4j", "uri": "bolt://x", "schema": "g"}
         assert resolve_postgres_database_override(flat) == ""
         assert resolve_neo4j_database(flat) == "neo4j"
+
+
+class TestNeo4jNamedConnections:
+    def test_list_empty_when_only_flat_keys(self):
+        """Flat legacy uri/username must NOT become a synthetic connection."""
+        raw = {
+            "neo4j": {
+                "uri": "bolt://x",
+                "database": "neo4j",
+                "username": "neo4j",
+                "secret_scope": "s",
+                "secret_key": "k",
+            }
+        }
+        assert list_neo4j_connections(raw) == []
+        assert resolve_neo4j_connection(raw, "default") == {}
+
+    def test_list_and_resolve_by_name(self):
+        raw = {
+            "neo4j": {
+                "connections": [
+                    {
+                        "name": "Aura Prod",
+                        "uri": "neo4j+s://a.example",
+                        "database": "neo4j",
+                        "username": "neo4j",
+                        "secret_scope": "ontobricks",
+                        "secret_key": "pw",
+                        "encrypted": True,
+                        "auth_method": "databricks_secret",
+                    },
+                    {
+                        "name": "Lab",
+                        "uri": "bolt://lab:7687",
+                        "neo4j_database": "graph",
+                        "username": "neo4j",
+                    },
+                ]
+            }
+        }
+        conns = list_neo4j_connections(raw)
+        assert [c["name"] for c in conns] == ["Aura Prod", "Lab"]
+        assert conns[1]["database"] == "graph"
+        assert "neo4j_database" not in conns[1]
+        aura = resolve_neo4j_connection(raw, "Aura Prod")
+        assert aura["uri"] == "neo4j+s://a.example"
+        assert aura["secret_scope"] == "ontobricks"
+        assert resolve_neo4j_connection(raw, "missing") == {}
+
+    def test_duplicate_names_keep_first(self):
+        raw = {
+            "neo4j": {
+                "connections": [
+                    {"name": "A", "uri": "bolt://1"},
+                    {"name": "A", "uri": "bolt://2"},
+                ]
+            }
+        }
+        conns = list_neo4j_connections(raw)
+        assert len(conns) == 1
+        assert conns[0]["uri"] == "bolt://1"
+
+    def test_normalize_keeps_connections(self):
+        raw = {
+            "neo4j": {
+                "connections": [{"name": "X", "uri": "bolt://x", "database": "db1"}]
+            }
+        }
+        out = normalize_graph_engine_config(raw)
+        assert out["neo4j"]["connections"][0]["name"] == "X"
+        assert out["neo4j"]["connections"][0]["database"] == "db1"

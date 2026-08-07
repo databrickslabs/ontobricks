@@ -116,3 +116,316 @@ Deploy: `make deploy` (target `dev-lakebase-07x`, profile `fe-vm-bcayla-demos`) 
 bundle deployed, both apps started and verified `RUNNING`
 (`ontobricks-07x`, `mcp-ontobricks-07x`); `/healthz` returned 200 on both at
 deploy time and again ~60s later (no post-start crash).
+
+## Add named Neo4j connection profiles
+
+Context: Settings stored a single flat Neo4j Bolt profile, and Domain → KG
+exposed an optional database override via SHOW DATABASES. Admins need
+multiple named connections (URI, database, username, Databricks secret) and
+must bind each Neo4j domain to one of them. Spec:
+`documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md`.
+
+Changes:
+
+1. `src/back/core/graphdb/engine_config.py`
+   Add `list_neo4j_connections` / `resolve_neo4j_connection`; finalize
+   `neo4j.connections[]`; no auto-migration from flat uri/username.
+2. `src/back/core/graphdb/GraphDBFactory.py`
+   Resolve `domain.info.neo4j_connection` to a named profile for Neo4jStore.
+3. `src/back/objects/session/DomainSession.py` / `Domain.py`
+   Persist required `neo4j_connection`; retire domain `neo4j_database` write.
+4. `src/back/objects/domain/SettingsService.py` / `src/api/routers/internal/settings.py`
+   List connections API; save `connections[]` with password strip +
+   referential delete/rename guard; Test/Objects/Health take `connection_name`.
+5. `src/back/objects/registry/store/base.py` / `lakebase/store.py`
+   Include `neo4j_connection` on domain metadata for referential scans.
+6. `src/front/templates/settings.html` / `src/front/static/config/js/settings.js`
+   Master–detail Connections UI (add/edit/delete); Objects/Health use selection.
+7. `src/front/templates/partials/domain/_domain_information.html` /
+   `domain-information.js` / `domain.js`
+   Required Neo4j Connection dropdown lists Settings connection names.
+8. Tests under `tests/units/graphdb/`, `tests/units/settings/`, `tests/units/domain/`
+   Updated for connections[] and neo4j_connection.
+9. `documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md`
+   / `documentation/superpowers/plans/2026-08-07-neo4j-named-connections.md`
+   Design + implementation plan.
+
+Modified files:
+- src/back/core/graphdb/engine_config.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/domain/test_domain_session.py
+- tests/units/domain/test_domain_service.py
+- tests/units/settings/test_neo4j_settings_persistence.py
+- tests/units/settings/test_graph_engine_config.py
+- documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md
+- documentation/superpowers/plans/2026-08-07-neo4j-named-connections.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `DATABRICKS_CONFIG_PROFILE=__nonexistent_profile_for_fast_fail__ uv run --frozen pytest -q -m "not scenario"` → 4760 passed, 276 skipped, 5 deselected, 1 xfailed in 34.00s; 1 failure is the known env artifact `test_health.py::TestCheckDatabricksAuth::test_local_mode_with_cli_profile` (CLI profile override), not a regression from this change.
+
+--------------------------------------------------------------------------------
+
+## Fix: Neo4j connection secret scope/key lost on hydration
+
+Context:
+After adding named Neo4j connections, the Secret scope / Secret name dropdowns
+showed empty for saved connections and the persisted values were wiped from
+`graph_engine_config.neo4j.connections[]` on the next save. Two frontend causes,
+both in the master–detail hydration path (backend persistence was correct):
+
+1. `loadNeo4jSecretScopes()` early-returned on a module-level `loaded` flag, so
+   selecting another connection never re-applied that profile's scope, and the
+   key list never cascaded.
+2. `selectNeo4jConnection()` → `fillNeo4jDetailForm()` kicks off an *async*
+   dropdown populate, then synchronously ran `mergeNeo4jPanelIntoConfigTextarea()`.
+   `readNeo4jDetailForm()` read the still-empty `<select>` elements and
+   overwrote the in-memory profile's `secret_scope`/`secret_key` with `''`.
+
+Changes:
+1. `src/front/static/config/js/settings.js`
+   - Replaced the `neo4jSecretScopesLoaded` / `neo4jSecretKeysScope` guards with
+     option-list caches (`_neo4jScopeOptions`, `_neo4jKeyOptionsByScope`); the
+     selects are now always re-populated *and re-selected* from the currently
+     selected connection, while the Secrets API is still hit only once per list.
+   - Added a `_neo4jSecretHydrating` counter; `readNeo4jDetailForm()` falls back
+     to the stored profile's scope/key while a populate is in flight, so a merge
+     can no longer persist an empty secret reference.
+   - `fillNeo4jDetailForm()` re-syncs and re-merges after the dropdowns settle.
+   - Scope change now clears the stored `secret_key` before cascading (the old
+     key does not exist in the new scope); both refresh buttons re-sync the
+     textarea after reloading.
+2. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Regression coverage: scope/key dropdowns re-select per connection, and form
+   reads keep the stored secret while dropdowns hydrate.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_neo4j_settings_persistence.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4764 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 37.50s.
+
+--------------------------------------------------------------------------------
+
+## Improve Neo4j connection selection contrast
+
+Context:
+The selected named Neo4j connection used Bootstrap's strong blue active state,
+which reduced the connection-name readability and did not match the Settings
+sidebar navigation.
+
+Changes:
+1. `src/front/templates/settings.html`
+   Added a scoped class to the Neo4j connection list and moved its minimum
+   height out of inline styling.
+2. `src/front/static/global/css/config.css`
+   Applied the Settings menu's neutral grey hover/selection treatment with dark
+   primary and secondary text.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/global/css/config.css
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4764 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 35.69s.
+
+--------------------------------------------------------------------------------
+
+## Group Neo4j connection actions
+
+Context:
+“Test connection” acts on the selected named connection but was displayed in
+the page-level header, separate from the selected connection’s Delete action.
+
+Changes:
+1. `src/front/templates/settings.html`
+   Moved the small Test connection button beside Delete in the connection
+   detail header, leaving Save as the page-level action.
+2. `src/front/static/config/js/settings.js`
+   Disabled Test connection when no connection is selected and preserved that
+   state after a test request completes.
+3. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Added contracts for action placement and selection-dependent disabling.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_neo4j_settings_persistence.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4766 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 36.08s.
+
+--------------------------------------------------------------------------------
+
+## Objects connection picker; remove Neo4j Health tab
+
+Context:
+Objects still depended on the Connections-tab highlight. Admins need an
+explicit connection dropdown on Objects, and the Health tab is redundant with
+per-connection Test connection.
+
+Changes:
+1. `src/front/templates/settings.html`
+   Added Objects Connection select; removed Health tab/pane.
+2. `src/front/static/config/js/settings.js`
+   Sync/prefill Objects dropdown from Connections selection; Load/Drop use
+   that value; removed Health JS.
+3. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Contracts for Objects dropdown and Health removal.
+4. `documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md`
+   Updated Objects/Health decisions.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_neo4j_settings_persistence.py
+- documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4768 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 39.45s.
+
+--------------------------------------------------------------------------------
+
+## Fix Domain Neo4j connection picker population and save
+
+Context:
+In Domain → Information the Neo4j Connection dropdown stayed empty until the
+user clicked the refresh button, so there was usually nothing to pick and the
+save either sent an empty name (rejected server-side) or appeared to not
+persist. Two causes: `loadNeo4jDatabases()` was only bound to the refresh
+button, and the option list captured the target selection *before* its fetch,
+so a list refresh could overwrite the value hydrated from `/domain/info`.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-information.js`
+   Added `syncNeo4jConnectionSection()` — reveals the selector and populates it
+   from `/settings/graph-engine/neo4j-connections`; wired to page init and to
+   the Graph Backend `change` event. `_loadNeo4jConnectionOptions()` now reads
+   the target selection after the fetch resolves, so a late `/domain/info`
+   hydration is preserved. Added an in-flight guard so a single reveal issues
+   one request; the refresh button forces a reload.
+2. `src/front/static/domain/js/domain.js`
+   Blocks the save with a warning when Graph Backend is Neo4j and no connection
+   is selected, and refreshes `data-saved-value` after a successful save so a
+   later list refresh re-selects the persisted name.
+3. `tests/units/domain/test_domain_neo4j_connection_picker.py`
+   New contracts: auto-population, repopulation on backend change, saved value
+   read after the fetch, request de-duplication, forced refresh, save guard and
+   saved-value baseline update.
+
+Modified files:
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4775 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 35.20s.
+
+--------------------------------------------------------------------------------
+
+## Fix Neo4j connection dropped by the UC-save payload (KG tab)
+
+Context:
+The Knowledge Graph tab's Neo4j Connection still did not stick. Root cause was a
+second, hand-rolled `/domain/info` payload: `saveDomainInfoBeforeSave()` in
+`navbar.js` (the auto-save that runs before every UC save) sent `graph_backend`
+but not `neo4j_connection`. Since `Domain.save_domain_info` falls back to the
+stored value for absent keys, the user's pick was silently discarded — and on a
+domain that had no connection yet the fallback was blank, so the server rejected
+the save. The Information form's Save button routes through `domainSave()`, so it
+hit this path and never reached the guard added to `saveDomainInfo()`.
+
+Changes:
+
+1. `src/front/static/global/js/navbar.js`
+   Extracted `buildDomainInfoPayload()` as the single source of truth for the
+   `/domain/info` payload (now including `neo4j_connection`, cleared when the
+   backend is not Neo4j) and made `saveDomainInfoBeforeSave()` use it. Added
+   `validateDomainInfoForm()` and called it at the top of `domainSave()` so the
+   "pick a connection" guard applies to the UC-save path too.
+2. `src/front/static/domain/js/domain.js`
+   `saveDomainInfo()` now builds its payload with the shared helper and defers to
+   the shared validator, removing the duplicated field list that drifted.
+3. `tests/units/domain/test_domain_neo4j_connection_picker.py`
+   New `TestDomainInfoPayloadSharing`: the shared builder carries
+   `neo4j_connection`, both save paths use it, no second field list remains in
+   the UC-save path, and `domainSave()` validates before posting.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain.js
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4780 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 37.35s.
+
+--------------------------------------------------------------------------------
+
+## Fix Neo4j connection picker race with the page's own info re-fetch
+
+Context:
+The previous fix made the Save payload correct, but the connection still did
+not stick for some users. Isolated the backend save→close→load-from-registry
+round trip with direct API calls (curl, real workspace) and it persisted
+correctly every time — so the loss was purely client-side. Reproduced with a
+browser agent using the full real journey (open existing domain → pick
+connection → Save → Close → reopen from the registry list): `#domainGraphBackend`
+and `#domainNeo4jDatabase` are rendered correctly by the server-side Jinja
+template on page load, but `domain-information.js`'s `DOMContentLoaded` handler
+also re-fetches `/domain/info` inside a `Promise.all` gated behind
+`loadLlmEndpoints()` — a real-workspace model-serving-endpoints call that can
+take several seconds. When that fetch resolved, it unconditionally overwrote
+both fields with the pre-page-load values. A user who picked a new backend or
+connection before the slow fetch resolved had the pick silently reverted with
+no warning; Save then reported success while persisting the stale value.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-information.js`
+   Both fields get a `dataset.userEdited = '1'` flag on their first `change`
+   event, wired up before the slow `Promise.all` starts. The late `/domain/info`
+   handler now skips overwriting a field once that flag is set, so a fresh user
+   edit always wins over the stale re-fetch.
+2. `tests/units/domain/test_domain_neo4j_connection_picker.py`
+   New `TestNeo4jFieldEditRaceGuard`: dirty flags are wired for both fields
+   before the `Promise.all`, and the late-fetch handler's overwrite is guarded
+   by `!<field>.dataset.userEdited` immediately before each assignment.
+
+Modified files:
+- src/front/static/domain/js/domain-information.js
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4785 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 38.95s.
+
+Verified in-browser (dedicated subagent, real workspace):
+- Backend round trip (save-to-uc → close → load-from-uc via direct API calls)
+  persisted `neo4j_connection` correctly on every attempt — confirms the loss
+  was purely client-side.
+- Reproduced the exact race with artificial network delay: picking a new
+  Graph Backend / Neo4j Connection immediately after page load survived the
+  later `/domain/info` + LLM-endpoints resolution (dropdowns kept the pick,
+  `dataset.userEdited` was `"1"` on both fields, and the Save payload carried
+  the picked connection, not the stale one). A subsequent fresh reload showed
+  the persisted value with no console errors.

@@ -1132,10 +1132,15 @@ document.addEventListener('DOMContentLoaded', function () {
         updateLakebaseSyncModeHelp();
     }
 
-    // Cache: avoid re-fetching the scope list on every form hydration —
-    // refreshed explicitly via the "refresh" buttons or a hard page reload.
-    let neo4jSecretScopesLoaded = false;
-    let neo4jSecretKeysScope = null;
+    // Cache the fetched option lists (avoid re-hitting the Secrets API on every
+    // hydration) but always re-apply the *selected connection's* values, since
+    // each named connection carries its own scope/key.
+    let _neo4jScopeOptions = null;
+    const _neo4jKeyOptionsByScope = {};
+    // Non-zero while a scope/key dropdown is being (re)populated. The selects
+    // read empty during that window, so form reads must fall back to the stored
+    // profile instead of persisting an empty scope/key.
+    let _neo4jSecretHydrating = 0;
 
     /** Populate a <select> with string options, preserving/selecting `selected` if present. */
     function _populateSelectOptions(selectEl, options, placeholder, selected) {
@@ -1166,24 +1171,29 @@ document.addEventListener('DOMContentLoaded', function () {
         selectEl.value = selected || '';
     }
 
-    /** Fetch + populate the Neo4j secret-scope dropdown, then cascade into keys. */
+    /** Populate the Neo4j secret-scope dropdown for the selected connection, then cascade into keys. */
     async function loadNeo4jSecretScopes(forceRefresh) {
         const sel = document.getElementById('neo4jSecretScope');
         if (!sel) return;
-        if (neo4jSecretScopesLoaded && !forceRefresh) return;
-        const persisted = (readEngineConfigRoot().neo4j || {}).secret_scope || sel.value || '';
+        const selected = getSelectedNeo4jConnection();
+        const persisted = String((selected && selected.secret_scope) || '').trim();
+        _neo4jSecretHydrating += 1;
         try {
-            const resp = await fetch('/settings/graph-engine/neo4j-secret-scopes', { credentials: 'same-origin' });
-            const data = resp.ok ? await resp.json() : {};
-            _populateSelectOptions(sel, data.scopes || [], '— Select a scope —', persisted);
-            neo4jSecretScopesLoaded = true;
+            if (_neo4jScopeOptions === null || forceRefresh) {
+                const resp = await fetch('/settings/graph-engine/neo4j-secret-scopes', { credentials: 'same-origin' });
+                const data = resp.ok ? await resp.json() : {};
+                _neo4jScopeOptions = data.scopes || [];
+            }
+            _populateSelectOptions(sel, _neo4jScopeOptions, '— Select a scope —', persisted);
+            await loadNeo4jSecretKeys(sel.value, forceRefresh);
         } catch (e) {
             console.log('Neo4j secret scopes load failed', e);
+        } finally {
+            _neo4jSecretHydrating -= 1;
         }
-        if (sel.value) await loadNeo4jSecretKeys(sel.value, forceRefresh);
     }
 
-    /** Fetch + populate the Neo4j secret-key dropdown for the given scope. */
+    /** Populate the Neo4j secret-key dropdown for *scope*, selecting the connection's key. */
     async function loadNeo4jSecretKeys(scope, forceRefresh) {
         const sel = document.getElementById('neo4jSecretKey');
         const refreshBtn = document.getElementById('btnRefreshNeo4jSecretKeys');
@@ -1192,49 +1202,237 @@ document.addEventListener('DOMContentLoaded', function () {
             sel.disabled = true;
             if (refreshBtn) refreshBtn.disabled = true;
             _populateSelectOptions(sel, [], '— Select a scope first —', '');
-            neo4jSecretKeysScope = null;
             return;
         }
-        if (neo4jSecretKeysScope === scope && !forceRefresh) return;
-        const persisted = scope === ((readEngineConfigRoot().neo4j || {}).secret_scope || '')
-            ? ((readEngineConfigRoot().neo4j || {}).secret_key || '')
-            : '';
+        const selected = getSelectedNeo4jConnection();
+        const persisted = String((selected && selected.secret_key) || '').trim();
+        _neo4jSecretHydrating += 1;
         try {
-            const resp = await fetch(
-                '/settings/graph-engine/neo4j-secret-keys?scope=' + encodeURIComponent(scope),
-                { credentials: 'same-origin' }
-            );
-            const data = resp.ok ? await resp.json() : {};
+            if (!_neo4jKeyOptionsByScope[scope] || forceRefresh) {
+                const resp = await fetch(
+                    '/settings/graph-engine/neo4j-secret-keys?scope=' + encodeURIComponent(scope),
+                    { credentials: 'same-origin' }
+                );
+                const data = resp.ok ? await resp.json() : {};
+                _neo4jKeyOptionsByScope[scope] = data.keys || [];
+            }
             sel.disabled = false;
             if (refreshBtn) refreshBtn.disabled = false;
-            _populateSelectOptions(sel, data.keys || [], '— Select a secret —', persisted);
-            neo4jSecretKeysScope = scope;
+            _populateSelectOptions(sel, _neo4jKeyOptionsByScope[scope], '— Select a secret —', persisted);
         } catch (e) {
             console.log('Neo4j secret keys load failed', e);
+        } finally {
+            _neo4jSecretHydrating -= 1;
+        }
+    }
+
+    // ── Named Neo4j connections (master–detail) ──────────────────────────────
+    let _neo4jConnections = [];
+    let _neo4jSelectedIdx = -1;
+    let _neo4jSelectedOriginalName = '';
+
+    function getSelectedNeo4jConnection() {
+        if (_neo4jSelectedIdx < 0 || _neo4jSelectedIdx >= _neo4jConnections.length) return null;
+        return _neo4jConnections[_neo4jSelectedIdx];
+    }
+
+    function selectedNeo4jConnectionName() {
+        const c = getSelectedNeo4jConnection();
+        return c ? String(c.name || '').trim() : '';
+    }
+
+    function updateNeo4jSelectionHints() {
+        const del = document.getElementById('btnDeleteNeo4jConnection');
+        if (del) del.disabled = _neo4jSelectedIdx < 0;
+        const test = document.getElementById('btnTestNeo4jConnection');
+        if (test) test.disabled = _neo4jSelectedIdx < 0;
+        const fields = document.getElementById('neo4jDetailFields');
+        if (fields) fields.disabled = _neo4jSelectedIdx < 0;
+        const title = document.getElementById('neo4jDetailTitle');
+        if (title) {
+            title.textContent = _neo4jSelectedIdx < 0
+                ? 'Select or add a connection'
+                : ('Edit · ' + (selectedNeo4jConnectionName() || 'Untitled'));
+        }
+        syncNeo4jObjectsConnectionSelect();
+    }
+
+    /** Populate Objects-tab connection dropdown; prefer Connections-tab selection. */
+    function syncNeo4jObjectsConnectionSelect() {
+        const sel = document.getElementById('neo4jObjectsConnection');
+        if (!sel) return;
+        const prefer = selectedNeo4jConnectionName();
+        const previous = String(sel.value || '').trim();
+        const names = _neo4jConnections
+            .map(c => String(c.name || '').trim())
+            .filter(Boolean);
+        const frag = document.createDocumentFragment();
+        const ph = document.createElement('option');
+        ph.value = '';
+        ph.textContent = names.length ? '— Select a connection —' : '— No connections saved —';
+        frag.appendChild(ph);
+        names.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            frag.appendChild(opt);
+        });
+        sel.innerHTML = '';
+        sel.appendChild(frag);
+        let next = '';
+        if (prefer && names.includes(prefer)) next = prefer;
+        else if (previous && names.includes(previous)) next = previous;
+        sel.value = next;
+        const hint = document.getElementById('neo4jSelectedHintObjects');
+        if (hint) hint.classList.toggle('d-none', !!next);
+        const loadBtn = document.getElementById('btnLoadNeo4jLabels');
+        if (loadBtn) loadBtn.disabled = !next;
+    }
+
+    function objectsNeo4jConnectionName() {
+        const sel = document.getElementById('neo4jObjectsConnection');
+        return sel ? String(sel.value || '').trim() : '';
+    }
+
+    function renderNeo4jConnectionList() {
+        const list = document.getElementById('neo4jConnectionList');
+        if (!list) return;
+        list.innerHTML = '';
+        if (!_neo4jConnections.length) {
+            const empty = document.createElement('div');
+            empty.className = 'list-group-item text-muted small';
+            empty.id = 'neo4jConnectionEmpty';
+            empty.textContent = 'No Neo4j connections yet — click Add.';
+            list.appendChild(empty);
+            updateNeo4jSelectionHints();
+            return;
+        }
+        _neo4jConnections.forEach((c, idx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action py-2'
+                + (idx === _neo4jSelectedIdx ? ' active' : '');
+            const name = escapeHtmlSettings(String(c.name || 'Untitled'));
+            const uri = escapeHtmlSettings(String(c.uri || ''));
+            const db = escapeHtmlSettings(String(c.database || 'neo4j'));
+            btn.innerHTML = '<div class="fw-semibold small">' + name + '</div>'
+                + '<div class="text-muted" style="font-size:11px;">' + uri + ' · db ' + db + '</div>';
+            btn.addEventListener('click', () => selectNeo4jConnection(idx));
+            list.appendChild(btn);
+        });
+        updateNeo4jSelectionHints();
+    }
+
+    function fillNeo4jDetailForm(c) {
+        const set = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.value = val == null ? '' : String(val);
+        };
+        set('neo4jConnectionName', c?.name || '');
+        set('neo4jUri', c?.uri || '');
+        set('neo4jDatabase', c?.database || 'neo4j');
+        set('neo4jUsername', c?.username || '');
+        const enc = document.getElementById('neo4jEncrypted');
+        if (enc) enc.checked = c ? (c.encrypted !== false) : true;
+        // The dropdowns populate asynchronously; re-sync once they settle so the
+        // config textarea reflects the connection's scope/key.
+        loadNeo4jSecretScopes(false).then(() => {
+            syncSelectedNeo4jFromForm();
+            mergeNeo4jPanelIntoConfigTextarea();
+        });
+    }
+
+    function readNeo4jDetailForm() {
+        const stored = getSelectedNeo4jConnection() || {};
+        const scope = (document.getElementById('neo4jSecretScope')?.value || '').trim();
+        const key = (document.getElementById('neo4jSecretKey')?.value || '').trim();
+        const pending = _neo4jSecretHydrating > 0;
+        return {
+            name: (document.getElementById('neo4jConnectionName')?.value || '').trim(),
+            uri: (document.getElementById('neo4jUri')?.value || '').trim(),
+            database: (document.getElementById('neo4jDatabase')?.value || '').trim() || 'neo4j',
+            username: (document.getElementById('neo4jUsername')?.value || '').trim(),
+            secret_scope: scope || (pending ? String(stored.secret_scope || '').trim() : ''),
+            secret_key: key || (pending ? String(stored.secret_key || '').trim() : ''),
+            encrypted: !!document.getElementById('neo4jEncrypted')?.checked,
+            auth_method: 'databricks_secret',
+        };
+    }
+
+    function syncSelectedNeo4jFromForm() {
+        if (_neo4jSelectedIdx < 0) return;
+        _neo4jConnections[_neo4jSelectedIdx] = readNeo4jDetailForm();
+    }
+
+    function selectNeo4jConnection(idx) {
+        syncSelectedNeo4jFromForm();
+        _neo4jSelectedIdx = idx;
+        const c = getSelectedNeo4jConnection();
+        _neo4jSelectedOriginalName = c ? String(c.name || '').trim() : '';
+        fillNeo4jDetailForm(c || {});
+        renderNeo4jConnectionList();
+        mergeNeo4jPanelIntoConfigTextarea();
+    }
+
+    function addNeo4jConnection() {
+        syncSelectedNeo4jFromForm();
+        let n = 1;
+        const names = new Set(_neo4jConnections.map(c => String(c.name || '')));
+        while (names.has('Connection ' + n)) n += 1;
+        _neo4jConnections.push({
+            name: 'Connection ' + n,
+            uri: '',
+            database: 'neo4j',
+            username: '',
+            secret_scope: '',
+            secret_key: '',
+            encrypted: true,
+            auth_method: 'databricks_secret',
+        });
+        selectNeo4jConnection(_neo4jConnections.length - 1);
+    }
+
+    function deleteSelectedNeo4jConnection() {
+        if (_neo4jSelectedIdx < 0) return;
+        _neo4jConnections.splice(_neo4jSelectedIdx, 1);
+        _neo4jSelectedIdx = _neo4jConnections.length ? Math.min(_neo4jSelectedIdx, _neo4jConnections.length - 1) : -1;
+        if (_neo4jSelectedIdx >= 0) {
+            selectNeo4jConnection(_neo4jSelectedIdx);
+        } else {
+            fillNeo4jDetailForm({});
+            renderNeo4jConnectionList();
+            mergeNeo4jPanelIntoConfigTextarea();
         }
     }
 
     /**
-     * Hydrate the Neo4j Settings form from ``#graphEngineConfig.neo4j``.
-     * Called after every config load so URI / user / database survive a refresh.
+     * Hydrate the Neo4j Settings master–detail from ``#graphEngineConfig.neo4j``.
      */
     function applyNeo4jFormFromConfigTextarea() {
         if (!document.getElementById('graphEngineConfig')) return;
         const o = (readEngineConfigRoot().neo4j || {});
-
-        function _set(id, val) {
-            const el = document.getElementById(id);
-            if (el) el.value = val == null ? '' : String(val);
+        const raw = Array.isArray(o.connections) ? o.connections : [];
+        _neo4jConnections = raw
+            .filter(c => c && typeof c === 'object')
+            .map(c => ({
+                name: String(c.name || '').trim(),
+                uri: String(c.uri || '').trim(),
+                database: String(c.database || c.neo4j_database || 'neo4j').trim() || 'neo4j',
+                username: String(c.username || '').trim(),
+                secret_scope: String(c.secret_scope || '').trim(),
+                secret_key: String(c.secret_key || '').trim(),
+                encrypted: c.encrypted !== false,
+                auth_method: 'databricks_secret',
+            }))
+            .filter(c => c.name);
+        if (_neo4jConnections.length) {
+            const keep = Math.min(Math.max(_neo4jSelectedIdx, 0), _neo4jConnections.length - 1);
+            selectNeo4jConnection(keep);
+        } else {
+            _neo4jSelectedIdx = -1;
+            fillNeo4jDetailForm({});
+            renderNeo4jConnectionList();
         }
-
-        _set('neo4jUri', o.uri || '');
-        _set('neo4jDatabase', o.database || o.neo4j_database || 'neo4j');
-        _set('neo4jUsername', o.username || '');
-        const enc = document.getElementById('neo4jEncrypted');
-        if (enc) enc.checked = o.encrypted !== false;
-        // Scope/key dropdowns are populated live from the Secrets API —
-        // fire-and-forget, they self-select the persisted values once loaded.
-        loadNeo4jSecretScopes(false);
     }
 
     async function loadLakebaseGraphHealth() {
@@ -3160,73 +3358,87 @@ document.addEventListener('DOMContentLoaded', function () {
     //  GLOBAL SAVE BUTTON – warehouse, global prefs, CloudFetch, Graph DB
     // =====================================================================
 
-    // ── Neo4j engine config — form ↔ textarea ───────────────────────────────
-    //
-    // Mirrors the Lakebase merge/toggle pattern. When the active engine is
-    // "neo4j" (Settings > Back end > Neo4j), this function
-    // reads the Neo4j config form fields from #neo4j-section and serialises
-    // them into graph_engine_config.neo4j (fully separate from lakebase).
+    // ── Neo4j engine config — named connections ↔ textarea ───────────────────
     function mergeNeo4jPanelIntoConfigTextarea() {
         if (!document.getElementById('graphEngineConfig')) return;
+        syncSelectedNeo4jFromForm();
         const root = readEngineConfigRoot();
-        const o = root.neo4j || {};
-
-        const uri      = (document.getElementById('neo4jUri')?.value || '').trim();
-        const database = (document.getElementById('neo4jDatabase')?.value || '').trim();
-        const user     = (document.getElementById('neo4jUsername')?.value || '').trim();
-        const scope    = (document.getElementById('neo4jSecretScope')?.value || '').trim();
-        const key      = (document.getElementById('neo4jSecretKey')?.value || '').trim();
-        const encrypted = !!document.getElementById('neo4jEncrypted')?.checked;
-
-        if (uri) o.uri = uri; else delete o.uri;
-        o.database = database || 'neo4j';
-        delete o.neo4j_database;
-        // The password is always resolved live from a Databricks secret —
-        // no other auth method is offered from the UI, and clear-text
-        // passwords are never serialised.
-        o.auth_method = 'databricks_secret';
-        o.encrypted = encrypted;
-        if (user) o.username = user; else delete o.username;
-        if (scope) o.secret_scope = scope; else delete o.secret_scope;
-        if (key) o.secret_key = key; else delete o.secret_key;
-        delete o.password;
-
-        root.neo4j = o;
+        const connections = _neo4jConnections.map(c => {
+            const out = {
+                name: String(c.name || '').trim(),
+                uri: String(c.uri || '').trim(),
+                database: String(c.database || '').trim() || 'neo4j',
+                username: String(c.username || '').trim(),
+                secret_scope: String(c.secret_scope || '').trim(),
+                secret_key: String(c.secret_key || '').trim(),
+                encrypted: c.encrypted !== false,
+                auth_method: 'databricks_secret',
+            };
+            return out;
+        }).filter(c => c.name);
+        root.neo4j = { connections: connections };
         writeEngineConfigRoot(root);
     }
 
     // Wire up Neo4j form field listeners — keep the textarea in sync as the
     // user edits the panel, so the save flow always serialises fresh values.
     [
-        'neo4jUri', 'neo4jDatabase',
+        'neo4jConnectionName', 'neo4jUri', 'neo4jDatabase',
         'neo4jUsername', 'neo4jSecretScope', 'neo4jSecretKey',
         'neo4jEncrypted',
     ].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('input',  mergeNeo4jPanelIntoConfigTextarea);
-        el.addEventListener('change', mergeNeo4jPanelIntoConfigTextarea);
+        el.addEventListener('input',  () => {
+            syncSelectedNeo4jFromForm();
+            renderNeo4jConnectionList();
+            mergeNeo4jPanelIntoConfigTextarea();
+        });
+        el.addEventListener('change', () => {
+            syncSelectedNeo4jFromForm();
+            renderNeo4jConnectionList();
+            mergeNeo4jPanelIntoConfigTextarea();
+        });
     });
     // Scope change cascades into a fresh key list for that scope (the
     // previously selected key almost certainly doesn't exist in the new one).
     document.getElementById('neo4jSecretScope')?.addEventListener('change', (e) => {
-        loadNeo4jSecretKeys(e.target.value, false).then(mergeNeo4jPanelIntoConfigTextarea);
+        const selected = getSelectedNeo4jConnection();
+        if (selected) selected.secret_key = '';
+        loadNeo4jSecretKeys(e.target.value, false).then(() => {
+            syncSelectedNeo4jFromForm();
+            mergeNeo4jPanelIntoConfigTextarea();
+        });
     });
     document.getElementById('btnRefreshNeo4jSecretScopes')?.addEventListener('click', () => {
-        loadNeo4jSecretScopes(true);
+        loadNeo4jSecretScopes(true).then(() => {
+            syncSelectedNeo4jFromForm();
+            mergeNeo4jPanelIntoConfigTextarea();
+        });
     });
     document.getElementById('btnRefreshNeo4jSecretKeys')?.addEventListener('click', () => {
         const scope = document.getElementById('neo4jSecretScope')?.value || '';
-        if (scope) loadNeo4jSecretKeys(scope, true);
+        if (!scope) return;
+        loadNeo4jSecretKeys(scope, true).then(() => {
+            syncSelectedNeo4jFromForm();
+            mergeNeo4jPanelIntoConfigTextarea();
+        });
     });
+    document.getElementById('btnAddNeo4jConnection')?.addEventListener('click', addNeo4jConnection);
+    document.getElementById('btnDeleteNeo4jConnection')?.addEventListener('click', deleteSelectedNeo4jConnection);
 
-    // Test-connection button — POSTs to /settings/graph-engine/neo4j-test which
-    // runs a Bolt protocol handshake (driver.verify_connectivity()) using the
-    // persisted engine_config + NEO4J_PASSWORD env var. No Cypher is executed.
+    // Test-connection button — POSTs draft fields for the selected connection.
     document.getElementById('btnTestNeo4jConnection')?.addEventListener('click', async function () {
         const btn = this;
         const result = document.getElementById('neo4jTestResult');
         if (!result) return;
+        const draft = readNeo4jDetailForm();
+        if (_neo4jSelectedIdx < 0) {
+            result.className = 'alert alert-warning mt-3 small';
+            result.classList.remove('d-none');
+            result.textContent = 'Select or add a connection first.';
+            return;
+        }
         const origHtml = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Testing…';
@@ -3234,22 +3446,15 @@ document.addEventListener('DOMContentLoaded', function () {
         result.classList.remove('d-none');
         result.textContent = 'Sending Bolt handshake…';
         try {
-            // Save the current panel state first so the test uses the values
-            // currently in the form, not just what was persisted.
             mergeNeo4jPanelIntoConfigTextarea();
-            const ta = document.getElementById('graphEngineConfig');
-            let parsed = {};
-            try { parsed = normalizeEngineConfigRoot(JSON.parse(ta?.value || '{}')); } catch (_) { parsed = { lakebase: {}, neo4j: {} }; }
-            writeEngineConfigRoot(parsed);
-            await fetch('/settings/graph-engine-config', {
+            const resp = await fetch('/settings/graph-engine/neo4j-test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ graph_engine_config: parsed }),
-            });
-            const resp = await fetch('/settings/graph-engine/neo4j-test', {
-                method: 'POST',
-                credentials: 'same-origin',
+                body: JSON.stringify({
+                    connection_name: draft.name,
+                    draft: draft,
+                }),
             });
             const j = await resp.json();
             if (j.ok) {
@@ -3275,15 +3480,14 @@ document.addEventListener('DOMContentLoaded', function () {
             result.className = 'alert alert-danger mt-3 small';
             result.textContent = 'Test failed: ' + (e.message || e);
         } finally {
-            btn.disabled = false;
+            btn.disabled = _neo4jSelectedIdx < 0;
             btn.innerHTML = origHtml;
         }
     });
 
     // =====================================================================
-    //  NEO4J ADMIN — Objects (list + drop graphs) & Health (Bolt probe), P5
-    //  Mirrors the Lakebase Objects / Health tabs. Reuses the shared
-    //  #lkDropConfirmModal drop-confirmation modal.
+    //  NEO4J ADMIN — Objects (list + drop graphs)
+    //  Reuses the shared #lkDropConfirmModal drop-confirmation modal.
     // =====================================================================
 
     // Graphs listed by the last loadNeo4jLabels() call, keyed by marker label,
@@ -3304,7 +3508,16 @@ document.addEventListener('DOMContentLoaded', function () {
         _neo4jLabelRegistry = {};
 
         try {
-            const resp = await fetch('/settings/graph-engine/neo4j-labels', { credentials: 'same-origin' });
+            const cname = objectsNeo4jConnectionName();
+            if (!cname) {
+                result.innerHTML = '<div class="alert alert-warning small py-2 mt-2">'
+                    + 'Select a Neo4j connection first.</div>';
+                return;
+            }
+            const resp = await fetch(
+                '/settings/graph-engine/neo4j-labels?connection_name=' + encodeURIComponent(cname),
+                { credentials: 'same-origin' }
+            );
             const data = resp.ok ? await resp.json() : {};
             if (!data.success) {
                 result.innerHTML = '<div class="alert alert-warning small py-2 mt-2">'
@@ -3354,7 +3567,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 + escapeHtmlSettings(e.message || 'Network error') + '</div>';
         } finally {
             if (btn) {
-                btn.disabled = false;
+                btn.disabled = !objectsNeo4jConnectionName();
                 btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Load graphs';
             }
         }
@@ -3400,7 +3613,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ label: label }),
+                body: JSON.stringify({
+                    label: label,
+                    connection_name: objectsNeo4jConnectionName(),
+                }),
             });
             let data = {};
             try { data = await resp.json(); } catch (_) {}
@@ -3428,60 +3644,25 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function loadNeo4jHealth() {
-        const msgEl = document.getElementById('neo4jHealthMessage');
-        const dl    = document.getElementById('neo4jHealthDl');
-        const btn   = document.getElementById('btnRefreshNeo4jHealth');
-        if (!msgEl || !dl) return;
-
-        if (btn) btn.disabled = true;
-        dl.innerHTML = '';
-        msgEl.style.display = '';
-        msgEl.className = 'small mb-2 text-muted';
-        msgEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Checking Neo4j…';
-
-        function row(label, value) {
-            return '<dt class="col-sm-4 text-muted">' + escapeHtmlSettings(label) + '</dt>'
-                + '<dd class="col-sm-8 font-monospace text-break">' + value + '</dd>';
-        }
-
-        try {
-            const resp = await fetch('/settings/graph-engine/neo4j-health', { credentials: 'same-origin' });
-            const data = resp.ok ? await resp.json() : {};
-            if (!data.success) {
-                msgEl.className = 'small mb-2 text-warning';
-                msgEl.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>'
-                    + escapeHtmlSettings(data.detail || data.message || 'Health check failed');
-                return;
-            }
-            msgEl.className = 'small mb-2 ' + (data.ok ? 'text-success' : 'text-danger');
-            msgEl.innerHTML = '<i class="bi bi-' + (data.ok ? 'check-circle' : 'x-circle') + ' me-1"></i>'
-                + (data.ok ? 'Bolt handshake OK' : escapeHtmlSettings(data.error || 'Unreachable'));
-            dl.innerHTML = (
-                row('Bolt URI', escapeHtmlSettings(String(data.uri || '')))
-                + row('Database', escapeHtmlSettings(String(data.database || '')))
-                + row('Latency', escapeHtmlSettings(String(data.latency_ms != null ? data.latency_ms + ' ms' : '')))
-                + (data.ok ? '' : row('Error', escapeHtmlSettings(String(data.error || ''))))
-            );
-        } catch (e) {
-            msgEl.className = 'small mb-2 text-danger';
-            msgEl.innerHTML = '<i class="bi bi-x-circle me-1"></i>' + escapeHtmlSettings(e.message || 'Network error');
-        } finally {
-            if (btn) btn.disabled = false;
-        }
-    }
-
     document.getElementById('btnLoadNeo4jLabels')?.addEventListener('click', loadNeo4jLabels);
-    document.getElementById('btnRefreshNeo4jHealth')?.addEventListener('click', loadNeo4jHealth);
+    document.getElementById('neo4jObjectsConnection')?.addEventListener('change', () => {
+        const result = document.getElementById('neo4jLabelsResult');
+        if (result) result.innerHTML = '';
+        _neo4jLabelRegistry = {};
+        const cname = objectsNeo4jConnectionName();
+        const hint = document.getElementById('neo4jSelectedHintObjects');
+        if (hint) hint.classList.toggle('d-none', !!cname);
+        const loadBtn = document.getElementById('btnLoadNeo4jLabels');
+        if (loadBtn) loadBtn.disabled = !cname;
+    });
 
-    // Lazy-load each admin tab the first time it is shown (parity with Lakebase).
+    // Lazy-load Objects the first time the tab is shown (when a connection is set).
     document.getElementById('n4tab-objects')?.addEventListener('shown.bs.tab', function () {
-        if (!_neo4jLabelRegistry || Object.keys(_neo4jLabelRegistry).length === 0) {
+        syncNeo4jObjectsConnectionSelect();
+        if (objectsNeo4jConnectionName()
+                && (!_neo4jLabelRegistry || Object.keys(_neo4jLabelRegistry).length === 0)) {
             loadNeo4jLabels();
         }
-    });
-    document.getElementById('n4tab-health')?.addEventListener('shown.bs.tab', function () {
-        loadNeo4jHealth();
     });
 
     document.querySelectorAll('.btn-save-settings').forEach(saveBtn => saveBtn.addEventListener('click', async function () {

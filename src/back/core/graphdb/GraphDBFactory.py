@@ -99,13 +99,16 @@ class GraphDBFactory:
         *,
         engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
-        """Instantiate :class:`Neo4jStore` against the configured Bolt endpoint.
+        """Instantiate :class:`Neo4jStore` against a named Settings connection.
 
-        Reads ``uri``, ``database``, ``auth_method`` and credentials from
-        ``engine_config``. See :class:`back.core.graphdb.neo4j.Neo4jStore`
-        for the recognised keys.
+        Resolves ``domain.info.neo4j_connection`` against
+        ``engine_config.connections`` (or a nested graph_engine_config root).
+        The matched profile supplies URI / database / auth fields.
         """
         try:
+            from back.core.graphdb.engine_config import (
+                resolve_neo4j_connection,
+            )
             from back.core.graphdb.neo4j import NEO4J_AVAILABLE
             from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
             from shared.config.constants import DEFAULT_GRAPH_NAME
@@ -117,13 +120,34 @@ class GraphDBFactory:
             logger.warning("Neo4j graph backend unavailable (neo4j driver not installed)")
             return None
 
-        cfg = dict(engine_config or {})
         info = domain.info or {}
-        # Per-domain Neo4j database override (Domain Info selector) wins over the
-        # workspace-global configured database. Empty → keep the configured one.
-        domain_db = str(info.get("neo4j_database") or "").strip()
-        if domain_db:
-            cfg["database"] = domain_db
+        conn_name = str(info.get("neo4j_connection") or "").strip()
+        if not conn_name:
+            logger.warning(
+                "Neo4jStore: domain has no neo4j_connection — pick one in "
+                "Domain → Information → Knowledge Graph"
+            )
+            return None
+
+        # engine_config may be the neo4j section or the nested root.
+        root_or_section = engine_config if isinstance(engine_config, dict) else {}
+        profile = resolve_neo4j_connection(root_or_section, conn_name)
+        if not profile and (
+            "lakebase" in root_or_section
+            or "neo4j" in root_or_section
+            or "connections" not in root_or_section
+        ):
+            # When create() already passed neo4j_section(...), wrap it so
+            # resolve_neo4j_connection can still see connections[].
+            profile = resolve_neo4j_connection({"neo4j": root_or_section}, conn_name)
+        if not profile:
+            logger.warning(
+                "Neo4jStore: connection %r not found in Settings → Neo4j",
+                conn_name,
+            )
+            return None
+
+        cfg = dict(profile)
         base_name = info.get("name", DEFAULT_GRAPH_NAME)
         version = getattr(domain, "current_version", "1") or "1"
         db_name = "%s_V%s" % (base_name, version)

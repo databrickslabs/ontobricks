@@ -50,6 +50,14 @@ def _basic_config(**overrides: Any) -> Dict[str, Any]:
     return cfg
 
 
+def _connections_config(
+    name: str = "Aura Prod", **profile_overrides: Any
+) -> Dict[str, Any]:
+    profile = _basic_config(**profile_overrides)
+    profile["name"] = name
+    return {"connections": [profile]}
+
+
 def _secret_config(**overrides: Any) -> Dict[str, Any]:
     cfg = {
         "uri": "neo4j+s://b4810af7.databases.neo4j.io",
@@ -280,10 +288,13 @@ class TestFactoryDispatch:
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom"}
+        domain.info = {"name": "dom", "neo4j_connection": "Aura Prod"}
         domain.current_version = "1"
         store = factory.create(
-            domain, settings=None, engine="neo4j", engine_config=_basic_config()
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(),
         )
         assert store is not None
         assert store.__class__.__name__ == "Neo4jStore"
@@ -294,12 +305,13 @@ class TestFactoryDispatch:
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom"}
+        domain.info = {"name": "dom", "neo4j_connection": "Aura Prod"}
         domain.current_version = "1"
-        bad_cfg = _basic_config()
-        bad_cfg["uri"] = ""
         store = factory.create(
-            domain, settings=None, engine="neo4j", engine_config=bad_cfg
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(uri=""),
         )
         assert store is None  # ValueError caught, logged, returns None
 
@@ -308,34 +320,51 @@ class TestFactoryDispatch:
 
         assert GraphDBFactory.NEO4J_AVAILABLE is True
 
-    def test_domain_neo4j_database_overrides_config(self):
-        # Per-domain info.neo4j_database wins over the global config database (P4).
+    def test_factory_uses_named_connection_database(self):
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom", "neo4j_database": "insurbricks"}
+        domain.info = {"name": "dom", "neo4j_connection": "Lab"}
         domain.current_version = "1"
         store = factory.create(
-            domain, settings=None, engine="neo4j",
-            engine_config=_basic_config(database="neo4j"),
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(name="Lab", database="insurbricks"),
         )
         assert store is not None
         assert store._database == "insurbricks"
 
-    def test_empty_domain_database_keeps_configured_default(self):
+    def test_factory_returns_none_without_connection_name(self):
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom", "neo4j_database": ""}
+        domain.info = {"name": "dom", "neo4j_connection": ""}
         domain.current_version = "1"
         store = factory.create(
-            domain, settings=None, engine="neo4j",
-            engine_config=_basic_config(database="neo4j"),
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(),
         )
-        assert store is not None
-        assert store._database == "neo4j"
+        assert store is None
+
+    def test_factory_returns_none_when_connection_missing(self):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        factory = GraphDBFactory()
+        domain = MagicMock()
+        domain.info = {"name": "dom", "neo4j_connection": "Ghost"}
+        domain.current_version = "1"
+        store = factory.create(
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(name="Aura Prod"),
+        )
+        assert store is None
 
 
 # ---------------------------------------------------------------------------

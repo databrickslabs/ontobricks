@@ -70,6 +70,7 @@ class DomainSummary(TypedDict, total=False):
     base_uri: str
     description: str
     graph_backend: str       # lakebase | databricks | neo4j (from latest version info)
+    neo4j_connection: str    # Settings Neo4j connection name (when backend is neo4j)
     review_quorum: int       # per-domain sign-off quorum (>= 1)
     versions: List[Dict[str, Any]]
 

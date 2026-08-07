@@ -29,7 +29,8 @@ those profiles explicitly.
 | Domain binding | Required named connection (no “use default”) |
 | Delete / rename in use | Block; list referencing domains |
 | Legacy flat config | No auto-migration; readers use only `connections[]` (flat keys unused) |
-| Objects / Health tabs | Operate on the connection selected in the Settings list |
+| Objects tab | Connection dropdown; prefills from Connections selection |
+| Health tab | Removed from Settings UI (API retained) |
 | Settings UI | Master–detail: list left, edit form right |
 | Domain field | New `neo4j_connection` (connection name); retire domain DB override |
 
@@ -108,11 +109,16 @@ Rename that would collide with an existing name is also rejected.
 - Secret scope/key dropdowns keep the existing live Databricks Secrets API
   behaviour.
 
-**Objects** and **Health** tabs:
+**Objects** tab:
 
-- Use the currently selected list row’s connection.
-- If none selected, disable actions and show a short hint to select a
-  connection first.
+- Connection dropdown lists saved connection names.
+- Prefills from the Connections-tab selection when present; otherwise empty.
+- Load graphs / drop-label use the dropdown value (`connection_name`).
+- Changing the dropdown clears prior results.
+
+**Health** tab:
+
+- Removed from Settings UI. The `/neo4j-health` API may remain unused.
 
 Persist still goes through the graph-engine config save path, writing
 `neo4j.connections[]` (not the old flat fields).
@@ -138,7 +144,7 @@ Admin-gated under existing `/settings/graph-engine/…`:
 | `GET …/neo4j-connections` | List connection profiles (no passwords). Domain dropdown uses this. |
 | Existing graph-engine config save | Persist `neo4j.connections[]`. |
 | `POST …/neo4j-test` | Accept `connection_name` and/or inline draft fields for unsaved edits. |
-| Objects / Health / drop-label | Accept `connection_name` for the selected row. |
+| Objects / drop-label | Accept `connection_name` from the Objects dropdown. |
 
 Retire Domain use of `GET …/neo4j-databases` (server `SHOW DATABASES`). The
 endpoint may remain unused or be removed in the same change set if nothing

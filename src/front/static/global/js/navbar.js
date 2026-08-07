@@ -461,6 +461,8 @@ async function domainNew() {
  */
 async function domainSave() {
     try {
+        if (!validateDomainInfoForm()) return;
+
         // First, save domain info from form if on the domain page
         await saveDomainInfoBeforeSave();
         
@@ -505,10 +507,13 @@ async function domainSave() {
 }
 
 /**
- * Save domain info from form fields before saving to UC
+ * Build the ``/domain/info`` payload from the Information form.
+ *
+ * Single source of truth for both save entry points (the Information form's
+ * own Save and the auto-save that runs before a UC save) so the two cannot
+ * drift and silently drop a field.
  */
-async function saveDomainInfoBeforeSave() {
-    // Check if we're on a page with domain info form fields
+function buildDomainInfoPayload() {
     const nameEl = document.getElementById('domainName');
     const descEl = document.getElementById('domainDescription');
     const authorEl = document.getElementById('domainAuthor');
@@ -516,27 +521,74 @@ async function saveDomainInfoBeforeSave() {
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
     const graphBackendEl = document.getElementById('domainGraphBackend');
+    const neo4jConnEl = document.getElementById('domainNeo4jDatabase');
     const versionEl = document.getElementById('domainVersionSelect');
+
+    const payload = {
+        name: nameEl ? nameEl.value.trim() : undefined,
+        description: descEl ? descEl.value.trim() : undefined,
+        author: authorEl ? authorEl.value.trim() : undefined,
+        base_uri: baseUriEl ? baseUriEl.value.trim() : undefined,
+        base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
+        llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
+        review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : undefined,
+        graph_backend: graphBackendEl ? graphBackendEl.value : undefined,
+        // Only meaningful for Neo4j; cleared for other backends so a stale
+        // connection name cannot linger on the domain.
+        neo4j_connection: graphBackendEl
+            ? (graphBackendEl.value === 'neo4j' && neo4jConnEl ? neo4jConnEl.value : '')
+            : undefined,
+        version: versionEl ? versionEl.value : undefined,
+    };
+
+    // Drop absent fields so a page without the full form cannot clobber
+    // values already stored on the domain.
+    Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) delete payload[key];
+    });
+    return payload;
+}
+
+window.buildDomainInfoPayload = buildDomainInfoPayload;
+
+/**
+ * True when the Information form can be persisted.
+ *
+ * A Neo4j domain must name a connection — the server rejects a blank one, so
+ * catch it here with a message that names the fix.
+ */
+function validateDomainInfoForm() {
+    const graphBackendEl = document.getElementById('domainGraphBackend');
+    if (!graphBackendEl || graphBackendEl.value !== 'neo4j') return true;
+    const neo4jConnEl = document.getElementById('domainNeo4jDatabase');
+    if (neo4jConnEl && neo4jConnEl.value) return true;
+    if (typeof showNotification === 'function') {
+        showNotification(
+            'Select a Neo4j connection (managed in Settings → Neo4j) before saving.',
+            'warning'
+        );
+    }
+    return false;
+}
+
+window.validateDomainInfoForm = validateDomainInfoForm;
+
+/**
+ * Save domain info from form fields before saving to UC
+ */
+async function saveDomainInfoBeforeSave() {
+    // Check if we're on a page with domain info form fields
+    const nameEl = document.getElementById('domainName');
+    const descEl = document.getElementById('domainDescription');
+    const authorEl = document.getElementById('domainAuthor');
+    const baseUriEl = document.getElementById('domainBaseUri');
+    const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const graphBackendEl = document.getElementById('domainGraphBackend');
 
     // If any form fields exist, save the domain info
     if (nameEl || descEl || authorEl || baseUriEl || llmEndpointEl || graphBackendEl) {
-        const domainInfoPayload = {
-            name: nameEl ? nameEl.value.trim() : undefined,
-            description: descEl ? descEl.value.trim() : undefined,
-            author: authorEl ? authorEl.value.trim() : undefined,
-            base_uri: baseUriEl ? baseUriEl.value.trim() : undefined,
-            base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
-            llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
-            review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : undefined,
-            graph_backend: graphBackendEl ? graphBackendEl.value : undefined,
-            version: versionEl ? versionEl.value : undefined,
-        };
-        
-        // Remove undefined values
-        Object.keys(domainInfoPayload).forEach(key => {
-            if (domainInfoPayload[key] === undefined) delete domainInfoPayload[key];
-        });
-        
+        const domainInfoPayload = buildDomainInfoPayload();
+
         // Only save if we have something to save
         if (Object.keys(domainInfoPayload).length > 0) {
             console.log('[Domain] Auto-saving domain info before UC save:', domainInfoPayload);
