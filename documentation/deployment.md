@@ -332,8 +332,12 @@ PGUSER=you@example.com                   # Your Databricks email locally; SP id 
 # MLflow — persist agent traces to your workspace (recommended)
 MLFLOW_TRACKING_URI=databricks
 
-# Neo4j (only for domains whose graph backend is "neo4j")
-# NEO4J_PASSWORD=<bolt-password>          # in Apps, provide via a secret resource
+# Neo4j (only for domains whose graph backend is "neo4j") — the password is
+# resolved live from a Databricks secret scope/key picked in Settings → Back
+# end → Neo4j (see documentation/pr47-neo4j-demo/secret-configuration.md);
+# NEO4J_PASSWORD below is only read for the legacy `auth_method: "basic"`
+# configs still bound to an Apps secret resource.
+# NEO4J_PASSWORD=<bolt-password>          # legacy — in Apps, via a secret resource
 ```
 
 > `PGPASSWORD` is intentionally **not** in this list. `LakebaseAuth`
@@ -346,16 +350,21 @@ The Graph DB engine is chosen **per domain** (`graph_backend`: `lakebase`,
 `databricks`, or `neo4j`) under **Domain → Information → Knowledge Graph**;
 connection knobs live under **Settings → Back end**. Lakebase and the Delta
 (`databricks`) engine need no extra credentials beyond the Databricks/Lakebase
-config above. The **Neo4j** engine (Aura or self-hosted, Bolt protocol)
-additionally needs its Bolt password:
+config above. The **Neo4j** engine (Aura or self-hosted, Bolt protocol) always
+asks for the Bolt **username** directly and resolves the **password live from
+a Databricks secret** — there is no plain-text password field, in local dev or
+in the deployed app:
 
-- **Local dev** — set `NEO4J_PASSWORD` in `.env`, or store the password in the
-  persisted `engine_config` via **Settings → Back end → Neo4j**.
-- **Databricks Apps** — provide `NEO4J_PASSWORD` through an app **secret
-  resource** (never the persisted `engine_config`). The deployed app refuses to
-  source the Bolt password from `engine_config` and requires the secret. Host,
-  port, database, and auth method are configured in **Settings → Back end →
-  Neo4j**.
+- Pick the **Secret scope** and **Secret name** from the dropdowns in
+  **Settings → Back end → Neo4j** (populated live via the Databricks Secrets
+  API).
+- The app's own identity (SP OAuth in Apps, PAT/CLI profile locally) needs
+  `READ` on that scope — see
+  `documentation/pr47-neo4j-demo/secret-configuration.md` for the one-time
+  `databricks secrets put-acl` setup.
+- Legacy configs still bound to the `neo4j-password` Apps secret resource
+  (`auth_method: "basic"` + `NEO4J_PASSWORD` env var) keep working, but that
+  path is no longer offered in the Settings UI — see the same doc to migrate.
 
 ### Run Locally
 

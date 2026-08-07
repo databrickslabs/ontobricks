@@ -1,0 +1,118 @@
+## Force Databricks-secret Neo4j password in the deployed app
+
+Context: In a deployed Databricks App the Settings UI let an admin pick
+`basic` or `databricks_secret` auth for Neo4j, but `basic` also silently
+required a secret behind the scenes (the UI could not accept a typed
+password there either), which was confusing and made it look like two
+auth paths existed when only one was actually usable. The user asked to
+always collect the Neo4j username directly, drop the password field
+entirely, and force the password to come from a Databricks secret picked
+via two live dropdowns (scope, then key) instead of free-typed strings.
+
+Changes:
+
+1. `src/back/core/databricks/constants.py`
+   Add `SECRETS_SCOPES_LIST_PATH`, `SECRETS_LIST_PATH`, `SECRETS_GET_PATH`
+   REST API paths for the Databricks Secrets API.
+2. `src/back/core/databricks/SecretsService.py` (new)
+   `list_scopes`, `list_keys`, `get_secret_value` wrapping the Secrets API,
+   mapping 403/404 responses to `InfrastructureError` with remediation text
+   (grant `READ` ACL / check the scope-key name).
+3. `src/back/core/databricks/DatabricksClient.py`
+   Wire up `self.secrets = SecretsService(...)` and add
+   `list_secret_scopes` / `list_secret_keys` / `get_secret` facade methods.
+4. `src/back/core/graphdb/neo4j/Neo4jConnection.py`
+   `DEFAULT_AUTH_METHOD` is now `"databricks_secret"`. `_resolve_auth`
+   always requires `username` regardless of method, and for
+   `databricks_secret` fetches the password via a new
+   `_fetch_databricks_secret` (uses `DatabricksAuth` + `SecretsService`),
+   cached per `(scope, key)` for 300s behind a `threading.Lock`
+   (`_secret_value_cache`) to avoid hammering the Secrets API on every
+   connection. `basic` auth (env var `NEO4J_PASSWORD` or local dev config
+   password) still works for backward compatibility but is no longer
+   exposed in the UI.
+5. `src/back/objects/domain/SettingsService.py`
+   `_neo4j_credentials_source` reports whether the password came from a
+   Databricks secret, `NEO4J_PASSWORD`, or local config.
+   `set_graph_engine_config_result` strips `password` from persisted
+   config whenever `auth_method` is `databricks_secret` or `NEO4J_PASSWORD`
+   is set, so no clear-text password is ever saved once a live source
+   exists. Add `graph_engine_neo4j_secret_scopes_result` /
+   `graph_engine_neo4j_secret_keys_result` to back the new dropdowns.
+6. `src/api/routers/internal/settings.py`
+   Add admin-gated `GET /graph-engine/neo4j-secret-scopes` and
+   `GET /graph-engine/neo4j-secret-keys/{scope}`.
+7. `src/front/templates/settings.html`
+   Drop the `Auth method` selector and the password input. Username is
+   now always visible/required. Add `neo4jSecretScope` /
+   `neo4jSecretKey` `<select>` dropdowns (each with a refresh button) and
+   help text on granting scope `READ` permissions, linking to the updated
+   docs.
+8. `src/front/static/config/js/settings.js`
+   Remove `applyNeo4jAuthMethodVisibility`. Add `loadNeo4jSecretScopes` /
+   `loadNeo4jSecretKeys` (populate the two dropdowns live from the new
+   endpoints, cascading scope → key). `mergeNeo4jPanelIntoConfigTextarea`
+   now always writes `auth_method: "databricks_secret"`, stores
+   `secret_scope` / `secret_key`, and deletes `password` outright.
+9. `src/front/routes/home.py`
+   Remove the now-unused `neo4j_password_from_secret` template variable.
+10. `documentation/pr47-neo4j-demo/secret-configuration.md`,
+   `documentation/deployment.md`
+   Document the secret-only flow: store the password as a Databricks
+   secret, grant the app's service principal `READ` on the scope, then
+   pick scope/key in Settings. `NEO4J_PASSWORD` / UI `basic` auth are
+   noted as deprecated for new configs.
+11. `tests/units/graphdb/test_neo4j_store.py`
+   `TestDatabricksSecretAuth`: fetches and caches the password via the
+   Secrets API, and raises `ValidationError` when `username`,
+   `secret_scope`, or `secret_key` is missing.
+12. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Updated for the new UI contract: hydration loads secret scopes and
+   never touches a password field; merge always forces
+   `auth_method=databricks_secret` and drops `password`; scope/key
+   dropdowns are populated live from the two new endpoints.
+
+Modified files:
+- src/back/core/databricks/constants.py
+- src/back/core/databricks/SecretsService.py (new)
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/graphdb/neo4j/Neo4jConnection.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/routes/home.py
+- documentation/pr47-neo4j-demo/secret-configuration.md
+- documentation/deployment.md
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/settings/test_neo4j_settings_persistence.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q tests/units/graphdb/test_neo4j_store.py tests/units/settings/test_neo4j_settings_persistence.py` → 49 passed in 1.31s
+
+Environment note (unrelated pre-existing issue, not caused by this change):
+the local `~/.databrickscfg` `DEFAULT` CLI profile's OAuth session is
+expired. Any code path that falls through to `WorkspaceClient()` default
+auth (e.g. `back.core.databricks.get_local_user_email`, `RegistryCfg.from_domain`,
+`DatabricksHelpers._resolve_registry_cfg`) now hits the SDK's slow
+OAuth-refresh retry/backoff instead of failing fast, and because
+`get_local_user_email` is `functools.lru_cache(maxsize=1)`-wrapped, the very
+first test in a session to touch it stalls every later test that needs the
+same cached call for minutes. This is environmental (fixed by
+`databricks auth login --profile fe-vm-bcayla-demos`, which requires
+interactive browser auth) and reproduces on a clean tree — it is not a
+regression from this change. Full-suite run for this session used
+`DATABRICKS_CONFIG_PROFILE=__nonexistent_profile_for_fast_fail__` (env-only,
+no code change) to force those paths to fail fast instead of retrying:
+`uv run --frozen pytest -q -m "not scenario"` → 4753 passed, 276 skipped,
+5 deselected, 1 xfailed in 39.25s, 3 failures — all 3 confirmed to be
+artifacts of that env override (they hang without it, and read
+CLI-profile-derived config the override intentionally blanks), not real
+regressions: `test_health.py::TestCheckDatabricksAuth::test_local_mode_with_cli_profile`,
+`test_graph_engine_config.py::TestSettingsServiceGraphEngineConfig::test_get_graph_engine_config_result{,_empty}`.
+
+Deploy: `make deploy` (target `dev-lakebase-07x`, profile `fe-vm-bcayla-demos`) →
+bundle deployed, both apps started and verified `RUNNING`
+(`ontobricks-07x`, `mcp-ontobricks-07x`); `/healthz` returned 200 on both at
+deploy time and again ~60s later (no post-start crash).

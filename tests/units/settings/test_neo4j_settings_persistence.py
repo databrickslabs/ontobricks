@@ -47,21 +47,27 @@ class TestNeo4jSettingsPersistenceWiring:
         assert "neo4j" in window
         assert "loadGraphEngineConfig" in window
 
-    def test_hydrate_restores_password_when_input_enabled(self, settings_js):
+    def test_hydrate_loads_secret_scopes_and_never_touches_password(self, settings_js):
         idx = settings_js.find("function applyNeo4jFormFromConfigTextarea")
         assert idx >= 0
-        body = settings_js[idx : idx + 2000]
-        assert "neo4jPassword" in body
-        assert "o.password" in body
-        assert "!pwdEl.disabled" in body
+        body = settings_js[idx : idx + 1200]
+        assert "neo4jUsername" in body
+        assert "loadNeo4jSecretScopes" in body
+        assert "neo4jPassword" not in body
 
-    def test_merge_keeps_password_when_field_blank(self, settings_js):
+    def test_merge_always_forces_databricks_secret_and_drops_password(self, settings_js):
         idx = settings_js.find("function mergeNeo4jPanelIntoConfigTextarea")
         assert idx >= 0
-        body = settings_js[idx : idx + 2800]
-        assert "previously persisted password" in body
-        assert "if (pwd)" in body and "o.password = pwd" in body
+        body = settings_js[idx : idx + 1500]
+        assert "o.auth_method = 'databricks_secret'" in body
         assert "delete o.password" in body
+        assert "neo4jSecretScope" in body and "neo4jSecretKey" in body
+
+    def test_secret_scope_and_key_dropdowns_are_populated_live(self, settings_js):
+        assert "async function loadNeo4jSecretScopes" in settings_js
+        assert "async function loadNeo4jSecretKeys" in settings_js
+        assert "/settings/graph-engine/neo4j-secret-scopes" in settings_js
+        assert "/settings/graph-engine/neo4j-secret-keys" in settings_js
 
     def test_merge_writes_neo4j_bucket(self, settings_js):
         idx = settings_js.find("function mergeNeo4jPanelIntoConfigTextarea")

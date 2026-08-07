@@ -957,6 +957,35 @@ async def post_graph_engine_neo4j_test(
         return config_service.graph_engine_neo4j_test_result(session_mgr, settings)
 
 
+@router.get(
+    "/graph-engine/neo4j-secret-scopes",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_graph_engine_neo4j_secret_scopes(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Databricks secret scopes for the Neo4j password "Secret scope" dropdown."""
+    with map_route_errors("graph engine Neo4j secret scopes", logger):
+        return config_service.graph_engine_neo4j_secret_scopes_result(session_mgr, settings)
+
+
+@router.get(
+    "/graph-engine/neo4j-secret-keys",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_graph_engine_neo4j_secret_keys(
+    scope: str = "",
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List secret keys within ``scope`` for the Neo4j password "Secret key" dropdown."""
+    with map_route_errors("graph engine Neo4j secret keys", logger):
+        return config_service.graph_engine_neo4j_secret_keys_result(
+            scope, session_mgr, settings
+        )
+
+
 @router.get("/graph-engine/neo4j-databases")
 async def get_graph_engine_neo4j_databases(
     session_mgr: SessionManager = Depends(get_session_manager),

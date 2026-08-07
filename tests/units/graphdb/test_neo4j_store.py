@@ -50,6 +50,19 @@ def _basic_config(**overrides: Any) -> Dict[str, Any]:
     return cfg
 
 
+def _secret_config(**overrides: Any) -> Dict[str, Any]:
+    cfg = {
+        "uri": "neo4j+s://b4810af7.databases.neo4j.io",
+        "database": "neo4j",
+        "auth_method": "databricks_secret",
+        "username": "neo4j",
+        "secret_scope": "ontobricks-secrets",
+        "secret_key": "neo4j-password",
+    }
+    cfg.update(overrides)
+    return cfg
+
+
 def _store(**overrides: Any):
     """Construct a Neo4jStore with the underlying connection's `run` mocked.
 
@@ -411,6 +424,75 @@ class TestPasswordSourcing:
 
         monkeypatch.setenv("NEO4J_PASSWORD", "from-secret")
         s = _store(username="")
+        with pytest.raises(ValidationError, match="username"):
+            s._resolve_auth()
+
+
+# ---------------------------------------------------------------------------
+#  Password sourcing — Databricks secret (scope/key resolved live via the
+#  Secrets API), the default and only method the Settings UI offers.
+# ---------------------------------------------------------------------------
+
+class TestDatabricksSecretAuth:
+    def setup_method(self, _method):
+        from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
+
+        # The value cache is class-level (shared across Neo4jConnection
+        # instances) — clear it so tests don't leak cached secrets.
+        Neo4jConnection._secret_value_cache.clear()
+
+    def _secret_store(self, **overrides: Any):
+        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+
+        return Neo4jStore(db_name="testset", engine_config=_secret_config(**overrides))
+
+    def test_resolve_auth_fetches_from_secrets_api(self):
+        with patch("back.core.databricks.DatabricksAuth.DatabricksAuth") as MockAuth, \
+             patch(
+                 "back.core.databricks.SecretsService.SecretsService.get_secret_value",
+                 return_value="s3cr3t",
+             ) as mock_get:
+            MockAuth.return_value.host = "https://example.databricks.com"
+            s = self._secret_store()
+            user, pwd = s._resolve_auth()
+
+        assert user == "neo4j"
+        assert pwd == "s3cr3t"
+        mock_get.assert_called_once_with("ontobricks-secrets", "neo4j-password")
+
+    def test_resolve_auth_caches_secret_value(self):
+        with patch("back.core.databricks.DatabricksAuth.DatabricksAuth") as MockAuth, \
+             patch(
+                 "back.core.databricks.SecretsService.SecretsService.get_secret_value",
+                 return_value="s3cr3t",
+             ) as mock_get:
+            MockAuth.return_value.host = "https://example.databricks.com"
+            s = self._secret_store()
+            s._resolve_auth()
+            s._resolve_auth()
+
+        # Second call is served from the in-process TTL cache — no second
+        # Secrets API round trip.
+        mock_get.assert_called_once_with("ontobricks-secrets", "neo4j-password")
+
+    def test_resolve_auth_raises_when_scope_missing(self):
+        from back.core.errors import ValidationError
+
+        s = self._secret_store(secret_scope="")
+        with pytest.raises(ValidationError, match="secret_scope"):
+            s._resolve_auth()
+
+    def test_resolve_auth_raises_when_key_missing(self):
+        from back.core.errors import ValidationError
+
+        s = self._secret_store(secret_key="")
+        with pytest.raises(ValidationError, match="secret_key"):
+            s._resolve_auth()
+
+    def test_resolve_auth_raises_when_username_missing(self):
+        from back.core.errors import ValidationError
+
+        s = self._secret_store(username="")
         with pytest.raises(ValidationError, match="username"):
             s._resolve_auth()
 

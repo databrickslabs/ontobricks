@@ -714,57 +714,45 @@
                             </div>
 
                             <div class="col-md-6">
-                                <label for="neo4jAuthMethod" class="form-label small fw-semibold mb-1">Auth method</label>
-                                <select class="form-select form-select-sm" id="neo4jAuthMethod">
-                                    <option value="basic" selected>Basic (username + password)</option>
-                                    <option value="databricks_secret">Databricks secret</option>
-                                </select>
+                                <label for="neo4jUsername" class="form-label small fw-semibold mb-1">Username <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control form-control-sm" id="neo4jUsername" autocomplete="off" required>
                             </div>
 
-                            <!-- Basic auth fields -->
-                            <div class="col-md-6 neo4j-auth-basic">
-                                <label for="neo4jUsername" class="form-label small fw-semibold mb-1">Username</label>
-                                <input type="text" class="form-control form-control-sm" id="neo4jUsername" autocomplete="off">
-                            </div>
-                            <div class="col-md-6 neo4j-auth-basic">
-                                <label for="neo4jPassword" class="form-label small fw-semibold mb-1">
-                                    Password
-                                    {% if neo4j_password_from_secret %}
+                            <div class="col-md-6">
+                                <label for="neo4jSecretScope" class="form-label small fw-semibold mb-1">
+                                    Secret scope <span class="text-danger">*</span>
                                     <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle ms-1"
-                                          title="The password is injected at runtime from the Databricks Apps secret resource `neo4j-password`. The field below is ignored.">
-                                        <i class="bi bi-shield-check me-1"></i>From Apps secret
+                                          title="The password is resolved live from this Databricks secret using the app's own identity — never stored in clear.">
+                                        <i class="bi bi-shield-check me-1"></i>Databricks secret
                                     </span>
-                                    {% else %}
-                                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"
-                                          title="In production, bind the `neo4j-password` resource in the Apps UI to inject the password from a workspace secret. This input is a local-dev fallback and is persisted in clear in global_config.">
-                                        <i class="bi bi-exclamation-triangle me-1"></i>Local-dev fallback
-                                    </span>
-                                    {% endif %}
                                 </label>
-                                <input type="password" class="form-control form-control-sm" id="neo4jPassword"
-                                       autocomplete="new-password"
-                                       {% if neo4j_password_from_secret %}disabled placeholder="••••••••  (sourced from Apps secret)"{% endif %}>
+                                <div class="input-group input-group-sm">
+                                    <select class="form-select form-select-sm" id="neo4jSecretScope" required>
+                                        <option value="">— Select a scope —</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="btnRefreshNeo4jSecretScopes" title="Refresh scope list">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </div>
                                 <div class="form-text small text-muted">
-                                    {% if neo4j_password_from_secret %}
-                                    Managed by the <code>neo4j-password</code> Databricks Apps secret resource. See
-                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
-                                    {% else %}
-                                    Stored in registry <code>graph_engine_config</code> for local development.
-                                    For production, bind the <code>neo4j-password</code> secret resource in
-                                    <strong>Apps → Resources</strong> instead — see
-                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
-                                    {% endif %}
+                                    Only scopes your identity can read appear here. Missing one? Grant access:
+                                    <code>databricks secrets put-acl --scope &lt;scope&gt; --principal &lt;app-service-principal&gt; --permission READ</code>.
                                 </div>
                             </div>
-
-                            <!-- Databricks-secret auth fields -->
-                            <div class="col-md-6 neo4j-auth-databricks-secret d-none">
-                                <label for="neo4jSecretScope" class="form-label small fw-semibold mb-1">Secret scope</label>
-                                <input type="text" class="form-control form-control-sm" id="neo4jSecretScope">
-                            </div>
-                            <div class="col-md-6 neo4j-auth-databricks-secret d-none">
-                                <label for="neo4jSecretKey" class="form-label small fw-semibold mb-1">Secret key</label>
-                                <input type="text" class="form-control form-control-sm" id="neo4jSecretKey">
+                            <div class="col-md-6">
+                                <label for="neo4jSecretKey" class="form-label small fw-semibold mb-1">Secret name <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-sm">
+                                    <select class="form-select form-select-sm" id="neo4jSecretKey" disabled required>
+                                        <option value="">— Select a scope first —</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="btnRefreshNeo4jSecretKeys" title="Refresh secret list" disabled>
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text small text-muted">
+                                    The password is fetched live at connect time — nothing is persisted in clear. See
+                                    <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
+                                </div>
                             </div>
 
                             <div class="col-md-12">

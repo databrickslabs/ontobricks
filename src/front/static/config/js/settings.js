@@ -1132,16 +1132,86 @@ document.addEventListener('DOMContentLoaded', function () {
         updateLakebaseSyncModeHelp();
     }
 
-    /** Toggle Neo4j basic vs Databricks-secret auth field groups. */
-    function applyNeo4jAuthMethodVisibility() {
-        const sel = document.getElementById('neo4jAuthMethod');
+    // Cache: avoid re-fetching the scope list on every form hydration —
+    // refreshed explicitly via the "refresh" buttons or a hard page reload.
+    let neo4jSecretScopesLoaded = false;
+    let neo4jSecretKeysScope = null;
+
+    /** Populate a <select> with string options, preserving/selecting `selected` if present. */
+    function _populateSelectOptions(selectEl, options, placeholder, selected) {
+        if (!selectEl) return;
+        const frag = document.createDocumentFragment();
+        const ph = document.createElement('option');
+        ph.value = '';
+        ph.textContent = placeholder;
+        frag.appendChild(ph);
+        let found = false;
+        options.forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt;
+            el.textContent = opt;
+            if (selected && opt === selected) found = true;
+            frag.appendChild(el);
+        });
+        // Persisted value no longer visible (e.g. permission revoked) — keep
+        // it selectable so Save doesn't silently drop a working config.
+        if (selected && !found) {
+            const el = document.createElement('option');
+            el.value = selected;
+            el.textContent = selected + ' (not visible to current identity)';
+            frag.appendChild(el);
+        }
+        selectEl.innerHTML = '';
+        selectEl.appendChild(frag);
+        selectEl.value = selected || '';
+    }
+
+    /** Fetch + populate the Neo4j secret-scope dropdown, then cascade into keys. */
+    async function loadNeo4jSecretScopes(forceRefresh) {
+        const sel = document.getElementById('neo4jSecretScope');
         if (!sel) return;
-        const basicFields  = document.querySelectorAll('.neo4j-auth-basic');
-        const secretFields = document.querySelectorAll('.neo4j-auth-databricks-secret');
-        const isBasic  = sel.value === 'basic';
-        const isSecret = sel.value === 'databricks_secret';
-        basicFields.forEach(el => el.classList.toggle('d-none', !isBasic));
-        secretFields.forEach(el => el.classList.toggle('d-none', !isSecret));
+        if (neo4jSecretScopesLoaded && !forceRefresh) return;
+        const persisted = (readEngineConfigRoot().neo4j || {}).secret_scope || sel.value || '';
+        try {
+            const resp = await fetch('/settings/graph-engine/neo4j-secret-scopes', { credentials: 'same-origin' });
+            const data = resp.ok ? await resp.json() : {};
+            _populateSelectOptions(sel, data.scopes || [], '— Select a scope —', persisted);
+            neo4jSecretScopesLoaded = true;
+        } catch (e) {
+            console.log('Neo4j secret scopes load failed', e);
+        }
+        if (sel.value) await loadNeo4jSecretKeys(sel.value, forceRefresh);
+    }
+
+    /** Fetch + populate the Neo4j secret-key dropdown for the given scope. */
+    async function loadNeo4jSecretKeys(scope, forceRefresh) {
+        const sel = document.getElementById('neo4jSecretKey');
+        const refreshBtn = document.getElementById('btnRefreshNeo4jSecretKeys');
+        if (!sel) return;
+        if (!scope) {
+            sel.disabled = true;
+            if (refreshBtn) refreshBtn.disabled = true;
+            _populateSelectOptions(sel, [], '— Select a scope first —', '');
+            neo4jSecretKeysScope = null;
+            return;
+        }
+        if (neo4jSecretKeysScope === scope && !forceRefresh) return;
+        const persisted = scope === ((readEngineConfigRoot().neo4j || {}).secret_scope || '')
+            ? ((readEngineConfigRoot().neo4j || {}).secret_key || '')
+            : '';
+        try {
+            const resp = await fetch(
+                '/settings/graph-engine/neo4j-secret-keys?scope=' + encodeURIComponent(scope),
+                { credentials: 'same-origin' }
+            );
+            const data = resp.ok ? await resp.json() : {};
+            sel.disabled = false;
+            if (refreshBtn) refreshBtn.disabled = false;
+            _populateSelectOptions(sel, data.keys || [], '— Select a secret —', persisted);
+            neo4jSecretKeysScope = scope;
+        } catch (e) {
+            console.log('Neo4j secret keys load failed', e);
+        }
     }
 
     /**
@@ -1159,20 +1229,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
         _set('neo4jUri', o.uri || '');
         _set('neo4jDatabase', o.database || o.neo4j_database || 'neo4j');
-        _set('neo4jAuthMethod', o.auth_method || 'basic');
         _set('neo4jUsername', o.username || '');
-        // Restore persisted password for local-dev basic auth. When the Apps
-        // secret resource is bound the input is disabled and must stay empty
-        // (env var is the source of truth; backend strips clear-text passwords).
-        const pwdEl = document.getElementById('neo4jPassword');
-        if (pwdEl && !pwdEl.disabled) {
-            pwdEl.value = o.password != null ? String(o.password) : '';
-        }
-        _set('neo4jSecretScope', o.secret_scope || '');
-        _set('neo4jSecretKey', o.secret_key || '');
         const enc = document.getElementById('neo4jEncrypted');
         if (enc) enc.checked = o.encrypted !== false;
-        applyNeo4jAuthMethodVisibility();
+        // Scope/key dropdowns are populated live from the Secrets API —
+        // fire-and-forget, they self-select the persisted values once loaded.
+        loadNeo4jSecretScopes(false);
     }
 
     async function loadLakebaseGraphHealth() {
@@ -3109,60 +3171,35 @@ document.addEventListener('DOMContentLoaded', function () {
         const root = readEngineConfigRoot();
         const o = root.neo4j || {};
 
-        const uri        = (document.getElementById('neo4jUri')?.value || '').trim();
-        const database   = (document.getElementById('neo4jDatabase')?.value || '').trim();
-        const authMethod = (document.getElementById('neo4jAuthMethod')?.value || 'basic').trim();
-        const encrypted  = !!document.getElementById('neo4jEncrypted')?.checked;
+        const uri      = (document.getElementById('neo4jUri')?.value || '').trim();
+        const database = (document.getElementById('neo4jDatabase')?.value || '').trim();
+        const user     = (document.getElementById('neo4jUsername')?.value || '').trim();
+        const scope    = (document.getElementById('neo4jSecretScope')?.value || '').trim();
+        const key      = (document.getElementById('neo4jSecretKey')?.value || '').trim();
+        const encrypted = !!document.getElementById('neo4jEncrypted')?.checked;
 
         if (uri) o.uri = uri; else delete o.uri;
         o.database = database || 'neo4j';
         delete o.neo4j_database;
-        o.auth_method = authMethod;
-        o.encrypted   = encrypted;
+        // The password is always resolved live from a Databricks secret —
+        // no other auth method is offered from the UI, and clear-text
+        // passwords are never serialised.
+        o.auth_method = 'databricks_secret';
+        o.encrypted = encrypted;
+        if (user) o.username = user; else delete o.username;
+        if (scope) o.secret_scope = scope; else delete o.secret_scope;
+        if (key) o.secret_key = key; else delete o.secret_key;
+        delete o.password;
 
-        if (authMethod === 'basic') {
-            const user = (document.getElementById('neo4jUsername')?.value || '').trim();
-            const pwdEl = document.getElementById('neo4jPassword');
-            // When the password input is disabled (Apps secret is in place),
-            // never serialise the field — the server-side env var is the
-            // source of truth and the backend strips persisted passwords.
-            if (user) o.username = user; else delete o.username;
-            if (pwdEl && !pwdEl.disabled) {
-                const pwd = pwdEl.value || '';
-                if (pwd) {
-                    o.password = pwd;
-                }
-                // Blank field: keep the previously persisted password in ``o``
-                // (already parsed from the textarea). Deleting it here would
-                // wipe credentials every time the page reloads with an empty
-                // input before the hydrate runs, or when the user Saves other
-                // Neo4j fields without retyping the password.
-            } else {
-                delete o.password;
-            }
-            delete o.secret_scope;
-            delete o.secret_key;
-        } else if (authMethod === 'databricks_secret') {
-            const scope = (document.getElementById('neo4jSecretScope')?.value || '').trim();
-            const key   = (document.getElementById('neo4jSecretKey')?.value || '').trim();
-            if (scope) o.secret_scope = scope; else delete o.secret_scope;
-            if (key)   o.secret_key   = key;   else delete o.secret_key;
-            delete o.username;
-            delete o.password;
-        }
         root.neo4j = o;
         writeEngineConfigRoot(root);
     }
 
-    // Auth-method visibility is handled by applyNeo4jAuthMethodVisibility()
-    // (defined with the Lakebase/Neo4j form hydrators above).
-
     // Wire up Neo4j form field listeners — keep the textarea in sync as the
     // user edits the panel, so the save flow always serialises fresh values.
     [
-        'neo4jUri', 'neo4jDatabase', 'neo4jAuthMethod',
-        'neo4jUsername', 'neo4jPassword',
-        'neo4jSecretScope', 'neo4jSecretKey',
+        'neo4jUri', 'neo4jDatabase',
+        'neo4jUsername', 'neo4jSecretScope', 'neo4jSecretKey',
         'neo4jEncrypted',
     ].forEach(id => {
         const el = document.getElementById(id);
@@ -3170,9 +3207,18 @@ document.addEventListener('DOMContentLoaded', function () {
         el.addEventListener('input',  mergeNeo4jPanelIntoConfigTextarea);
         el.addEventListener('change', mergeNeo4jPanelIntoConfigTextarea);
     });
-    document.getElementById('neo4jAuthMethod')?.addEventListener('change', applyNeo4jAuthMethodVisibility);
-    // Initial render — apply auth-method visibility on page load.
-    applyNeo4jAuthMethodVisibility();
+    // Scope change cascades into a fresh key list for that scope (the
+    // previously selected key almost certainly doesn't exist in the new one).
+    document.getElementById('neo4jSecretScope')?.addEventListener('change', (e) => {
+        loadNeo4jSecretKeys(e.target.value, false).then(mergeNeo4jPanelIntoConfigTextarea);
+    });
+    document.getElementById('btnRefreshNeo4jSecretScopes')?.addEventListener('click', () => {
+        loadNeo4jSecretScopes(true);
+    });
+    document.getElementById('btnRefreshNeo4jSecretKeys')?.addEventListener('click', () => {
+        const scope = document.getElementById('neo4jSecretScope')?.value || '';
+        if (scope) loadNeo4jSecretKeys(scope, true);
+    });
 
     // Test-connection button — POSTs to /settings/graph-engine/neo4j-test which
     // runs a Bolt protocol handshake (driver.verify_connectivity()) using the

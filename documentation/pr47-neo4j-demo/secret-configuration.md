@@ -1,6 +1,8 @@
-# Configuring the Neo4j password as a Databricks Apps secret
+# Configuring the Neo4j password as a Databricks secret
 
-The Neo4j Bolt password is sourced at runtime from the `NEO4J_PASSWORD` environment variable, populated by a Databricks Apps **secret resource** declared in `app.yaml`. The deployed app refuses to instantiate `Neo4jStore` if the variable is missing — no clear-text password ever lives in `global_config`.
+**Settings → Back end → Neo4j** always asks for the Bolt **username** directly, and always resolves the **password** live from a Databricks secret scope/key — there is no plain-text password field in the UI, and no clear-text password is ever persisted to `global_config`.
+
+The app resolves the secret at connect time via the Databricks Secrets REST API (`/api/2.0/secrets/get`), using its own identity — the service principal's OAuth token in the deployed app, or your PAT/CLI profile in local dev. This is the same identity every other Databricks REST call in this codebase already uses (`DatabricksAuth`).
 
 ## One-time setup
 
@@ -9,57 +11,57 @@ The Neo4j Bolt password is sourced at runtime from the `NEO4J_PASSWORD` environm
 Pick (or create) a workspace secret scope, then put the Neo4j password into a key inside it:
 
 ```bash
-databricks secrets create-scope ontobricks               # one-off
-databricks secrets put-secret  ontobricks neo4j-password
+databricks secrets create-scope ontobricks-secrets               # one-off
+databricks secrets put-secret  ontobricks-secrets neo4j-password
 # Paste the password at the prompt, Ctrl-D to commit.
 ```
 
-The scope name and key name are free — only the binding in step 2 matters.
+The scope name and key name are free — you'll pick both from dropdowns in Settings.
 
-### 2. Bind the secret to the app's `neo4j-password` resource
+### 2. Grant the app's identity READ access to the scope
 
-The bundle's `app.yaml.template` already declares the resource:
+Unlike a Databricks Apps **secret resource** (declarative binding in `app.yaml`, edited in the Apps UI), this is a live API call the app makes itself, so the caller needs an explicit ACL:
 
-```yaml
-resources:
-  - name: neo4j-password
-    secret:
-      permission: READ
+```bash
+databricks secrets put-acl --scope ontobricks-secrets \
+  --principal <app-service-principal-id-or-name> \
+  --permission READ
 ```
 
-After `make deploy`, open the deployed app in the Databricks UI:
+Find the app's service principal under **Apps → ontobricks → Authorization** in the Databricks UI, or via `databricks apps get <app-name>`.
 
-1. **Apps → ontobricks → Resources**
-2. Locate the row `neo4j-password` (status will be **Unbound**).
-3. Click **Edit** → pick **Secret** → fill `Scope = ontobricks`, `Key = neo4j-password` (or whatever you used in step 1).
-4. Save. The status flips to **Bound**.
+For local development, grant `READ` to your own user/CLI-profile identity instead (or reuse the same scope — most workspaces already grant broad read access to the deploying user).
 
-The app does not need a redeploy after binding — the platform re-injects `NEO4J_PASSWORD` on the next request.
+### 3. Configure it in Settings
 
-### 3. Verify
+Open the OntoBricks app: **Settings → Back end → Neo4j**.
 
-Open the OntoBricks app: **Settings → Back end → Neo4j**. The **Password** field shows a green badge **From Apps secret** and the input is disabled. Save the engine config — any persisted clear-text `password` in `global_config` is stripped server-side at save time.
+1. Fill in the Bolt **URI** and **Username**.
+2. Pick the **Secret scope** from the dropdown (only scopes your identity can read appear here — click the refresh icon after granting access in step 2 if it's not showing up yet).
+3. Pick the **Secret name** (the key) from the dropdown once a scope is selected.
+4. **Save**. Nothing password-shaped is written to `global_config` — only the scope/key names.
+5. Click **Test connection** to confirm the app can resolve the password and open a Bolt session.
 
 ## Local development
 
-When `DATABRICKS_APP_PORT` is unset (running on your laptop), the password falls back to `engine_config.password` from the Settings UI. This path is **disabled in the deployed app** — the runtime check uses the platform-injected `DATABRICKS_APP_PORT` variable to detect prod.
+Local dev goes through the exact same path as the deployed app — no plain-text fallback. Your local Databricks auth (`DATABRICKS_TOKEN`, or a `databricks auth login` CLI profile) is used to call the Secrets API, so make sure that identity has `READ` on the chosen scope (step 2 above).
 
-To run locally against an Aura instance, either:
+## Legacy: `NEO4J_PASSWORD` env var / Apps secret resource
 
-- Set `NEO4J_PASSWORD` in your `.env` (so the secret path is exercised in dev too), or
-- Leave it unset and enter the password once in Settings → Neo4j (persisted to your local `global_config`).
+Deployments that already bind the `neo4j-password` Apps secret resource (`app.yaml` `valueFrom`) keep working unmodified — the backend still supports `auth_method: "basic"` and prioritizes the `NEO4J_PASSWORD` env var when it's set. This path is **not exposed in the Settings UI anymore**; it only remains for existing configs that haven't been migrated. To migrate, open Settings → Neo4j and Save once with a scope/key picked — this overwrites `auth_method` to `"databricks_secret"`.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| App logs `InfrastructureError: NEO4J_PASSWORD env var is required` at first build | Resource bound but not propagated, **or** wrong scope/key | Re-open Resources, re-bind, ensure scope+key exist via `databricks secrets list-secrets <scope>` |
-| Settings badge stays **Local-dev fallback** in deployed app | Resource is unbound | Bind it via Apps → Resources (step 2) |
-| Connection succeeds locally but fails in deployed app | Local `.env` has the right password, prod secret does not | Verify the value: `databricks secrets get-secret <scope> <key>` |
+| Secret scope dropdown is empty | Identity has no `READ` ACL on any scope | Grant it: `databricks secrets put-acl --scope <scope> --principal <principal> --permission READ`, then click the refresh icon |
+| `InfrastructureError: Databricks secrets/get denied (403)` on Test connection | Scope is visible in `list-scopes` but `READ` wasn't actually granted (or was granted to the wrong principal) | Re-run `put-acl` with the exact app service-principal ID from **Apps → Authorization** |
+| `Secret '<scope>/<key>' not found (404)` | Key was renamed/deleted after being selected | Re-open Settings → Neo4j, pick the current key from the refreshed dropdown |
+| Connection succeeds locally but fails in the deployed app | Your local identity has `READ` on the scope, the app's service principal does not | Grant `READ` to the app's service principal too (step 2) |
 
 ## Why this design
 
-- **Zero clear-text credential in `global_config`** — the save endpoint strips `password` whenever `NEO4J_PASSWORD` is set.
-- **Declarative** — the binding is part of the app's resources, reviewable in the Apps UI, with audit trails on the secret scope.
-- **No runtime call to the Secrets API** — the platform injects the value at startup; the app code reads a plain env var.
-- **No per-user secrets** — the binding is at the app level (service principal), consistent with the Lakebase OAuth pattern (`LakebaseAuth`).
+- **Zero clear-text credential in `global_config`** — the save endpoint always strips `password` when `auth_method == "databricks_secret"`.
+- **No redeploy to change the password** — rotating the secret value in the workspace takes effect within `_SECRET_VALUE_CACHE_TTL_SECONDS` (5 minutes) of the next connection, no Apps resource rebind and no bundle redeploy.
+- **One flow everywhere** — local dev and the deployed app resolve the password the same way, through the same `DatabricksAuth` identity resolution every other Databricks call in this codebase uses.
+- **Least surprise on permissions** — a 403 from the Secrets API maps to a plain-English "grant READ to this principal" message instead of a raw HTTP error.

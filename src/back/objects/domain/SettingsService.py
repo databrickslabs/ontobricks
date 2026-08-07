@@ -1760,18 +1760,22 @@ class SettingsService:
         if not isinstance(config, dict):
             raise ValidationError("graph_engine_config must be a JSON object")
         config = normalize_graph_engine_config(config)
-        if is_neo4j_password_from_secret():
-            neo = dict(config.get("neo4j") or {})
-            if neo.get("password"):
-                # Never persist a clear-text password when the Apps secret is
-                # in place — the env var wins at runtime and this would only
-                # leak a redundant credential into global_config.
-                logger.info(
-                    "Stripping neo4j['password'] before persist — "
-                    "NEO4J_PASSWORD env var is the source of truth"
-                )
-                neo.pop("password", None)
-                config = {**config, "neo4j": neo}
+        neo = dict(config.get("neo4j") or {})
+        if neo.get("password") and (
+            neo.get("auth_method") == "databricks_secret" or is_neo4j_password_from_secret()
+        ):
+            # Never persist a clear-text password when the password is
+            # sourced live (Databricks secret scope/key, or the legacy
+            # NEO4J_PASSWORD env var) — the live source always wins at
+            # runtime, so a stored clear-text value would only be a
+            # redundant, leak-prone credential in global_config.
+            logger.info(
+                "Stripping neo4j['password'] before persist — password is "
+                "sourced live (%s)",
+                "databricks_secret" if neo.get("auth_method") == "databricks_secret" else "env var",
+            )
+            neo.pop("password", None)
+            config = {**config, "neo4j": neo}
         ok, msg = global_config_service.set_graph_engine_config(
             host, token, registry_cfg, config
         )
@@ -2076,12 +2080,56 @@ class SettingsService:
                 if cypher_rows is not None
                 else None
             ),
-            "credentials_source": (
-                "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
-                if is_neo4j_password_from_secret()
-                else "engine_config (local-dev fallback)"
-            ),
+            "credentials_source": SettingsService._neo4j_credentials_source(gcfg),
         }
+
+    @staticmethod
+    def _neo4j_credentials_source(gcfg: Dict[str, Any]) -> str:
+        """Human-readable description of where the Neo4j password came from."""
+        from back.core.graphdb.neo4j.Neo4jConnection import NEO4J_PASSWORD_ENV
+
+        auth_method = str(gcfg.get("auth_method") or "basic").strip() or "basic"
+        if auth_method == "databricks_secret":
+            scope = str(gcfg.get("secret_scope") or "").strip()
+            key = str(gcfg.get("secret_key") or "").strip()
+            return "Databricks secret (%s/%s)" % (scope, key)
+        if is_neo4j_password_from_secret():
+            return "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
+        return "engine_config (local-dev fallback)"
+
+    @staticmethod
+    def graph_engine_neo4j_secret_scopes_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List Databricks secret scopes for the Neo4j "Databricks secret" dropdown.
+
+        Uses the app's own identity (SP OAuth in the deployed app, PAT/CLI
+        profile in local dev) — the same identity every other Databricks
+        REST call in this codebase uses. A scope only shows up here if that
+        identity has at least READ access to it.
+        """
+        from back.core.databricks.DatabricksClient import DatabricksClient
+
+        _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
+        client = DatabricksClient(host=host, token=token)
+        return {"success": True, "scopes": client.list_secret_scopes()}
+
+    @staticmethod
+    def graph_engine_neo4j_secret_keys_result(
+        scope: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List secret keys within *scope* for the Neo4j "Secret key" dropdown."""
+        from back.core.databricks.DatabricksClient import DatabricksClient
+
+        scope = (scope or "").strip()
+        if not scope:
+            return {"success": True, "keys": []}
+        _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
+        client = DatabricksClient(host=host, token=token)
+        return {"success": True, "keys": client.list_secret_keys(scope)}
 
     @staticmethod
     def _neo4j_connection_from_config(session_mgr, settings):

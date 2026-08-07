@@ -22,11 +22,12 @@ patterns. The forward transform lives in the driver-free
 Implementation is split across three services (extracted during the PR
 #47 review — Benoit 2026-06-18 "la classe est trop grosse"):
 
-- :class:`Neo4jConnection` — driver lifecycle, auth resolution
-  (NEO4J_PASSWORD env var first, engine_config fallback in local dev,
-  hard refusal in the deployed app without a secret resource), and the
-  single :meth:`Neo4jConnection.run` execution path that emits one INFO
-  log line per Cypher statement.
+- :class:`Neo4jConnection` — driver lifecycle, auth resolution (username
+  always explicit; password resolved live from a Databricks secret
+  scope/key via the Secrets REST API, with a legacy env-var/local-dev
+  path kept for pre-existing Apps-resource deployments), and the single
+  :meth:`Neo4jConnection.run` execution path that emits one INFO log line
+  per Cypher statement.
 - :class:`Neo4jWriteOps` — schema (constraint create/drop), typed bulk writes
   (``UNWIND`` + ``MERGE`` nodes/labels/props then batched relationship MERGE),
   deletes, cohort wipes, and reverse-schema-map persistence.
@@ -100,23 +101,28 @@ class Neo4jStore(GraphDBBackend):
             Bolt URI, e.g. ``neo4j+s://b4810af7.databases.neo4j.io``.
         ``database`` (default ``"neo4j"``)
             Logical Neo4j database name on the target instance.
-        ``auth_method`` (default ``"basic"``)
-            ``"basic"`` → username + password. ``"databricks_secret"`` →
-            credentials resolved from a Databricks secret scope (PR 3,
-            deferred).
+        ``auth_method`` (default ``"databricks_secret"``)
+            ``"databricks_secret"`` → the only method the Settings UI
+            offers: username + password resolved live from a Databricks
+            secret scope/key via the Secrets REST API (see
+            ``docs/pr47-neo4j-demo/secret-configuration.md``).
+            ``"basic"`` → username + password/env-var — legacy, kept only
+            for deployments still bound to the ``neo4j-password`` Apps
+            secret resource; no longer exposed in the UI.
         ``username``
-            Required when ``auth_method == "basic"``.
-        ``password``
-            Local-dev fallback when ``auth_method == "basic"``. **In the
-            deployed app** (when ``DATABRICKS_APP_PORT`` is set) the password
-            MUST come from the ``NEO4J_PASSWORD`` env var, populated via a
-            Databricks Apps secret resource bound in ``app.yaml``. The
-            persisted JSON ``password`` is ignored in prod and stripped at
-            save-time so no clear-text credential ever lands in
-            ``global_config``. See
-            ``docs/pr47-neo4j-demo/secret-configuration.md``.
+            Always required, regardless of ``auth_method``.
         ``secret_scope``, ``secret_key``
-            Required when ``auth_method == "databricks_secret"``.
+            Required when ``auth_method == "databricks_secret"``. Never
+            persisted alongside a clear-text ``password``.
+        ``password``
+            Legacy local-dev fallback, only read when
+            ``auth_method == "basic"``. **In the deployed app** (when
+            ``DATABRICKS_APP_PORT`` is set) the password MUST come from the
+            ``NEO4J_PASSWORD`` env var instead, populated via a Databricks
+            Apps secret resource bound in ``app.yaml``. The persisted JSON
+            ``password`` is stripped at save-time whenever a live source
+            (secret scope/key or env var) is in play, so no clear-text
+            credential lands in ``global_config``.
         ``encrypted`` (default ``True``)
             Bolt-level encryption flag (ignored when URI is ``neo4j+s://``).
     """
