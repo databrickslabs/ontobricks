@@ -51,7 +51,7 @@ Override the target / timeouts via env:
     ONTOBRICKS_SCENARIO_RULES_TIMEOUT     max seconds for business-rule generation (default 600)
     ONTOBRICKS_SCENARIO_DQ_TIMEOUT        max seconds for the data-quality run (default 300)
     ONTOBRICKS_SCENARIO_REASONING_TIMEOUT max seconds for the reasoning run (default 420)
-    ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT  max seconds for compute+interpret (default 300)
+    ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT  max seconds for compute+interpret (default 900)
 """
 
 from __future__ import annotations
@@ -86,7 +86,12 @@ _BUILD_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_BUILD_TIMEOUT", "420"
 _RULES_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_RULES_TIMEOUT", "600"))
 _DQ_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_DQ_TIMEOUT", "300"))
 _REASONING_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_REASONING_TIMEOUT", "420"))
-_ANALYSIS_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT", "300"))
+# Graph analysis is the only step that delegates to a Databricks Lakeflow job
+# (`ontobricks-<instance>-graph-analytics`), so its budget must cover cluster
+# start plus Spark centrality compute — measured ~600s on the 52k-triple
+# scenario graph. The app itself allows the run `analytics_job_timeout_s`
+# (3600s default), so a short test budget fails while the job is still healthy.
+_ANALYSIS_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT", "900"))
 _ANALYSIS_TIMEOUT_MS = _ANALYSIS_TIMEOUT_S * 1000
 
 

@@ -478,3 +478,222 @@ Tests: `uv run --frozen pytest -q tests/units/front/test_backend_brand_icons.py 
 → 9 passed, 1 warning in 0.16s.
 `uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
 5 deselected, 1 xfailed, 23 warnings in 34.03s.
+
+## Fix scenario 3 graph-analysis timeout; add Ontos Integration to the v0.8.0 roadmap
+
+Context:
+Full validation pass: the non-scenario suite was green, but the live scenario
+campaign failed on scenario 3 with `graph analysis did not finish within 300s`.
+Investigation showed the app was healthy: the graph-analysis step delegates to
+the `ontobricks-<instance>-graph-analytics` Lakeflow job, and Databricks run
+591217018872608 finished SUCCESS in 596s (setup 5s, execution 590s) on the
+52k-triple scenario graph. Scenario 3 was the only step budgeting an external
+Databricks job, yet it had the smallest allowance (300s) — smaller than the
+in-process build (420s), reasoning (420s) and rules (600s) steps, and 12x
+smaller than the app's own `analytics_job_timeout_s` (3600s). The test gave up
+while the job was still running normally. Separately, the August roadmap gained
+an Ontos Integration entry under v0.8.0.
+
+Changes:
+
+1. `tests/e2e/scenarios/test_scenario_03_rules_analysis.py`
+   Raised the `ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT` default from 300s to 900s
+   so the poll budget covers Lakeflow cluster start plus Spark centrality
+   compute, with a comment recording the measured ~600s run and the app-side
+   3600s allowance. Updated the module docstring's documented default.
+2. `releases/Roadmap_2026-08.md`
+   Added Ontos Integration to v0.8.0: executive-summary axis (five axes → six),
+   a Known-limitations bullet, new "Pillar 8 — Ontos Integration" (P1), a
+   Feature Matrix row, an updated v0.8.0 section title/theme, and Open Question
+   8 on the sync direction (import / bidirectional / publish-only).
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- releases/Roadmap_2026-08.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests:
+`uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 40.51s (unchanged from the pre-change
+baseline).
+
+Live scenario campaign (`make scenario-campaign`, app started with
+`ONTOBRICKS_NO_RELOAD=1`):
+- scenario 1 (generate + auto-map + build) → PASSED (52 502 triples)
+- scenario 2 (comments, tasks, review, publish, branch V2) → PASSED
+- scenario 3 (SHACL, business rules, DQ, reasoning, analysis) → FAILED at 300s,
+  then PASSED in 14:33 after the fix (DQ 112 checks/102 passed, 1546 inferred
+  triples, analysis + interpretation recorded in the audit trail)
+- `test_scenario_validation` → PASSED — 13 passed, 0 failed, 2 info
+- `test_full_lifecycle` → SKIPPED (needs the int workspace credentials)
+
+--------------------------------------------------------------------------------
+
+## Code review: docs accuracy, find-route dedup, deploy skill, release notes
+
+Context: Full v0.7.0 review pass (rule compliance, duplication, dead code,
+session-data audit, deploy scripts, docs vs Aug 6–7 features). Release notes
+stopped at Aug 5; deploy skill documented non-existent Make targets; Neo4j /
+MCP product docs drifted from named connections and DAB deploy. Applied
+Extract Method for duplicated triples/find seed+BFS logic shared by the public
+API and Graph Chat routes.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Add `build_find_seed_where` + `find_triples_bfs` (shared seed SQL + BFS
+   neighbourhood walk).
+2. `src/api/routers/digitaltwin.py` / `src/api/routers/internal/dtwin.py`
+   Thin routes call `DigitalTwin.find_triples_bfs` (Extract Method / Pull Up).
+3. `.claude/skills/deploy/SKILL.md`
+   Align Make target table with `Makefile` + `documentation/deployment.md`
+   (remove fictional `deploy-all` / `deploy-mcp` / `deploy-prod`).
+4. `documentation/neo4j-requirements.md`
+   Named connections, Databricks-secret auth, Domain binding, Objects picker;
+   Health tab → Test connection.
+5. `documentation/mcp.md` / `documentation/architecture.md`
+   MCP deploy via DAB (`make deploy` + `bundle run`); correct `src/mcp-server`
+   path.
+6. `documentation/features.md`
+   Graph Chat confirmation-gated Actions; named Neo4j connections.
+7. `releases/ReleaseNotes_V0.7.0.md`
+   Aug 6–7 highlights (named Neo4j, Graph Chat MCP alignment, branding),
+   upgrade note for connections[], test count 4787.
+
+Modified files:
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- .claude/skills/deploy/SKILL.md
+- documentation/neo4j-requirements.md
+- documentation/mcp.md
+- documentation/architecture.md
+- documentation/features.md
+- releases/ReleaseNotes_V0.7.0.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 39.64s.
+
+--------------------------------------------------------------------------------
+
+## Apply proposed review fixes: registry JS extraction, guards layering, model rename
+
+Context: Follow-up to the "Code review: docs accuracy, find-route dedup, deploy
+skill, release notes" pass. Applied the remaining proposed items (registry
+inline script, back/objects Request layering, Neo4jGraphModel filename/class
+mismatch) and re-verified the two flagged "possible violations" that turned
+out, on closer reading, to be intentional and already correct:
+`EditLockService`'s `success: False` on store-unavailable is documented
+graceful degradation consumed correctly by `edit-lock.js` (a transient blip is
+retried, not treated as lease-loss) — left unchanged. `src/api/service.py` and
+the `print()` in `jobs/graph_analytics_job.py` were re-confirmed as live code
+(mock-patch seam for API tests; justified driver-log-independent summary line)
+— no dead code removed.
+
+Changes:
+
+1. `src/front/templates/partials/registry/_registry_configuration.html`
+   Extract Method (JS) — moved the ~312-line inline `<script>` out to a new
+   static file; the partial is markup-only.
+2. `src/front/static/config/js/settings-registry-configuration.js`
+   New file — UC access-check + Lakebase permission-check/grant rendering,
+   identical behavior; `window._obRenderRegistryGrants` still exposed for
+   `registry.js`.
+3. `src/front/templates/settings.html`
+   Load the new script alongside the other admin-only Settings tab JS.
+4. `src/front/static/registry/js/registry.js`
+   Fix stale comment pointing at the removed inline script.
+5. `src/api/routers/internal/_guards.py` (new)
+   Move Function — `require()` FastAPI dependency factory relocated out of
+   `back/objects/registry/` (zero-`Request` layer) into the routes layer,
+   alongside sibling `_permissions.py`.
+6. `src/back/objects/registry/guards.py` (deleted)
+   Superseded by `api/routers/internal/_guards.py`.
+7. `src/back/objects/registry/__init__.py`
+   Drop the `require` re-export (no external consumers outside `api/`).
+8. `src/api/routers/internal/dtwin.py` / `src/api/routers/internal/settings.py`
+   Import `require` from the new location.
+9. `tests/units/auth/test_route_guards.py`
+   Updated import + docstring reference.
+10. `src/back/core/graphdb/neo4j/Neo4jGraphModel.py` → `graph_model.py`
+    Rename — snake_case multi-symbol module (3 `NamedTuple`s + functions, no
+    single matching class) per class-first filename rule.
+11. `src/back/core/graphdb/neo4j/Neo4jStore.py` / `Neo4jWriteOps.py` /
+    `Neo4jReadOps.py`
+    Update imports + docstring `:mod:` refs to `graph_model`.
+12. `tests/units/graphdb/test_neo4j_graph_model.py`
+    Update import + docstring reference.
+13. `releases/ReleaseNotes_V0.7.0.md`
+    Fix `Neo4jGraphModel.py` → `back/core/graphdb/neo4j/graph_model.py`.
+
+Modified files:
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/config/js/settings-registry-configuration.js (new)
+- src/front/templates/settings.html
+- src/front/static/registry/js/registry.js
+- src/api/routers/internal/_guards.py (new)
+- src/back/objects/registry/guards.py (deleted)
+- src/back/objects/registry/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- tests/units/auth/test_route_guards.py
+- src/back/core/graphdb/neo4j/graph_model.py (renamed from Neo4jGraphModel.py)
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/core/graphdb/neo4j/Neo4jWriteOps.py
+- src/back/core/graphdb/neo4j/Neo4jReadOps.py
+- tests/units/graphdb/test_neo4j_graph_model.py
+- releases/ReleaseNotes_V0.7.0.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 38.45s.
+
+## Full verification pass: routine suite + live scenario campaign
+
+Context: User asked to clear local dev caches, then "run all tests & scenarios
+(fix if needed)" as a final verification after the review/refactor pass above.
+No code changes were needed — every suite passed on the first clean run.
+
+Changes: none (verification only).
+
+1. Cleared local Python dev caches (`__pycache__`, `.pytest_cache`,
+   `.ruff_cache`) before re-running, per the prior "clear the cache" request.
+2. Routine suite: `uv run --frozen pytest -q -m "not scenario"` →
+   **4787 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.73s**
+   — confirms the cache clear didn't mask anything and the refactor pass is
+   still green from a fresh interpreter state.
+3. Live scenario campaign (`make scenario-campaign`, `ONTOBRICKS_SCENARIO_LIVE=1`,
+   real warehouse + LLM against a local `--no-reload` app instance):
+   `test_full_lifecycle` **skipped** (needs `fevm-ontobricks-int` workspace —
+   expected/documented), `test_scenario_01_generate_live` **PASSED** (generate →
+   11 classes, Auto-Map → 11 entity + 9 relationship mappings, KG build → 52502
+   triples), `test_scenario_02_collab_lifecycle` **PASSED** (comments, tasks,
+   submit → reopen → resubmit → approve → publish, V1 PUBLISHED, V2 branched),
+   `test_scenario_03_rules_analysis` **PASSED** (98 SHACL shapes, 11 business
+   rules, data-quality run 96/107 passed, reasoning → 2646 inferred triples,
+   graph analysis → 5136 nodes / 4350 edges, interpretation + audit trail),
+   `test_scenario_validation` **PASSED** (13 passed, 0 failed, 2 info in the
+   roll-up report). Overall: **4 passed, 1 skipped, 1 warning in 1571s
+   (26m11s)**. Reports: `artifacts/scenarios/campaign.html` /
+   `campaign_report.md`.
+4. While bringing the app up for the campaign, found the previous dev-server
+   process had drifted into a state where `scripts/stop.sh` killed the tracked
+   pidfile PID but left the actual `run.py`/multiprocessing children holding
+   port 8000 as orphans — force-killed them before restarting. Not a code bug
+   (normal consequence of restarting the dev server across agent sessions);
+   no fix needed. `GET /health` itself is fine — it runs ~15 real
+   Databricks/Lakebase probes serially and legitimately takes ~10-11s end to
+   end, which just needs a longer client timeout than a quick smoke-check
+   `curl -m 5` allows.
+5. Restored the app to normal auto-reload dev mode afterwards (it only needs
+   `--no-reload` for the live campaign itself, per the Makefile's own
+   guidance, to avoid killing in-flight background tasks on a `src/` save).
+
+Modified files:
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 35.73s. `make scenario-campaign` → 4
+passed, 1 skipped, 1 warning in 1571.06s (26m11s); scenario validation report:
+13 passed, 0 failed, 2 info.

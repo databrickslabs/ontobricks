@@ -1,4 +1,4 @@
-"""Tests for back.objects.registry.guards.require — the declarative
+"""Tests for api.routers.internal._guards.require — the declarative
 permission FastAPI dependency.
 
 The middleware (:mod:`shared.fastapi.main`) is responsible for
@@ -22,6 +22,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 from starlette.datastructures import State
 
+from api.routers.internal._guards import require
 from back.core.errors import AuthorizationError, register_exception_handlers
 from back.objects.registry import (
     ROLE_ADMIN,
@@ -30,7 +31,6 @@ from back.objects.registry import (
     ROLE_EDITOR,
     ROLE_NONE,
     ROLE_VIEWER,
-    require,
 )
 
 

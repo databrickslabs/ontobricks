@@ -1493,7 +1493,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 updateRegistryStatus(registryCfg);
                 // Surface the Lakebase grants applied during Initialize
                 // (in-app port of bootstrap-lakebase-perms.sh). Rendered by
-                // the inline script in _registry_configuration.html.
+                // config/js/settings-registry-configuration.js.
                 if (data.permissions && typeof window._obRenderRegistryGrants === 'function') {
                     window._obRenderRegistryGrants(data.permissions);
                     const warns = (data.permissions.warnings || []).length;

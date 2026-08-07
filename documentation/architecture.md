@@ -450,9 +450,9 @@ src/
 │   ├── agent_auto_icon_assign/         # Emoji icon mapping agent
 │   └── agent_ontology_assistant/       # Conversational assistant + ResponsesAgent wrapper
 │
-└── mcp-server/                         # MCP Server (separate Databricks App)
-    ├── app.yaml                        # Databricks App config
-    ├── deploy-mcp-server.sh            # Deployment script
+└── mcp-server/                         # MCP Server (separate Databricks App; under src/)
+    ├── app.yaml                        # Databricks App config (also rendered via DAB)
+    ├── deploy-mcp-server.sh            # Legacy standalone deploy (prefer `make deploy`)
     ├── pyproject.toml                  # Python dependencies
     └── server/
         ├── app.py                      # MCP tools, domain selection, text formatting

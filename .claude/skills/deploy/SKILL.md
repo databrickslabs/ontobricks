@@ -40,19 +40,32 @@ The canonical deploy steps are in **`README.md §Deploying / Installing`** and
 
 ## Deploy
 
+Canonical target list (matches `documentation/deployment.md` §Makefile targets
+and the root `Makefile`). There is **no** `deploy-all` / `deploy-mcp` /
+`deploy-prod` target — MCP ships in the same DAB bundle as the main app;
+production uses a distinct `DEFAULT_INSTANCE_ID` + `make deploy`, not a
+separate Make recipe.
+
 | Command | When |
 |---------|------|
-| `make deploy` | dev — deploy + start FastAPI app |
-| `make deploy-all` | dev — deploy + start both apps (FastAPI + MCP) |
-| `make deploy-mcp` | only MCP server changed |
-| `make deploy-prod` | production target |
-| `make deploy-no-run` | deploy artifacts without starting apps |
-| `make bundle-validate` | validate `databricks.yml` only |
+| `make deploy` | default — `scripts/deploy.sh` (target from `deploy.config.sh`, usually `dev-lakebase`); starts the main app |
+| `make deploy-volume` | volume-only target (`-t dev`) — no Lakebase postgres binding |
+| `make deploy-no-run` | deploy artifacts without `bundle run` |
+| `make deploy-dry-run` / `make deploy-check` | read-only preflight (no deploy) |
+| `make bundle-validate` | validate `databricks.yml` for the configured target |
 | `make bundle-summary` | preview what will deploy |
+| `make bootstrap-perms` | app SP self-`CAN_MANAGE` + analytics-job `CAN_MANAGE_RUN` (idempotent; also auto-run by `make deploy`) |
+| `make bootstrap-lakebase` | Lakebase schema GRANTs (idempotent; auto-run on `*-lakebase` targets) |
 
-`make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically on
-the first deploy (see README.md). If the user runs `databricks bundle
-deploy` directly, run `make bootstrap-perms` once afterwards (idempotent).
+After `make deploy`, start the MCP app if it is not already running:
+
+```bash
+databricks bundle run mcp_ontobricks_app -t <DAB_TARGET>
+```
+
+`make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically (see
+README.md). If the user runs `databricks bundle deploy` directly, run
+`make bootstrap-perms` once afterwards (idempotent).
 
 ## Post-deploy
 

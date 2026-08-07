@@ -17,7 +17,7 @@ that marker.
 prop-key→predicate URI). So the KG view / GraphQL / reasoning layers see no
 behavioural change, while traversal/reasoning now run as native relationship
 patterns. The forward transform lives in the driver-free
-:mod:`Neo4jGraphModel`.
+:mod:`back.core.graphdb.neo4j.graph_model`.
 
 Implementation is split across three services (extracted during the PR
 #47 review — Benoit 2026-06-18 "la classe est trop grosse"):

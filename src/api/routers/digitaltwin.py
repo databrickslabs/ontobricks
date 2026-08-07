@@ -714,72 +714,26 @@ async def dt_triples_find(
     if not table:
         raise ValidationError("Graph name not configured")
 
-    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-
     def _run_find() -> FindResponse:
-        rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
-
-        seed_conditions: list[str] = []
-
-        if entity_type:
-            esc = sql_escape(entity_type).lower()
-            seed_conditions.append(
-                f"subject IN (SELECT subject FROM {table} "
-                f"WHERE predicate = '{rdf_type}' AND "
-                f"(LOWER(object) LIKE '%#{esc}' OR LOWER(object) LIKE '%/{esc}'))"
-            )
-
-        if search:
-            esc = sql_escape(search).lower()
-            seed_conditions.append(
-                f"(subject IN (SELECT subject FROM {table} "
-                f"WHERE (predicate = '{rdfs_label}' "
-                f"OR predicate LIKE '%#label' OR predicate LIKE '%/label' "
-                f"OR predicate LIKE '%#name' OR predicate LIKE '%/name') "
-                f"AND LOWER(object) LIKE '%{esc}%') "
-                f"OR LOWER(subject) LIKE '%/{esc}%' "
-                f"OR LOWER(subject) LIKE '%#{esc}%')"
-            )
-
-        seed_where = " WHERE " + " AND ".join(seed_conditions)
-
-        bfs_rows = store.bfs_traversal(
+        result = DigitalTwin.find_triples_bfs(
+            store,
             table,
-            seed_where,
-            depth,
-            search=search or "",
-            entity_type=entity_type or "",
+            entity_type=entity_type,
+            search=search,
+            depth=depth,
+            limit=limit,
+            offset=offset,
         )
-
-        if not bfs_rows:
+        if result.get("message") and not result.get("triples"):
             return FindResponse(
                 success=True,
                 seed_count=0,
                 depth=depth,
-                message="No matching entities found",
+                message=result["message"],
             )
-
-        all_entities = {r["entity"] for r in bfs_rows}
-        seed_count = sum(1 for r in bfs_rows if int(r.get("min_lvl", 0)) == 0)
-
-        all_entities = DigitalTwin.expand_uri_aliases(store, table, all_entities)
-
-        all_rows = store.get_triples_for_subjects(table, list(all_entities))
-
-        seen_triples: set = set()
-        all_triples: list = []
-        for r in all_rows:
-            key = (r["subject"], r["predicate"], r["object"])
-            if key not in seen_triples:
-                seen_triples.add(key)
-                all_triples.append(r)
-
-        total = len(all_triples)
-        page = all_triples[offset : offset + limit]
-
         return FindResponse(
             success=True,
-            seed_count=seed_count,
+            seed_count=result["seed_count"],
             depth=depth,
             triples=[
                 TripleRow(
@@ -787,13 +741,13 @@ async def dt_triples_find(
                     predicate=r.get("predicate", ""),
                     object=r.get("object", ""),
                 )
-                for r in page
+                for r in result["triples"]
             ],
-            count=len(page),
-            total=total,
+            count=result["count"],
+            total=result["total"],
             limit=limit,
             offset=offset,
-            entity_count=len(all_entities),
+            entity_count=result["entity_count"],
         )
 
     try:

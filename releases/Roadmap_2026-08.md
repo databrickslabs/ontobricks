@@ -12,13 +12,14 @@
 
 OntoBricks is the only Databricks-native knowledge graph builder that combines ontology design, LLM-powered automation, formal reasoning, and interactive graph exploration in a single deployable App. Versions 0.4.0 (Lakebase as primary triple store), 0.5.0 (UX, workflow & governance), 0.6.0 (collaborative comments & AI agents, graph analytics, mapping depth), and 0.7.0 (Neo4j connector) have shipped; **v0.7.0 is the current stable line**.
 
-The next phase of the roadmap focuses on five strategic axes:
+The next phase of the roadmap focuses on six strategic axes:
 
 1. **Data & mapping integrity hardening** — close two gaps surfaced by real usage: deleting a data source still referenced by a mapping today produces a silent, dangling reference (broken R2RML at build time, no warning at delete time), and metadata refresh applies column changes without a preview (**v0.8.0**).
 2. **External surface expansion** — a GraphRAG-inspired retrieval layer for the MCP Server, embedded-dashboard/action/dataset endpoints published on the external API, and a first design pass on exposing draft domains and agentic modeling externally (**v0.8.0**).
 3. **Workflow completeness** — close the remaining v0.6.0-deferred UX and automation items (ontology version diff, mapping multi-select & orphan validation, scheduled reasoning, temporal & recursive Datalog) folded into the **v0.8.0** release.
 4. **Domain storage isolation** — isolate each domain's Lakebase and Lakehouse artifacts behind a dedicated schema so multi-domain deployments no longer share a flat namespace (**v0.8.0**).
-5. **Enterprise hardening** — fine-grained RBAC, multi-workspace federation, audit log, large-graph pagination, and one-command deployment (**v0.9.0**).
+5. **Ontos integration** — connect OntoBricks domains with Databricks Ontos so ontology and mapping work can interoperate with the platform ontology layer (**v0.8.0**).
+6. **Enterprise hardening** — fine-grained RBAC, multi-workspace federation, audit log, large-graph pagination, and one-command deployment (**v0.9.0**).
 
 ---
 
@@ -85,6 +86,7 @@ OntoBricks can be positioned as the **semantic layer for the Databricks Lakehous
 - Deleting a data source still referenced by a mapping is not blocked or flagged, and metadata refresh applies column changes without a preview — **targeted for v0.8.0**
 - Lakebase and Lakehouse graph/registry objects are not isolated per domain (shared schema / flat namespace) — **targeted for v0.8.0**
 - MCP Server exposes typed lookups and BFS-style traversal but no semantic/GraphRAG-style retrieval; embedded dashboards, actions, and datasets are not published on the external API; the external API has no concept of draft domains or agentic operations — **targeted for v0.8.0**
+- No integration with Databricks Ontos (import/export or sync of ontology assets between OntoBricks and the platform ontology layer) — **targeted for v0.8.0**
 - No native, end-to-end unstructured data ingestion pipeline (document → entity extraction → deduplication → knowledge graph); v0.5.0 shipped document-to-markdown conversion feeding the ontology/business-rules agents, but full extraction-to-graph is **unscheduled** pending user feedback in Discussions
 - No i18n / localization layer — all UI strings are hardcoded English; **unscheduled**, pending a decision on target languages and scaffolding approach
 - No SPARQL federation across multiple domain graphs
@@ -202,9 +204,9 @@ Also delivered (beyond the original plan):
 
 ---
 
-### v0.8.0 — Data Integrity, External Surface, Domain Isolation & Workflow Completeness (October 2026)
+### v0.8.0 — Data Integrity, External Surface, Domain Isolation, Workflow Completeness & Ontos Integration (October 2026)
 
-**Theme:** four pillars shipped together. First, **data & mapping integrity hardening** — closing gaps in the data-source/mapping lifecycle surfaced by real usage. Second, **external surface expansion** — a GraphRAG-inspired MCP retrieval layer, published dashboard/action/dataset endpoints, and a first design pass on exposing draft domains and agentic modeling externally. Third, **domain storage isolation** — each domain gets a dedicated Lakebase and Lakehouse schema so graph and registry artifacts no longer share a flat namespace. Fourth, **closure of all workflow items deferred from v0.6.0** (ontology version diff, mapping multi-select, orphan detection, scheduled reasoning, temporal & recursive Datalog).
+**Theme:** five tracks shipped together. First, **data & mapping integrity hardening** — closing gaps in the data-source/mapping lifecycle surfaced by real usage. Second, **external surface expansion** — a GraphRAG-inspired MCP retrieval layer, published dashboard/action/dataset endpoints, and a first design pass on exposing draft domains and agentic modeling externally. Third, **domain storage isolation** — each domain gets a dedicated Lakebase and Lakehouse schema so graph and registry artifacts no longer share a flat namespace. Fourth, **closure of all workflow items deferred from v0.6.0** (ontology version diff, mapping multi-select, orphan detection, scheduled reasoning, temporal & recursive Datalog). Fifth, **Ontos integration** — bridge OntoBricks domains with Databricks Ontos so customers can reuse and align ontology assets across the platform ontology layer and OntoBricks design/mapping/reasoning.
 
 #### Pillar 1 — Data Source & Mapping Integrity
 
@@ -269,6 +271,13 @@ Also delivered (beyond the original plan):
 | **Scheduler — inference & materialization**         | Extend the scheduler so OWL 2 RL inference and SWRL materialization can run as scheduled tasks alongside the existing build job, with results recorded in the build-run trace                                                                                                                                                                                                                                                                                                                                                                                                                                  | P2       |
 | **Advanced reasoning — temporal & recursive rules** | Extend the multi-phase reasoning engine with two new symbolic families: **(1) Temporal reasoning** — Allen's 13 interval relations (before, meets, overlaps, during, …) inferred from entity start/end datatype properties; **(2) recursive Datalog** — stratified, semi-naïve fixpoint rules reusing the SWRL atom syntax for true recursion (e.g. conditional reachability/ancestry) beyond the fixed transitive closure. Shipped as a phased roadmap (temporal first, Datalog second)                                                                                                                     | P2       |
 
+#### Pillar 8 — Ontos Integration
+
+
+| Capability                              | Description                                                                                                                                                                                                                                                                                                                                 | Priority |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| **Ontos Integration**                   | Integrate OntoBricks with **Databricks Ontos**: import/align ontology assets from Ontos into OntoBricks domains, export or publish OntoBricks OWL/mappings back for platform reuse, and document the supported sync/auth model so design, mapping, and reasoning stay complementary to the Databricks ontology layer rather than a silo | P1       |
+
 ---
 
 ### v0.9.0 — Enterprise Hardening (Q4 2026)
@@ -329,6 +338,7 @@ Also delivered (beyond the original plan):
 | **Mapping multi-select & orphan check**          | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | **Scheduled inference / materialization**        | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | **Temporal & recursive Datalog reasoning**       | —    | —    | —    | —    | ✅    | ✅    | ✅    |
+| **Ontos Integration**                            | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | Fine-grained RBAC                                | —    | —    | —    | —    | —    | ✅    | ✅    |
 | Multi-workspace federation                       | —    | —    | —    | —    | —    | ✅    | ✅    |
 | API key authentication                           | —    | —    | —    | —    | —    | ✅    | ✅    |
@@ -365,6 +375,7 @@ Also delivered (beyond the original plan):
 5. **Language package approach** — scaffold a general translation-key pipeline now (higher upfront cost, no immediate payoff) or wait for a concrete target-language requirement and localize incrementally? No committed direction yet.
 6. **Lakebase SPARQL subset scope** — BGP + FILTER covers 80% of use cases; OPTIONAL and UNION add another 15%. Aggregates and property paths are deferred to a later patch.
 7. **Auto quality rules confidence** — the v0.5.0 business-rules generator is advisory (suggest + review/accept). How aggressively should auto-suggested rules be applied? Auto-apply with confidence thresholds is deferred pending feedback.
+8. **Ontos Integration direction** — one-way import from Ontos, bidirectional sync, or publish-from-OntoBricks-only? Needs a short design pass on asset granularity (classes/properties vs full domain package), conflict resolution, and auth against the Ontos API before implementation.
 
 ---
 
