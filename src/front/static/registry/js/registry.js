@@ -306,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function () {
             };
             const backendIconClasses = {
                 lakebase: 'ob-icon-postgresql',
-                databricks: 'ob-icon-databricks',
+                databricks: 'ob-icon-lakehouse',
                 neo4j: 'ob-icon-neo4j',
             };
             let html = '<div class="table-responsive registry-domain-table-wrapper">' +

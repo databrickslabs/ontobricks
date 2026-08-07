@@ -403,7 +403,7 @@
                         {
                             "id": "databricks",
                             "label": "Databricks",
-                            "icon": "bi-database",
+                            "icon": "ob-brand-icon ob-icon-databricks",
                             "default": true,
                             "requires": null
                         },
@@ -439,7 +439,7 @@
                         {
                             "id": "delta",
                             "label": "Lakehouse",
-                            "icon": "ob-brand-icon ob-icon-databricks",
+                            "icon": "ob-brand-icon ob-icon-lakehouse",
                             "default": false,
                             "requires": null
                         },

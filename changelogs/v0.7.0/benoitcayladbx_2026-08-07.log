@@ -429,3 +429,52 @@ Verified in-browser (dedicated subagent, real workspace):
   `dataset.userEdited` was `"1"` on both fields, and the Save payload carried
   the picked connection, not the stale one). A subsequent fresh reload showed
   the persisted value with no console errors.
+
+--------------------------------------------------------------------------------
+
+## Split Lakehouse and Databricks icons
+
+Context:
+Lakehouse backend surfaces used the official Databricks logo, while the
+Databricks configuration item used a generic database glyph. The application
+now uses the supplied orange Lakehouse artwork everywhere Lakehouse is shown
+and reserves the official Databricks logo for Databricks settings.
+
+Changes:
+
+1. `src/front/static/global/img/lakehouse-icon.png`
+   Added the supplied local orange Lakehouse asset.
+2. `src/front/static/global/css/components.css`
+   Added the semantic `ob-icon-lakehouse` modifier while retaining the
+   Databricks modifier for the official logo.
+3. `src/front/config/menu_config.json`
+   Split the Lakehouse backend and Databricks configuration icon mappings.
+4. `src/front/templates/settings.html`
+   Aligned the Databricks and Lakehouse section headers with their menu icons.
+5. `src/front/static/query/js/query-sync.js`
+   Mapped Lakehouse backend aliases to the Lakehouse icon.
+6. `src/front/static/domain/js/domain-validation.js`
+   Mapped Domain Validation Lakehouse aliases to the Lakehouse icon.
+7. `src/front/static/registry/js/registry.js`
+   Mapped Registry Lakehouse badges to the Lakehouse icon.
+8. `tests/units/front/test_backend_brand_icons.py`
+   Covered local PNG/SVG assets and the semantic settings and backend mappings.
+9. `tests/units/front/test_registry_backend_column.py`
+   Updated the Registry backend-column contract for the Lakehouse modifier.
+
+Modified files:
+- src/front/static/global/img/lakehouse-icon.png
+- src/front/static/global/css/components.css
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_registry_backend_column.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_backend_brand_icons.py tests/units/front/test_registry_backend_column.py`
+→ 9 passed, 1 warning in 0.16s.
+`uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 34.03s.

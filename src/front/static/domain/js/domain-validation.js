@@ -570,12 +570,13 @@ function updateDtwinCard(data) {
         var key = String(backend || 'lakebase').toLowerCase();
         var iconClass = 'ob-icon-postgresql';
         if (key === 'databricks' || key === 'delta' || key === 'lakehouse') {
-            iconClass = 'ob-icon-databricks';
+            iconClass = 'ob-icon-lakehouse';
         } else if (key === 'neo4j') {
             iconClass = 'ob-icon-neo4j';
         }
         element.classList.remove(
             'ob-icon-postgresql',
+            'ob-icon-lakehouse',
             'ob-icon-databricks',
             'ob-icon-neo4j',
             'd-none'

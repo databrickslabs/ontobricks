@@ -28,6 +28,10 @@
     background-image: url("/static/global/img/lakebase-icon.svg");
 }
 
+.ob-icon-lakehouse {
+    background-image: url("/static/global/img/lakehouse-icon.png");
+}
+
 .ob-icon-databricks {
     background-image: url("/static/global/img/databricks-icon.svg");
 }

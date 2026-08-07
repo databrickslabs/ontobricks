@@ -28,6 +28,6 @@ def test_registry_browse_has_backend_column_after_uri():
     assert "Lakehouse" in body
     assert "Neo4j" in body
     assert "ob-icon-postgresql" in body
-    assert "ob-icon-databricks" in body
+    assert "ob-icon-lakehouse" in body
     assert "ob-icon-neo4j" in body
     assert "ob-brand-icon" in body

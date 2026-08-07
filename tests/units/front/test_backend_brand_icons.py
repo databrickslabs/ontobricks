@@ -16,19 +16,24 @@ _BUILD_JS = Path("src/front/static/query/js/query-sync.js")
 _VALIDATION = Path("src/front/templates/partials/domain/_domain_validation.html")
 _VALIDATION_JS = Path("src/front/static/domain/js/domain-validation.js")
 _REGISTRY_CONFIG = Path("src/front/templates/partials/registry/_registry_configuration.html")
+_REGISTRY_JS = Path("src/front/static/registry/js/registry.js")
 
 _EXPECTED = {
     "lakebase": ("ob-icon-postgresql", "lakebase-icon.svg"),
-    "delta": ("ob-icon-databricks", "databricks-icon.svg"),
+    "delta": ("ob-icon-lakehouse", "lakehouse-icon.png"),
     "neo4j": ("ob-icon-neo4j", "neo4j-icon.svg"),
 }
 
 
-def _backend_items() -> dict[str, dict]:
+def _settings_items(group_id: str) -> dict[str, dict]:
     menus = json.loads(_MENU.read_text(encoding="utf-8"))["menus"]
     settings = next(menu for menu in menus if menu["id"] == "settings")
-    backend = next(group for group in settings["groups"] if group["id"] == "settings-triplestore")
-    return {item["id"]: item for item in backend["items"]}
+    group = next(group for group in settings["groups"] if group["id"] == group_id)
+    return {item["id"]: item for item in group["items"]}
+
+
+def _backend_items() -> dict[str, dict]:
+    return _settings_items("settings-triplestore")
 
 
 def test_backend_menu_uses_brand_icon_classes():
@@ -41,18 +46,51 @@ def test_backend_headers_match_menu_brand_icons():
     template = _SETTINGS.read_text(encoding="utf-8")
     expected_headers = {
         "Lakebase": "ob-icon-postgresql",
-        "Lakehouse": "ob-icon-databricks",
+        "Lakehouse": "ob-icon-lakehouse",
         "Neo4j": "ob-icon-neo4j",
     }
     for label, modifier in expected_headers.items():
         assert f'<i class="ob-brand-icon {modifier} me-2"></i>{label}</h4>' in template
 
 
-def test_brand_icons_are_local_color_svgs():
-    for _, filename in _EXPECTED.values():
-        svg = (_IMG / filename).read_text(encoding="utf-8")
-        assert "<svg" in svg
-        assert "#" in svg, f"{filename} must define a brand color"
+def test_brand_icon_assets_are_local_and_colored():
+    for item_id, (_, filename) in _EXPECTED.items():
+        asset = _IMG / filename
+        assert asset.is_file()
+        if item_id == "delta":
+            assert asset.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+        else:
+            svg = asset.read_text(encoding="utf-8")
+            assert "<svg" in svg
+            assert "#" in svg, f"{filename} must define a brand color"
+
+
+def test_databricks_settings_uses_official_databricks_icon():
+    items = _settings_items("settings-config")
+    assert items["databricks"]["icon"] == "ob-brand-icon ob-icon-databricks"
+
+    template = _SETTINGS.read_text(encoding="utf-8")
+    assert (
+        '<i class="ob-brand-icon ob-icon-databricks me-2"></i>Databricks</h4>'
+        in template
+    )
+
+    css = _CSS.read_text(encoding="utf-8")
+    assert (
+        '.ob-icon-databricks {\n'
+        '    background-image: url("/static/global/img/databricks-icon.svg");\n'
+        "}"
+    ) in css
+
+
+def test_lakehouse_dynamic_icons_use_lakehouse_modifier():
+    build_js = _BUILD_JS.read_text(encoding="utf-8")
+    validation_js = _VALIDATION_JS.read_text(encoding="utf-8")
+    registry_js = _REGISTRY_JS.read_text(encoding="utf-8")
+
+    assert "return 'ob-icon-lakehouse';" in build_js
+    assert "iconClass = 'ob-icon-lakehouse';" in validation_js
+    assert "databricks: 'ob-icon-lakehouse'," in registry_js
 
 
 def test_brand_icon_box_matches_text_icon_size():

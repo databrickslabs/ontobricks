@@ -203,6 +203,7 @@ function _setBackendBrandIcon(element, backend) {
     if (!element) return;
     element.classList.remove(
         'ob-icon-postgresql',
+        'ob-icon-lakehouse',
         'ob-icon-databricks',
         'ob-icon-neo4j',
         'd-none'
@@ -753,7 +754,7 @@ function _kgBackendKey() {
 function _backendBrandIconClass(backend) {
     var key = String(backend || 'lakebase').toLowerCase();
     if (key === 'databricks' || key === 'delta' || key === 'lakehouse') {
-        return 'ob-icon-databricks';
+        return 'ob-icon-lakehouse';
     }
     if (key === 'neo4j') return 'ob-icon-neo4j';
     return 'ob-icon-postgresql';
