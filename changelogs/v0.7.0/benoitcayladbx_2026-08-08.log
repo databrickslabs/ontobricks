@@ -68,3 +68,34 @@ Tests: `.venv/bin/pytest -q -m "not scenario"`
 → 4787 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.92s.
 (`uv run --frozen` could not re-resolve hatchling against the internal pypi
 proxy in this environment — 403 — so the already-synced venv was used.)
+
+## Document 0.6.x → 0.7 in-place app upgrade
+
+Context: Customers on 0.6.x asking whether `make deploy` with 0.7 scripts
+kills the live Databricks app. Upgrade Notes covered schema/product breaks
+but not the INSTANCE_ID / DAB target recipe. Documented the safe in-place
+path (match live app suffix + force legacy `dev-lakebase` target) vs naive
+parallel deploy vs destructive same-target rename.
+
+Changes:
+
+1. `releases/ReleaseNotes_V0.7.0.md`
+   Added "Keep the existing Databricks app" under Upgrading from v0.6.x
+   with in-place / parallel / naive-default guidance and example command.
+2. `documentation/DEPLOY_CHECKLIST.md`
+   New §5 in-place app upgrade table; renumbered following sections;
+   happy-path checklist now references DEFAULT_INSTANCE_ID + §5.
+3. `documentation/deployment.md`
+   Config table: DEFAULT_INSTANCE_ID + clarified DEFAULT_DAB_TARGET
+   legacy override for pre-INSTANCE_ID upgrades.
+
+Modified files:
+- releases/ReleaseNotes_V0.7.0.md
+- documentation/DEPLOY_CHECKLIST.md
+- documentation/deployment.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-08.log
+
+Tests: `.venv/bin/pytest -q -m "not scenario"`
+→ 4787 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.42s.
+(`uv run --frozen` could not re-resolve hatchling against the internal pypi
+proxy in this environment — 403 — so the already-synced venv was used.)

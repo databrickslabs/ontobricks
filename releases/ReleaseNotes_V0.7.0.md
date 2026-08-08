@@ -139,6 +139,42 @@ No special action beyond the standard `make bootstrap-lakebase` (which now also 
 
 ### Upgrading from v0.6.x
 
+#### Keep the existing Databricks app (do not destroy it)
+
+v0.7.0 introduces `DEFAULT_INSTANCE_ID`, which derives both the app name
+(`ontobricks-<id>`) and the DAB target (`dev-lakebase-<id>`). A Databricks app
+name cannot be renamed in place — Terraform **destroys then creates**. Preflight
+blocks accidental renames unless you confirm (`ALLOW_APP_RENAME=1` or typing the
+old name).
+
+**In-place upgrade of a live 0.6.x app** (same URL, same Terraform state under
+the unsuffixed `dev-lakebase` target):
+
+1. Note the live app name (e.g. `ontobricks-060`) and set the matching id:
+   `DEFAULT_INSTANCE_ID=060` in `scripts/deploy.config.sh` (or pass it on the
+   command line).
+2. Force the **legacy** DAB target so you keep managing the existing state:
+   uncomment / set `DEFAULT_DAB_TARGET="dev-lakebase"`, or run
+   `DAB_TARGET=dev-lakebase make deploy`.
+3. Keep Lakebase / UC coords pointing at the same registry as before.
+4. Run `make bootstrap-lakebase` (or let `make deploy` do it) so the 0.6→0.7
+   scheduler columns land, then `make deploy`.
+
+Example:
+
+```bash
+DEFAULT_INSTANCE_ID=060 DAB_TARGET=dev-lakebase make deploy
+```
+
+**What a naive default deploy does:** stock `DEFAULT_INSTANCE_ID=07x` deploys
+`ontobricks-07x` under a **new** target `dev-lakebase-07x`. That does **not**
+kill the old app — it leaves it running and orphaned from the new scripts. Use
+the in-place recipe above if you want to refresh the existing app.
+
+**New parallel instance (leave 0.6.x untouched):** change only
+`DEFAULT_INSTANCE_ID` (e.g. `07x`) and deploy; each id gets its own app + state.
+See also `documentation/DEPLOY_CHECKLIST.md` §5.
+
 - **Neo4j is a breaking storage change for pre-release testers only**: any Neo4j graph written by an earlier v0.7 pre-release build (flat triple nodes, no relationships) is **not** migrated automatically. Drop the old graph via Settings → Neo4j → Objects and rebuild the domain. Domains that have never used Neo4j are unaffected.
 - **Named Neo4j connections (breaking for early Neo4j adopters)**: flat workspace `uri`/`username` Neo4j config is **not** auto-migrated into `connections[]`. Re-enter profiles in Settings → Neo4j, then set each Neo4j domain's required **Neo4j connection** on Domain → Information → Knowledge Graph. The old per-domain `neo4j_database` field is no longer written.
 - **Graph backend selection moved**: the workspace-global Settings → Back End page is gone. Every domain must have a `graph_backend` (Lakebase / Lakehouse / Neo4j) set on Domain → Information → Knowledge Graph; existing domains default to Lakebase.
