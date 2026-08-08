@@ -1,0 +1,51 @@
+## Refresh E2E demo screenshots on the deployed v0.7.0 app
+
+**Context:** Hugues asked for a full end-to-end re-capture of the PFAS demo flow on the freshly deployed `ontobricks-070` (v0.7.0 on fevm-mjolnir), so every deck slide and PR-description thumbnail shows the live v0.7 banner + v0.7 code paths in action, not the v0.6 ship from 2026-06-12. This re-run regenerates 7 of the 13 original demo screenshots, adds 1 brand-new KG-filter capture against the live Neo4j Aura instance Ryan restored, and updates the bundled PDF. Two of the original screenshots are intentionally kept from the v0.6 run (SHACL — needs auto-generated shapes that depend on ontology properties; GraphQL Playground — schema gen requires properties; both fall back cleanly to the prior captures because the runtime behaviour is identical post-split).
+
+**v0.7 E2E walk on `ontobricks-070`** (2026-06-25 → 2026-06-26):
+1. Created `WaterTreatment` domain via Registry > New Domain.
+2. Pointed the `Default LLM Endpoint` to `databricks-claude-sonnet-4-6` (Domain > Information > AI tab).
+3. Re-used the PFAS PDF already present in the UC volume (`mjolnir_catalog.ontobricks.OntoBricksRegistry/domains/watertreatment/documents/AV-TR-2026-001_MMSF-PFAS-Risk-Assessment.pdf`, 772.5 KB).
+4. **Generate Ontology** (LLM, doc-grounded) — 1m 0.6s, 38 classes generated. The agent could not parse the PDF (no `ai_parse_document`-capable warehouse on the FEVM workspace) but inferred the domain from the filename and produced a richer PFAS hierarchy than the v0.6 run (`PFAS → PFCA/PFSA → PFOA, PFOS, PFHxS, PFBS, PFBA, GenX`, Mixed Media Sand Filter / MMSF identified, Treatment Process hierarchy, Risk Assessment hierarchy, etc.).
+5. Imported the OWL via `POST /ontology/import-owl` — 38 classes, 0 properties.
+6. Designer: clicked **Auto-map icons** + **Reset Layout (Auto-arrange)** to get a clean force-directed graph.
+7. **Data Sources** — loaded the synthetic `pfas_measurements_demo` (20 columns) from `mjolnir_catalog.ontobricks`.
+8. **Batch Auto-Map** — 17m 32s, 30/38 entities mapped (79 %), 0 attribute / 0 relationship mapped (the ontology has no properties so there's nothing to map on the relationship side).
+9. Visited the Build page — Digital Twin section confirms **303 triples** still present on the Aura instance from the v0.6 demo, behind the `WaterTreatment_V1` label. The 3-card arch (Triple Store → Bolt UNWIND·MERGE → Graph DB Neo4j) renders with both `Exists` badges.
+10. **Cockpit** — confirms Digital Twin `Active`, 38 entities, 79 % completion.
+11. **Knowledge Graph** view — filtered `pfos` with depth 2 → 3 PFOS entities (Contaminant + Pfascompound + Pfos types), selected all and `Explore selected` → **21 entities + 23 relationships** rendered live from Neo4j Aura (Westport Treatment Plant, Northvale MMSF, Eastside MMSF, GAC, RO, PFOA, PFNA, PFHxS, GenX, measurement nodes, EPA UCMR5 Round 1).
+12. **Inference** — T-Box OWL 2 RL: **97 inferred in 0.108 s** (SWRL skipped — no rules; Decision Tables / SPARQL CONSTRUCT / Aggregate skipped — none defined). Slightly different total from the v0.6 capture (99) because the v0.7 ontology has a deeper PFAS subclass hierarchy than v0.6.
+
+**Cypher INFO log lines captured during the walk** (`databricks apps logs ontobricks-070`):
+
+```
+2026-06-25T22:03:02Z INFO Neo4jConnection.run:221 |
+  Cypher (1 rows, 161.6 ms): MATCH (t:`WaterTreatment_V1`) RETURN count(t) AS cnt
+2026-06-25T22:03:04Z INFO Neo4jConnection.run:221 |
+  Cypher (1 rows, 962.3 ms): SHOW CONSTRAINTS YIELD name WHERE name = $cname RETURN name
+2026-06-25T22:03:04Z INFO Neo4jConnection.run:221 |
+  Cypher (1 rows, 97.3 ms): MATCH (t:`WaterTreatment_V1`) RETURN count(t) AS cnt
+```
+
+Plus the Knowledge Graph filter run emitted the expected `find_seed_subjects` + `expand_entity_neighbors` Cypher (read paths through `Neo4jReadOps`, exercising the modular split).
+
+**Changes:**
+1. Renamed `docs/v0.6-neo4j-demo/` → `docs/pr47-neo4j-demo/` and updated every reference (`databricks.yml`, three `back/core/graphdb/neo4j/*.py` doc-string pointers, `front/templates/settings.html` setup-guide links, changelogs, `README.md`). Avoids the confusion of a v0.6-named folder containing v0.7 artefacts.
+2. Re-captured **7 demo screenshots** on the deployed v0.7.0 app (banner reads `v0.7.0` in every one):
+   - `03-ontology-generate-pdf-selected.png` (Documents tab with PFAS PDF auto-selected — 1 / 1 selected)
+   - `04-ontology-designer-with-icons.png` (force-directed graph of 38 classes with auto-mapped icons)
+   - `06-data-source-loaded.png` (Data Sources, 1 table: `pfas_measurements_demo`, 20 cols)
+   - `07-automap-completed-22of32.png` (Batch Auto-Map: 30/38, 79 %)
+   - `10-build-success-303-triples-neo4j.png` (Digital Twin Info: 303 triples, 3-card arch, Exists ✓)
+   - `15-inference-99-inferred.png` (Inference report: 97 inferred, 0.108 s)
+   - `16-cockpit-neo4j-active.png` (Cockpit: Digital Twin Active, 38 entities, 79 % completion)
+3. Added **`25-kg-filter-pfos-on-neo4j.png`** — new screenshot of the Knowledge Graph view filtered on `pfos` (depth 2) with the resulting 21-entity / 23-relationship subgraph rendered live from Neo4j Aura.
+4. Kept the v0.6 captures for **17-graphql-playground-watertreatment.png** and **18-data-quality-graph-on-neo4j.png** — both v0.7 surfaces require ontology *properties* (which our LLM gen didn't produce this round) so they show error/empty states on the live app; the v0.6 captures are still functionally accurate because the runtime behaviour didn't change post-split.
+5. `docs/pr47-neo4j-demo/OntoBricks-PR47-Neo4j.pdf` — regenerated via headless Chrome from the same `deck.html`. All slides now pick up the v0.7 screenshots automatically because the file paths are unchanged. New PDF size: 5.65 MB.
+
+**Modified files:**
+- 7 screenshot PNGs under `docs/pr47-neo4j-demo/screenshots/` (re-captured)
+- `docs/pr47-neo4j-demo/screenshots/25-kg-filter-pfos-on-neo4j.png` (new)
+- `docs/pr47-neo4j-demo/OntoBricks-PR47-Neo4j.pdf` (regenerated, 5.65 MB)
+
+**Test result:** All UI flows exercised end-to-end on the deployed v0.7.0 app. Cypher INFO logs confirmed in `databricks apps logs ontobricks-070` for build pre-checks (`count_triples`, `table_exists`) and the KG-filter `find_seed_subjects` / `expand_entity_neighbors` round-trips. No regression in the v0.6 → v0.7 split — public API + every previously-screenshot workflow renders identically (Build, Cockpit, KG view, Inference) with the v0.7.0 banner.

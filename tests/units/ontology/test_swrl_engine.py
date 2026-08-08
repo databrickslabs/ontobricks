@@ -116,6 +116,37 @@ class TestSWRLSQLTranslator:
         assert "INSERT INTO triples" in sql
 
 
+# -- Built-in registry tests -----------------------------------------------
+
+
+class TestBuiltinNumericCasts:
+    """Built-ins cast triple values, which are strings, to numbers or dates.
+
+    Under ANSI mode a bare ``CAST`` aborts the statement on the first value
+    that will not convert, so one malformed row would fail the whole rule
+    instead of simply not matching.
+    """
+
+    def test_no_builtin_emits_a_bare_cast(self):
+        from back.core.reasoning.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+
+        offenders = [
+            b.name
+            for b in SWRLBuiltinRegistry.all().values()
+            if "CAST(" in b.sql_template.replace("TRY_CAST(", "")
+        ]
+        assert offenders == []
+
+    def test_greater_than_uses_try_cast(self):
+        from back.core.reasoning.SWRLBuiltinRegistry import SWRLBuiltinRegistry
+
+        builtin = SWRLBuiltinRegistry.get("greaterThan")
+        assert (
+            builtin.sql_template
+            == "TRY_CAST({0} AS DOUBLE) > TRY_CAST({1} AS DOUBLE)"
+        )
+
+
 # -- SWRLEngine tests ------------------------------------------------------
 
 

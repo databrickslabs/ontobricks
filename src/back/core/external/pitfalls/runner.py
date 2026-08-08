@@ -47,9 +47,9 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P1.1",
         "title": "Parent disjoint with children",
         "description": (
-            "A class is declared disjoint from one of its own subclasses. "
+            "An entity is declared disjoint from one of its own subclasses. "
             "This is a contradiction: no individual can simultaneously belong "
-            "to both a class and its subclass if they are disjoint, making the "
+            "to both an entity and its subclass if they are disjoint, making the "
             "subclass unsatisfiable (always empty)."
         ),
     },
@@ -58,8 +58,8 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P1.2",
         "title": "Entity as subclass of both parent and grandparent",
         "description": (
-            "A class is explicitly declared as a direct subclass of both a "
-            "parent class and one of that parent's ancestors. The declaration "
+            "An entity is explicitly declared as a direct subclass of both a "
+            "parent entity and one of that parent's ancestors. The declaration "
             "to the ancestor is redundant because subclass transitivity already "
             "implies it, and it can mislead reasoners."
         ),
@@ -69,10 +69,10 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P1.3",
         "title": "Logical inconsistencies",
         "description": (
-            "Axioms in the ontology produce unsatisfiable classes — e.g., a "
-            "class is simultaneously defined as a subclass of two disjoint "
-            "classes, or a restriction forces contradictory types. An OWL "
-            "reasoner would flag these classes as equivalent to owl:Nothing."
+            "Axioms in the ontology produce unsatisfiable entities — e.g., an "
+            "entity is simultaneously defined as a subclass of two disjoint "
+            "entities, or a restriction forces contradictory types. An OWL "
+            "reasoner would flag these entities as equivalent to owl:Nothing."
         ),
     },
     {
@@ -80,7 +80,7 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P2.1",
         "title": "Not connected hierarchies",
         "description": (
-            "The ontology contains isolated class trees with no common root "
+            "The ontology contains isolated entity trees with no common root "
             "other than owl:Thing. Disconnected hierarchies often indicate "
             "that separate sub-ontologies were merged without alignment, or "
             "that top-level grouping concepts are missing."
@@ -91,7 +91,7 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P2.2",
         "title": "Single subclass parent",
         "description": (
-            "A class has exactly one direct subclass. This is often a sign "
+            "An entity has exactly one direct subclass. This is often a sign "
             "of unnecessary intermediate nodes: if a parent has only one child, "
             "the hierarchy could usually be flattened without loss of semantics, "
             "unless the parent is used in axioms independently."
@@ -102,7 +102,7 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P2.3",
         "title": "Superfluous disjointness",
         "description": (
-            "Two classes are declared disjoint when one is already a subclass "
+            "Two entities are declared disjoint when one is already a subclass "
             "of the other, or when disjointness is already implied by the "
             "hierarchy. The explicit disjointness assertion is redundant and "
             "may create unintended logical side-effects."
@@ -167,7 +167,7 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P3.3",
         "title": "Domain in property title",
         "description": (
-            "A property name encodes its domain class (e.g., 'personHasName', "
+            "A property name encodes its domain entity (e.g., 'personHasName', "
             "'orderContainsItem'). Same fragility as P3.2: naming should "
             "express the relationship semantics, not repeat structural "
             "information already captured by rdfs:domain declarations."
@@ -176,9 +176,9 @@ PITFALL_TAXONOMY = (
     {
         "category": "Semantic Issues",
         "pitfall_id": "P4.1",
-        "title": "Overly generic classes",
+        "title": "Overly generic entities",
         "description": (
-            "Classes whose labels are very broad, generic terms (e.g., "
+            "Entities whose labels are very broad, generic terms (e.g., "
             "'Thing', 'Entity', 'Object', 'Item') that carry little semantic "
             "specificity. These often indicate placeholder concepts that were "
             "never refined or that model a concept already covered by owl:Thing."
@@ -189,7 +189,7 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P4.2",
         "title": "Synonyms in superclasses",
         "description": (
-            "A class has multiple superclasses whose labels are synonyms or "
+            "An entity has multiple superclasses whose labels are synonyms or "
             "near-synonyms (detected via WordNet). Declaring redundant synonymous "
             "parents inflates the hierarchy without adding distinctions, and may "
             "cause unintended logical entailments. Requires ML dependencies."
@@ -200,10 +200,10 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P4.3",
         "title": "Conflicting hierarchy",
         "description": (
-            "Sibling classes (sharing the same parent) have labels that are "
+            "Sibling entities (sharing the same parent) have labels that are "
             "antonyms of each other (detected via WordNet/sentiment analysis). "
             "Antonymous siblings often indicate a modelling conflict or that "
-            "the classes should instead be declared disjoint explicitly. Requires ML dependencies."
+            "the entities should instead be declared disjoint explicitly. Requires ML dependencies."
         ),
     },
     {
@@ -244,10 +244,10 @@ PITFALL_TAXONOMY = (
         "pitfall_id": "P4.7",
         "title": "DataProperties that can become ObjectProperties",
         "description": (
-            "A datatype property has values that look like class names or "
-            "identifiers of existing classes (e.g., a 'hasType' string "
-            "property whose values match class labels). These are candidates "
-            "for promotion to object properties pointing to the named classes."
+            "A datatype property has values that look like entity names or "
+            "identifiers of existing entities (e.g., a 'hasType' string "
+            "property whose values match entity labels). These are candidates "
+            "for promotion to object properties pointing to the named entities."
         ),
     },
 )

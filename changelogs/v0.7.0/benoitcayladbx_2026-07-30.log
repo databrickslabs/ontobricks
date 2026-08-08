@@ -1,0 +1,897 @@
+## Lift the graph-analytics triple cap via engine-side SQL aggregation
+
+Context: KG Analytics was capped at `ONTOBRICKS_ANALYTICS_MAX_TRIPLES` (500,000)
+and rejected larger graphs outright, because `GraphBuilder._load_triples`
+materialises every triple into a Python list and `GraphMetrics` builds one
+in-memory `networkx.Graph`. Phase A of the Lakeflow-pushdown plan removes that
+wall without any new infrastructure: oversized graphs are analysed by SQL
+aggregations executed inside the graph store, and entity-type filters are now
+pushed down so a filtered analysis reads only the selected subgraph.
+
+Removing the memory cap also exposed a second ceiling — `MetricsResult` carried
+five floats plus a type and a label for *every* node, stored as one JSONB
+`result` column and shipped whole to the browser. That payload is now bounded.
+
+Branch: `feat/graph-analytics-lakeflow-pushdown` (from `develop`).
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBBackend.py
+   Add the analytics aggregation family as default-SQL methods, so Delta and
+   Lakebase inherit them and only non-SQL engines need an override:
+   `get_graph_structure_stats`, `get_top_nodes_by_degree`, `get_type_edge_stats`,
+   `get_type_predicate_pairs`, plus the shared `_analytics_edge_cte` /
+   `_degree_cte` fragments. The entity-entity edge definition is passed in by
+   the caller (`excluded_predicates`) so storage stays free of analytics policy.
+   Self-loops are excluded — a documented difference from NetworkX, which counts
+   a self-loop as degree 2.
+   Also add `query_triples_for_analysis`, which scopes a filtered load to the
+   selected instances plus their direct neighbours, and its Python equivalent
+   `_filter_analysis_triples_in_python` used by non-SQL engines and as the test
+   oracle. `rdf:type` / `rdfs:label` are always retained: they never become
+   edges but the analysis needs them for node types and display labels.
+2. src/back/core/graph_analysis/PushdownMetrics.py
+   New service assembling the same `MetricsResult` from those aggregations, with
+   `supports_pushdown()` as the engine capability probe. Reports PageRank,
+   clustering, betweenness, closeness and the component count through
+   `unavailable_metrics` instead of returning zeros or approximations labelled
+   like exact values.
+3. src/back/core/graph_analysis/profiles.py
+   Extract the temporal-predicate detection and flat-dataset heuristic out of
+   `GraphMetrics` so both compute paths share one copy and cannot drift on what
+   counts as flat.
+4. src/back/core/graph_analysis/GraphMetrics.py
+   Use the shared profile helpers; drop the now-duplicated private copies.
+5. src/back/core/graph_analysis/GraphBuilder.py
+   `_load_triples` pushes class/predicate filters down to the store when it
+   supports it, so the cap applies to the reduced set. Reword the guard message,
+   which previously told users filters could not help.
+6. src/back/core/graph_analysis/models.py
+   Add `mode` (`in_memory` | `pushdown`) and `unavailable_metrics` to
+   `MetricsResult`; make `MetricsStats.connected_components` optional so an
+   unknown count renders as em-dash rather than a misleading 0. Add `to_dict()`
+   on each model, replacing the hand-rolled serialisation in `DigitalTwin` so
+   both paths emit an identical payload. Document that `nodes` is bounded in
+   pushdown mode and that node counts must come from `stats.node_count`.
+7. src/back/objects/digitaltwin/DigitalTwin.py
+   `compute_graph_metrics` gains `mode` / `top_n` / `allow_pushdown_fallback`:
+   a class-filtered run over the cap is attempted in memory first and degrades
+   to pushdown only if the subgraph still does not fit. `run_metrics_task`
+   records the effective mode on the task result and in the registry row.
+   Drops ~35 lines of duplicated serialisation.
+8. src/api/routers/internal/dtwin.py
+   `/metrics/compute` selects a mode instead of rejecting oversized graphs, and
+   only errors when pushdown is genuinely unavailable (non-SQL engine or the
+   setting disabled). `/dtwin/sync/stats` returns
+   `analytics_pushdown_available` so the page can describe the mode up-front.
+   `/metrics/latest` needed no change — `mode` rides along in `**result`.
+9. src/shared/config/settings.py
+   Add `analytics_pushdown_enabled` (default true) and `analytics_top_n`
+   (default 100); reword `analytics_max_triples` as the mode switch point.
+10. src/front/templates/partials/dtwin/_query_analytics.html
+    The over-limit banner informs instead of blocking when pushdown is
+    available, and Run Analysis stays enabled. Charts for unavailable metrics
+    explain why rather than drawing a flat zero line. Fix the completion
+    notification, which derived the node count from `Object.keys(nodes).length`
+    — wrong now that `nodes` is a bounded slice. Correct the "filters narrow the
+    charts, not the load" copy.
+11. tests/units/core/test_pushdown_metrics.py
+    New: 35 tests. A `SqliteStore` subclass of `GraphDBBackend` executes the
+    generated SQL for real (SQLite needs only `least` / `greatest` registered),
+    so the queries are validated rather than string-matched. `TestPushdownParity`
+    asserts the SQL and NetworkX paths agree on structure stats, degree
+    centrality and every type-profile field; `TestAnalysisTriplePushdown` checks
+    the pushed-down triple selection against its Python oracle.
+12. tests/units/core/test_graph_metrics.py
+    Replace the bare `MagicMock` store with a `_FakeStore` implementing the
+    pushdown contract via the backend's own filter, so filtered tests exercise
+    real selection semantics instead of a mock returning whatever it is asked.
+13. docs/user-guide.md, docs/get-started.md
+    Document the two compute modes, what engine-side aggregation does and does
+    not report, filter pushdown as the route to the full metric set on a large
+    graph, and the two new environment variables.
+
+Modified files:
+
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graph_analysis/PushdownMetrics.py (new)
+- src/back/core/graph_analysis/profiles.py (new)
+- src/back/core/graph_analysis/GraphMetrics.py
+- src/back/core/graph_analysis/GraphBuilder.py
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/shared/config/settings.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- tests/units/core/test_pushdown_metrics.py (new)
+- tests/units/core/test_graph_metrics.py
+- docs/user-guide.md
+- docs/get-started.md
+
+Test result: `uv run pytest -q -m "not scenario"` — 3497 passed, 275 skipped,
+5 deselected. No lint errors. Verified the live Lakebase engine resolves
+`_sql_relation` and `_readable_table_id` to the same `physical_table_id`, so the
+inherited SQL targets the correct union view.
+
+Not done (phase B of the plan): the serverless Lakeflow job that would restore
+PageRank, connected components and clustering coefficient at scale. This
+environment has no `pyspark` and no JRE, so a Spark job cannot be executed or
+tested locally — deferred pending a decision on whether to build it as
+generated SQL (executable against SQLite in tests, like the phase A queries) or
+the PySpark DataFrame API.
+
+================================================================================
+
+## Graph analytics phase B — iterative metrics on a serverless Lakeflow job
+
+Context
+-------
+Phase A (above) lifted the 500k triple cap by pushing the aggregatable metrics
+into the graph store as SQL, but PageRank, connected components and the
+clustering coefficient stayed unavailable above the cap because each needs
+repeated passes over the graph. Phase B computes those three on a serverless
+Databricks job and reads the result back, leaving only betweenness and
+closeness (all-pairs shortest paths) unavailable in engine-side modes.
+
+Implementation style: **generated SQL**, chosen over the PySpark DataFrame API
+so the algorithms are verifiable without a cluster. Every statement the job
+executes is emitted as a string and driven through injected `execute` / `scalar`
+callables; the tests run the exact same statements against SQLite and compare
+against a NetworkX oracle. A DataFrame implementation could only have been
+tested on a live workspace.
+
+Changes
+-------
+1. `src/jobs/graph_analytics_job.py` (new) — the job. Module-level SQL builders
+   with no pyspark import (so tests can use them), plus a `main()` that imports
+   pyspark lazily. Emits `DROP TABLE IF EXISTS` + `CREATE TABLE AS` pairs rather
+   than `CREATE OR REPLACE TABLE`: portable, and the write truncates the Spark
+   lineage between iterations. PageRank is power iteration with exact rank-mass
+   conservation (no dangling nodes, so no re-normalisation); components are
+   min-label propagation that stops when no label changes and reports
+   non-convergence rather than publishing a wrong count; triangles are counted
+   via a degree-oriented acyclic edge list, which enumerates each triangle
+   exactly once and bounds work at high-degree hubs. Both iterative algorithms
+   alternate between `_a` / `_b` tables so no step reads and writes the same
+   relation. `validate_identifier` rejects non-identifier table names, which are
+   interpolated unquoted.
+2. `resources/graph_analytics.job.yml` (new) — serverless `spark_python_task`
+   with an `environments` block, `max_concurrent_runs: 1`, failure email, and
+   per-run `job_parameters`. No Maven libraries: GraphFrames would be the
+   obvious choice but cannot be installed on serverless compute, which is why
+   the algorithms are hand-rolled.
+3. `databricks.yml` — added the `include: resources/*.yml` block the bundle
+   previously lacked, so the job resource is deployed. `sync.exclude` already
+   permits `src/jobs/`.
+4. `src/back/core/graph_analysis/LakeflowRunner.py` (new) — resolves the job by
+   name (exact, then `[dev <user>] ` prefixed, since DAB renames in development
+   mode), triggers `run_now`, and polls `get_run` mapping life-cycle state onto
+   task-tracker progress. Injectable client factory and sleep.
+5. `src/back/core/graph_analysis/JobMetrics.py` (new) — the third compute mode.
+   `resolve_spark_source` decides whether a graph is reachable from Spark at
+   all (Delta: yes; Lakebase `managed_synced`: the UC table upstream of the
+   sync; Lakebase `app_managed` and Neo4j: refused with an actionable reason).
+   `compute` reuses `PushdownMetrics` verbatim for the aggregates so the two
+   modes cannot drift, runs the job, then overlays per-node PageRank/clustering,
+   the component count and per-type `avg_clustering`. Read-back keeps the
+   bounded-payload contract: only the union of top-N per metric.
+6. `src/back/objects/digitaltwin/DigitalTwin.py` — `compute_graph_metrics`
+   gained the `job` mode plus `settings` / `on_progress`; a job failure degrades
+   to pushdown rather than losing the user the aggregates. Added
+   `build_job_metrics` and `analytics_output_table` (one output table per domain
+   version, sanitised to `[A-Za-z0-9_]`).
+7. `src/api/routers/internal/dtwin.py` — `/metrics/compute` prefers `job` over
+   `pushdown` when enabled and the source resolves; `/dtwin/sync/stats` returns
+   `analytics_job_available`.
+8. `src/front/templates/partials/dtwin/_query_analytics.html` — **fixed a phase
+   A bug**: `analyticsCompute` refused every oversized run unconditionally even
+   though the button was enabled and the server would have accepted it, so the
+   phase A pushdown path was unreachable from the UI. The backstop now only
+   blocks when no engine-side path exists. Added the job-mode banner, the
+   *(computed on Databricks)* provenance label, and a mode-aware explanation on
+   the unavailable-metric charts.
+9. `src/shared/config/settings.py` — five `analytics_job_*` settings; the
+   feature is opt-in (`analytics_job_enabled` defaults to `false`) because it
+   needs a deployed bundle and Spark-readable data.
+10. `pyproject.toml` — added `sqlglot` as a dev dependency so the cross-dialect
+    parse checks actually run instead of skipping.
+
+Modified files
+--------------
+- src/jobs/graph_analytics_job.py (new)
+- resources/graph_analytics.job.yml (new)
+- databricks.yml
+- src/back/core/graph_analysis/LakeflowRunner.py (new)
+- src/back/core/graph_analysis/JobMetrics.py (new)
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/shared/config/settings.py
+- pyproject.toml
+- tests/units/core/test_graph_analytics_job_sql.py (new)
+- tests/units/core/test_job_metrics.py (new)
+- tests/units/core/test_lakeflow_runner.py (new)
+- docs/user-guide.md
+- docs/get-started.md
+
+Test result
+-----------
+`uv run pytest -q -m "not scenario"` — **3591 passed**, 275 skipped, 5
+deselected (up 94 from phase A's 3497). No lint errors.
+
+The 94 new tests are mostly parity rather than assertion: degree, connected
+components and the clustering coefficient match NetworkX **exactly** on four
+structurally different graphs (star, two-component, K5, karate club), and
+PageRank matches to 1e-6. All generated SQL — the job's and the read-back's —
+is parse-checked against Databricks, Spark and Postgres dialects.
+
+Two findings worth recording from writing those tests:
+
+- `nx.karate_club_graph()` ships edge weights and `nx.pagerank` uses them by
+  default, so the oracle needs `weight=None`; a triple graph is unweighted.
+- Power iteration converges at roughly `damping^k`, and near-bipartite graphs
+  (a star, a path) sit at the slow end. The job's default 20 iterations fixes
+  the top-N *ordering* — which is all the UI charts — but not absolute scores;
+  this is asserted separately and documented at the constant.
+
+Not verified
+------------
+`databricks bundle validate` could not run: the workspace OAuth refresh token
+is expired (`invalid_request: Refresh token is invalid`). The bundle YAML was
+checked structurally offline (parses; correct `environments` / `environment_key`
+/ `job_parameters` shape) but not against the workspace. Re-run
+`databricks auth login` then `databricks bundle validate -t dev-lakebase`
+before deploying. Nothing in the job itself has been executed on Spark yet.
+
+================================================================================
+Uncomputed analytics metrics no longer render as 0.0000 in the node table
+================================================================================
+
+Context
+-------
+User report: "Pagerank is to zero, like betweenness, closeness and clustering".
+
+Investigation found two separate things, only one of which is a bug.
+
+Not a bug: the admin toggle is currently off (verified via
+`GET /settings/analytics-job-enabled` → `enabled=false, source=admin`, the state
+it was deliberately reset to at the end of the previous session). With the
+toggle off, a 7.6M-triple graph routes to engine-side aggregation, and
+`PushdownMetrics.UNAVAILABLE_METRICS` is exactly
+`("pagerank", "betweenness", "closeness", "clustering")` — the four metrics the
+user saw as zero. Those four being absent is the documented contract for that
+mode, not a regression.
+
+The bug: `_renderPagerankTable` did not honour that contract. Uncomputed metrics
+are stored as `0`, and every cell was formatted with `toFixed(4)`, so an
+uncomputed metric printed `0.0000` — visually identical to a genuine measured
+zero (a leaf node really does have betweenness 0). The chart-level notices did
+explain the situation, but the node-detail table silently contradicted them by
+presenting non-results as results. The table also sorted by PageRank
+unconditionally, so in engine-side mode it ordered rows by a column that was all
+zeros — an arbitrary order beneath a header implying a ranking.
+
+Changes
+-------
+1. src/front/templates/partials/dtwin/_query_analytics.html
+   - `cell()` now checks `unavailable_metrics` first and returns an em dash with
+     a "Not computed in this mode" tooltip, short-circuiting before `toFixed`.
+     A genuine zero still prints `0.0000`, so the two cases are distinguishable.
+   - `cell()` prefixes `≈` to metrics listed in `approximate_metrics`, so the
+     sampled betweenness/closeness columns in job mode are not read as exact.
+   - Ranking key is chosen at render time: PageRank when it was computed,
+     otherwise degree (which pushdown does compute), so the order is meaningful
+     in every mode.
+   - New `_setPagerankTableNote()` renders a note above the table stating what
+     the rows are ranked by, which columns were not computed, and which are
+     sampled estimates. It hides itself when everything is exact, so the
+     in-memory mode is visually unchanged.
+   - New `#pagerankTableNote` element in the card body.
+
+2. tests/units/front/test_analytics_unavailable_metrics.py (new)
+   - Asserts the dash branch precedes and returns before `toFixed`, that the
+     comparator uses `rankBy` rather than a hard-coded `.pagerank`, that the note
+     covers all three conditions and hides itself when unnecessary, and that the
+     pre-existing chart notices still distinguish "not computed" from
+     "all values are 0".
+
+Verification
+------------
+- The panel's inline JS parses (`node --check` on the extracted script block).
+- The `cell()` + `rankBy` logic was mirrored in a scratch harness and run for
+  all three modes. in_memory: ranks by pagerank, real zeros still `0.0000`.
+  pushdown: ranks by degree, four columns dashed, degree numeric. job: ranks by
+  pagerank, betweenness/closeness prefixed `≈`.
+
+Modified files
+--------------
+- src/front/templates/partials/dtwin/_query_analytics.html
+- tests/units/front/test_analytics_unavailable_metrics.py (new)
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Tests: uv run pytest -q -m "not scenario" → 3687 passed, 275 skipped,
+5 deselected in 27.89s
+
+Still open
+----------
+This fix only corrects how the absence is displayed. To actually get the four
+metrics on the full graph, the serverless job has to be deployed (`make deploy`)
+and the toggle switched on in Settings → Global. The job has still never been
+executed on Spark — the parity tests run its generated SQL against SQLite, so
+the first real run is unproven.
+
+================================================================================
+Deploy the graph-analytics job to Databricks (three blocking bugs fixed)
+================================================================================
+
+Context
+-------
+User asked for the serverless graph-analytics job to be uploaded so they could
+run it. The job had never been deployed. Getting there required fixing three
+bugs, each of which blocked the deploy at a later stage than the last.
+
+Outcome: the job is deployed and runnable —
+`[dev benoit_cayla] ontobricks-07x-graph-analytics`, job_id 822506438871868.
+The apps did NOT deploy (see "Still blocked").
+
+Changes
+-------
+1. resources/graph_analytics.job.yml — invalid YAML.
+   The earlier `--pivots` / `--pagerank-iterations` additions were mis-indented:
+   four list items nested under `exclude_predicates` instead of being siblings,
+   and the `pagerank_iterations` / `pivots` job parameters dedented out of the
+   `parameters:` list. The file did not parse.
+
+   Blast radius was much wider than the job: the Databricks CLI loads every
+   file under `resources/` for any bundle-aware command, so even
+   `databricks auth describe` failed with `yaml: line 52: did not find expected
+   '-' indicator`. This is why the previous session concluded that
+   `bundle validate` was blocked by an expired OAuth token — the token was also
+   expired, but the YAML error was the first failure and masked it.
+
+2. scripts/_internal/_deploy-preflight.sh — sibling source resolved from the
+   caller's SCRIPT_DIR.
+   The file sourced `${SCRIPT_DIR:-<own dir>}/_lakebase-diag.sh`. It is *sourced*
+   by scripts/deploy.sh, where SCRIPT_DIR is already `scripts/`, so the `:-`
+   default never applied and the lookup missed `scripts/_internal/`. Now resolved
+   from `BASH_SOURCE` into a private `_PREFLIGHT_DIR`, leaving the caller's
+   SCRIPT_DIR untouched (deploy.sh still needs it). Fallout from 2c6ef76.
+
+3. scripts/_internal/_render-app-yaml.py — REPO_ROOT off by one.
+   `Path(__file__).resolve().parent.parent` resolved to `scripts/` after the file
+   moved into `_internal/`, so it looked for `scripts/app.yaml.template`. Now
+   `parents[2]`. Same 2c6ef76 fallout; no sibling script shares the pattern.
+
+4. tests/units/settings/test_bundle_job_resource.py (new) — 12 tests.
+   None of the above was reachable from the suite, because nothing parses the
+   bundle or exercises the deploy scripts. Now covered:
+   - every file under `resources/` and `databricks.yml` is valid YAML;
+   - each `{{job.parameters.X}}` is declared and each declared parameter is
+     used; task parameters strictly alternate flag/value (a mis-indent drops a
+     value and shifts every later pair);
+   - the serverless `environment_key` has a matching `environments` entry;
+   - `python_file` exists in the repo and is not caught by a `sync.exclude`;
+   - the job's own argparse accepts exactly the flags the bundle passes, so a
+     flag drift fails here instead of at runtime in Spark;
+   - both deploy-script path fixes, asserted behaviourally (the templates and
+     the sourced sibling are resolved and confirmed to exist) rather than only
+     by string match.
+
+Verification
+------------
+- `make bundle-validate` → valid (4 pre-existing warnings for `sync.exclude`
+  patterns that match no files: htmlcov, mlruns, mlartifacts, sphinx doctrees).
+- Deployed via `make deploy-no-run`, chosen deliberately over `make deploy` so
+  the running app is not restarted (see the uv.lock note below).
+- Deployed job definition read back from the API: correct serverless
+  `environments` (client "3"), all five flags wired, job parameter defaults
+  `pagerank_iterations=20` / `pivots=64`.
+- Uploaded source verified byte-identical to local (sha256 `ec94e93fd118191e`,
+  34817 bytes) and confirmed to contain `_run_pivot_centrality` and the `md5(`
+  pivot sampling, i.e. it is the current betweenness/closeness implementation.
+- Full suite: uv run pytest -q -m "not scenario" → 3699 passed, 275 skipped,
+  5 deselected in 25.52s
+
+Still blocked
+-------------
+* **Apps did not deploy.** `terraform apply` failed creating
+  `databricks_app.ontobricks_dev_app`: `Invalid secret resource neo4j-password:
+  Secret with scope ontobricks and key neo4j-password does not exist.`
+  `databricks.yml:272` binds scope `ontobricks`, but the workspace has only
+  `benoit_cayla` and `ontobricks-secrets` (the latter holding an unrelated
+  `lakebase-sp-password`). Per docs/pr47-neo4j-demo/secret-configuration.md the
+  scope name is free and the one-off `databricks secrets create-scope
+  ontobricks` was simply never run. Two documented ways out — create the
+  scope+key, or drop the overlay and bind manually in the Apps UI — left to the
+  user, since both touch workspace state. The job resource was created before
+  terraform reached the app, which is why the job is usable despite the failure.
+
+* **uv.lock is fully proxied** — 3662 URLs on `pypi-proxy.dev.databricks.com`,
+  zero on the public CDN, which the deploy skill flags as a container-build
+  crash. This is NOT new to this branch: `6486f7b` re-pinned it to the public
+  CDN, then `fb333ed` / `741cabf` re-proxied it on develop; commit `a836cf9`
+  from this work added 2 more entries. It could not be fixed here —
+  `pypi.org/simple` is refused from this machine (instant connection refused,
+  while `files.pythonhosted.org` answers 200), so `UV_INDEX_URL=https://pypi.org/simple
+  uv lock` cannot run. It does not affect the job (a plain workspace file), only
+  an app container build, which `--no-run` avoided.
+
+Open question
+-------------
+The UI reported 7,641,879 triples, but the largest triplestore view in
+`benoit_cayla.ontobricks_demo` is `triplestore_wrfm___shell_v2` at 507,227 rows
+(next is 48,643). The 7.6M figure matches nothing in that schema, so either the
+graph lives elsewhere or the UI's triple count is computed differently from
+`count(*)` on the view. Worth resolving before trusting the mode-routing
+thresholds, since 507,227 only barely exceeds the 500,000 cap.
+
+Modified files
+--------------
+- resources/graph_analytics.job.yml
+- scripts/_internal/_deploy-preflight.sh
+- scripts/_internal/_render-app-yaml.py
+- tests/units/settings/test_bundle_job_resource.py (new)
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Note: app.yaml and src/mcp-server/app.yaml were regenerated from their templates
+by the deploy (both are build outputs).
+
+================================================================================
+Job mode fell back silently because no job name could be resolved
+================================================================================
+
+Context
+-------
+User report, after the job was deployed and the Settings → Global toggle turned
+on: "pagerank, betweeness, closeness and clsutering are still not calculated".
+
+Cause, from the dev log:
+
+    compute_graph_metrics: job mode failed (No graph-analytics job name is
+    configured (ONTOBRICKS_ANALYTICS_JOB_NAME)) — falling back to SQL pushdown
+
+Job mode is gated on two things, not one. The toggle decides *whether* to use
+it; the runner still needs the job's name to resolve it. `DigitalTwin` derives
+the name from `ontobricks_app_name` when `ONTOBRICKS_ANALYTICS_JOB_NAME` is
+unset, but that reads `DATABRICKS_APP_NAME`, which the Apps platform injects and
+a local dev shell does not. So locally the name resolved to `""`, the runner
+refused, and the run fell back to engine-side aggregation — which does not
+compute those four metrics. A deployed run would have worked; only local dev was
+affected.
+
+The reason this was hard to see is the UI: `analytics_job_available` checked the
+toggle, pushdown support and Spark-readability, but *not* whether a job name
+existed. So the banner promised the full metric set while every run quietly
+delivered the reduced one. That is the same class of dishonesty fixed earlier
+today in the node-detail table, one layer further up.
+
+Changes
+-------
+1. .env — added `ONTOBRICKS_ANALYTICS_JOB_NAME=ontobricks-07x-graph-analytics`
+   (backup at .env.bak.before-analytics). Local dev only; the deployed app
+   derives it. The undecorated name is correct: DAB deploys the job as
+   "[dev <user>] <name>" and LakeflowRunner suffix-matches on "] <name>".
+
+2. src/back/core/helpers/DatabricksHelpers.py — new
+   `resolve_analytics_job_name(settings)`: explicit setting wins, else derive
+   `<app>-graph-analytics`, else `""`. Exported from `back.core.helpers`.
+   `""` is documented as meaningful — it is the one state where job mode is
+   configured but cannot run.
+
+3. src/api/routers/internal/dtwin.py — both availability sites (the analytics
+   compute path and `/dtwin/sync/stats`) now require a resolvable job name
+   before reporting job mode as available, so the banner cannot promise metrics
+   the run will omit.
+
+4. src/back/objects/digitaltwin/DigitalTwin.py — dropped the inline derivation
+   in favour of the shared resolver, so the API and the runner cannot disagree
+   about what the job is called.
+
+5. tests/units/core/test_helpers.py — `TestResolveAnalyticsJobName`, 7 tests:
+   explicit wins, derivation from app name, empty when neither is available
+   (the local-dev case), whitespace is not a name, trimming, missing attributes
+   do not raise, and — the drift guard — that the derived name matches the
+   bundle's `${var.app_name}-graph-analytics`, since a rename there would
+   silently disable job mode on a fresh deploy.
+
+Verification
+------------
+- `LakeflowRunner("ontobricks-07x-graph-analytics").resolve_job_id()` against the
+  live workspace returns 822506438871868, i.e. the exact lookup that was failing
+  now succeeds. An earlier attempt at this check failed with "Could not list
+  Databricks jobs"; that was the harness, not the app — the script had not loaded
+  .env, so the SDK fell back to CLI auth and found four profiles in
+  ~/.databrickscfg matching the host (DEFAULT, ontobricks-dev, default, and the
+  fe-vm-bcayla-demos added for the deploy) and refused to choose. With .env
+  loaded the app uses PAT auth and the ambiguity does not arise.
+- The running server's environment confirmed to carry the variable, and
+  `Settings().analytics_job_name` reads back `'ontobricks-07x-graph-analytics'`.
+- Server reloaded cleanly on the new import and still serves (HTTP 200).
+- Full suite: uv run pytest -q -m "not scenario" → 3706 passed, 275 skipped,
+  5 deselected in 25.14s
+
+Resolved: the earlier triple-count discrepancy
+----------------------------------------------
+The 7,641,879 figure is real and is
+`benoit_cayla.ontobricks.triplestore_bigcustomers_v1` (exactly 7,641,879 rows).
+The earlier note could not find it because it looked in `ontobricks_demo`, the
+schema from scripts/deploy.config.sh, whereas the local app uses
+`REGISTRY_SCHEMA=ontobricks` from .env. That graph is a UC VIEW over the
+`_data` / `_inferred` managed tables, so it is Delta-backed and directly
+readable by Spark — `resolve_spark_source` takes the Delta path and job mode is
+viable for it. Only the registry is Lakebase.
+
+Still not verified
+------------------
+The job has still never executed on Spark. Everything checked here is
+configuration and resolution; the first real run remains unproven, and the
+7.6M-triple graph is not the cheapest place to discover a runtime error.
+
+Modified files
+--------------
+- .env (local config, not tracked; backup .env.bak.before-analytics)
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/units/core/test_helpers.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+================================================================================
+Analytics toggle silently reverted to "off" by any other section's Save
+================================================================================
+
+Context
+-------
+User report: the Settings → Global option "Compute large-graph metrics on
+Databricks" "is not saved in the registry".
+
+The storage layer was not at fault. Verified directly against the Lakebase
+registry (`global_config` JSONB, force-loaded past the service cache) that
+`analytics_job_enabled = True` was present, that `GlobalConfigService._save`
+merges rather than replaces, and that the Lakebase store's `save_global_config`
+re-reads uncached and writes the whole dict. The GET/POST endpoints round-trip
+correctly, and replaying the full Save sequence — analytics toggle followed by
+`/settings/graph-engine-config`, which is what runs after it — left the value
+intact.
+
+The bug was in the browser, and it was a silent clobber rather than a failure to
+write. Save step 3c posted `analyticsJobInput.checked` *unconditionally*, and the
+handler is bound to all four `.btn-save-settings` buttons (Databricks, Lakebase,
+Neo4j, Global). The checkbox markup has no `checked` attribute, so its default is
+unchecked, and `loadAnalyticsJobEnabled()` swallowed any read failure into a
+`console.log` while leaving that default in place. So a hydration GET that failed
+— or simply had not resolved yet on a slow load — turned the *next* Save
+anywhere in Settings into a write of `false` over the admin's `true`, with a
+"All settings saved" toast and nobody having touched the control. The user
+enables it, a later unrelated save reverts it, and it reads as "never saved".
+
+Reproduced in a real browser before the fix: with the stored value `true` and
+only the hydration GET aborted, a Save in the *Databricks* section sent
+`{"analytics_job_enabled": false}` and the stored value became `false`.
+
+Changes — src/front/static/config/js/settings.js
+-----------------------------------------------
+1. New closure-scoped `analyticsJobHydrated` flag, declared beside
+   `graphDbLoaded`.
+2. `loadAnalyticsJobEnabled()` clears the flag and disables the checkbox on
+   entry, sets the flag and re-enables only after the value has been applied
+   (and after the `success` check, so a `success: false` body does not count as
+   hydrated), keeps a `catch` so the un-awaited call at load cannot reject
+   upward, and adds a `finally` that writes an explicit warning into
+   `#analyticsJobEnabledSource` when the read did not land. Clearing on entry
+   makes it re-entrant: a later failed refresh cannot leave a stale "hydrated".
+3. Step 3c posts only when hydrated. When the input exists but was never
+   hydrated it pushes an error instead, so the toast reports that the value was
+   left unchanged rather than claiming success. It pushes rather than returns, so
+   the rest of the Save still completes.
+
+Deliberately *not* changed: the toggle still posts on both check and uncheck. An
+over-tight guard here would make it one-way — an admin could enable the job but
+never disable it against an env var that enables it — so that direction was
+explicitly re-tested.
+
+4. tests/units/settings/test_analytics_job_toggle.py — new
+   `TestUnhydratedCheckboxIsNeverPersisted`, 10 tests: the flag exists, the save
+   is gated on it, the old ungated `if (analyticsJobInput) {` is gone, a failed
+   read is reported rather than saved, the flag is cleared per read and set only
+   after the value is applied and after the success check, the checkbox is
+   disabled until hydrated, the failure reaches the source note, and the `catch`
+   survives.
+
+Verification (real Chromium, fresh profile per run, patched asset confirmed served)
+----------------------------------------------------------------------------------
+- Happy path unchanged: no console errors, checkbox ends enabled and matching the
+  server, normal source note, and the toggle persists in *both* directions
+  (`true`→`false` and `false`→`true`, each surviving a reload).
+- The reproduction is closed: hydration GET aborted, stored value `true`, Save
+  clicked in the Databricks section without touching the checkbox →
+  `POST /settings/save-analytics-job-enabled` does not fire at all, stored value
+  remains `true`, toast reads "Some settings failed to save: Analytics job:
+  current value could not be read, so it was left unchanged.", the box is
+  disabled and the note carries the warning. The other six sibling POSTs still
+  returned 200, so the guard does not abort the handler.
+- Also covered: a `200` with `success: false`, which produces no console error at
+  all — the disabled box and the note are the only signals, which is why both
+  were added.
+- Re-entrancy: after a failed hydration, a successful reload re-enables the box,
+  restores the note, and saving works again.
+- The Save button returned to "Save" in every scenario; no uncaught exceptions.
+- Full suite: uv run pytest -q -m "not scenario" → 3716 passed, 275 skipped,
+  5 deselected in 29.94s
+- Stored value left at `analytics_job_enabled: true` (the user's intended state),
+  confirmed by a final GET.
+
+Security note (pre-existing, not addressed)
+-------------------------------------------
+`GET /settings/graph-engine-config` returns the Neo4j password in plaintext, and
+every Save from any section round-trips that full blob back in the request body.
+Any authenticated user who can reach the settings endpoints can read the
+credential, and it lands in browser devtools and any request logging. Worth
+treating as a finding in its own right — it is unrelated to this bug and was left
+alone.
+
+Modified files
+--------------
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_analytics_job_toggle.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+
+================================================================================
+Name the reason large-graph job mode is unavailable, instead of telling an
+admin to enable a setting they already enabled
+================================================================================
+
+Context
+-------
+With "Compute large-graph metrics on Databricks" ticked and stored
+(analytics_job_enabled=true, source=admin), the Analytics page still showed the
+amber banner ending with "...or enable Compute large-graph metrics on Databricks
+in Settings -> Global (admin only)". That advice is useless to someone who has
+already done it, and it gave no way to tell whether the toggle had failed, the
+job name was missing, or the graph was unreadable from Spark.
+
+Job mode needs four things: the admin toggle, an engine that can aggregate
+server-side, a resolvable job name, and a graph Spark can read as a UC table.
+resolve_spark_source() already returns a human-readable reason for its own
+refusals - its docstring says the text is written for the person reading it in
+the UI - but the stats endpoint discarded it with `[0]`, so every failure
+collapsed into a bare False and the diagnosis lived only in the logs.
+
+Investigation of the reported instance found no misconfiguration at all:
+analytics_job_available is true and the blocked reason is empty for
+`bigcustomers` (7,641,879 triples, Lakehouse/Delta engine, where the graph
+already is a UC table). What the user was reading was a *stale analysis result*
+rendered below the banner - "Last computed 1h ago (engine-side aggregation)"
+with "Not computed for this graph." on PageRank/betweenness/closeness/clustering
+- produced by a run made before the toggle was enabled. The live banner is now
+the blue "will run on Databricks" one. Re-running the analysis is the fix for
+that; the changes below make the same question answerable next time without a
+log dive.
+
+Changes
+-------
+1. src/api/routers/internal/dtwin.py
+   - New `_analytics_job_status(domain, settings, store, graph_name, *,
+     pushdown_ok) -> (available, reason)` helper: checks the four prerequisites
+     in order and returns the specific reason the first missing one failed,
+     passing resolve_spark_source's own wording through verbatim. Returns an
+     empty reason when the toggle is off, because then nothing is broken.
+     `pushdown_ok` is a parameter rather than derived, because the two callers
+     legitimately disagree: the analytics run also honours
+     settings.analytics_pushdown_enabled, while the stats endpoint reports raw
+     engine capability. Short-circuits before resolve_spark_source when the
+     toggle is off, avoiding a needless remote synced-table lookup.
+   - /dtwin/sync/stats now returns `analytics_job_blocked_reason` alongside
+     `analytics_job_available`, populated only when an admin enabled the toggle
+     and it still cannot run.
+   - Replaced the duplicated four-condition expression at the analytics-run
+     site with the shared helper.
+   - The stats cache staleness guard now also requires
+     `analytics_job_blocked_reason` to be present. It previously only inspected
+     top_predicates[0].kind, so a payload predating any new field was served
+     until expiry - which would have masked a setting the user had just changed.
+     The refresh log line now reports which check failed.
+
+2. src/front/templates/partials/dtwin/_query_analytics.html
+   - New `_jobBlockedReason`, hydrated from the stats payload.
+   - The amber over-limit banner now ends with "Compute large-graph metrics on
+     Databricks is enabled, but the job cannot run: <reason>" when a reason is
+     present, and only falls back to the "or enable it in Settings -> Global"
+     advice when the toggle is genuinely off.
+
+3. tests/units/dtwin/test_analytics_job_status.py (new, 19 tests)
+   - Behavioural coverage of the helper: all prerequisites met; toggle off is
+     unavailable *without* a reason and probes nothing else; each cause named
+     (engine, job name mentions ONTOBRICKS_ANALYTICS_JOB_NAME, spark reason
+     passed through verbatim); a reasonless refusal still explains itself;
+     cause ordering.
+   - Wiring checks that the reason reaches the banner, that the "go and enable
+     it" advice sits only on the not-blocked branch, and that the stats cache
+     treats a payload without the field as stale.
+
+Also noted, not fixed (unrelated, pre-existing)
+-----------------------------------------------
+- src/front/static/query/js/query-databricks-build.js:129 throws
+  `ReferenceError: count is not defined` on every Knowledge Graph page load,
+  aborting loadDatabricksBuildInfo(). Does not affect analytics.
+
+Modified files
+--------------
+- src/api/routers/internal/dtwin.py
+- src/front/templates/partials/dtwin/_query_analytics.html
+- tests/units/dtwin/test_analytics_job_status.py (new)
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Test result
+-----------
+uv run pytest -q -m "not scenario"
+  -> 3735 passed, 275 skipped, 5 deselected, 23 warnings in 25.79s
+uv run pytest -q tests/units/dtwin/test_analytics_job_status.py
+  -> 19 passed
+ReadLints on the three touched files -> clean.
+Verified live against the running dev server in a logged-in browser session:
+analytics_job_available=true, analytics_job_blocked_reason="" for bigcustomers,
+banner is the blue Databricks one, and the field is present on the non-refresh
+call too (cache repopulated with the new shape).
+
+## Per-instance DAB target from DEFAULT_INSTANCE_ID
+
+Context: Changing only DEFAULT_APP_NAME kept the same DAB target (and tfstate),
+so Terraform treated it as a rename and destroyed the running app. Multi-instance
+deploys need a distinct target per instance. DEFAULT_INSTANCE_ID is now the
+single knob: it derives the app name and a suffixed DAB target
+(``dev-lakebase-<id>``), and deploy.sh materialises that target before validate.
+
+Changes:
+
+1. scripts/deploy.config.sh
+   Add DEFAULT_INSTANCE_ID / DEFAULT_DAB_BACKEND; derive DEFAULT_APP_NAME,
+   DEFAULT_MCP_APP_NAME, and DEFAULT_DAB_TARGET from them. Resource keys stay
+   static. Env-overridable for CI (DEFAULT_INSTANCE_ID=080 make deploy).
+2. scripts/_internal/_ensure-instance-target.sh
+   New helper writing resources/_generated_instance_target.yml for
+   ``dev-lakebase-<id>`` / ``dev-<id>``; clears it for legacy ``dev`` /
+   ``dev-lakebase``.
+3. scripts/deploy.sh
+   Source the helper and call ensure_instance_target before bundle validate;
+   print Instance in the deploy banner; document instance targets.
+4. databricks.yml
+   Document that per-instance targets are generated and included via
+   resources/*.yml; keep static ``dev`` / ``dev-lakebase`` for legacy.
+5. scripts/_internal/_deploy-preflight.sh
+   Rename-guard guidance now points at DEFAULT_INSTANCE_ID / separate targets.
+6. .gitignore
+   Ignore resources/_generated_instance_target.yml.
+7. tests/units/settings/test_deploy_instance_id.py
+   New coverage for derivation, target generation, and deploy wiring.
+8. tests/units/settings/test_deploy_app_rename_guard.py
+   Expect DEFAULT_INSTANCE_ID in the keep-old-app message.
+
+Modified files:
+- scripts/deploy.config.sh
+- scripts/_internal/_ensure-instance-target.sh
+- scripts/deploy.sh
+- scripts/_internal/_deploy-preflight.sh
+- databricks.yml
+- .gitignore
+- tests/units/settings/test_deploy_instance_id.py
+- tests/units/settings/test_deploy_app_rename_guard.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Tests: uv run pytest -q -m "not scenario" → 3768 passed, 275 skipped, 5 deselected, 23 warnings in 33.06s
+
+## Drop DEFAULT_DAB_BACKEND — registry is always Lakebase
+
+Context: DEFAULT_DAB_BACKEND (lakebase|volume) was leftover from the old
+dev vs dev-lakebase DAB split. Deploy does not configure a graph backend;
+the registry is always Lakebase Postgres. The knob only added confusion.
+
+Changes:
+
+1. scripts/deploy.config.sh
+   Remove DEFAULT_DAB_BACKEND / DAB_BACKEND; always derive
+   ``dev-lakebase-<INSTANCE_ID>``.
+2. scripts/_internal/_ensure-instance-target.sh
+   Generate only ``dev-lakebase-<id>`` targets; reject volume-style
+   ``dev-<id>``.
+3. scripts/deploy.sh
+   Drop backend from the banner / error hints.
+4. tests/units/settings/test_deploy_instance_id.py
+   Match the simplified surface.
+
+Modified files:
+- scripts/deploy.config.sh
+- scripts/_internal/_ensure-instance-target.sh
+- scripts/deploy.sh
+- tests/units/settings/test_deploy_instance_id.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Tests: uv run pytest -q -m "not scenario" tests/units/settings/test_deploy_instance_id.py tests/units/settings/test_deploy_app_rename_guard.py → 30 passed, 1 warning in 1.57s
+
+## Deploy ontobricks-07x (dev-lakebase-07x) + fix crash/perms
+
+Context: First deploy under the new per-INSTANCE_ID target. App crashed on
+boot because ``uv.lock`` pointed at ``pypi-proxy.dev.databricks.com``
+(``uv run --frozen`` timed out fetching httptools). Lakebase perms bootstrap
+also failed: ``lakebase-perms.sh`` still sourced ``_lakebase-diag.sh`` from
+``scripts/bootstrap/`` after the file moved to ``scripts/_internal/``.
+
+Changes:
+
+1. uv.lock
+   Rewrite 4000 package URLs from the Databricks pypi-proxy to
+   ``files.pythonhosted.org`` (same /packages/… hash paths).
+2. scripts/bootstrap/lakebase-perms.sh
+   Source ``../_internal/_lakebase-diag.sh``.
+
+Deploy result:
+- ontobricks-07x RUNNING — https://ontobricks-07x-2508734981122804.aws.databricksapps.com
+- mcp-ontobricks-07x RUNNING — https://mcp-ontobricks-07x-2508734981122804.aws.databricksapps.com
+- /healthz → 200
+- Lakebase schema grants + migrations applied
+
+Modified files:
+- uv.lock
+- scripts/bootstrap/lakebase-perms.sh
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Tests: prior suite green; deploy verified live (healthz 200, both apps RUNNING)
+
+================================================================================
+Fix: successful graph-analytics run reported as failed (SystemExit at exit)
+================================================================================
+
+Context:
+
+Run 314895410340960 of ``[dev benoit_cayla] ontobricks-07x-graph-analytics``
+(job 334933950622420) terminated with ``RUN_EXECUTION_ERROR`` even though the
+analysis had completed: the driver log ends with
+``wrote benoit_cayla.ontobricks.graph_metrics_bigcustomers_1 (1349202 nodes)``
+followed by the ``ONTOBRICKS_GRAPH_ANALYTICS_SUMMARY`` line. The reported
+error was ``SystemExit: 0``.
+
+Root cause: Databricks serverless executes a ``spark_python_task`` file inside
+an IPython shell (visible in the run output as the
+``To exit: use 'exit', 'quit', or Ctrl-D`` warning from
+``IPython/core/interactiveshell.py``). The module guard ended the process with
+``raise SystemExit(main())``; that shell reports *any* raised ``SystemExit`` —
+code 0 included — as an uncaught exception, so a clean run was recorded as a
+failed workload and the app surfaced the analysis as failed.
+
+Changes:
+
+1. src/jobs/graph_analytics_job.py
+   Replace ``raise SystemExit(main())`` with ``run_cli()``, which raises
+   ``SystemExit`` only for a non-zero return so genuine failures still fail the
+   run while a successful analysis exits normally.
+2. tests/units/core/test_graph_analytics_job_exit.py (new)
+   Five unit tests over ``run_cli``: return 0 and return ``None`` must not
+   raise, a non-zero return must raise ``SystemExit`` with that code, argv is
+   forwarded, and the module guard no longer calls ``raise SystemExit(main())``.
+
+Follow-up noted, not changed:
+
+- Two jobs now answer to the name ``[dev benoit_cayla] ontobricks-07x-graph-analytics``:
+  334933950622420 (target ``dev-lakebase-07x``, current) and 822506438871868
+  (target ``dev-lakebase``, orphaned by today's per-instance target split).
+  ``LakeflowRunner.resolve_job_id`` warns and takes the first match, so the app
+  can pick the stale one. Deleting the orphan is pending user confirmation.
+
+Modified files:
+- src/jobs/graph_analytics_job.py
+- tests/units/core/test_graph_analytics_job_exit.py (new)
+- changelogs/v0.7.0/benoitcayladbx_2026-07-30.log
+
+Tests: uv run pytest -q -m "not scenario" → 3773 passed, 275 skipped, 5
+deselected in 32.78s.
+
+Note on running the suite: sourcing ``scripts/deploy.config.sh`` exports
+``LAKEBASE_PROJECT``/``LAKEBASE_BRANCH``/``DATABRICKS_CONFIG_PROFILE`` into the
+shell. pytest inherits them, ``LakebaseAuth`` then resolves a *real* Lakebase
+endpoint through the SDK, and unit tests block on retry backoff instead of
+failing fast. Run the suite from a shell that has not sourced the deploy config.

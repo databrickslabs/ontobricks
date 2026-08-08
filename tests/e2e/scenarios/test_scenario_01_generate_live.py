@@ -1,5 +1,5 @@
 """
-E2E (LIVE) — ``test_scenario_1``: import data sources → generate the OWL from
+E2E (LIVE) — ``TestScenario1``: import data sources → generate the OWL from
 the **Generate page** (LLM wizard) → persist the domain to the registry.
 
 Unlike :mod:`test_full_lifecycle` (which is deterministic, session-only and
@@ -11,14 +11,14 @@ afterwards.
 
 It therefore runs against an **already-running OntoBricks instance** — by
 default the local dev server on ``http://localhost:8000`` (``scripts/start.sh``)
-so the persisted ``test_scenario_1`` domain lands in the *same* registry the
+so the persisted ``TestScenario1`` domain lands in the *same* registry the
 local app reads, and shows up immediately when you open the app and browse the
 registry. Point it elsewhere with ``ONTOBRICKS_LIVE_BASE``.
 
 The journey:
 
     1. prime the session (sets the CSRF cookie)
-    2. reset to a clean slate, then create domain ``test_scenario_1`` with the
+    2. reset to a clean slate, then create domain ``TestScenario1`` with the
        Claude serving endpoint attached (so the wizard has an LLM)
     3. import the data sources (``benoit_cayla.customer`` tables) — *beforehand*,
        so the Generate page can see them
@@ -35,7 +35,7 @@ The journey:
     9. re-save to capture the build metadata, then verify it is listed
 
 The domain is intentionally **NOT** reset/deleted at the end — that is the
-whole point: open the app afterwards and load ``test_scenario_1``.
+whole point: open the app afterwards and load ``TestScenario1``.
 
 Gated behind ``ONTOBRICKS_SCENARIO_LIVE=1`` so it never runs in the default
 matrix (it costs warehouse + LLM time and mutates the registry).
@@ -86,7 +86,11 @@ pytestmark = [
 ]
 
 
-_DOMAIN_NAME = "test_scenario_1"
+# Domain names must be CamelCase alphanumeric (``is_valid_domain_name``); the
+# registry folder is the sanitized lowercase form, and it is the folder that
+# appears in registry listings and REST paths.
+_DOMAIN_NAME = "TestScenario1"
+_DOMAIN_FOLDER = _DOMAIN_NAME.lower()
 _CATALOG = os.environ.get("ONTOBRICKS_SCENARIO_CATALOG", "benoit_cayla")
 _SCHEMA = os.environ.get("ONTOBRICKS_SCENARIO_SCHEMA", "customer")
 _LLM_ENDPOINT = os.environ.get("ONTOBRICKS_SCENARIO_LLM", "databricks-claude-sonnet-4-5")
@@ -137,7 +141,7 @@ class TestScenario1GenerateLive:
         page.wait_for_load_state("domcontentloaded")
         headers = _csrf_headers(page.context)
 
-        # ── 2. Clean slate: delete any prior 'test_scenario_1', then create it ─
+        # ── 2. Clean slate: delete any prior 'TestScenario1', then create it ─
         # Deleting an existing copy makes every run re-exercise the full
         # generate → Auto-Map → build pipeline and keeps the final save a clean
         # create (no name conflict). The domain is recreated below and persists
@@ -154,16 +158,16 @@ class TestScenario1GenerateLive:
                     out.add(name.lower())
             return out
 
-        if _DOMAIN_NAME in _registry_names():
-            _step(f"'{_DOMAIN_NAME}' exists — deleting it for a clean rebuild")
+        if _DOMAIN_FOLDER in _registry_names():
+            _step(f"'{_DOMAIN_FOLDER}' exists — deleting it for a clean rebuild")
             resp = page.context.request.delete(
-                f"{base}/settings/registry/domains/{_DOMAIN_NAME}",
+                f"{base}/settings/registry/domains/{_DOMAIN_FOLDER}",
                 headers=headers,
                 timeout=60_000,
             )
             assert resp.status in (200, 204), resp.text()
 
-        _step("resetting session for a fresh 'test_scenario_1'")
+        _step("resetting session for a fresh 'TestScenario1'")
         resp = page.context.request.post(f"{base}/domain/reset", headers=headers)
         assert resp.status == 200, resp.text()
 
@@ -399,8 +403,8 @@ class TestScenario1GenerateLive:
             return d.get("name") or d.get("folder") or ""
 
         names = {_entry_name(d) for d in listed.get("domains", [])}
-        assert any((n or "").lower() == _DOMAIN_NAME for n in names), (
-            f"{_DOMAIN_NAME!r} not found in registry listing: "
+        assert any((n or "").lower() == _DOMAIN_FOLDER for n in names), (
+            f"{_DOMAIN_FOLDER!r} not found in registry listing: "
             f"{sorted(n for n in names if n)}"
         )
         _step(

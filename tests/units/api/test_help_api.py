@@ -11,7 +11,7 @@ The suite exercises the happy path plus the hardening:
 
 - every catalogued doc slug returns 200 with markdown (no 404 in production),
 - catalogued markdown files and referenced ``images/`` assets exist on disk,
-- deploy bundle config ships ``docs/`` to Databricks,
+- deploy bundle config ships ``documentation/`` to Databricks,
 - unknown slugs → 404,
 - bad image filenames (path traversal / wrong extension) → 404,
 - valid known assets that may not exist on disk → 404 (never 500).
@@ -54,7 +54,10 @@ def _normalize_help_asset_ref(raw: str) -> tuple[str, str] | None:
     if not ref or ref.startswith(("http://", "https://", "data:", "/")):
         return None
     ref = ref.replace("\\", "/").lstrip("./")
-    if ref.startswith("docs/"):
+    if ref.startswith("documentation/"):
+        ref = ref[len("documentation/") :]
+    elif ref.startswith("docs/"):
+        # Legacy markdown paths from before docs/ → documentation/ rename.
         ref = ref[len("docs/") :]
     for subdir in ("images", "screenshots"):
         prefix = f"{subdir}/"
@@ -112,6 +115,41 @@ class TestHelpDocsIndex:
         expected = {slug: meta["title"] for slug, meta in _DOC_INDEX.items()}
         assert indexed == expected
 
+    def test_graph_backend_guides_are_catalogued(self, client):
+        """Lakebase and Neo4j backend guides must be reachable from Help Center."""
+        response = client.get("/api/help/docs")
+        slugs = {
+            doc["slug"]
+            for cat in response.json()["categories"]
+            for doc in cat["docs"]
+        }
+        assert "graphdb-integration" in slugs
+        assert "lakebase-graphdb" in slugs
+        assert "neo4j-requirements" in slugs
+
+        neo = client.get("/api/help/docs/neo4j-requirements")
+        assert neo.status_code == 200
+        body = neo.json()["markdown"]
+        assert "Neo4j" in body
+        assert "Aura" in body
+
+    def test_cohort_and_import_export_guides_are_catalogued(self, client):
+        """Cohort Discovery, Import/Export and the contributor Code Map must be reachable."""
+        response = client.get("/api/help/docs")
+        slugs = {
+            doc["slug"]
+            for cat in response.json()["categories"]
+            for doc in cat["docs"]
+        }
+        assert "cohort-discovery" in slugs
+        assert "import-export" in slugs
+        assert "code-organization" in slugs
+
+        for slug in ("cohort-discovery", "import-export", "code-organization"):
+            resp = client.get(f"/api/help/docs/{slug}")
+            assert resp.status_code == 200
+            assert resp.json()["markdown"].strip()
+
 
 class TestHelpCatalogIntegrity:
     def test_docs_directory_exists(self):
@@ -133,7 +171,7 @@ class TestHelpCatalogIntegrity:
         response = client.get(f"/api/help/docs/{slug}")
         assert response.status_code == 200, (
             f"/api/help/docs/{slug} returned {response.status_code}; "
-            "deploy bundle must ship docs/*.md"
+            "deploy bundle must ship documentation/*.md"
         )
         body = response.json()
         assert body["slug"] == slug
@@ -171,23 +209,26 @@ class TestHelpCatalogIntegrity:
 
 
 class TestHelpDeployBundle:
-    def test_databricksignore_does_not_exclude_docs_tree(self):
+    def test_databricksignore_does_not_exclude_documentation_tree(self):
         ignore_path = _REPO_ROOT / ".databricksignore"
         blocked = {
             line.strip()
             for line in ignore_path.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.strip().startswith("#")
         }
-        assert "docs/" not in blocked
+        # Help Center markdown lives under documentation/; docs/ is the
+        # GitHub Pages marketing site and is intentionally excluded.
+        assert "documentation/" not in blocked
+        assert "docs/" in blocked
         assert "*.md" not in blocked
 
-    def test_databricks_yml_includes_docs_for_help_center(self):
+    def test_databricks_yml_includes_documentation_for_help_center(self):
         bundle_path = _REPO_ROOT / "databricks.yml"
         bundle = yaml.safe_load(bundle_path.read_text(encoding="utf-8"))
         includes = bundle.get("sync", {}).get("include", [])
         excludes = bundle.get("sync", {}).get("exclude", [])
-        assert "docs/**" in includes
-        assert "docs/" not in excludes
+        assert "documentation/**" in includes
+        assert "documentation/" not in excludes
         assert "*.md" not in excludes
 
 

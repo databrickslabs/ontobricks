@@ -87,6 +87,71 @@ class TestShaclGeneratorRoundtrip:
 
 
 @pytest.mark.unit
+class TestShaclGeneratorConditionalShapes:
+    """A guarded shape gets its own node shape with a SPARQL target."""
+
+    CONDITIONS = [
+        {
+            "property": "status",
+            "property_uri": "http://test.org/ontology#status",
+            "op": "eq",
+            "value": "active",
+        }
+    ]
+
+    def _guarded(self, **kw):
+        shape = _shape(
+            shacl_type="sh:pattern",
+            parameters={"sh:pattern": "^[A-Z]"},
+            **kw,
+        )
+        shape["conditions"] = self.CONDITIONS
+        shape["condition_logic"] = "and"
+        return shape
+
+    def test_conditional_shape_emits_a_sparql_target(self):
+        out = SHACLGenerator("http://test.org/ontology").generate([self._guarded()])
+        assert "sh:SPARQLTarget" in out
+        assert "sh:select" in out
+        assert "$this a <http://test.org/ontology#Customer>" in out
+        assert 'LCASE(STR(?c0)) = "active"' in out
+
+    def test_conditional_shape_keeps_its_constraint(self):
+        out = SHACLGenerator("http://test.org/ontology").generate([self._guarded()])
+        assert "sh:property" in out
+        assert "sh:pattern" in out
+
+    def test_conditional_shape_does_not_target_the_whole_class(self):
+        out = SHACLGenerator("http://test.org/ontology").generate([self._guarded()])
+        assert "sh:targetClass" not in out
+
+    def test_unconditional_shapes_are_still_grouped_by_class(self):
+        out = SHACLGenerator("http://test.org/ontology").generate(
+            [_shape(property_path="firstName"), _shape(property_path="lastName")]
+        )
+        assert out.count("sh:targetClass") == 1
+        assert "sh:SPARQLTarget" not in out
+
+    def test_conditional_and_plain_shapes_coexist(self):
+        out = SHACLGenerator("http://test.org/ontology").generate(
+            [self._guarded(), _shape()]
+        )
+        assert "sh:SPARQLTarget" in out
+        assert "sh:targetClass" in out
+
+    def test_import_reports_the_conditions_it_dropped(self):
+        svc = SHACLService(base_uri="http://test.org/ontology#")
+        turtle = svc.generate_turtle([self._guarded()])
+        shapes, report = svc.import_shapes_with_report(turtle)
+        assert report["conditions_dropped"] == 1
+        # The constraint survives, and its target class is recovered from the
+        # SPARQL target so the rule is not left inert.
+        assert shapes[0]["target_class"] == "Customer"
+        assert shapes[0]["parameters"]["sh:pattern"] == "^[A-Z]"
+        assert not shapes[0].get("conditions")
+
+
+@pytest.mark.unit
 class TestShaclGeneratorBaseUri:
     def test_base_uri_override_changes_namespace(self):
         gen = SHACLGenerator("http://original.example/")

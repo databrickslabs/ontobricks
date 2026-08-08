@@ -1,0 +1,15 @@
+{#
+  Knowledge Graph readiness indicator.
+
+  Drop this inside a Knowledge Graph sub-page <h4> title. It renders an empty
+  inline container that `updateKgReadyIndicators()` (query-sync.js) fills based
+  on the shared `tripleStoreHasData` status:
+
+    * built    -> green "Graph ready" badge
+    * building -> "Building…" badge
+    * empty    -> "Graph not built" message + a "Go to Build" button
+
+  All containers on the page are updated together whenever the triple-store
+  status changes (via `updateDataMenus()`).
+#}
+<span class="kg-status-indicator align-middle ms-2" data-kg-status role="status" aria-live="polite"></span>

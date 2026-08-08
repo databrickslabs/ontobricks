@@ -90,8 +90,8 @@ window.AxiomsModule = {
             this.populateSelect('axiomSubject', this.properties, 'property');
             this.populateSelect('axiomObject', this.properties, 'property');
         } else {
-            document.getElementById('subjectLabel').textContent = 'Subject Class';
-            document.getElementById('objectLabel').textContent = 'Object Class(es)';
+            document.getElementById('subjectLabel').textContent = 'Subject Entity';
+            document.getElementById('objectLabel').textContent = 'Object Entity(ies)';
             this.populateSelect('axiomSubject', this.classes, 'class');
             this.populateSelect('axiomObject', this.classes, 'class');
         }
@@ -301,7 +301,7 @@ window.AxiomsModule = {
             '<i class="bi bi-collection me-2"></i>Add Expression';
         document.getElementById('axiomModalHint').innerHTML =
             '<i class="bi bi-lightbulb me-1 text-primary"></i>' +
-            '<strong>Expression</strong> &mdash; define how a class is <em>composed</em> from other classes ' +
+            '<strong>Expression</strong> &mdash; define how an entity is <em>composed</em> from other entities ' +
             '(e.g. Pet = Cat &cup; Dog &cup; Fish).';
         const saveBtn = document.getElementById('axiomSaveBtn');
         if (saveBtn) saveBtn.className = 'btn btn-primary';
@@ -324,7 +324,7 @@ window.AxiomsModule = {
             '<i class="bi bi-signpost-split me-2"></i>Add Axiom';
         document.getElementById('axiomModalHint').innerHTML =
             '<i class="bi bi-lightbulb me-1 text-success"></i>' +
-            '<strong>Axiom</strong> &mdash; assert a logical <em>fact</em> about classes or properties ' +
+            '<strong>Axiom</strong> &mdash; assert a logical <em>fact</em> about entities or properties ' +
             '(e.g. Cat &perp; Dog, or hasParent &#8315;&sup1; hasChild).';
         const saveBtn = document.getElementById('axiomSaveBtn');
         if (saveBtn) saveBtn.className = 'btn btn-success';
@@ -355,8 +355,8 @@ window.AxiomsModule = {
             ? '<i class="bi bi-collection me-2"></i>Edit Expression'
             : '<i class="bi bi-signpost-split me-2"></i>Edit Axiom';
         document.getElementById('axiomModalHint').innerHTML = isExpr
-            ? '<i class="bi bi-lightbulb me-1 text-primary"></i><strong>Expression</strong> &mdash; defines how a class is composed from other classes.'
-            : '<i class="bi bi-lightbulb me-1 text-success"></i><strong>Axiom</strong> &mdash; asserts a logical fact about classes or properties.';
+            ? '<i class="bi bi-lightbulb me-1 text-primary"></i><strong>Expression</strong> &mdash; defines how an entity is composed from other entities.'
+            : '<i class="bi bi-lightbulb me-1 text-success"></i><strong>Axiom</strong> &mdash; asserts a logical fact about entities or properties.';
 
         document.getElementById('axiomType').value = axiom.type;
         this.onTypeChange();
@@ -394,7 +394,7 @@ window.AxiomsModule = {
             ? '<i class="bi bi-eye me-2"></i>View Expression'
             : '<i class="bi bi-eye me-2"></i>View Axiom';
         document.getElementById('axiomModalHint').innerHTML = isExpr
-            ? '<i class="bi bi-info-circle me-1 text-primary"></i>This is an <strong>expression</strong> &mdash; a class composition.'
+            ? '<i class="bi bi-info-circle me-1 text-primary"></i>This is an <strong>expression</strong> &mdash; an entity composition.'
             : '<i class="bi bi-info-circle me-1 text-success"></i>This is an <strong>axiom</strong> &mdash; a logical assertion.';
 
         document.getElementById('axiomType').value = axiom.type;

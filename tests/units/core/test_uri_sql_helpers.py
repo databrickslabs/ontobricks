@@ -60,6 +60,17 @@ class TestSQLHelpers:
     def test_sql_escape_normal(self):
         assert SQLHelpers.sql_escape("hello") == "hello"
 
+    def test_sql_cast_emits_try_cast(self):
+        assert SQLHelpers.sql_cast("t2.object", "DOUBLE") == "TRY_CAST(t2.object AS DOUBLE)"
+
+    def test_sql_numeric_delegates_to_sql_cast(self):
+        assert SQLHelpers.sql_numeric("t2.object") == SQLHelpers.sql_cast("t2.object", "DOUBLE")
+
+    def test_sql_numeric_custom_type_delegates_to_sql_cast(self):
+        assert SQLHelpers.sql_numeric("t2.object", "BIGINT") == SQLHelpers.sql_cast(
+            "t2.object", "BIGINT"
+        )
+
     def test_validate_table_name_valid(self):
         SQLHelpers.validate_table_name("catalog.schema.table")
 
@@ -72,6 +83,17 @@ class TestSQLHelpers:
         from back.core.errors import ValidationError
         with pytest.raises(ValidationError):
             SQLHelpers.validate_table_name("   ")
+
+    def test_validate_uc_identifier_accepts_hyphen(self):
+        assert SQLHelpers.validate_uc_identifier("my-catalog", role="catalog") == "my-catalog"
+
+    def test_validate_uc_identifier_rejects_injection(self):
+        from back.core.errors import ValidationError
+        with pytest.raises(ValidationError, match="Invalid UC catalog"):
+            SQLHelpers.validate_uc_identifier("cat; DROP", role="catalog")
+
+    def test_quote_uc_fqn(self):
+        assert SQLHelpers.quote_uc_fqn("main", "default", "tbl") == "`main`.`default`.`tbl`"
 
     def test_effective_view_table_from_domain(self):
         class FakeDomain:

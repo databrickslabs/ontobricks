@@ -248,7 +248,7 @@ class _BuildPipeline:
 
     def _resolve_lakebase_mode(self) -> None:
         """Resolve graph engine + engine_config once, before ``_open_store``."""
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         logger.debug("[DT-BUILD %s] resolving graph engine mode…", self.task_id)
         try:
@@ -258,12 +258,17 @@ class _BuildPipeline:
             # always shows the correct value because it also uses force=True.
             # Without this flag the build silently falls back to app_managed
             # even when managed_synced is configured.
-            engine = TripleStoreFactory._resolve_graph_engine(
+            engine = GraphDBFactory._resolve_graph_engine(
                 self.domain, self.settings, force=True
             )
-            cfg = TripleStoreFactory._resolve_graph_engine_config(
-                self.domain, self.settings, force=True
-            ) or {}
+            from back.core.graphdb.engine_config import lakebase_section
+
+            cfg = lakebase_section(
+                GraphDBFactory._resolve_graph_engine_config(
+                    self.domain, self.settings, force=True
+                )
+                or {}
+            )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "[DT-BUILD %s] could not resolve lakebase mode — defaulting to "
@@ -379,6 +384,9 @@ class _BuildPipeline:
                 return
             self._log_phase("create_view", t_phase)
             self._post_create_view_progress()
+
+            if not self._materialize_data_table():
+                return
 
             t_phase = time.time()
             self._announce_apply_step()
@@ -659,6 +667,40 @@ class _BuildPipeline:
                 self.task_id, 25, f"VIEW {self.view_table} created"
             )
 
+    def _materialize_data_table(self) -> bool:
+        """Snapshot the R2RML VIEW into ``…_data`` for every engine.
+
+        Analytics reads this table and nothing else, which is what makes the
+        KPIs identical across Lakehouse, Lakebase and Neo4j. It is therefore
+        not optional: a build that skipped it would leave a domain that looks
+        fine and cannot be analysed.
+        """
+        from back.core.graphdb.delta import _table_naming, materialize
+
+        data_table = _table_naming.data_table_fqn(self.domain, self.settings)
+        if not data_table:
+            self.tm.fail_task(
+                self.task_id, "Could not resolve the mapped-triples table name"
+            )
+            return False
+
+        self.tm.update_progress(
+            self.task_id, 30, f"Materializing mapped triples into {data_table}..."
+        )
+        try:
+            materialize.materialize_from_view(
+                self.source_client, self.view_table, data_table
+            )
+        except Exception as exc:  # noqa: BLE001
+            msg = f"Could not materialize {data_table}: {exc}"
+            logger.error("[DT-BUILD %s] %s", self.task_id, msg)
+            self.tm.fail_task(self.task_id, msg)
+            return False
+
+        self.data_table = data_table
+        logger.info("[DT-BUILD %s] materialized %s", self.task_id, data_table)
+        return True
+
     def _announce_apply_step(self) -> None:
         apply_msg = (
             "Applying changes to graph..."
@@ -669,14 +711,14 @@ class _BuildPipeline:
 
     def _open_store(self) -> bool:
         """Initialise the graph backend. Returns ``False`` on failure."""
-        from back.core.triplestore import get_triplestore as _get_ts
+        from back.core.graphdb import get_graphdb as _get_graphdb
 
         logger.debug(
             "[DT-BUILD %s] opening graph backend store (domain=%s)",
             self.task_id,
             self.domain_name,
         )
-        self.store = _get_ts(self.domain_snap, self.settings, backend="graph")
+        self.store = _get_graphdb(self.domain_snap, self.settings)
         if not self.store:
             logger.error(
                 "[DT-BUILD %s] could not initialize graph backend "
@@ -1069,6 +1111,13 @@ class _BuildPipeline:
         _adv()  # → "Syncing data from Delta (Lakeflow)"
 
         # Step 5 — trigger Lakeflow snapshot and wait for ONLINE.
+        if self.store.drop_app_owned_sync_artifacts_if_present(self.graph_name):
+            logger.info(
+                "[DT-BUILD %s] removed app-owned _sync artifacts for %s "
+                "before Lakeflow sync",
+                self.task_id,
+                self.graph_name,
+            )
         logger.debug(
             "[DT-BUILD %s] step 5/7: triggering Lakeflow sync for %s "
             "(timeout=%ss)",

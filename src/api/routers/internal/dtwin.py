@@ -6,30 +6,52 @@ Moved from app/frontend/digitaltwin/routes.py during the front/back split.
 
 from dataclasses import dataclass
 import os
+import secrets
 import time
 from typing import Any, Optional
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Query
 from back.core.logging import get_logger
 from back.core.errors import (
     InfrastructureError,
     NotFoundError,
     ValidationError,
 )
-from back.objects.registry import ROLE_BUILDER, require
+from api.routers.internal._guards import require
+from back.objects.registry import ROLE_BUILDER
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager, get_domain
 from shared.config.settings import get_settings, Settings
 from back.core.w3c import sparql
-from back.core.databricks import DatabricksClient, is_databricks_app
-from back.core.triplestore import get_triplestore
-from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
+from back.core.w3c.shacl.constants import (
+    AGGREGATE_ID_PREFIX,
+    DECISION_TABLE_ID_PREFIX,
+    RULE_FAMILY_CATEGORIES,
+    SWRL_ID_PREFIX,
+    rule_check_id,
+)
+from back.core.databricks import is_databricks_app
+from back.core.graphdb import get_graphdb
+from back.core.graph_analysis import (
+    MODE_JOB,
+    analytics_job_configured,
+    analytics_job_status,
+)
+from back.objects.digitaltwin import (
+    CohortService,
+    DigitalTwin,
+    DomainSnapshot,
+    NodeContextService,
+)
 from back.objects.domain import HomeService, Domain
+from api.routers.digitaltwin import NodeContextResponse
 from back.core.helpers import (
+    effective_databricks_table,
     effective_graph_name,
+    effective_graph_query_table,
     effective_view_table,
     get_databricks_client,
-    get_databricks_credentials,
+    get_triplestore_sql_credentials,
     get_databricks_host_and_token,
     make_volume_file_service,
     is_uri,
@@ -39,6 +61,39 @@ from back.core.helpers import (
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/dtwin", tags=["Query"])
+
+
+def _graph_query_table(
+    domain,
+    settings,
+    store=None,
+    *,
+    include_inferred: bool = True,
+) -> str:
+    """Resolve the physical graph table for read queries (Lakebase or Delta)."""
+    return effective_graph_query_table(
+        domain,
+        settings,
+        include_inferred=include_inferred,
+        store=store,
+    )
+
+
+def _dataquality_table(domain, settings) -> str:
+    """Resolve the single execution target for data quality checks.
+
+    Checks always compile to SQL and run against the triple-store VIEW. The
+    build creates it whatever graph engine the domain uses, so it is the one
+    target that is guaranteed to exist. Note it carries the mapped source
+    triples only — triples added by reasoning live in the graph store and are
+    deliberately out of scope for data quality.
+    """
+    table = effective_view_table(domain, settings).strip()
+    if not table:
+        raise ValidationError(
+            "The triple-store VIEW is not available. Build the Knowledge Graph first."
+        )
+    return table
 
 # Canonical rdf:type predicate. Neighbour expansion must preserve type
 # triples so the knowledge graph can group/colour expanded nodes by their
@@ -240,7 +295,7 @@ async def start_triplestore_sync(
             "No R2RML mapping available. Please ensure ontology and assignments are configured."
         )
 
-    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
     if not host and not is_databricks_app():
         raise ValidationError("Databricks not configured")
     if not token and not is_databricks_app():
@@ -272,10 +327,13 @@ async def start_triplestore_sync(
     # is absent when GlobalConfigService is the sole persistence layer
     # (common in the deployed App where the mirror write never fires).
     try:
-        from back.core.triplestore.TripleStoreFactory import TripleStoreFactory
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+        from back.core.graphdb.engine_config import lakebase_section
 
-        _engine = TripleStoreFactory._resolve_graph_engine(domain, settings, force=True) or ""
-        _ecfg = TripleStoreFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
+        _engine = GraphDBFactory._resolve_graph_engine(domain, settings, force=True) or ""
+        _ecfg = lakebase_section(
+            GraphDBFactory._resolve_graph_engine_config(domain, settings, force=True) or {}
+        )
     except Exception as _exc:  # noqa: BLE001
         logger.debug("Engine config resolution failed, defaulting to non-synced: %s", _exc)
         _engine = ""
@@ -348,11 +406,10 @@ async def load_triplestore(
         include_inferred = body.get("include_inferred", True)
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
-
         store = _require_graph_store(domain, settings)
-
-        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
+        query_table = _graph_query_table(
+            domain, settings, store, include_inferred=include_inferred
+        )
 
         try:
             results = store.query_triples(query_table)
@@ -363,7 +420,7 @@ async def load_triplestore(
             error_msg = str(e)
             if "does not exist" in error_msg.lower():
                 raise NotFoundError(
-                    f"Graph {graph_name} does not exist. Run Build first.",
+                    f"Graph {query_table} does not exist. Run Build first.",
                     detail=error_msg,
                 )
             raise InfrastructureError(
@@ -407,11 +464,10 @@ async def detect_clusters(
         max_triples = int(data.get("max_triples", settings.analytics_max_triples))
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
         if not graph_name:
             raise ValidationError("Graph name is not configured")
-
-        store = _require_graph_store(domain, settings)
 
         dt = DigitalTwin(domain)
         result = await run_blocking(
@@ -487,30 +543,24 @@ async def compute_graph_metrics(
             data = {}
         predicate_filter = data.get("predicate_filter")
         class_filter = data.get("class_filter")
-        max_triples = int(data.get("max_triples", settings.analytics_max_triples))
-        max_nodes_betweenness = int(data.get("max_nodes_betweenness", 2_000))
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
         if not graph_name:
             raise ValidationError("Graph name is not configured")
 
-        store = _require_graph_store(domain, settings)
-
-        # Fail fast on graphs too large for in-memory analysis — the triple
-        # count is already known, so reject here instead of spawning a
-        # background task that would only fail after loading everything.
-        try:
-            total_triples = int(store.get_aggregate_stats(graph_name).get("total", 0))
-        except Exception:  # noqa: BLE001
-            total_triples = 0
-        if total_triples and total_triples > max_triples:
+        # One compute path. When it cannot run, say why instead of quietly
+        # returning a thinner metric set.
+        job_available, blocked_reason = analytics_job_status(domain, settings)
+        if not job_available:
             raise ValidationError(
-                f"This Knowledge Graph has {total_triples:,} triples, which "
-                f"exceeds the analytics limit of {max_triples:,}. In-memory "
-                f"centrality/structure analysis is disabled for graphs this "
-                f"large — reduce the synced graph (exclude entity types in "
-                f"KG → Sync) or raise ONTOBRICKS_ANALYTICS_MAX_TRIPLES."
+                blocked_reason
+                or (
+                    "Graph analytics runs on Databricks, which is not enabled "
+                    "for this workspace. Enable 'Compute large-graph metrics on "
+                    "Databricks' in Settings."
+                )
             )
 
         tm = get_task_manager()
@@ -529,12 +579,10 @@ async def compute_graph_metrics(
                 task.id,
                 domain,
                 settings,
-                store,
                 graph_name,
                 predicate_filter=predicate_filter,
                 class_filter=class_filter,
-                max_triples=max_triples,
-                max_nodes_betweenness=max_nodes_betweenness,
+                top_n=settings.analytics_top_n,
             )
 
         thread = threading.Thread(target=run_metrics, daemon=True)
@@ -543,7 +591,8 @@ async def compute_graph_metrics(
         return {
             "success": True,
             "task_id": task.id,
-            "message": "Analysis started",
+            "mode": MODE_JOB,
+            "message": "Analysis started (running on Databricks)",
         }
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -573,6 +622,8 @@ async def get_latest_graph_metrics(
         if not stored:
             return {"success": True, "has_result": False}
 
+        # Rows stored before analytics became job-only carry mode="in_memory" or
+        # "pushdown". Nothing branches on mode, so they still render.
         result = stored.get("result") or {}
         return {
             "success": True,
@@ -593,25 +644,29 @@ async def get_latest_graph_metrics(
 
 @router.get("/metrics/history")
 async def get_graph_metrics_history(
+    version: Optional[str] = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1000),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Return the analytics run history (newest-first) for this domain/version.
+    """Return the analytics run history (newest-first) for this domain.
 
-    Lightweight metadata per run from the ``graph_analytics_runs`` trace —
-    backs the Analytics page "History" tab.
+    Spans every version unless ``version`` scopes it. Backs the analytics
+    table on Knowledge Graph → Management → Runs, which has no version
+    filter. Guarding on a version here would report an empty history for a
+    domain whose current version is blank, even with rows on file for
+    earlier ones.
     """
     from back.objects.registry.RegistryService import RegistryService
 
     try:
         domain = get_domain(session_mgr)
         folder = getattr(domain, "uc_domain_folder", "") or ""
-        version = str(getattr(domain, "current_version", "") or "")
-        if not folder or not version:
+        if not folder:
             return {"success": True, "runs": []}
 
         svc = RegistryService.from_context(domain, settings)
-        runs = svc.load_graph_analytics_runs(folder, version, limit=100)
+        runs = svc.load_graph_analytics_runs(folder, version, limit=limit)
         return {"success": True, "runs": runs}
 
     except (ValidationError, InfrastructureError, NotFoundError):
@@ -752,10 +807,10 @@ def cohort_engine_context(
     backend cannot be instantiated.
     """
     domain = get_domain(session_mgr)
-    graph_name = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    graph_name = _graph_query_table(domain, settings, store)
     if not graph_name:
         raise ValidationError("Graph name is not configured")
-    store = _require_graph_store(domain, settings)
     return CohortEngineContext(
         domain=domain,
         settings=settings,
@@ -782,11 +837,11 @@ def _require_graph_store(domain, settings):
 
     Centralises the five-line guard that every graph-facing route repeated::
 
-        store = get_triplestore(domain, settings, backend="graph")
+        store = get_graphdb(domain, settings)
         if not store:
             raise InfrastructureError("Graph backend is not configured")
     """
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError("Graph backend is not configured")
     return store
@@ -1038,13 +1093,10 @@ async def filter_triplestore(
         include_inferred = data.get("include_inferred", True)
 
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
-        if not graph_name:
-            raise ValidationError("Graph name is not configured")
-
         store = _require_graph_store(domain, settings)
-
-        query_table = graph_name if include_inferred else store.synced_table_name(graph_name)
+        query_table = _graph_query_table(
+            domain, settings, store, include_inferred=include_inferred
+        )
 
         if phase == "preview":
             entity_type = (data.get("entity_type") or "").strip()
@@ -1112,16 +1164,16 @@ async def triplestore_status(
 ):
     """Lightweight check: does the triple store table exist and contain data?
 
-    Returns session-cached status when available; falls back to a live
-    query and caches the result.  ``refresh`` is accepted for API
-    compatibility and ignored.
+    Returns session-cached status when available; falls back to a live query and
+    caches the result. ``refresh=true`` bypasses the cache, which is the escape
+    hatch the Build page's Refresh button needs when a stale entry disagrees with
+    the live graph.
     """
-    _ = refresh  # query param kept for backward compatibility
     try:
         domain = get_domain(session_mgr)
         dt = DigitalTwin(domain)
         await run_blocking(dt.sync_last_build_from_schedule, settings)
-        return await dt.get_or_fetch_graph_status(settings)
+        return await dt.get_or_fetch_graph_status(settings, force_refresh=refresh)
     except (ValidationError, InfrastructureError, NotFoundError):
         raise
     except Exception as e:
@@ -1220,6 +1272,138 @@ async def sync_info(
 
 
 # ===========================================
+# Databricks Triple Store Build (Delta only)
+# ===========================================
+
+
+@router.get("/databricks-build/info")
+async def databricks_build_info(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Readiness + Delta table status for the Databricks triple-store build page."""
+    from back.core.graphdb.delta import _table_naming
+    from back.core.graphdb.delta.health import probe_from_client
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    domain = get_domain(session_mgr)
+    backend = GraphDBFactory._resolve_triple_store_backend(domain, settings)
+    readiness = HomeService.validate_status(domain)
+    view_table = effective_view_table(domain)
+    data_table = effective_databricks_table(domain, settings)
+    client = create_databricks_client(domain, settings)
+    data_status = probe_from_client(client, data_table) if data_table else {}
+    return {
+        "success": True,
+        "triple_store_backend": backend,
+        "readiness": readiness,
+        "view_table": view_table,
+        "data_table": data_table,
+        "inferred_table": _table_naming.inferred_table_fqn(domain, settings),
+        "triplestore_status": data_status,
+    }
+
+
+@router.post(
+    "/databricks-build/start",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def start_databricks_triplestore_build(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Materialize UC Delta triple store (VIEW → TABLE); no Lakebase sync."""
+    import threading
+    from back.core.task_manager import get_task_manager
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+    from back.objects.digitaltwin._databricks_triplestore_build import (
+        run_databricks_triplestore_build,
+    )
+
+    await request.json()
+
+    domain = get_domain(session_mgr)
+    if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
+        raise ValidationError(
+            "Databricks triple-store build is only available when "
+            "triple_store_backend is 'databricks' (Settings → Back end)."
+        )
+
+    view_table = effective_view_table(domain)
+    data_table = effective_databricks_table(domain, settings)
+    if len(view_table.split(".")) != 3:
+        raise ValidationError(
+            "View location must be fully qualified: catalog.schema.view_name"
+        )
+    if len(data_table.split(".")) != 3:
+        raise ValidationError("Delta data table FQN could not be resolved")
+
+    domain.ensure_generated_content()
+    r2rml_content = domain.get_r2rml()
+    if not r2rml_content:
+        raise ValidationError(
+            "No R2RML mapping available. Configure ontology and assignments first."
+        )
+
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
+    if not host and not is_databricks_app():
+        raise ValidationError("Databricks not configured")
+    if not token and not is_databricks_app():
+        raise ValidationError("Databricks not configured")
+    if not warehouse_id:
+        raise ValidationError("No SQL warehouse configured")
+
+    domain.triplestore.pop("stats", None)
+    domain.triplestore.pop("_ts_cache_timestamp", None)
+    if domain.last_update:
+        domain.triplestore["build_last_update"] = domain.last_update
+
+    from datetime import datetime, timezone as tz
+
+    domain.last_build = datetime.now(tz.utc).isoformat()
+    domain.save()
+
+    domain_snap = DomainSnapshot(domain)
+    base_uri = domain.ontology.get("base_uri", DEFAULT_BASE_URI)
+
+    tm = get_task_manager()
+    task = tm.create_task(
+        name="Databricks Triple Store Build",
+        task_type="databricks_triplestore_build",
+        steps=[
+            {"name": "prepare", "description": "Preparing mappings and generating queries"},
+            {"name": "view", "description": "Creating the R2RML SQL view"},
+            {"name": "materialize", "description": "Materializing Delta table in Unity Catalog"},
+            {"name": "finalize", "description": "Optimizing Delta table"},
+        ],
+    )
+
+    def run_build():
+        run_databricks_triplestore_build(
+            tm,
+            task.id,
+            domain,
+            settings,
+            domain_snap,
+            host,
+            token,
+            warehouse_id,
+            view_table,
+            data_table,
+            r2rml_content,
+            domain.assignment,
+            domain.ontology,
+            base_uri,
+            build_kind="session",
+        )
+
+    threading.Thread(target=run_build, daemon=True).start()
+    return {"success": True, "task_id": task.id}
+
+
+# ===========================================
 # Knowledge Graph Existence Checks
 # ===========================================
 
@@ -1255,7 +1439,8 @@ async def triplestore_stats(
     """Return content statistics about the triple store."""
     try:
         domain = get_domain(session_mgr)
-        graph_name = effective_graph_name(domain)
+        store = _require_graph_store(domain, settings)
+        graph_name = _graph_query_table(domain, settings, store)
 
         if not graph_name:
             raise ValidationError("Graph name is not configured")
@@ -1265,10 +1450,17 @@ async def triplestore_stats(
             if cached:
                 preds = cached.get("top_predicates") or []
                 has_kind = preds and "kind" in preds[0]
-                if has_kind:
+                # A payload predating a field would otherwise be served until the
+                # cache expired, hiding a setting the user just changed.
+                has_job_reason = "analytics_job_blocked_reason" in cached
+                if has_kind and has_job_reason:
                     logger.debug("Returning cached graph stats")
                     return cached
-                logger.debug("Stale stats cache (missing 'kind'); refreshing")
+                logger.debug(
+                    "Stale stats cache (kind=%s, job_reason=%s); refreshing",
+                    has_kind,
+                    has_job_reason,
+                )
 
         store = _require_graph_store(domain, settings)
 
@@ -1288,6 +1480,8 @@ async def triplestore_stats(
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
 
+        job_available, job_blocked_reason = analytics_job_configured(domain, settings)
+
         result = {
             "success": True,
             "total_triples": total_count,
@@ -1301,10 +1495,13 @@ async def triplestore_stats(
             "type_assertion_count": type_count,
             "relationship_count": max(relationship_count, 0),
             "inferred_triples": inferred_count,
-            # Effective KG-analytics safety limit, so the Analytics page can
-            # warn up-front when total_triples exceeds it (in-memory NetworkX
-            # guard; see Settings.analytics_max_triples).
-            "analytics_max_triples": settings.analytics_max_triples,
+            # Whether the Databricks analytics job can run for this domain.
+            "analytics_job_available": job_available,
+            # Why it is not, when an admin has turned it on and therefore expects
+            # it to work. ``resolve_analytics_source`` writes these for the person
+            # reading them, and every cause is a configuration problem only they
+            # can fix, so discarding them just moves the diagnosis into the logs.
+            "analytics_job_blocked_reason": job_blocked_reason,
         }
         DigitalTwin(domain).set_ts_cache("stats", result)
         return result
@@ -1328,41 +1525,21 @@ async def execute_dataquality_check(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Execute a single SHACL shape check against the triple store."""
+    """Execute a single SHACL shape check against the triple-store VIEW."""
     try:
         data = await request.json()
         shape = data.get("shape", {})
-        backend = data.get("backend", "view").strip()
         domain = get_domain(session_mgr)
-        if backend == "graph":
-            triplestore_table = effective_graph_name(domain).strip()
-        else:
-            triplestore_table = data.get("triplestore_table", "").strip()
+        triplestore_table = _dataquality_table(domain, settings)
 
-        if not triplestore_table:
-            raise ValidationError("Triple store table is not specified.")
         if not shape:
             raise ValidationError("No shape was provided.")
 
         from back.core.w3c import SHACLService
 
-        store = get_triplestore(domain, settings, backend=backend)
+        store = get_graphdb(domain, settings, engine="view")
         if not store:
-            raise InfrastructureError(f"Could not initialize {backend} backend")
-
-        if backend == "graph":
-            graph_name = triplestore_table or effective_graph_name(domain)
-            triples = await run_blocking(store.query_triples, graph_name)
-            if not triples:
-                raise ValidationError(f"Graph '{graph_name}' is empty. Build first.")
-            violations = SHACLService.evaluate_shape_in_memory(shape, triples)
-            return {
-                "success": True,
-                "violations": violations,
-                "count": len(violations),
-                "sql": "",
-                "engine": "in-memory",
-            }
+            raise InfrastructureError("Could not reach the SQL warehouse")
 
         sql = SHACLService.shape_to_sql(shape, triplestore_table)
         if not sql:
@@ -1396,19 +1573,12 @@ async def start_dataquality_checks(
     data = await request.json()
     dimensions = data.get("dimensions") or []
     shape_ids = data.get("shape_ids") or []
-    requested_backend = data.get("backend", "").strip() or "view"
     violation_limit = int(data.get("violation_limit", 10))
     if violation_limit <= 0:
         violation_limit = None
 
     domain = get_domain(session_mgr)
-    if requested_backend == "graph":
-        triplestore_table = effective_graph_name(domain).strip()
-    else:
-        triplestore_table = data.get("triplestore_table", "").strip()
-
-    if not triplestore_table:
-        raise ValidationError("Triple store table is not specified.")
+    triplestore_table = _dataquality_table(domain, settings)
     shapes = domain.shacl_shapes
     if shape_ids:
         shape_ids_set = set(shape_ids)
@@ -1417,22 +1587,47 @@ async def start_dataquality_checks(
         shapes = [s for s in shapes if s.get("category") in dimensions]
     shapes = [s for s in shapes if s.get("enabled", True)]
 
-    swrl_rules = domain.swrl_rules or []
     ontology_dict = getattr(domain, "ontology", None)
     if not isinstance(ontology_dict, dict):
         ontology_dict = (
             domain._data.get("ontology", {}) if hasattr(domain, "_data") else {}
         )
-    decision_tables = [
-        dt for dt in ontology_dict.get("decision_tables", []) if dt.get("enabled", True)
-    ]
-    aggregate_rules = [
-        r for r in ontology_dict.get("aggregate_rules", []) if r.get("enabled", True)
-    ]
+
+    # SWRL rules, decision tables and aggregate rules are selected the same way
+    # shapes are: by check id when the user picked individual rules, otherwise
+    # by the dimension their results are filed under.
+    selected_ids = set(shape_ids)
+
+    def _selected_rules(prefix: str, family: list) -> list:
+        if (
+            not selected_ids
+            and dimensions
+            and RULE_FAMILY_CATEGORIES[prefix] not in dimensions
+        ):
+            return []
+        selected = []
+        for index, rule in enumerate(family or []):
+            if not rule.get("enabled", True):
+                continue
+            check_id = rule_check_id(prefix, rule, index)
+            if selected_ids and check_id not in selected_ids:
+                continue
+            selected.append({**rule, "check_id": check_id})
+        return selected
+
+    swrl_rules = _selected_rules(SWRL_ID_PREFIX, domain.swrl_rules)
+    decision_tables = _selected_rules(
+        DECISION_TABLE_ID_PREFIX, ontology_dict.get("decision_tables", [])
+    )
+    aggregate_rules = _selected_rules(
+        AGGREGATE_ID_PREFIX, ontology_dict.get("aggregate_rules", [])
+    )
 
     if not shapes and not swrl_rules and not decision_tables and not aggregate_rules:
         raise ValidationError(
-            "No enabled shapes, SWRL rules, decision tables or aggregate rules to check."
+            "Nothing to check in the selected dimensions."
+            if dimensions or shape_ids
+            else "No enabled shapes, SWRL rules, decision tables or aggregate rules to check."
         )
 
     total = len(shapes) + len(swrl_rules) + len(decision_tables) + len(aggregate_rules)
@@ -1452,7 +1647,6 @@ async def start_dataquality_checks(
             domain_snap,
             shapes,
             triplestore_table,
-            requested_backend,
             total,
             swrl_rules=swrl_rules,
             ontology_dict=ontology_dict,
@@ -1589,7 +1783,7 @@ async def materialize_inferred(
 
     if do_graph and uri_triples:
         try:
-            store = get_triplestore(domain_snap, settings, backend="graph")
+            store = get_graphdb(domain_snap, settings)
             if store is None:
                 result["materialize_graph_error"] = "Graph store not available"
             else:
@@ -1639,23 +1833,242 @@ async def get_inferred_triples(
 # ===========================================
 
 
-# Session key for the Graph Chat cache (history + limit).
-# Shape: {"limit": int, "history": {<domain_name>: [{"role", "content"}, ...]}}
+@router.get("/classes")
+async def dtwin_classes(
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Return session-domain classes and Graph Chat action metadata."""
+    domain = get_domain(session_mgr)
+    return {
+        "success": True,
+        "domain_name": _chat_resolve_domain_name(domain),
+        "classes": [
+            {
+                "name": cls.get("name", ""),
+                "uri": cls.get("uri", ""),
+                "dataset": cls.get("dataset") or None,
+                "bridges": NodeContextService.class_bridge_entries(cls),
+                "actions": NodeContextService.class_action_entries(cls),
+            }
+            for cls in (domain.get_classes() or [])
+        ],
+    }
+
+
+@router.post("/nodes/action/request")
+async def dtwin_nodes_action_request(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Validate an entity + allow-listed action and mint a one-time pending token.
+
+    Does **not** invoke the Unity Catalog function — this only checks that
+    the entity resolves to an ontology class and that the action is declared
+    on that class, then stores a pending entry in the session cache. Call
+    ``POST /dtwin/nodes/action/confirm`` with the returned token to execute.
+    """
+    data = await request.json()
+    entity_uri = (data.get("entity_uri") or "").strip()
+    action_full_name = (data.get("action_full_name") or "").strip()
+    if not entity_uri or not action_full_name:
+        raise ValidationError("entity_uri and action_full_name are required")
+
+    domain = get_domain(session_mgr)
+    raw_classes = domain.get_classes() or []
+    matched_cls = NodeContextService.match_ontology_class(entity_uri, raw_classes)
+    if matched_cls is None:
+        raise ValidationError("No ontology class matches this entity URI")
+
+    class_name = matched_cls.get("name", "")
+    action = next(
+        (
+            a
+            for a in NodeContextService.class_action_entries(matched_cls)
+            if a["fullName"] == action_full_name
+        ),
+        None,
+    )
+    if action is None:
+        raise ValidationError(
+            f"Action {action_full_name!r} is not configured on class {class_name!r}"
+        )
+
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+
+    token = secrets.token_urlsafe(24)
+    cache["pending_actions"][token] = {
+        "domain": domain_key,
+        "entity_uri": entity_uri,
+        "action_full_name": action["fullName"],
+        "expires_at": time.time() + _PENDING_ACTION_TTL_SEC,
+        "used": False,
+    }
+    _chat_save_cache(session_mgr, cache)
+
+    entity_label = DigitalTwin.extract_local_id(entity_uri)
+
+    logger.info(
+        "nodes/action/request: minted pending token for entity=%s action=%s domain=%s",
+        entity_label,
+        action["fullName"],
+        domain_key,
+    )
+
+    return {
+        "success": True,
+        "pending_action": {
+            "token": token,
+            "entity_uri": entity_uri,
+            "entity_label": entity_label,
+            "action": action["fullName"],
+            "description": action.get("description"),
+            "expires_in_sec": _PENDING_ACTION_TTL_SEC,
+        },
+        "message": f"Confirm to run {action['fullName']} on {entity_label}.",
+    }
+
+
+@router.post("/nodes/action/confirm")
+async def dtwin_nodes_action_confirm(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Consume a pending-action token and invoke the Unity Catalog function once.
+
+    The token is marked ``used`` **before** invocation so a double-click or
+    retried request cannot invoke the action twice. If the invocation itself
+    fails, the token stays used and the caller must ``request`` a fresh one —
+    tokens are not refunded on failure.
+    """
+    data = await request.json()
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise ValidationError("token is required")
+
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+
+    entry = cache["pending_actions"].get(token)
+    if (
+        not entry
+        or entry.get("used")
+        or entry.get("domain") != domain_key
+        or entry.get("expires_at", 0) <= time.time()
+    ):
+        raise ValidationError("Action expired — request again")
+
+    entry["used"] = True
+    _chat_save_cache(session_mgr, cache)
+
+    return await NodeContextService.invoke_action(
+        domain,
+        settings,
+        entity_uri=entry["entity_uri"],
+        action_full_name=entry["action_full_name"],
+    )
+
+
+@router.post("/nodes/action/cancel")
+async def dtwin_nodes_action_cancel(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Discard a pending-action token if present. Always returns success.
+
+    Best-effort UI cleanup: the token also self-expires via TTL, so a missing
+    or already-consumed token is not an error.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    token = (data.get("token") or "").strip()
+    if token:
+        cache = _chat_cache(session_mgr)
+        if cache["pending_actions"].pop(token, None) is not None:
+            _chat_save_cache(session_mgr, cache)
+    return {"success": True}
+
+
+@router.get("/nodes/context", response_model=NodeContextResponse, response_model_exclude_none=True)
+async def dtwin_nodes_context(
+    entity_uri: str,
+    fetch_dataset_rows: bool = False,
+    dataset_row_limit: int = 5,
+    follow_bridges: bool = False,
+    bridge_depth: int = 1,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Resolve node context against the active session domain."""
+    domain = get_domain(session_mgr)
+    payload = await NodeContextService.resolve_context(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        session_mgr=session_mgr,
+        fetch_dataset_rows=fetch_dataset_rows,
+        dataset_row_limit=max(1, min(dataset_row_limit or 5, 20)),
+        follow_bridges=follow_bridges,
+        bridge_depth=max(1, min(bridge_depth or 1, 1)),
+        registry_catalog=None,
+        registry_schema=None,
+        registry_volume=None,
+    )
+    return NodeContextResponse(**payload)
+
+
+# Session key for the Graph Chat cache (history + limit + pending actions).
+# Shape: {
+#   "limit": int,
+#   "history": {<domain_name>: [{"role", "content"}, ...]},
+#   "pending_actions": {
+#       <token>: {"domain", "entity_uri", "action_full_name", "expires_at", "used"},
+#   },
+# }
 _CHAT_SESSION_KEY = "graph_chat"
 _CHAT_DEFAULT_LIMIT = 20         # number of user+assistant turns kept per domain
 _CHAT_MIN_LIMIT = 5
 _CHAT_MAX_LIMIT = 100
+
+# How long a minted Action confirmation token stays valid. Short enough that
+# a stale browser tab can't replay a UC function call long after the user
+# looked away, long enough to click "Confirm" on a rendered chat card.
+# pending_actions live in the in-memory session cache (per-process); the
+# used-before-invoke guard assumes a single Uvicorn worker / one event loop.
+# Multiple workers need sticky sessions or shared state so request and confirm
+# hit the same process.
+_PENDING_ACTION_TTL_SEC = 120
 
 
 def _chat_cache(session_mgr: SessionManager) -> dict:
     """Return the Graph Chat session cache, creating an empty one if absent."""
     cache = session_mgr.get(_CHAT_SESSION_KEY)
     if not isinstance(cache, dict):
-        cache = {"limit": _CHAT_DEFAULT_LIMIT, "history": {}}
+        cache = {"limit": _CHAT_DEFAULT_LIMIT, "history": {}, "pending_actions": {}}
     else:
         cache.setdefault("limit", _CHAT_DEFAULT_LIMIT)
         cache.setdefault("history", {})
+        cache.setdefault("pending_actions", {})
     return cache
+
+
+def _pending_actions_prune(cache: dict) -> None:
+    """Drop expired pending-action tokens in place so the cache stays bounded.
+
+    Called on every request/confirm/cancel so a session that mints many
+    tokens over time doesn't accumulate stale entries forever.
+    """
+    now = time.time()
+    pending = cache.get("pending_actions") or {}
+    expired = [tok for tok, entry in pending.items() if entry.get("expires_at", 0) <= now]
+    for tok in expired:
+        pending.pop(tok, None)
 
 
 def _chat_save_cache(session_mgr: SessionManager, cache: dict) -> None:
@@ -1711,6 +2124,26 @@ def _chat_trim(messages: list, limit: int) -> list:
         return []
     keep = 2 * limit
     return messages[-keep:] if len(messages) > keep else list(messages)
+
+
+def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
+    """Build the common blocking or SSE-completion Graph Chat response."""
+    payload = {
+        "success": agent_result.success,
+        "reply": agent_result.reply or "",
+        "tools": [
+            {"name": step.tool_name, "duration_ms": step.duration_ms}
+            for step in agent_result.steps
+            if step.step_type == "tool_result"
+        ],
+        "iterations": agent_result.iterations,
+        "usage": agent_result.usage,
+    }
+    if event_type:
+        payload["type"] = event_type
+    if agent_result.pending_action:
+        payload["pending_action"] = agent_result.pending_action
+    return payload
 
 
 def _auto_discover_llm_endpoint(domain, settings) -> str:
@@ -1881,21 +2314,18 @@ async def dtwin_assistant_chat(
             detail=agent_result.error or None,
         )
 
-    tool_calls = [
-        {
-            "name": step.tool_name,
-            "duration_ms": step.duration_ms,
-        }
-        for step in agent_result.steps
-        if step.step_type == "tool_result"
-    ]
-
     # Persist the exchange in the session cache (per-domain, trimmed to
     # the configured limit) so the discussion survives page navigation.
     # ``history`` is expected to hold PRIOR turns only; drop a trailing
     # entry that accidentally echoes the current user_message so we
     # never double-record the same question (also self-heals any pre-
     # existing sessions that were written with the old contract).
+    #
+    # Re-read the cache instead of reusing the pre-agent ``chat_cache``
+    # snapshot: the agent's tool calls loop back into this same process
+    # (e.g. ``POST /dtwin/nodes/action/request``) and may have minted a
+    # ``pending_actions`` token into the session while ``run_agent`` was
+    # running. Saving the stale snapshot would clobber that token.
     prior = list(history)
     if prior and prior[-1].get("role") == "user" and (
         prior[-1].get("content") or ""
@@ -1903,16 +2333,11 @@ async def dtwin_assistant_chat(
         prior = prior[:-1]
     prior.append({"role": "user", "content": user_message})
     prior.append({"role": "assistant", "content": agent_result.reply or ""})
+    chat_cache = _chat_cache(session_mgr)
     chat_cache["history"][domain_key] = _chat_trim(prior, limit)
     _chat_save_cache(session_mgr, chat_cache)
 
-    return {
-        "success": True,
-        "reply": agent_result.reply,
-        "tools": tool_calls,
-        "iterations": agent_result.iterations,
-        "usage": agent_result.usage,
-    }
+    return _chat_response_payload(agent_result)
 
 
 @router.post("/assistant/chat/stream")
@@ -2042,7 +2467,11 @@ async def dtwin_assistant_chat_stream(
                     kind, payload = item
                     if kind == "done":
                         agent_result = payload
-                        # Update session cache exactly like the blocking endpoint
+                        # Update session cache exactly like the blocking endpoint.
+                        # Re-read the cache instead of reusing the pre-agent
+                        # snapshot: the agent's tool calls loop back into this
+                        # same process and may have minted a pending_actions
+                        # token into the session while run_agent was running.
                         prior = list(history)
                         if prior and prior[-1].get("role") == "user" and (
                             prior[-1].get("content") or ""
@@ -2050,22 +2479,13 @@ async def dtwin_assistant_chat_stream(
                             prior = prior[:-1]
                         prior.append({"role": "user", "content": user_message})
                         prior.append({"role": "assistant", "content": agent_result.reply or ""})
-                        chat_cache["history"][domain_key] = _chat_trim(prior, limit)
-                        _chat_save_cache(session_mgr, chat_cache)
+                        fresh_cache = _chat_cache(session_mgr)
+                        fresh_cache["history"][domain_key] = _chat_trim(prior, limit)
+                        _chat_save_cache(session_mgr, fresh_cache)
 
-                        tool_calls = [
-                            {"name": s.tool_name, "duration_ms": s.duration_ms}
-                            for s in agent_result.steps
-                            if s.step_type == "tool_result"
-                        ]
-                        yield "data: " + _json.dumps({
-                            "type": "done",
-                            "reply": agent_result.reply or "",
-                            "tools": tool_calls,
-                            "iterations": agent_result.iterations,
-                            "usage": agent_result.usage,
-                            "success": agent_result.success,
-                        }) + "\n\n"
+                        yield "data: " + _json.dumps(
+                            _chat_response_payload(agent_result, event_type="done")
+                        ) + "\n\n"
                         break
 
                     else:  # error
@@ -2158,6 +2578,7 @@ async def dtwin_graphql_schema(
     domain.
     """
     from back.core.graphql import build_schema_for_domain
+    from back.fastapi.graphql_routes import _diagnose_empty_ontology
     from strawberry.printer import print_schema
 
     domain = get_domain(session_mgr)
@@ -2170,10 +2591,25 @@ async def dtwin_graphql_schema(
     properties_list = ontology.get("properties", []) or []
     base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
 
-    if not classes:
-        raise ValidationError(
-            "Ontology is empty — add at least one class to generate a GraphQL schema."
-        )
+    # Friendly fallback: when the ontology is too thin to back a GraphQL
+    # schema, return a 200 with ``sdl=null`` + a typed ``reason``. The UI
+    # branches on ``ready`` to render an in-context hint instead of a
+    # blunt "HTTP 400" toast.
+    diag = _diagnose_empty_ontology(classes, properties_list)
+    if diag is not None:
+        reason, message = diag
+        return {
+            "success": True,
+            "ready": False,
+            "domain": display_name,
+            "sdl": None,
+            "reason": reason,
+            "message": message,
+            "stats": {
+                "classes": len(classes),
+                "properties": len(properties_list),
+            },
+        }
 
     result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
     if not result:
@@ -2183,6 +2619,7 @@ async def dtwin_graphql_schema(
     schema, _metadata = result
     return {
         "success": True,
+        "ready": True,
         "domain": display_name,
         "sdl": print_schema(schema),
     }
@@ -2201,7 +2638,6 @@ async def dtwin_graphql_execute(
     to resolve the query.
     """
     from back.core.graphql import build_schema_for_domain, DEFAULT_DEPTH, MAX_DEPTH
-    from back.core.triplestore import get_triplestore
     from back.core.helpers import effective_graph_name
 
     domain = get_domain(session_mgr)
@@ -2233,7 +2669,7 @@ async def dtwin_graphql_execute(
 
     context = {
         "triplestore": store,
-        "table_name": effective_graph_name(domain),
+        "table_name": _graph_query_table(domain, settings, store),
         "base_uri": base_uri,
     }
     if depth is not None:
@@ -2278,8 +2714,6 @@ async def dtwin_triples_find(
     Graph Chat agent can introspect domains that have never been
     published as a version.
     """
-    from back.core.helpers import sql_escape
-
     if not entity_type and not search:
         raise ValidationError("Provide at least entity_type or search")
 
@@ -2288,79 +2722,24 @@ async def dtwin_triples_find(
     offset = max(0, int(offset or 0))
 
     domain = get_domain(session_mgr)
-    table = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    table = _graph_query_table(domain, settings, store)
     if not table:
         raise ValidationError("Graph name not configured")
 
-    store = _require_graph_store(domain, settings)
-
-    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-    rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
-
     try:
-        seed_conditions: list[str] = []
-        if entity_type:
-            esc = sql_escape(entity_type).lower()
-            seed_conditions.append(
-                f"subject IN (SELECT subject FROM {table} "
-                f"WHERE predicate = '{rdf_type}' AND "
-                f"(LOWER(object) LIKE '%#{esc}' OR LOWER(object) LIKE '%/{esc}'))"
-            )
-        if search:
-            esc = sql_escape(search).lower()
-            seed_conditions.append(
-                f"(subject IN (SELECT subject FROM {table} "
-                f"WHERE (predicate = '{rdfs_label}' "
-                f"OR predicate LIKE '%#label' OR predicate LIKE '%/label' "
-                f"OR predicate LIKE '%#name' OR predicate LIKE '%/name') "
-                f"AND LOWER(object) LIKE '%{esc}%') "
-                f"OR LOWER(subject) LIKE '%/{esc}%' "
-                f"OR LOWER(subject) LIKE '%#{esc}%')"
-            )
-
-        seed_where = " WHERE " + " AND ".join(seed_conditions)
-
-        bfs_rows = store.bfs_traversal(
+        result = DigitalTwin.find_triples_bfs(
+            store,
             table,
-            seed_where,
-            depth,
-            search=search or "",
-            entity_type=entity_type or "",
+            entity_type=entity_type,
+            search=search,
+            depth=depth,
+            limit=limit,
+            offset=offset,
         )
-
-        if not bfs_rows:
-            return {
-                "success": True,
-                "seed_count": 0,
-                "depth": depth,
-                "message": "No matching entities found",
-                "triples": [],
-                "count": 0,
-                "total": 0,
-                "limit": limit,
-                "offset": offset,
-                "entity_count": 0,
-            }
-
-        all_entities = {r["entity"] for r in bfs_rows}
-        seed_count = sum(1 for r in bfs_rows if int(r.get("min_lvl", 0)) == 0)
-        all_entities = DigitalTwin.expand_uri_aliases(store, table, all_entities)
-
-        all_rows = store.get_triples_for_subjects(table, list(all_entities))
-        seen: set = set()
-        all_triples: list = []
-        for r in all_rows:
-            key = (r["subject"], r["predicate"], r["object"])
-            if key not in seen:
-                seen.add(key)
-                all_triples.append(r)
-
-        total = len(all_triples)
-        page = all_triples[offset : offset + limit]
-
-        return {
+        payload = {
             "success": True,
-            "seed_count": seed_count,
+            "seed_count": result["seed_count"],
             "depth": depth,
             "triples": [
                 {
@@ -2368,14 +2747,17 @@ async def dtwin_triples_find(
                     "predicate": r.get("predicate", ""),
                     "object": r.get("object", ""),
                 }
-                for r in page
+                for r in result["triples"]
             ],
-            "count": len(page),
-            "total": total,
+            "count": result["count"],
+            "total": result["total"],
             "limit": limit,
             "offset": offset,
-            "entity_count": len(all_entities),
+            "entity_count": result["entity_count"],
         }
+        if result.get("message"):
+            payload["message"] = result["message"]
+        return payload
     except (ValidationError, InfrastructureError, NotFoundError):
         raise
     except Exception as e:
@@ -2408,11 +2790,10 @@ async def dtwin_neighbors(
     limit = max(1, min(int(limit or 2000), 20000))
 
     domain = get_domain(session_mgr)
-    table = effective_graph_name(domain)
+    store = _require_graph_store(domain, settings)
+    table = _graph_query_table(domain, settings, store)
     if not table:
         raise ValidationError("Graph name not configured")
-
-    store = _require_graph_store(domain, settings)
 
     query_table = table if include_inferred else store.synced_table_name(table)
 

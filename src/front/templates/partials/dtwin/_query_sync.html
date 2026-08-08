@@ -33,7 +33,7 @@
 
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-arrow-repeat me-2"></i>Build Knowledge Graph</h4>
+            <h4 class="mb-1"><i class="bi bi-fast-forward me-2"></i>Build Knowledge Graph</h4>
             <p class="text-muted mb-0 small">Triple store status and build execution</p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -45,7 +45,7 @@
             {% set _dr = get_user_domain_role() %}
             {% if _dr not in ('viewer', 'editor', 'none') %}
             <button type="button" class="btn btn-sm btn-outline-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
-                <i class="bi bi-arrow-repeat me-1"></i> Build
+                <i class="bi bi-fast-forward me-1"></i>Build
             </button>
             {% else %}
             <button type="button" class="btn btn-sm btn-outline-secondary" disabled
@@ -130,29 +130,31 @@
                         <div id="tripleStoreStatusArea" class="d-none"></div>
                     </div>
 
-                    <!-- Architecture diagram: Triple Store → Sync → Graph DB (Lakebase) -->
+                    <!-- Architecture diagram: Triple-Store Gateway → Sync → Graph DB (Lakebase) -->
                     <div id="dtColumnsArea" class="d-none">
                         <div class="dt-arch-diagram">
 
-                            <!-- Card 1: Triple Store (Unity Catalog VIEW) -->
+                            <!-- Card 1: Triple-Store Gateway (Unity Catalog VIEW) -->
                             <div class="dt-arch-node" id="dtZeroCopyCard">
                                 <div class="dt-arch-header">
                                     <i class="bi bi-database fs-4 dt-arch-icon-triplestore flex-shrink-0"></i>
-                                    <span class="dt-arch-title">Triple Store</span>
+                                    <span class="dt-arch-title">Triple-Store Gateway</span>
                                     <span class="dt-arch-badge" id="dtExistView"></span>
                                 </div>
                                 <code class="dt-arch-name" id="dtViewName">N/A</code>
                             </div>
 
-                            <!-- Lakebase section: arrow + Sync + arrow + Graph DB -->
+                            <!-- Engine-specific bridge + Graph DB. The middle bridge card
+                                 differs by engine: Lakebase Sync (persistent UC-synced table)
+                                 vs Neo4j Bolt writer (transient Cypher UNWIND/MERGE at build time). -->
                             <div id="dtLakebaseDetails" class="d-none dt-arch-lakebase-section">
 
-                                <!-- Arrow: Triple Store → Sync -->
+                                <!-- Arrow: Triple-Store Gateway → Bridge -->
                                 <div class="dt-arch-connector">
                                     <i class="bi bi-arrow-right"></i>
                                 </div>
 
-                                <!-- Card 2: UC Sync Object -->
+                                <!-- Card 2a: UC Sync Object (Lakebase engine) -->
                                 <div class="dt-arch-node" id="dtLakebaseSyncedUcRow">
                                     <div class="dt-arch-header">
                                         <i class="bi bi-arrow-repeat fs-4 dt-arch-icon-sync-lg flex-shrink-0"></i>
@@ -162,28 +164,47 @@
                                     <code class="dt-arch-name" id="dtLakebaseSyncedUc">—</code>
                                 </div>
 
-                                <!-- Arrow: Sync → Graph DB -->
+                                <!-- Card 2b: Bolt writer (Neo4j engine) — hidden by default; JS shows it -->
+                                <div class="dt-arch-node d-none" id="dtNeo4jBoltCard">
+                                    <div class="dt-arch-header">
+                                        <i class="bi bi-lightning-charge-fill fs-4 dt-arch-icon-sync-lg flex-shrink-0" style="color:#018BFF;"></i>
+                                        <span class="dt-arch-title">Bolt</span>
+                                        <span class="dt-arch-badge"><span class="badge bg-info bg-opacity-10 text-info border border-info" style="font-size:.65rem;"><i class="bi bi-broadcast me-1"></i>UNWIND · MERGE</span></span>
+                                    </div>
+                                    <code class="dt-arch-name">Cypher write at build time</code>
+                                </div>
+
+                                <!-- Arrow: Bridge → Graph DB -->
                                 <div class="dt-arch-connector">
                                     <i class="bi bi-arrow-right"></i>
                                 </div>
 
-                                <!-- Card 3: Graph DB (Lakebase) -->
+                                <!-- Card 3: Graph DB (engine-aware) -->
                                 <div class="dt-arch-node" id="dtGraphCard">
                                     <div class="dt-arch-header">
-                                        <img src="/static/global/img/lakebase-icon.svg" class="dt-arch-icon-lakebase-img flex-shrink-0" alt="Lakebase">
+                                        <i id="dtGraphBackendIcon" class="ob-brand-icon ob-icon-postgresql dt-arch-icon-lakebase-img flex-shrink-0" aria-hidden="true"></i>
                                         <span class="dt-arch-title" id="dtGraphBackendTitle">Graph DB (Lakebase)</span>
                                         <span class="dt-arch-badge" id="dtLakebaseTableExists"></span>
                                     </div>
                                     <code class="dt-arch-name" id="dtLakebaseFullName">—</code>
                                 </div>
 
-                                <!-- Build note (below cards) -->
-                                <div class="dt-arch-build-note w-100 d-none" id="dtLakebaseBuildNote">
-                                    <i class="bi bi-info-circle me-1"></i>
-                                    Build writes graph triples to Lakebase
-                                    (<code id="fnLkDatabase2">…</code>.<code id="fnLkSchema2">…</code>.<code id="fnLkTable2">…</code>)<span id="fnLkSyncNote" class="d-none"> and registers a Lakeflow synced table as <code id="fnLkSyncedUc2"></code></span>.
-                                </div>
+                            </div>
 
+                            <!-- Build note: spans full width below ALL arch cards -->
+                            <div class="dt-arch-build-note w-100 d-none" id="dtLakebaseBuildNote">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Build writes graph triples to Lakebase
+                                (<code id="fnLkDatabase2">…</code>.<code id="fnLkSchema2">…</code>.<code id="fnLkTable2">…</code>)<span id="fnLkSyncNote" class="d-none"> and registers a Lakeflow synced table as <code id="fnLkSyncedUc2"></code></span>.
+                            </div>
+
+                            <!-- Neo4j build note (engine=neo4j; JS toggles vs the Lakebase one) -->
+                            <div class="dt-arch-build-note w-100 d-none" id="dtNeo4jBuildNote">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Build writes a typed property graph to Neo4j over Bolt — nodes
+                                (keyed on entity URI), <code>rdf:type</code> labels, and relationships —
+                                into database <code id="fnNeo4jDatabase">neo4j</code> under marker label
+                                <code id="fnNeo4jLabel">…</code>. No SQL view or UC-synced table is used on this path.
                             </div>
 
                             <!-- Hidden: individual fields + compat elements -->

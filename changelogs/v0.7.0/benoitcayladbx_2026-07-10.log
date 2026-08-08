@@ -1,0 +1,66 @@
+## Optimize Lakebase alias expansion for large local-id sets
+
+Context: `describe_entity` / Graph Chat alias expansion generated SQL with
+1000+ `OR LIKE '%/<local-id>'` predicates on Lakebase, causing long-running
+statements and timeouts. Incorporated from PR #115 review (supersedes external PR).
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Add `find_subjects_by_patterns()` override grouping `%/<id>` patterns by suffix
+   length into `RIGHT(subject, k) = ANY(ARRAY[...])` clauses (single round-trip).
+
+2. tests/units/core/test_lakebase_flat_store.py
+   Add unit tests for fast-path SQL shape, generic LIKE fallback, and escaping.
+
+Modified files:
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- tests/units/core/test_lakebase_flat_store.py
+
+Tests: uv run pytest -q -m "not scenario" → 3003 passed, 275 skipped in 21.1s
+
+## Add Databricks CLI profile auth for local development
+
+Context: Workspaces that block PAT generation could not run OntoBricks locally.
+Implemented Option A from PR #49 review on current develop: third auth mode via
+``~/.databrickscfg`` (app → PAT → CLI precedence), with test isolation, SQL
+``credentials_provider`` contract coverage, and a thread-safe CloudFetch recursion
+guard. Original design and tests by Sam Bryfczynski ([#49](https://github.com/databrickslabs/ontobricks/pull/49)).
+
+Changes:
+
+1. src/back/core/databricks/DatabricksAuth.py
+   CLI profile resolution via SDK ``Config``, ``auth_mode`` property, SQL/REST paths.
+2. src/back/core/helpers/DatabricksHelpers.py
+   CLI fallback for ``get_databricks_client`` and agent bearer-token resolution.
+3. src/shared/fastapi/health.py
+   Eager CLI auth validation in readiness probe.
+4. src/back/core/databricks/SQLWarehouse.py
+   CLI-aware connection test messages.
+5. .env.example / CONTRIBUTING.md
+   Document runtime CLI auth alongside existing start.sh flow.
+6. tests/conftest.py
+   Autouse ``_resolve_cli_config`` stub for test isolation.
+7. tests/units/auth/test_auth.py
+   ``TestCliMode`` including ``credentials_provider`` chain assertion.
+8. tests/units/core/test_health.py
+   CLI health probe success and failure cases.
+9. tests/units/core/test_helpers.py
+   Clear env token in no-credentials client tests.
+10. CONTRIBUTORS.md
+    Credit Sam Bryfczynski for the original contribution.
+
+Modified files:
+- src/back/core/databricks/DatabricksAuth.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/shared/fastapi/health.py
+- src/back/core/databricks/SQLWarehouse.py
+- .env.example
+- CONTRIBUTING.md
+- CONTRIBUTORS.md
+- tests/conftest.py
+- tests/units/auth/test_auth.py
+- tests/units/core/test_health.py
+- tests/units/core/test_helpers.py
+
+Tests: uv run pytest -q -m "not scenario" → 3227 passed, 275 skipped in 21.76s

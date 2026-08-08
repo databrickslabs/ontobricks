@@ -12,6 +12,34 @@
     display: none;
 }
 
+/* Local color brand marks, sized and aligned like Bootstrap Icons. */
+.ob-brand-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    vertical-align: -0.125em;
+}
+
+.ob-icon-postgresql {
+    background-image: url("/static/global/img/lakebase-icon.svg");
+}
+
+.ob-icon-lakehouse {
+    background-image: url("/static/global/img/lakehouse-icon.png");
+}
+
+.ob-icon-databricks {
+    background-image: url("/static/global/img/databricks-icon.svg");
+}
+
+.ob-icon-neo4j {
+    background-image: url("/static/global/img/neo4j-icon.svg");
+}
+
 /* Display utilities */
 .d-hidden {
     display: none;
@@ -597,9 +625,10 @@
 
 
 /* ==========================================================================
-   Wizard Form Overlay (for async tasks)
+   Task progress overlay (wizard, auto-map, async tasks)
    ========================================================================== */
 
+.task-progress-overlay,
 .wizard-form-overlay {
     position: absolute;
     top: 0;
@@ -609,9 +638,45 @@
     background: rgba(255, 255, 255, 0.95);
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 2rem 1rem;
     z-index: 100;
     border-radius: 0.375rem;
+}
+
+.task-step-log-panel,
+.task-activity-log-panel,
+.wizard-step-log-panel,
+.wizard-activity-log-panel {
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.task-activity-log,
+.wizard-activity-log {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0.5rem 0.75rem;
+    background: rgba(248, 250, 252, 0.9);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.375rem;
+}
+
+.task-activity-row:last-child,
+.wizard-activity-row:last-child {
+    margin-bottom: 0 !important;
+}
+
+.task-agent-steps-mount details,
+#wizardAgentStepsMount details {
+    margin-top: 0.75rem;
+}
+
+.task-agent-steps-mount .border,
+#wizardAgentStepsMount .border {
+    background: #ffffff !important;
 }
 
 
@@ -883,4 +948,44 @@
     font-weight: 300;
     opacity: 0.6;
     vertical-align: middle;
+}
+
+/* ==========================================================================
+   Stacked confirmation over an open modal
+   Applied by showConfirmDialog() in global/js/utils.js when another
+   .modal.show already exists. Classes: ob-modal-underlying (parent),
+   ob-modal-stacked (confirm), ob-modal-stacked-backdrop (its backdrop).
+   ========================================================================== */
+
+.modal.ob-modal-underlying .modal-content {
+    filter: blur(2px);
+    opacity: 0.72;
+    transition: var(--db-transition-fast);
+    pointer-events: none;
+}
+
+.modal.ob-modal-underlying::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(var(--db-dark-rgb), 0.28);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.modal.ob-modal-stacked {
+    z-index: 1065 !important;
+}
+
+.modal-backdrop.ob-modal-stacked-backdrop {
+    z-index: 1060 !important;
+    background-color: rgba(var(--db-dark-rgb), 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal.ob-modal-underlying .modal-content {
+        filter: none;
+        transition: none;
+        opacity: 0.55;
+    }
 }

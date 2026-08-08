@@ -1,5 +1,7 @@
 """Tests for back.core.helpers — Databricks client/credentials helpers."""
 
+from pathlib import Path
+
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 
@@ -7,6 +9,7 @@ from back.core.helpers import (
     get_databricks_client,
     get_databricks_credentials,
     get_databricks_host_and_token,
+    resolve_analytics_job_enabled,
     resolve_use_cloud_fetch,
 )
 from back.core.helpers.DatabricksHelpers import DatabricksHelpers
@@ -43,7 +46,8 @@ class TestGetDatabricksClient:
         assert client is not None
 
     @patch("back.core.databricks.is_databricks_app", return_value=False)
-    def test_returns_none_without_credentials(self, _):
+    def test_returns_none_without_credentials(self, _, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
         domain = _make_domain()
         settings = _make_settings(databricks_host="", databricks_token="")
         client = get_databricks_client(domain, settings)
@@ -162,6 +166,144 @@ class TestResolveUseCloudFetch:
         assert resolve_use_cloud_fetch(_make_domain(), _make_settings()) is True
 
 
+def _cfg(catalog="main", schema="ob"):
+    """Patch the registry/host lookups the global-config resolvers depend on."""
+    return (
+        patch.object(
+            DatabricksHelpers,
+            "_resolve_registry_cfg",
+            return_value={"catalog": catalog, "schema": schema},
+        ),
+        patch.object(
+            DatabricksHelpers,
+            "get_databricks_host_and_token",
+            return_value=("https://test.databricks.com", "tok-123"),
+        ),
+    )
+
+
+class TestResolveAnalyticsJobName:
+    """The name gates job mode as hard as the on/off toggle does.
+
+    When no name can be formed the runner cannot resolve a job, so the run falls
+    back to engine-side aggregation. That happened silently in local dev, where
+    ``DATABRICKS_APP_NAME`` is absent and so the derivation yields nothing while
+    the UI still advertised the full metric set.
+    """
+
+    class _S:
+        def __init__(self, name="", app=""):
+            self.analytics_job_name = name
+            self.ontobricks_app_name = app
+
+    def test_explicit_name_wins_over_the_derivation(self):
+        s = self._S(name="renamed-job", app="ontobricks-07x")
+        assert DatabricksHelpers.resolve_analytics_job_name(s) == "renamed-job"
+
+    def test_name_is_derived_from_the_app_name(self):
+        s = self._S(app="ontobricks-07x")
+        assert (
+            DatabricksHelpers.resolve_analytics_job_name(s)
+            == "ontobricks-07x-graph-analytics"
+        )
+
+    def test_empty_when_neither_is_available(self):
+        """The local-dev case: no explicit name and no app name to derive from."""
+        assert DatabricksHelpers.resolve_analytics_job_name(self._S()) == ""
+
+    def test_whitespace_is_not_a_name(self):
+        assert DatabricksHelpers.resolve_analytics_job_name(self._S("  ", "  ")) == ""
+
+    def test_explicit_name_is_trimmed(self):
+        s = self._S(name="  spaced  ")
+        assert DatabricksHelpers.resolve_analytics_job_name(s) == "spaced"
+
+    def test_absent_attributes_do_not_raise(self):
+        assert DatabricksHelpers.resolve_analytics_job_name(object()) == ""
+
+    def test_derived_name_matches_the_bundle_resource(self):
+        """Drift here silently disables job mode on a fresh deploy."""
+        import yaml
+
+        repo_root = Path(__file__).resolve().parents[3]
+        job = yaml.safe_load(
+            (repo_root / "resources/graph_analytics.job.yml").read_text()
+        )["resources"]["jobs"]["graph_analytics_job"]
+        # The bundle names it "${var.app_name}-graph-analytics".
+        assert job["name"] == "${var.app_name}-graph-analytics"
+        derived = DatabricksHelpers.resolve_analytics_job_name(self._S(app="APP"))
+        assert derived == job["name"].replace("${var.app_name}", "APP")
+
+
+class TestResolveAnalyticsJobEnabled:
+    """Settings → Global admin toggle wins over the env-var deployment default.
+
+    The three-state getter is the whole point here: ``None`` has to mean "no
+    admin has decided", so it falls through to the env var, while a stored
+    ``False`` must still be able to override an env var that turns the job on.
+    Collapsing that to a plain bool would make "admin turned it off" and "never
+    configured" indistinguishable.
+    """
+
+    def _resolve(self, *, configured, env_default):
+        rcfg, hst = _cfg()
+        with rcfg, hst, patch(
+            "back.objects.session.global_config_service.get_analytics_job_enabled",
+            return_value=configured,
+        ):
+            return resolve_analytics_job_enabled(
+                _make_domain(), _make_settings(analytics_job_enabled=env_default)
+            )
+
+    def test_admin_on_overrides_env_off(self):
+        assert self._resolve(configured=True, env_default=False) is True
+
+    def test_admin_off_overrides_env_on(self):
+        # The regression that the `if val: return val` idiom would cause.
+        assert self._resolve(configured=False, env_default=True) is False
+
+    def test_unset_falls_back_to_env_default_on(self):
+        assert self._resolve(configured=None, env_default=True) is True
+
+    def test_unset_falls_back_to_env_default_off(self):
+        assert self._resolve(configured=None, env_default=False) is False
+
+    def test_registry_unconfigured_uses_env_default(self):
+        rcfg, hst = _cfg(catalog="", schema="")
+        with rcfg, hst:
+            assert (
+                resolve_analytics_job_enabled(
+                    _make_domain(), _make_settings(analytics_job_enabled=True)
+                )
+                is True
+            )
+
+    def test_lookup_failure_uses_env_default(self):
+        # A registry hiccup must not silently flip the feature on or off.
+        rcfg, hst = _cfg()
+        with rcfg, hst, patch(
+            "back.objects.session.global_config_service.get_analytics_job_enabled",
+            side_effect=RuntimeError("registry down"),
+        ):
+            assert (
+                resolve_analytics_job_enabled(
+                    _make_domain(), _make_settings(analytics_job_enabled=True)
+                )
+                is True
+            )
+
+    def test_missing_setting_attribute_defaults_off(self):
+        # MCP / probe callers may pass a Settings without the field at all.
+        rcfg, hst = _cfg()
+        settings = _make_settings()
+        del settings.analytics_job_enabled
+        with rcfg, hst, patch(
+            "back.objects.session.global_config_service.get_analytics_job_enabled",
+            return_value=None,
+        ):
+            assert resolve_analytics_job_enabled(_make_domain(), settings) is False
+
+
 class TestGetDatabricksClientCloudFetch:
     """End-to-end: a disabled global toggle must reach ``DatabricksAuth``."""
 
@@ -189,6 +331,7 @@ class TestNoneDomainSafety:
         assert host and token and wh
 
     @patch("back.core.databricks.is_databricks_app", return_value=False)
-    def test_get_databricks_client_none_domain_no_creds_returns_none(self, _):
+    def test_get_databricks_client_none_domain_no_creds_returns_none(self, _, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_TOKEN", raising=False)
         settings = _make_settings(databricks_host="", databricks_token="")
         assert get_databricks_client(None, settings) is None

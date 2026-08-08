@@ -7,8 +7,8 @@
 # committing per-environment changes.
 #
 # ┌─────────────────────────────────────────────────────────────────┐
-# │  TO DEPLOY A NEW INSTANCE:                                      │
-# │    1. Set DEFAULT_APP_NAME.                                     │
+# │  TO DEPLOY A NEW INSTANCE (keeps existing apps):                │
+# │    1. Set DEFAULT_INSTANCE_ID (e.g. "07x").                     │
 # │    2. Set DEFAULT_LAKEBASE_DATABASE (existing Postgres datname).│
 # │    3. Optionally set DEFAULT_DATABRICKS_PROFILE if you use a    │
 # │       non-default Databricks CLI profile.                       │
@@ -17,8 +17,9 @@
 # │    5. Optionally set DEFAULT_REGISTRY_SCHEMA if the UC schema   │
 # │       differs from the app-name slug.                           │
 # │                                                                  │
-# │  The Lakebase db-… resource segment is resolved automatically   │
-# │  from DEFAULT_LAKEBASE_DATABASE — you never need to set it.     │
+# │  App name + DAB target are derived from INSTANCE_ID so each     │
+# │  instance gets its own Terraform state (no destroy/rename).     │
+# │  The Lakebase db-… resource segment is resolved automatically.  │
 # └─────────────────────────────────────────────────────────────────┘
 #
 # Sections:
@@ -32,7 +33,15 @@
 
 # ── 0a. Instance identity ────────────────────────────────────────────
 # THE ONLY LINE YOU NEED TO CHANGE to create a new deployment.
-DEFAULT_APP_NAME="ontobricks-060"
+# Lowercase alphanumeric + hyphens only (becomes part of the app name
+# and the DAB target: ``dev-lakebase-<id>``).
+# Env-overridable: ``DEFAULT_INSTANCE_ID=080 make deploy``.
+DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-07x}"
+
+# Optional: force a DAB target instead of the auto ``dev-lakebase-<id>``.
+# Use only to keep managing a pre-INSTANCE_ID deploy whose local state
+# still lives under the unsuffixed ``dev-lakebase``.
+# DEFAULT_DAB_TARGET="dev-lakebase"
 
 # ── 0b. Workspace constants ──────────────────────────────────────────
 # Set once for your workspace. Shared across all instances deployed here.
@@ -51,6 +60,12 @@ DEFAULT_REGISTRY_CATALOG="benoit_cayla"
 DEFAULT_REGISTRY_SCHEMA="ontobricks_demo"
 DEFAULT_REGISTRY_VOLUME="registry"
 
+# Workspace secret scope holding ``neo4j-password``, bound to the app on deploy.
+# Must be an existing scope (`databricks secrets list-scopes`) — a missing scope
+# fails `terraform apply` on the app resource, and because an app rename is a
+# destroy-then-create, that failure can leave you with no app at all.
+DEFAULT_NEO4J_SECRET_SCOPE="ontobricks-secrets"
+
 # Lakebase Autoscaling project + branch
 DEFAULT_LAKEBASE_PROJECT="ontobricks-demo2"
 DEFAULT_LAKEBASE_BRANCH="production"
@@ -65,18 +80,25 @@ DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
 # Example — reuse existing schema: DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
 
 # ── 0c. Derived defaults (auto-computed — do NOT edit) ────────────────
+DEFAULT_APP_NAME="ontobricks-${DEFAULT_INSTANCE_ID}"
 DEFAULT_MCP_APP_NAME="mcp-${DEFAULT_APP_NAME}"
 
-# DAB resource keys (static identifiers in databricks.yml)
+# DAB resource keys (static identifiers in databricks.yml). Same keys are
+# fine across instances — isolation comes from a distinct DAB *target*
+# (and therefore a distinct ``.databricks/bundle/<target>/`` tfstate),
+# not from renaming these keys.
 DEFAULT_APP_RESOURCE_KEY="ontobricks_dev_app"
 DEFAULT_MCP_APP_RESOURCE_KEY="mcp_ontobricks_app"
+
+# Per-instance DAB target → separate local Terraform state.
+# Always Lakebase (registry is Postgres). Override with an explicit
+# DAB_TARGET=… / DEFAULT_DAB_TARGET=… only when you still manage a
+# pre-INSTANCE_ID deploy under unsuffixed ``dev-lakebase``.
+DEFAULT_DAB_TARGET="${DEFAULT_DAB_TARGET:-dev-lakebase-${DEFAULT_INSTANCE_ID}}"
 
 # ── 0d. app.yaml runtime fallback literals ───────────────────────────
 DEFAULT_APP_TRIPLESTORE_TABLE_NAME="default_triplestore"
 DEFAULT_APP_MLFLOW_TRACKING_URI="databricks"
-
-# ── DAB target ───────────────────────────────────────────────────────
-DEFAULT_DAB_TARGET="dev-lakebase"
 
 # ── 0e. Databricks CLI profile ───────────────────────────────────────
 # Override for one-off runs: DATABRICKS_CONFIG_PROFILE=my-profile make deploy
@@ -85,14 +107,16 @@ if [[ -n "${DATABRICKS_CONFIG_PROFILE:-$DEFAULT_DATABRICKS_PROFILE}" ]]; then
 fi
 
 # ── 1. Apps ─────────────────────────────────────────────────────────
+export INSTANCE_ID="${INSTANCE_ID:-$DEFAULT_INSTANCE_ID}"
 export APP_NAME="${APP_NAME:-$DEFAULT_APP_NAME}"
 export MCP_APP_NAME="${MCP_APP_NAME:-$DEFAULT_MCP_APP_NAME}"
 export APP_RESOURCE_KEY="${APP_RESOURCE_KEY:-$DEFAULT_APP_RESOURCE_KEY}"
 export MCP_APP_RESOURCE_KEY="${MCP_APP_RESOURCE_KEY:-$DEFAULT_MCP_APP_RESOURCE_KEY}"
 
 # ── 2. DAB target ───────────────────────────────────────────────────
-# `dev`           : Volume-only registry backend.
-# `dev-lakebase`  : Volume + Lakebase Autoscaling Postgres binding (default).
+# Auto: ``dev-lakebase-<INSTANCE_ID>``. Legacy unsuffixed ``dev-lakebase``
+# still works when forced via ``DAB_TARGET=dev-lakebase make deploy``
+# (uses the static target in databricks.yml; no generated instance target).
 export DAB_TARGET="${DAB_TARGET:-$DEFAULT_DAB_TARGET}"
 
 # ── 3. DAB variable overrides (databricks.yml > variables:) ─────────
@@ -105,6 +129,7 @@ export REGISTRY_CATALOG="${REGISTRY_CATALOG:-$DEFAULT_REGISTRY_CATALOG}"
 # the routine deploy still always uses DEFAULT_REGISTRY_SCHEMA.
 export REGISTRY_SCHEMA="${REGISTRY_SCHEMA:-$DEFAULT_REGISTRY_SCHEMA}"
 export REGISTRY_VOLUME="${REGISTRY_VOLUME:-$DEFAULT_REGISTRY_VOLUME}"
+export NEO4J_SECRET_SCOPE="${NEO4J_SECRET_SCOPE:-$DEFAULT_NEO4J_SECRET_SCOPE}"
 
 # Lakebase project / branch.
 export LAKEBASE_PROJECT="${LAKEBASE_PROJECT:-$DEFAULT_LAKEBASE_PROJECT}"

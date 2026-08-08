@@ -4,10 +4,10 @@ import importlib
 import pytest
 from unittest.mock import MagicMock, Mock, patch
 
-_unity_catalog_mod = importlib.import_module("back.core.databricks.UnityCatalog")
+_unity_catalog_mod = importlib.import_module("back.core.databricks.uc.UnityCatalog")
 
 from back.core.databricks.DatabricksAuth import DatabricksAuth
-from back.core.databricks.UnityCatalog import UnityCatalog
+from back.core.databricks.uc import UnityCatalog
 from back.core.errors import ValidationError
 
 
@@ -91,7 +91,7 @@ class TestGetSchemas:
         uc = UnityCatalog(auth_with_warehouse)
         out = uc.get_schemas("main")
         assert out == ["default", "information_schema"]
-        mock_cursor.execute.assert_called_once_with("SHOW SCHEMAS IN main")
+        mock_cursor.execute.assert_called_once_with("SHOW SCHEMAS IN `main`")
 
 
 class TestGetTables:
@@ -105,7 +105,7 @@ class TestGetTables:
         uc = UnityCatalog(auth_with_warehouse)
         out = uc.get_tables("cat", "sch")
         assert out == ["t1", "t2"]
-        mock_cursor.execute.assert_called_once_with("SHOW TABLES IN cat.sch")
+        mock_cursor.execute.assert_called_once_with("SHOW TABLES IN `cat`.`sch`")
 
     @patch(
         "databricks.sql.connect",
@@ -114,6 +114,71 @@ class TestGetTables:
     def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
         uc = UnityCatalog(auth_with_warehouse)
         assert uc.get_tables("cat", "sch") == []
+
+
+class TestListFunctions:
+    @patch("databricks.sql.connect")
+    def test_returns_functions_with_param_metadata(
+        self, mock_connect, auth_with_warehouse
+    ):
+        mock_cursor = _make_sql_mocks(
+            mock_connect,
+            fetchall=[
+                [
+                    "recompute_risk",
+                    "STRING",
+                    "Recompute the risk score",
+                    "entity_id",
+                ],
+                ["risk_history", "TABLE_TYPE", None, "days,entity_id"],
+                ["no_args", "STRING", "", ""],
+            ],
+        )
+        uc = UnityCatalog(auth_with_warehouse)
+        out = uc.list_functions("main", "ops")
+
+        assert out == [
+            {
+                "name": "recompute_risk",
+                "full_name": "main.ops.recompute_risk",
+                "comment": "Recompute the risk score",
+                "input_params": ["entity_id"],
+                "param_count": 1,
+                "returns_table": False,
+            },
+            {
+                "name": "risk_history",
+                "full_name": "main.ops.risk_history",
+                "comment": "",
+                "input_params": ["days", "entity_id"],
+                "param_count": 2,
+                "returns_table": True,
+            },
+            {
+                "name": "no_args",
+                "full_name": "main.ops.no_args",
+                "comment": "",
+                "input_params": [],
+                "param_count": 0,
+                "returns_table": False,
+            },
+        ]
+        call_sql, call_params = mock_cursor.execute.call_args[0]
+        # Parameter listing must come from information_schema: the REST
+        # /functions collection endpoint does not populate input_params.
+        assert "`main`.information_schema.routines" in call_sql
+        assert "`main`.information_schema.parameters" in call_sql
+        assert "p.parameter_mode   = 'IN'" in call_sql
+        assert call_params == ("ops",)
+
+    @patch("databricks.sql.connect", side_effect=RuntimeError("boom"))
+    def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.list_functions("main", "ops") == []
+
+    def test_rejects_invalid_schema_identifier(self, auth_with_warehouse):
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.list_functions("main", "ops; DROP TABLE x") == []
 
 
 class TestGetTableColumns:
@@ -134,7 +199,7 @@ class TestGetTableColumns:
             {"name": "name", "type": "string", "comment": ""},
             {"name": "x", "type": "int", "comment": ""},
         ]
-        mock_cursor.execute.assert_called_once_with("DESCRIBE cat.sch.tbl")
+        mock_cursor.execute.assert_called_once_with("DESCRIBE `cat`.`sch`.`tbl`")
 
     @patch(
         "databricks.sql.connect",
@@ -155,9 +220,11 @@ class TestGetTableComment:
         uc = UnityCatalog(auth_with_warehouse)
         assert uc.get_table_comment("cat", "sch", "tbl") == "my table comment"
         mock_cursor.execute.assert_called_once()
-        call_sql = mock_cursor.execute.call_args[0][0]
+        call_args = mock_cursor.execute.call_args
+        call_sql = call_args[0][0]
         assert "information_schema.tables" in call_sql
-        assert "cat" in call_sql and "sch" in call_sql and "tbl" in call_sql
+        assert "`cat`.information_schema.tables" in call_sql
+        assert call_args[0][1] == ("cat", "sch", "tbl")
 
     @patch("databricks.sql.connect")
     def test_returns_empty_when_no_row(self, mock_connect, auth_with_warehouse):
@@ -190,7 +257,7 @@ class TestGetVolumesSql:
         uc = UnityCatalog(auth_with_warehouse)
         out = uc.get_volumes("main", "default")
         assert out == ["vol_a", "vol_b"]
-        mock_cursor.execute.assert_called_once_with("SHOW VOLUMES IN main.default")
+        mock_cursor.execute.assert_called_once_with("SHOW VOLUMES IN `main`.`default`")
 
 
 class TestListVolumesRest:
@@ -272,3 +339,59 @@ class TestCreateVolumeRest:
         )
         uc = UnityCatalog(auth)
         assert uc.create_volume("main", "default", "v") is False
+
+
+class TestUnityCatalogSqlInjectionGuards:
+    @pytest.mark.parametrize(
+        "method,args",
+        [
+            ("get_schemas", ("main; DROP TABLE x--",)),
+            ("get_tables", ("cat", "sch'; DROP--")),
+            ("get_table_columns", ("cat", "sch", "tbl;drop")),
+            ("get_table_comment", ("cat", "sch", "tbl;")),
+            ("get_volumes", ("main", "default;")),
+            ("probe_schema_has_tables", ("cat", "sch;")),
+            ("check_table_select_permission", ("cat", "sch", "tbl;")),
+        ],
+    )
+    def test_rejects_invalid_identifiers(self, auth_with_warehouse, method, args):
+        uc = UnityCatalog(auth_with_warehouse)
+        with pytest.raises(ValidationError, match="Invalid UC"):
+            getattr(uc, method)(*args)
+
+
+class TestProbeSchemaHasTables:
+    @patch("databricks.sql.connect")
+    def test_returns_count_with_parameterized_query(self, mock_connect, auth_with_warehouse):
+        mock_cursor = _make_sql_mocks(mock_connect, fetchone=[3])
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.probe_schema_has_tables("my_cat", "my_sch") == 3
+        mock_cursor.execute.assert_called_once()
+        call_sql, params = mock_cursor.execute.call_args[0]
+        assert "`my_cat`.information_schema.tables" in call_sql
+        assert "table_schema = %s" in call_sql
+        assert params == ("my_sch",)
+
+    @patch("databricks.sql.connect", side_effect=RuntimeError("denied"))
+    def test_returns_minus_one_on_error(self, _mock_connect, auth_with_warehouse):
+        uc = UnityCatalog(auth_with_warehouse)
+        assert uc.probe_schema_has_tables("cat", "sch") == -1
+
+
+class TestCheckTableSelectPermission:
+    @patch("databricks.sql.connect")
+    def test_uses_quoted_fqn(self, mock_connect, auth_with_warehouse):
+        mock_cursor = _make_sql_mocks(mock_connect)
+        uc = UnityCatalog(auth_with_warehouse)
+        out = uc.check_table_select_permission("cat", "sch", "tbl")
+        assert out == {"can_select": True, "error": None}
+        mock_cursor.execute.assert_called_once_with(
+            "SELECT * FROM `cat`.`sch`.`tbl` LIMIT 0"
+        )
+
+    @patch("databricks.sql.connect", side_effect=RuntimeError("no select"))
+    def test_returns_false_on_error(self, _mock_connect, auth_with_warehouse):
+        uc = UnityCatalog(auth_with_warehouse)
+        out = uc.check_table_select_permission("cat", "sch", "tbl")
+        assert out["can_select"] is False
+        assert "no select" in out["error"]

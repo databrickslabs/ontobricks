@@ -116,7 +116,10 @@ class SQLWarehouse:
         if not self._auth.has_valid_auth():
             if self._auth.is_app_mode:
                 return False, "Missing OAuth credentials (DATABRICKS_CLIENT_ID/SECRET)"
-            return False, "Missing configuration: DATABRICKS_HOST or DATABRICKS_TOKEN"
+            return False, (
+                "Missing configuration: DATABRICKS_HOST, DATABRICKS_TOKEN, "
+                "or a Databricks CLI profile (run `databricks auth login`)"
+            )
 
         try:
             with self._borrow() as conn:
@@ -126,6 +129,8 @@ class SQLWarehouse:
             auth_mode = (
                 "OAuth (Databricks App)"
                 if self._auth.is_app_mode
+                else "Databricks CLI profile"
+                if self._auth.auth_mode == "cli"
                 else "Personal Access Token"
             )
             return True, f"Connection successful ({auth_mode})"

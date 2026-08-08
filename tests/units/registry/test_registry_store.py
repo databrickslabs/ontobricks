@@ -17,7 +17,7 @@ in the gated ``tests/integration/`` suite.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
@@ -53,7 +53,10 @@ class _InMemoryStore(RegistryStore):
         self._history: Dict[str, List[ScheduleHistoryEntry]] = {}
         self._build_runs: Dict[str, List[Dict[str, Any]]] = {}
         self._graph_analytics: Dict[Tuple[str, str], Dict[str, Any]] = {}
-        self._graph_analytics_runs: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+        self._graph_analytics_runs: Dict[Tuple[str, str], List[Any]] = {}
+        # Stands in for ``computed_at`` so a cross-version read can order
+        # newest-first the way the real store's ORDER BY does.
+        self._graph_analytics_seq = 0
         self._review_events: List[Dict[str, Any]] = []
         self._change_events: List[Dict[str, Any]] = []
         self._comments: List[Dict[str, Any]] = []
@@ -82,7 +85,28 @@ class _InMemoryStore(RegistryStore):
 
     def list_domains_with_metadata(self) -> Tuple[bool, List[DomainSummary], str]:
         ok, folders, msg = self.list_domain_folders()
-        return ok, [{"name": f, "versions": []} for f in folders], msg
+        result: List[DomainSummary] = []
+        for f in folders:
+            versions = []
+            description = ""
+            for (vf, vv), data in self._versions.items():
+                if vf != f:
+                    continue
+                info = data.get("info", {}) or {}
+                description = description or info.get("description", "")
+                versions.append(
+                    {"version": vv, "status": info.get("status", "DRAFT")}
+                )
+            result.append(
+                {"name": f, "description": description, "versions": versions}
+            )
+        return ok, result, msg
+
+    def get_version_status(self, folder: str, version: str):
+        data = self._versions.get((folder, version))
+        if data is None:
+            return None
+        return (data.get("info", {}) or {}).get("status")
 
     def domain_exists(self, folder: str) -> bool:
         return any(f == folder for (f, _) in self._versions.keys())
@@ -150,13 +174,13 @@ class _InMemoryStore(RegistryStore):
         self._schedules = {k: dict(v) for k, v in schedules.items()}
         return True, "ok"
 
-    def load_schedule_history(self, folder: str) -> List[ScheduleHistoryEntry]:
-        return list(self._history.get(folder, []))
+    def load_schedule_history(self, key: str) -> List[ScheduleHistoryEntry]:
+        return list(self._history.get(key, []))
 
     def append_schedule_history(
-        self, folder: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
+        self, key: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
     ) -> None:
-        bucket = self._history.setdefault(folder, [])
+        bucket = self._history.setdefault(key, [])
         bucket.append(dict(entry))
         if len(bucket) > max_entries:
             del bucket[: len(bucket) - max_entries]
@@ -177,6 +201,20 @@ class _InMemoryStore(RegistryStore):
         ]
         runs.reverse()  # newest-first
         return runs[:limit]
+
+    def load_all_build_runs(
+        self, *, folder=None, limit: int = 25, offset: int = 0
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        rows = [
+            dict(r, domain=f)
+            for f, runs in self._build_runs.items()
+            if folder is None or f == folder
+            for r in runs
+        ]
+        # Mirrors the real ORDER BY started_at DESC, id DESC.
+        rows.sort(key=lambda r: (str(r.get("started_at", "")), r.get("id", 0)))
+        rows.reverse()
+        return rows[offset : offset + limit], len(rows)
 
     def build_analytics(self, folder: str, *, version=None) -> Dict[str, Any]:
         runs = [
@@ -214,16 +252,39 @@ class _InMemoryStore(RegistryStore):
     def record_graph_analytics_run(
         self, folder: str, version: str, entry: Dict[str, Any]
     ) -> None:
-        # Append-only run history (newest stored first on read).
+        # Append-only run history, tagged with a sequence number so reads
+        # can order newest-first across versions.
+        self._graph_analytics_seq += 1
+        row = dict(entry)
+        row.setdefault("version", version)
         self._graph_analytics_runs.setdefault((folder, version), []).append(
-            dict(entry)
+            (self._graph_analytics_seq, row)
         )
 
     def load_graph_analytics_runs(
-        self, folder: str, version: str, *, limit: int = 100
+        self, folder: str, version: Optional[str] = None, *, limit: int = 100
     ):
-        rows = list(reversed(self._graph_analytics_runs.get((folder, version), [])))
-        return [dict(r) for r in rows[:limit]]
+        pairs = [
+            (seq, row)
+            for (f, v), entries in self._graph_analytics_runs.items()
+            if f == folder and (version is None or v == version)
+            for seq, row in entries
+        ]
+        pairs.sort(key=lambda p: p[0], reverse=True)
+        return [dict(row) for _, row in pairs[:limit]]
+
+    def load_all_graph_analytics_runs(
+        self, *, folder=None, limit: int = 25, offset: int = 0
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        pairs = [
+            (seq, dict(row, domain=f))
+            for (f, _v), entries in self._graph_analytics_runs.items()
+            if folder is None or f == folder
+            for seq, row in entries
+        ]
+        pairs.sort(key=lambda p: p[0], reverse=True)
+        rows = [row for _, row in pairs]
+        return rows[offset : offset + limit], len(rows)
 
     def record_review_event(
         self,
@@ -698,6 +759,148 @@ class TestStoreContract:
         store.record_graph_analytics_run("demo", "2", {"node_count": 9})
         assert len(store.load_graph_analytics_runs("demo", "1")) == 1
         assert store.load_graph_analytics_runs("demo", "2")[0]["node_count"] == 9
+
+    def test_graph_analytics_runs_span_versions_when_no_version_given(self, store):
+        """The Runs page shows every version at once, so omitting the
+        version must return the whole folder's history, newest-first."""
+        store.record_graph_analytics_run("demo", "1", {"node_count": 1})
+        store.record_graph_analytics_run("demo", "2", {"node_count": 2})
+        store.record_graph_analytics_run("demo", "1", {"node_count": 3})
+
+        runs = store.load_graph_analytics_runs("demo")
+
+        assert [r["node_count"] for r in runs] == [3, 2, 1]
+
+    def test_graph_analytics_runs_carry_their_version(self, store):
+        """With no filter the table interleaves versions, so each row has
+        to say which version it belongs to."""
+        store.record_graph_analytics_run("demo", "7", {"node_count": 1})
+        assert store.load_graph_analytics_runs("demo")[0]["version"] == "7"
+
+    def test_graph_analytics_runs_limit_applies_across_versions(self, store):
+        store.record_graph_analytics_run("demo", "1", {"node_count": 1})
+        store.record_graph_analytics_run("demo", "2", {"node_count": 2})
+        store.record_graph_analytics_run("demo", "3", {"node_count": 3})
+
+        runs = store.load_graph_analytics_runs("demo", limit=2)
+
+        assert [r["node_count"] for r in runs] == [3, 2]
+
+    def test_graph_analytics_runs_ignores_other_folders(self, store):
+        store.record_graph_analytics_run("demo", "1", {"node_count": 1})
+        store.record_graph_analytics_run("other", "1", {"node_count": 99})
+        assert [r["node_count"] for r in store.load_graph_analytics_runs("demo")] == [1]
+
+    # -- cross-domain, paginated reads (Settings → Automation → Runs) --
+    #
+    # The per-folder readers above answer "this domain's history". These
+    # answer "the whole registry's history, one page at a time", and return
+    # ``(page_rows, total_matching_rows)`` so the UI can render page counts
+    # without fetching everything.
+
+    def _seed_build_runs(self, store):
+        store.record_build_run("alpha", {"version": "1", "started_at": "1"})
+        store.record_build_run("beta", {"version": "1", "started_at": "2"})
+        store.record_build_run("alpha", {"version": "2", "started_at": "3"})
+
+    def test_all_build_runs_span_every_domain_newest_first(self, store):
+        self._seed_build_runs(store)
+
+        rows, total = store.load_all_build_runs()
+
+        assert total == 3
+        assert [r["started_at"] for r in rows] == ["3", "2", "1"]
+
+    def test_all_build_runs_rows_carry_their_domain(self, store):
+        self._seed_build_runs(store)
+
+        rows, _ = store.load_all_build_runs()
+
+        assert [r["domain"] for r in rows] == ["alpha", "beta", "alpha"]
+
+    def test_all_build_runs_scoped_to_one_domain(self, store):
+        self._seed_build_runs(store)
+
+        rows, total = store.load_all_build_runs(folder="alpha")
+
+        assert total == 2
+        assert {r["domain"] for r in rows} == {"alpha"}
+
+    def test_all_build_runs_total_ignores_limit_and_offset(self, store):
+        self._seed_build_runs(store)
+
+        rows, total = store.load_all_build_runs(limit=1, offset=1)
+
+        assert total == 3
+        assert len(rows) == 1
+
+    def test_all_build_runs_consecutive_pages_are_disjoint(self, store):
+        self._seed_build_runs(store)
+
+        first, _ = store.load_all_build_runs(limit=2, offset=0)
+        second, _ = store.load_all_build_runs(limit=2, offset=2)
+
+        assert [r["started_at"] for r in first + second] == ["3", "2", "1"]
+
+    def test_all_build_runs_offset_past_the_end_is_an_empty_page(self, store):
+        self._seed_build_runs(store)
+
+        rows, total = store.load_all_build_runs(offset=99)
+
+        assert rows == []
+        assert total == 3
+
+    def test_all_build_runs_unknown_domain_is_empty(self, store):
+        self._seed_build_runs(store)
+        assert store.load_all_build_runs(folder="ghost") == ([], 0)
+
+    def _seed_analytics_runs(self, store):
+        store.record_graph_analytics_run("alpha", "1", {"node_count": 1})
+        store.record_graph_analytics_run("beta", "1", {"node_count": 2})
+        store.record_graph_analytics_run("alpha", "2", {"node_count": 3})
+
+    def test_all_analytics_runs_span_every_domain_newest_first(self, store):
+        self._seed_analytics_runs(store)
+
+        rows, total = store.load_all_graph_analytics_runs()
+
+        assert total == 3
+        assert [r["node_count"] for r in rows] == [3, 2, 1]
+
+    def test_all_analytics_runs_rows_carry_their_domain(self, store):
+        self._seed_analytics_runs(store)
+
+        rows, _ = store.load_all_graph_analytics_runs()
+
+        assert [r["domain"] for r in rows] == ["alpha", "beta", "alpha"]
+
+    def test_all_analytics_runs_scoped_to_one_domain(self, store):
+        self._seed_analytics_runs(store)
+
+        rows, total = store.load_all_graph_analytics_runs(folder="alpha")
+
+        assert total == 2
+        assert [r["node_count"] for r in rows] == [3, 1]
+
+    def test_all_analytics_runs_total_ignores_limit_and_offset(self, store):
+        self._seed_analytics_runs(store)
+
+        rows, total = store.load_all_graph_analytics_runs(limit=1, offset=1)
+
+        assert total == 3
+        assert [r["node_count"] for r in rows] == [2]
+
+    def test_all_analytics_runs_consecutive_pages_are_disjoint(self, store):
+        self._seed_analytics_runs(store)
+
+        first, _ = store.load_all_graph_analytics_runs(limit=2, offset=0)
+        second, _ = store.load_all_graph_analytics_runs(limit=2, offset=2)
+
+        assert [r["node_count"] for r in first + second] == [3, 2, 1]
+
+    def test_all_analytics_runs_unknown_domain_is_empty(self, store):
+        self._seed_analytics_runs(store)
+        assert store.load_all_graph_analytics_runs(folder="ghost") == ([], 0)
 
     def test_review_events_round_trip_oldest_first(self, store):
         store.record_review_event(
@@ -1579,3 +1782,272 @@ class TestLakebaseCollab:
         sql, params = cur.executed[-1]
         assert "SET status = %s" in sql
         assert params[0] == "in_progress"
+
+
+# ---------------------------------------------------------------------
+# Lakebase graph-analytics run history — real SQL code path
+#
+# The in-memory fake above proves the *contract* (version=None spans
+# every version, version="x" scopes to it). These drive the concrete
+# Lakebase implementation to pin down the conditional ``r.version = %s``
+# predicate and, critically, the *order* of the bound params — a
+# reordered ``.append()`` would still "work" against the fake cursor
+# but would silently mis-bind params against a real Postgres query.
+# ---------------------------------------------------------------------
+
+
+def _graph_analytics_runs_store(monkeypatch, cur):
+    """A Lakebase store whose ``_connect`` yields *cur* and whose
+    graph-analytics-runs table is already marked present (skips the
+    lazy DDL probe). Mirrors ``_collab_store``.
+    """
+    from contextlib import contextmanager
+    import back.objects.registry.store.lakebase.store as _store_mod
+
+    store = _make_lakebase_store(monkeypatch)
+    store._registry_id = "rid-1"          # skip registry-id resolution
+    store._graph_analytics_runs_ready = True  # skip the ensure/CREATE probe
+
+    @contextmanager
+    def fake_connect():
+        yield _ScriptedConn(cur)
+
+    monkeypatch.setattr(store, "_connect", fake_connect)
+    monkeypatch.setattr(_store_mod, "_require_psycopg", lambda: (None, None))
+    return store
+
+
+class TestLakebaseGraphAnalyticsRunsSql:
+    def test_load_runs_without_version_omits_predicate(self, monkeypatch):
+        cur = _ScriptedCursor([{"contains": "FROM", "fetchall": []}])
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_graph_analytics_runs("demo", limit=50)
+
+        sql, params = cur.executed[-1]
+        assert "r.version = %s" not in sql
+        assert params == ("rid-1", "demo", 50)
+
+    def test_load_runs_with_version_appends_predicate_and_param_last(
+        self, monkeypatch
+    ):
+        cur = _ScriptedCursor([{"contains": "FROM", "fetchall": []}])
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_graph_analytics_runs("demo", "1", limit=50)
+
+        sql, params = cur.executed[-1]
+        assert "r.version = %s" in sql
+        assert params == ("rid-1", "demo", "1", 50)
+
+
+# ---------------------------------------------------------------------
+# Lakebase cross-domain, paginated run history — real SQL code path
+#
+# Same reasoning as the class above: the fake proves the contract, these
+# pin down the SQL. Two things can only break here — the ``d.folder``
+# predicate must vanish (not be bound to NULL) when no domain is
+# selected, and the page query and its COUNT must share one predicate,
+# or "Showing 1–25 of N" would quote an N from a different question.
+# ---------------------------------------------------------------------
+
+
+_BUILD_ROW = {
+    "id": 4,
+    "domain": "alpha",
+    "version": "2",
+    "build_kind": "session",
+    "status": "success",
+    "message": "",
+    "error": "",
+    "started_at": datetime(2026, 8, 4, 9, 0),
+    "finished_at": datetime(2026, 8, 4, 9, 1),
+    "duration_s": 60.0,
+    "triple_count": 10,
+    "entity_count": 2,
+    "relationship_count": 1,
+    "sql_chars": 100,
+    "graph_engine": "lakebase",
+    "sync_mode": "full",
+    "view_table": "",
+    "graph_name": "g",
+    "task_id": "t-1",
+    "phase_times": {},
+    "stats": {},
+}
+
+_ANALYTICS_ROW = {
+    "id": 9,
+    "domain": "beta",
+    "version": "1",
+    "status": "completed",
+    "class_filter": [],
+    "node_count": 5,
+    "edge_count": 4,
+    "connected_components": 1,
+    "avg_degree": 1.6,
+    "density": 0.2,
+    "duration_ms": 1200,
+    "task_id": "t-2",
+    "error": "",
+    "computed_at": datetime(2026, 8, 4, 9, 30),
+}
+
+
+def _paged(cur):
+    """The page query and the COUNT query out of a scripted cursor."""
+    page = next(s for s in cur.executed if "ORDER BY" in s[0])
+    count = next(s for s in cur.executed if "COUNT(*)" in s[0])
+    return page, count
+
+
+def _build_runs_store(monkeypatch, cur):
+    """Like ``_graph_analytics_runs_store`` but for ``build_runs``."""
+    from contextlib import contextmanager
+    import back.objects.registry.store.lakebase.store as _store_mod
+
+    store = _make_lakebase_store(monkeypatch)
+    store._registry_id = "rid-1"
+    store._build_runs_ready = True
+
+    @contextmanager
+    def fake_connect():
+        yield _ScriptedConn(cur)
+
+    monkeypatch.setattr(store, "_connect", fake_connect)
+    monkeypatch.setattr(_store_mod, "_require_psycopg", lambda: (None, None))
+    return store
+
+
+class TestLakebaseAllBuildRunsSql:
+    def _cursor(self, total=1, rows=None):
+        return _ScriptedCursor(
+            [
+                {"contains": "COUNT(*)", "fetchone": {"total": total}},
+                {"contains": "ORDER BY", "fetchall": rows or [dict(_BUILD_ROW)]},
+            ]
+        )
+
+    def test_without_folder_omits_the_folder_predicate(self, monkeypatch):
+        cur = self._cursor()
+        store = _build_runs_store(monkeypatch, cur)
+
+        store.load_all_build_runs(limit=25, offset=0)
+
+        (page_sql, page_params), _ = _paged(cur)
+        assert "d.folder = %s" not in page_sql
+        assert page_params == ("rid-1", 25, 0)
+
+    def test_with_folder_binds_it_before_limit_and_offset(self, monkeypatch):
+        cur = self._cursor()
+        store = _build_runs_store(monkeypatch, cur)
+
+        store.load_all_build_runs(folder="alpha", limit=10, offset=20)
+
+        (page_sql, page_params), _ = _paged(cur)
+        assert "d.folder = %s" in page_sql
+        assert page_params == ("rid-1", "alpha", 10, 20)
+
+    def test_count_shares_the_predicate_but_not_the_paging(self, monkeypatch):
+        cur = self._cursor()
+        store = _build_runs_store(monkeypatch, cur)
+
+        store.load_all_build_runs(folder="alpha", limit=10, offset=20)
+
+        _, (count_sql, count_params) = _paged(cur)
+        assert "d.folder = %s" in count_sql
+        assert "LIMIT" not in count_sql
+        assert count_params == ("rid-1", "alpha")
+
+    def test_total_comes_from_the_count_not_the_page_length(self, monkeypatch):
+        cur = self._cursor(total=137)
+        store = _build_runs_store(monkeypatch, cur)
+
+        rows, total = store.load_all_build_runs(limit=25)
+
+        assert len(rows) == 1
+        assert total == 137
+
+    def test_rows_carry_the_domain_folder(self, monkeypatch):
+        cur = self._cursor()
+        store = _build_runs_store(monkeypatch, cur)
+
+        rows, _ = store.load_all_build_runs()
+
+        assert rows[0]["domain"] == "alpha"
+        assert rows[0]["triple_count"] == 10
+
+    def test_missing_table_degrades_to_an_empty_page(self, monkeypatch):
+        cur = self._cursor()
+        store = _build_runs_store(monkeypatch, cur)
+        monkeypatch.setattr(store, "_ensure_build_runs_table", lambda: False)
+
+        assert store.load_all_build_runs() == ([], 0)
+
+
+class TestLakebaseAllAnalyticsRunsSql:
+    def _cursor(self, total=1, rows=None):
+        return _ScriptedCursor(
+            [
+                {"contains": "COUNT(*)", "fetchone": {"total": total}},
+                {"contains": "ORDER BY", "fetchall": rows or [dict(_ANALYTICS_ROW)]},
+            ]
+        )
+
+    def test_without_folder_omits_the_folder_predicate(self, monkeypatch):
+        cur = self._cursor()
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_all_graph_analytics_runs(limit=25, offset=0)
+
+        (page_sql, page_params), _ = _paged(cur)
+        assert "d.folder = %s" not in page_sql
+        assert page_params == ("rid-1", 25, 0)
+
+    def test_with_folder_binds_it_before_limit_and_offset(self, monkeypatch):
+        cur = self._cursor()
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_all_graph_analytics_runs(folder="beta", limit=50, offset=50)
+
+        (page_sql, page_params), _ = _paged(cur)
+        assert "d.folder = %s" in page_sql
+        assert page_params == ("rid-1", "beta", 50, 50)
+
+    def test_spans_every_version(self, monkeypatch):
+        """No version filter exists on the Runs page, so the SQL must not
+        grow one."""
+        cur = self._cursor()
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        store.load_all_graph_analytics_runs(folder="beta")
+
+        (page_sql, _), _ = _paged(cur)
+        assert "r.version = %s" not in page_sql
+
+    def test_total_comes_from_the_count_not_the_page_length(self, monkeypatch):
+        cur = self._cursor(total=42)
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        rows, total = store.load_all_graph_analytics_runs()
+
+        assert len(rows) == 1
+        assert total == 42
+
+    def test_rows_carry_the_domain_folder(self, monkeypatch):
+        cur = self._cursor()
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+
+        rows, _ = store.load_all_graph_analytics_runs()
+
+        assert rows[0]["domain"] == "beta"
+        assert rows[0]["node_count"] == 5
+
+    def test_missing_table_degrades_to_an_empty_page(self, monkeypatch):
+        cur = self._cursor()
+        store = _graph_analytics_runs_store(monkeypatch, cur)
+        monkeypatch.setattr(
+            store, "_ensure_graph_analytics_runs_table", lambda: False
+        )
+
+        assert store.load_all_graph_analytics_runs() == ([], 0)

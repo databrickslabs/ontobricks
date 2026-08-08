@@ -1,0 +1,136 @@
+/* Registry navbar icon + modal */
+
+#registryModalToggle i {
+    font-size: 1.4rem;
+    line-height: 1;
+    vertical-align: middle;
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+
+#registryModalToggle:hover i {
+    transform: scale(1.08);
+}
+
+#registryModal.show {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+}
+
+#registryModal .modal-dialog {
+    flex: 0 0 80vw;
+    width: 80vw;
+    max-width: 80vw;
+    height: 80vh;
+    margin: 0;
+}
+
+.registry-modal-content {
+    height: 80vh;
+    min-height: 80vh;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.registry-modal-content .modal-header {
+    flex-shrink: 0;
+}
+
+.registry-modal-content .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#registryModalTabs {
+    flex-shrink: 0;
+}
+
+#registryModalTabContent {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Browse: scroll the tab pane itself */
+#registry-pane-browse.tab-pane.active {
+    height: 100%;
+    overflow-y: auto;
+}
+
+/*
+ * Bridges: fill remaining modal height so the D3 canvas gets a real
+ * bounding box. The old page CSS keyed off #bridges-section (sidebar),
+ * which no longer exists in the modal.
+ */
+#registry-pane-bridges.tab-pane.active {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+#registry-pane-bridges > .content-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding: 0;
+}
+
+#registry-pane-bridges .section-header,
+#registry-pane-bridges #bridgesSummary,
+#registry-pane-bridges #bridgesStatus {
+    flex-shrink: 0;
+}
+
+#registry-pane-bridges #bridgesGraphContainer {
+    flex: 1 1 auto;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#registry-pane-bridges #bridgesGraph {
+    flex: 1 1 auto;
+    min-height: 280px;
+    width: 100%;
+}
+
+#registry-pane-bridges #bridgesContent {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.registry-modal-content .content-section {
+    padding: 0;
+}
+
+.registry-modal-content .section-header h4 {
+    font-size: 1.1rem;
+}
+
+@media (max-width: 767.98px) {
+    #registryModal .modal-dialog {
+        flex-basis: calc(100vw - 1rem);
+        width: calc(100vw - 1rem);
+        max-width: calc(100vw - 1rem);
+        height: calc(100vh - 1rem);
+        margin: 0;
+    }
+
+    .registry-modal-content {
+        height: calc(100vh - 1rem);
+        min-height: calc(100vh - 1rem);
+        max-height: calc(100vh - 1rem);
+    }
+}

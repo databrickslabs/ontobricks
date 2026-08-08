@@ -19,7 +19,7 @@ Authentication:
   injected by the Apps ``postgres`` resource binding (Lakebase
   Autoscaling — the only tier supported by OntoBricks).
 - The Postgres password is a short-lived OAuth token minted by
-  :class:`back.core.databricks.LakebaseAuth`.
+  :class:`back.core.databricks.lakebase.LakebaseAuth`.
 
 Cold start:
 - Lakebase Autoscaling scales-to-zero when idle. Initial calls
@@ -27,13 +27,16 @@ Cold start:
   ("cannot_connect_now") and on ``connection refused``.
 
 Connection pooling:
-- A process-wide LIFO pool (``_LakebasePool``) keeps a small handful
-  of warm psycopg connections, keyed by host/db/user/schema. This
-  avoids the 200-500 ms TCP+TLS+JWT handshake per call and turns
-  hot-path operations like *Load Domain from Registry* into a single
-  network round-trip per query. Connections are recycled before the
-  1 h JWT expiry (``_POOL_MAX_LIFETIME_S``), so token rotation stays
-  invisible to callers.
+- The connection machinery is shared with the graph triple store and
+  lives in :mod:`back.core.databricks.lakebase`. A process-wide LIFO
+  pool keeps a small handful of warm psycopg connections, keyed by the
+  full connection identity (host/port/db/user/instance/schema) plus the
+  ``ontobricks-registry`` workload label. This avoids the 200-500 ms
+  TCP+TLS+JWT handshake per call and turns hot-path operations like
+  *Load Domain from Registry* into a single network round-trip per
+  query. Connections are recycled before the 1 h JWT expiry so token
+  rotation stays invisible to callers. The registry and the graph store
+  remain independent databases — they never share a pool.
 
 Token expiry:
 - Authentication failures (SQLSTATE ``28P01``) trigger a single
@@ -52,10 +55,12 @@ import os
 import re
 import threading
 import time
-from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.databricks import get_lakebase_auth
+from back.core.databricks.lakebase import get_lakebase_pool
+from back.core.databricks.lakebase import require_psycopg as _shared_require_psycopg
+from back.core.databricks.lakebase.constants import APPLICATION_NAME_REGISTRY
 from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
 from back.objects.registry.registry_cache import invalidate_registry_cache
@@ -72,29 +77,25 @@ from ..base import (
     ReviewEvent,
     ScheduleHistoryEntry,
     StoreError,
+    parse_schedule_key,
+    schedule_key,
 )
 
 logger = get_logger(__name__)
 
-_SCHEDULES_KEY = "schedules"
+# Keys the global-config blob must never carry: schedules and their run
+# history are owned by the ``schedules`` / ``schedule_runs`` tables. The
+# cohort pair predates the generic scheduled-task table and is imported
+# out of the blob by ``_import_legacy_cohort_schedules``.
+_LEGACY_SCHEDULE_KEYS = (
+    "schedules",
+    "schedule_history",
+    "cohort_schedules",
+    "cohort_schedule_history",
+)
 _DDL_FILENAME = "schema.sql"
 _SCHEMA_TOKEN = "__SCHEMA__"
 _SAFE_SCHEMA_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-
-_COLD_START_SQLSTATES = {"57P03"}  # cannot_connect_now
-_AUTH_FAILURE_SQLSTATES = {"28P01"}  # invalid_password / token expired
-_MAX_COLD_START_ATTEMPTS = 6
-_INITIAL_BACKOFF_S = 1.0
-_MAX_BACKOFF_S = 16.0
-
-# Connection pool tuning. ``_POOL_MAX_LIFETIME_S`` is comfortably below
-# the Lakebase JWT TTL (~1 h) so a connection is always retired before
-# its credentials would expire mid-query. ``_POOL_MAX_SIZE`` is small on
-# purpose: the registry is admin-traffic only, and Postgres connections
-# are not cheap on the Lakebase side either.
-_POOL_MAX_SIZE = 4
-_POOL_MAX_LIFETIME_S = 45 * 60.0  # 45 min
-_POOL_ACQUIRE_TIMEOUT_S = 30.0
 
 # Whitelist used by ``table_row_counts``; keeps the dynamic SQL safe
 # even though identifiers are also quoted via ``_q``.
@@ -111,6 +112,7 @@ _KNOWN_TABLES = frozenset(
         "graph_analytics",
         "graph_analytics_runs",
         "domain_review_events",
+        "domain_change_events",
         "domain_comments",
         "domain_tasks",
         "domain_edit_locks",
@@ -127,263 +129,39 @@ _KNOWN_TABLES = frozenset(
 
 
 def _require_psycopg():
-    """Lazy import psycopg + psycopg.rows. Clear error when missing."""
+    """Lazy import psycopg + psycopg.rows. Clear error when missing.
+
+    Delegates to the shared gate (:func:`back.core.databricks.lakebase.
+    require_psycopg`) but re-raises as :class:`InfrastructureError` to keep
+    the registry's error surface unchanged. Kept as a module-level function
+    so the many ``psycopg, dict_row = _require_psycopg()`` call sites (and the
+    tests that monkeypatch this name) keep working.
+    """
     try:
-        import psycopg  # noqa: F401
-        from psycopg.rows import dict_row  # noqa: F401
+        return _shared_require_psycopg()
     except ImportError as exc:  # pragma: no cover
-        raise InfrastructureError(
-            "psycopg is required for the Lakebase backend. Install with "
-            "``uv sync --extra lakebase`` (or ``pip install .[lakebase]``)."
-        ) from exc
-    return psycopg, dict_row
+        raise InfrastructureError(str(exc)) from exc
 
 
-class _LakebasePool:
-    """Tiny thread-safe LIFO connection pool for Lakebase.
+def _get_pool(auth: Any, schema: str, database: str = ""):
+    """Return the shared Lakebase pool for *auth* + *schema* + *database*.
 
-    The pool is intentionally minimal — just enough plumbing to
-    avoid the per-call TCP+TLS+JWT handshake while keeping all the
-    bespoke behaviour (cold-start retries, OAuth token rotation,
-    ``search_path`` setup) that we already had on the unpooled path.
+    Thin wrapper over :func:`back.core.databricks.lakebase.get_lakebase_pool`
+    with the registry workload label and error type. Kept as a module-level
+    function because ``fetch_lakebase_registry_triplet`` and
+    :meth:`LakebaseRegistryStore._connect` call it (and tests monkeypatch it).
 
-    A single instance is shared by every :class:`LakebaseRegistryStore`
-    pointing at the same host/db/user/schema (see :func:`_get_pool`).
+    The ``database`` arg is the optional override that points the store at a
+    different Postgres database on the same Lakebase instance. The empty
+    string means "use the bound PGDATABASE".
     """
-
-    def __init__(
-        self,
-        *,
-        auth: Any,
-        schema: str,
-        database: str = "",
-        max_size: int = _POOL_MAX_SIZE,
-        max_lifetime: float = _POOL_MAX_LIFETIME_S,
-    ) -> None:
-        self._auth = auth
-        self._schema = schema
-        # Empty string means "use whatever PGDATABASE is bound to the
-        # app". A non-empty value points the store at a different
-        # database on the same Lakebase instance (the JWT scope is
-        # per-instance so the cached token still authenticates).
-        self._database = database or ""
-        self._max_size = max_size
-        self._max_lifetime = max_lifetime
-        self._cv = threading.Condition()
-        self._idle: List[Tuple[Any, float]] = []  # (conn, opened_at)
-        self._size = 0  # checked-out + idle
-        self._closed = False
-
-    # -- public API --------------------------------------------------
-
-    @contextmanager
-    def connection(self):
-        """Yield a healthy Lakebase connection from the pool."""
-        conn, opened_at = self._acquire()
-        try:
-            yield conn
-        except Exception:
-            self._discard(conn)
-            raise
-        else:
-            self._release(conn, opened_at)
-
-    def close(self) -> None:
-        """Drain the pool, closing every idle connection."""
-        with self._cv:
-            self._closed = True
-            idle = list(self._idle)
-            self._idle.clear()
-            self._size = 0
-            self._cv.notify_all()
-        for conn, _ in idle:
-            try:
-                conn.close()
-            except Exception:  # noqa: BLE001
-                pass
-
-    def stats(self) -> Dict[str, int]:
-        with self._cv:
-            return {
-                "size": self._size,
-                "idle": len(self._idle),
-                "max_size": self._max_size,
-            }
-
-    # -- internals ---------------------------------------------------
-
-    def _is_alive(self, conn: Any, opened_at: float) -> bool:
-        if (time.monotonic() - opened_at) >= self._max_lifetime:
-            return False
-        try:
-            return not conn.closed
-        except Exception:  # noqa: BLE001
-            return False
-
-    def _acquire(self, timeout: float = _POOL_ACQUIRE_TIMEOUT_S) -> Tuple[Any, float]:
-        deadline = time.monotonic() + timeout
-        with self._cv:
-            while True:
-                if self._closed:
-                    raise StoreError("Lakebase pool is closed")
-                # Re-use an idle connection (LIFO keeps the hottest
-                # connection on top — friendliest to TCP keep-alive).
-                while self._idle:
-                    conn, opened_at = self._idle.pop()
-                    if self._is_alive(conn, opened_at):
-                        return conn, opened_at
-                    # Stale or closed: drop and keep looking.
-                    self._size -= 1
-                    try:
-                        conn.close()
-                    except Exception:  # noqa: BLE001
-                        pass
-                # No idle: open a fresh one if we are under cap. We
-                # reserve the slot here, then release the lock to do
-                # the (potentially slow) open.
-                if self._size < self._max_size:
-                    self._size += 1
-                    break
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise StoreError(
-                        f"Lakebase pool exhausted after waiting "
-                        f"{timeout:.1f}s for a connection"
-                    )
-                self._cv.wait(remaining)
-        # Open outside the lock. On failure, give the slot back so
-        # other waiters are not starved by a transient outage.
-        try:
-            conn = self._open_one()
-        except Exception:
-            with self._cv:
-                self._size -= 1
-                self._cv.notify()
-            raise
-        return conn, time.monotonic()
-
-    def _release(self, conn: Any, opened_at: float) -> None:
-        with self._cv:
-            if self._closed or not self._is_alive(conn, opened_at):
-                self._size -= 1
-                self._cv.notify()
-                try:
-                    conn.close()
-                except Exception:  # noqa: BLE001
-                    pass
-                return
-            self._idle.append((conn, opened_at))
-            self._cv.notify()
-
-    def _discard(self, conn: Any) -> None:
-        with self._cv:
-            self._size -= 1
-            self._cv.notify()
-        try:
-            conn.close()
-        except Exception:  # noqa: BLE001
-            pass
-
-    def _open_one(self) -> Any:
-        """Open one new psycopg connection, with cold-start + auth retry."""
-        psycopg, _ = _require_psycopg()
-        attempts = 0
-        backoff = _INITIAL_BACKOFF_S
-        retried_auth = False
-        while True:
-            try:
-                kwargs = self._auth.kwargs(
-                    application_name="ontobricks-registry"
-                )
-                if self._database:
-                    kwargs["dbname"] = self._database
-                conn = psycopg.connect(autocommit=True, **kwargs)
-                with conn.cursor() as cur:
-                    cur.execute(f'SET search_path TO "{self._schema}", public')
-                return conn
-            except Exception as exc:  # noqa: BLE001
-                sqlstate = getattr(exc, "sqlstate", "") or ""
-                msg = str(exc).lower()
-                cold = (
-                    sqlstate in _COLD_START_SQLSTATES
-                    or "starting up" in msg
-                    or "connection refused" in msg
-                )
-                auth_failed = (
-                    sqlstate in _AUTH_FAILURE_SQLSTATES
-                    or "authentication failed" in msg
-                )
-                if auth_failed and not retried_auth:
-                    self._auth.invalidate()
-                    retried_auth = True
-                    logger.info("Lakebase auth failed; rotating token and retrying")
-                    continue
-                if cold and attempts < _MAX_COLD_START_ATTEMPTS:
-                    attempts += 1
-                    sleep_for = min(backoff, _MAX_BACKOFF_S)
-                    logger.info(
-                        "Lakebase cold start (sqlstate=%s, attempt=%d/%d); "
-                        "sleeping %.1fs",
-                        sqlstate or "?",
-                        attempts,
-                        _MAX_COLD_START_ATTEMPTS,
-                        sleep_for,
-                    )
-                    time.sleep(sleep_for)
-                    backoff *= 2
-                    continue
-                raise StoreError(f"Lakebase connection failed: {exc}") from exc
-
-
-# Process-wide pool registry. ``LakebaseRegistryStore`` is rebuilt on
-# every request through :class:`RegistryFactory`, so the pool itself
-# must outlive any single store instance.
-_pools_lock = threading.Lock()
-_pools: Dict[Tuple[str, str, str, str, str, str, str], _LakebasePool] = {}
-
-
-def _safe_attr(obj: Any, name: str) -> str:
-    """Read an attribute that may raise ``ValidationError`` lazily."""
-    try:
-        return str(getattr(obj, name, "") or "")
-    except Exception:  # noqa: BLE001
-        return ""
-
-
-def _get_pool(auth: Any, schema: str, database: str = "") -> _LakebasePool:
-    """Return (and lazily create) the shared pool for *auth* + *schema* + *database*.
-
-    The ``database`` arg is the optional override that points the store
-    at a different Postgres database on the same Lakebase instance. The
-    empty string means "use the bound PGDATABASE". Two stores that
-    differ only by ``database`` get distinct pools (and distinct
-    connections), which is what we want — a Postgres connection only
-    ever talks to a single database.
-    """
-    bound_db = _safe_attr(auth, "database")
-    effective_db = database or bound_db
-    key = (
-        _safe_attr(auth, "host"),
-        _safe_attr(auth, "port"),
-        bound_db,
-        effective_db,
-        _safe_attr(auth, "user"),
-        _safe_attr(auth, "instance_name"),
+    return get_lakebase_pool(
+        auth,
         schema,
+        database,
+        application_name=APPLICATION_NAME_REGISTRY,
+        error_factory=StoreError,
     )
-    with _pools_lock:
-        pool = _pools.get(key)
-        if pool is None:
-            pool = _LakebasePool(auth=auth, schema=schema, database=database)
-            _pools[key] = pool
-            logger.info(
-                "Created Lakebase connection pool for %s/%s (schema=%s, max_size=%d)",
-                key[0],
-                effective_db,
-                schema,
-                _POOL_MAX_SIZE,
-            )
-        return pool
 
 
 # ---------------------------------------------------------------------------
@@ -553,6 +331,13 @@ class LakebaseRegistryStore(RegistryStore):
         # used to self-heal deployments created before the single-editor
         # lock feature existed (same pattern as ``_collab_tables_ready``).
         self._edit_locks_ready = False
+        # Guards the lazy migration that turns the build-only ``schedules``
+        # table into the generic scheduled-task table (task_type /
+        # target_key / config / detail + the widened unique constraint).
+        self._schedule_columns_ready = False
+        # Guards the one-shot import of cohort schedules out of the
+        # ``global_config`` JSONB blob into the ``schedules`` table.
+        self._cohort_schedules_imported = False
 
     # ------------------------------------------------------------------
     # Identity
@@ -872,20 +657,36 @@ class LakebaseRegistryStore(RegistryStore):
         }
 
     def initialize(self, *, client: Any = None) -> Tuple[bool, str]:
+        """Initialize or upgrade the Lakebase registry schema.
+
+        Idempotent: safe to re-run on an already-initialized registry.
+        Creates any tables that are missing (``IF NOT EXISTS``), applies
+        pending column migrations, ensures the registry identity row, and
+        scrubs legacy JSONB keys.  Use this both for first-time setup and
+        as an in-app upgrade step when the app is updated to a new version
+        that added columns to existing tables.
+        """
         del client  # not used: Lakebase instance is provisioned out of band
         try:
             self._apply_ddl()
             self._registry_id = self._ensure_registry_row()
             self._scrub_global_config_legacy_keys()
+            # Apply pending column migrations eagerly so the admin gets
+            # immediate feedback from the Initialize / Upgrade button rather
+            # than waiting for the first runtime call that needs the column.
+            self._ensure_domain_versions_status_column()
+            self._ensure_domains_review_quorum_column()
+            self._ensure_schedule_task_columns()
+            self._import_legacy_cohort_schedules()
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute("SELECT 1")  # wake probe
             logger.info(
-                "Lakebase registry initialised (schema=%s, host=%s)",
+                "Lakebase registry initialised/upgraded (schema=%s, host=%s)",
                 self._schema,
                 self._auth.host,
             )
             return True, (
-                f"Lakebase registry initialized at "
+                f"Lakebase registry initialized/upgraded at "
                 f"{self._auth.host}/{self._effective_database} "
                 f"(schema={self._schema})"
             )
@@ -915,7 +716,7 @@ class LakebaseRegistryStore(RegistryStore):
         than aborting, so the schema grants (the part the SP can always do)
         still apply.
         """
-        from back.core.databricks.lakebase_grants import (  # noqa: PLC0415
+        from back.core.databricks.lakebase.grants import (  # noqa: PLC0415
             grant_can_use_on_project,
             grant_schema_privileges,
             grant_uc_catalog,
@@ -1047,22 +848,30 @@ class LakebaseRegistryStore(RegistryStore):
             for v in version_rows:
                 by_domain.setdefault(str(v["domain_id"]), []).append(v)
 
+            from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
             result: List[DomainSummary] = []
             for d in domain_rows:
                 versions = by_domain.get(str(d["id"]), [])
                 description = d["description"] or ""
                 base_uri = d["base_uri"] or ""
+                graph_backend = normalize_graph_backend(None)
+                neo4j_connection = ""
                 if versions:
                     latest = versions[0]
                     info = latest["info"] or {}
                     description = description or info.get("description", "")
                     ont = latest["ontology"] or {}
                     base_uri = base_uri or ont.get("base_uri", "")
+                    graph_backend = normalize_graph_backend(info.get("graph_backend"))
+                    neo4j_connection = str(info.get("neo4j_connection") or "").strip()
                 result.append(
                     {
                         "name": d["folder"],
                         "base_uri": base_uri,
                         "description": description,
+                        "graph_backend": graph_backend,
+                        "neo4j_connection": neo4j_connection,
                         "review_quorum": max(1, int(d.get("review_quorum") or 1)),
                         "versions": [
                             {
@@ -1443,12 +1252,15 @@ class LakebaseRegistryStore(RegistryStore):
 
     def load_schedules(self) -> Dict[str, Dict[str, Any]]:
         try:
+            self._ensure_schedule_task_columns()
+            self._import_legacy_cohort_schedules()
             psycopg, dict_row = _require_psycopg()
             with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     f"""
-                    SELECT domain_name, interval_minutes, drop_existing,
-                           enabled, version, last_run, last_status, last_message
+                    SELECT task_type, domain_name, target_key, interval_minutes,
+                           enabled, version, config, last_run, last_status,
+                           last_message, last_count
                     FROM {self._q(self._schema)}.schedules
                     WHERE registry_id = %s
                     """,
@@ -1457,14 +1269,21 @@ class LakebaseRegistryStore(RegistryStore):
                 rows = cur.fetchall()
             out: Dict[str, Dict[str, Any]] = {}
             for r in rows:
-                out[r["domain_name"]] = {
+                task_type = r["task_type"] or "build"
+                target_key = r["target_key"] or ""
+                key = schedule_key(task_type, r["domain_name"], target_key)
+                out[key] = {
+                    "task_type": task_type,
+                    "domain_name": r["domain_name"],
+                    "target_key": target_key,
                     "interval_minutes": r["interval_minutes"],
-                    "drop_existing": r["drop_existing"],
                     "enabled": r["enabled"],
                     "version": r["version"] or "latest",
+                    "config": dict(r["config"] or {}),
                     "last_run": r["last_run"].isoformat() if r["last_run"] else None,
                     "last_status": r["last_status"],
                     "last_message": r["last_message"],
+                    "last_count": int(r["last_count"] or 0),
                 }
             return out
         except Exception as exc:  # noqa: BLE001
@@ -1475,6 +1294,7 @@ class LakebaseRegistryStore(RegistryStore):
         self, schedules: Dict[str, Dict[str, Any]]
     ) -> Tuple[bool, str]:
         try:
+            self._ensure_schedule_task_columns()
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     f"""
@@ -1483,43 +1303,62 @@ class LakebaseRegistryStore(RegistryStore):
                     """,
                     (self._registry(),),
                 )
-                for name, cfg in schedules.items():
+                for key, cfg in schedules.items():
+                    fallback_type, fallback_domain, fallback_target = (
+                        parse_schedule_key(key)
+                    )
+                    config = dict(cfg.get("config") or {})
+                    if "drop_existing" not in config and "drop_existing" in cfg:
+                        # Pre-generic entries carried the build flag at the
+                        # top level (the Volume → Lakebase migration script
+                        # still writes that shape).
+                        config["drop_existing"] = bool(cfg["drop_existing"])
                     cur.execute(
                         f"""
                         INSERT INTO {self._q(self._schema)}.schedules
-                            (registry_id, domain_name, interval_minutes,
-                             drop_existing, enabled, version, last_run,
-                             last_status, last_message)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            (registry_id, task_type, domain_name, target_key,
+                             interval_minutes, drop_existing, enabled, version,
+                             config, last_run, last_status, last_message,
+                             last_count)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
+                                %s, %s, %s, %s)
                         """,
                         (
                             self._registry(),
-                            name,
+                            cfg.get("task_type") or fallback_type,
+                            cfg.get("domain_name") or fallback_domain,
+                            cfg.get("target_key") or fallback_target,
                             int(cfg.get("interval_minutes", 60)),
-                            bool(cfg.get("drop_existing", True)),
+                            bool(config.get("drop_existing", True)),
                             bool(cfg.get("enabled", True)),
                             cfg.get("version", "latest") or "latest",
+                            json.dumps(config),
                             cfg.get("last_run"),
                             cfg.get("last_status"),
                             cfg.get("last_message"),
+                            int(cfg.get("last_count") or 0),
                         ),
                     )
             return True, "Schedules saved"
         except Exception as exc:  # noqa: BLE001
             return False, str(exc)
 
-    def load_schedule_history(self, folder: str) -> List[ScheduleHistoryEntry]:
+    def load_schedule_history(self, key: str) -> List[ScheduleHistoryEntry]:
+        task_type, domain_name, target_key = parse_schedule_key(key)
         try:
+            self._ensure_schedule_task_columns()
             psycopg, dict_row = _require_psycopg()
             with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     f"""
-                    SELECT run_ts, status, message, duration_s, triple_count
+                    SELECT run_ts, status, message, duration_s, triple_count,
+                           detail
                     FROM {self._q(self._schema)}.schedule_runs
-                    WHERE registry_id = %s AND domain_name = %s
+                    WHERE registry_id = %s AND task_type = %s
+                      AND domain_name = %s AND target_key = %s
                     ORDER BY run_ts ASC
                     """,
-                    (self._registry(), folder),
+                    (self._registry(), task_type, domain_name, target_key),
                 )
                 rows = cur.fetchall()
             return [
@@ -1529,57 +1368,199 @@ class LakebaseRegistryStore(RegistryStore):
                     "message": r["message"] or "",
                     "duration_s": float(r["duration_s"] or 0),
                     "triple_count": int(r["triple_count"] or 0),
+                    "detail": dict(r["detail"] or {}),
                 }
                 for r in rows
             ]
         except Exception as exc:  # noqa: BLE001
-            logger.debug("load_schedule_history(%s) failed: %s", folder, exc)
+            logger.debug("load_schedule_history(%s) failed: %s", key, exc)
             return []
 
     def append_schedule_history(
-        self, folder: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
+        self, key: str, entry: ScheduleHistoryEntry, *, max_entries: int = 50
     ) -> None:
+        task_type, domain_name, target_key = parse_schedule_key(key)
         try:
+            self._ensure_schedule_task_columns()
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     f"""
                     INSERT INTO {self._q(self._schema)}.schedule_runs
-                        (registry_id, domain_name, run_ts, status, message,
-                         duration_s, triple_count)
-                    VALUES (%s, %s, COALESCE(%s::timestamptz, now()),
-                            %s, %s, %s, %s)
+                        (registry_id, task_type, domain_name, target_key,
+                         run_ts, status, message, duration_s, triple_count,
+                         detail)
+                    VALUES (%s, %s, %s, %s, COALESCE(%s::timestamptz, now()),
+                            %s, %s, %s, %s, %s::jsonb)
                     """,
                     (
                         self._registry(),
-                        folder,
+                        task_type,
+                        domain_name,
+                        target_key,
                         entry.get("timestamp"),
                         entry.get("status", ""),
                         entry.get("message", ""),
                         float(entry.get("duration_s", 0) or 0),
                         int(entry.get("triple_count", 0) or 0),
+                        json.dumps(dict(entry.get("detail") or {})),
                     ),
                 )
                 cur.execute(
                     f"""
                     DELETE FROM {self._q(self._schema)}.schedule_runs
-                    WHERE registry_id = %s AND domain_name = %s
+                    WHERE registry_id = %s AND task_type = %s
+                      AND domain_name = %s AND target_key = %s
                       AND id NOT IN (
                           SELECT id FROM {self._q(self._schema)}.schedule_runs
-                          WHERE registry_id = %s AND domain_name = %s
+                          WHERE registry_id = %s AND task_type = %s
+                            AND domain_name = %s AND target_key = %s
                           ORDER BY run_ts DESC
                           LIMIT %s
                       )
                     """,
                     (
                         self._registry(),
-                        folder,
+                        task_type,
+                        domain_name,
+                        target_key,
                         self._registry(),
-                        folder,
+                        task_type,
+                        domain_name,
+                        target_key,
                         max_entries,
                     ),
                 )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("append_schedule_history(%s) failed: %s", folder, exc)
+            logger.warning("append_schedule_history(%s) failed: %s", key, exc)
+
+    def _import_legacy_cohort_schedules(self) -> None:
+        """Move cohort schedules out of the ``global_config`` JSONB blob.
+
+        Cohort schedules predate the generic ``schedules`` table and were
+        stashed in the blob under ``cohort_schedules`` /
+        ``cohort_schedule_history``, keyed by ``"<domain>::<rule_id>"``.
+        This one-shot import rewrites them as ``task_type='cohort'`` rows
+        (with ``target_key`` holding the rule id) and then drops both
+        blob keys, so an upgraded deployment keeps its schedules without
+        the admin doing anything. Best-effort: a failure here leaves the
+        blob intact and is retried on the next app start.
+        """
+        if self._cohort_schedules_imported:
+            return
+        try:
+            # Read the raw blob: ``load_global_config`` strips every legacy
+            # schedule key, which is exactly what we are here to harvest.
+            psycopg, dict_row = _require_psycopg()
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    f"""
+                    SELECT config FROM {self._q(self._schema)}.global_config
+                    WHERE registry_id = %s
+                    """,
+                    (self._registry(),),
+                )
+                row = cur.fetchone()
+            cfg = dict((row or {}).get("config") or {})
+            legacy = dict(cfg.get("cohort_schedules") or {})
+            histories = dict(cfg.get("cohort_schedule_history") or {})
+            if not legacy and not histories:
+                self._cohort_schedules_imported = True
+                return
+            if not self._ensure_schedule_task_columns():
+                return
+
+            with self._connect() as conn, conn.cursor() as cur:
+                for legacy_key, entry in legacy.items():
+                    domain_name = entry.get("domain_name") or ""
+                    rule_id = entry.get("rule_id") or ""
+                    if not domain_name or not rule_id:
+                        # Fall back to the "<domain>::<rule>" key shape.
+                        parts = str(legacy_key).split("::", 1)
+                        domain_name = domain_name or parts[0]
+                        rule_id = rule_id or (parts[1] if len(parts) > 1 else "")
+                    if not domain_name or not rule_id:
+                        continue
+                    cur.execute(
+                        f"""
+                        INSERT INTO {self._q(self._schema)}.schedules
+                            (registry_id, task_type, domain_name, target_key,
+                             interval_minutes, enabled, version, config,
+                             last_run, last_status, last_message, last_count)
+                        VALUES (%s, 'cohort', %s, %s, %s, %s, %s, %s::jsonb,
+                                %s, %s, %s, %s)
+                        ON CONFLICT ON CONSTRAINT schedules_type_domain_target_key
+                        DO NOTHING
+                        """,
+                        (
+                            self._registry(),
+                            domain_name,
+                            rule_id,
+                            int(entry.get("interval_minutes", 60)),
+                            bool(entry.get("enabled", True)),
+                            entry.get("version", "latest") or "latest",
+                            json.dumps(
+                                {
+                                    "output_graph": bool(
+                                        entry.get("output_graph", True)
+                                    ),
+                                    "output_uc": bool(entry.get("output_uc", True)),
+                                }
+                            ),
+                            entry.get("last_run"),
+                            entry.get("last_status"),
+                            entry.get("last_message"),
+                            int(entry.get("last_count") or 0),
+                        ),
+                    )
+
+                for legacy_key, entries in histories.items():
+                    parts = str(legacy_key).split("::", 1)
+                    domain_name = parts[0]
+                    rule_id = parts[1] if len(parts) > 1 else ""
+                    if not domain_name or not rule_id:
+                        continue
+                    for run in list(entries or []):
+                        cur.execute(
+                            f"""
+                            INSERT INTO {self._q(self._schema)}.schedule_runs
+                                (registry_id, task_type, domain_name,
+                                 target_key, run_ts, status, message,
+                                 duration_s, triple_count, detail)
+                            VALUES (%s, 'cohort', %s, %s,
+                                    COALESCE(%s::timestamptz, now()),
+                                    %s, %s, %s, %s, %s::jsonb)
+                            """,
+                            (
+                                self._registry(),
+                                domain_name,
+                                rule_id,
+                                run.get("timestamp"),
+                                run.get("status", ""),
+                                run.get("message", ""),
+                                float(run.get("duration_s", 0) or 0),
+                                int(run.get("triple_count", 0) or 0),
+                                json.dumps(
+                                    {
+                                        "materialized_triples": int(
+                                            run.get("materialized_triples", 0) or 0
+                                        ),
+                                        "uc_rows_written": int(
+                                            run.get("uc_rows_written", 0) or 0
+                                        ),
+                                    }
+                                ),
+                            ),
+                        )
+
+            self._scrub_global_config_legacy_keys()
+            self._cohort_schedules_imported = True
+            logger.info(
+                "Imported %d legacy cohort schedule(s) from global_config "
+                "into the schedules table",
+                len(legacy),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not import legacy cohort schedules: %s", exc)
 
     # ------------------------------------------------------------------
     # Lifecycle status column (self-heal)
@@ -1676,6 +1657,124 @@ class LakebaseRegistryStore(RegistryStore):
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 "could not add domains.review_quorum column — "
+                "run `make bootstrap-lakebase` (or scripts/bootstrap-lakebase-perms.sh) "
+                "as the schema owner to apply the migration: %s",
+                exc,
+            )
+            return False
+
+    def _ensure_schedule_task_columns(self) -> bool:
+        """Lazily widen ``schedules`` / ``schedule_runs`` to generic tasks.
+
+        The tables were originally build-only: one row per domain, keyed
+        by ``UNIQUE (registry_id, domain_name)``. The scheduler now runs
+        several task types per domain, so this adds ``task_type`` /
+        ``target_key`` / ``config`` / ``last_count`` / ``detail`` and
+        swaps the unique constraint for one that includes the type and
+        the target.
+
+        Existing rows default to ``task_type = 'build'``, so builds keep
+        working untouched; their legacy ``drop_existing`` column is
+        folded into ``config`` in the same pass. Same idempotent,
+        ownership-aware pattern as
+        :meth:`_ensure_domain_versions_status_column` — the constraint
+        swap needs table ownership, so on failure this logs the
+        bootstrap hint and returns ``False``.
+        """
+        if self._schedule_columns_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'schedules' "
+                    "AND column_name = 'task_type'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._schedule_columns_ready = True
+                    return True
+
+                cur.execute(
+                    f"""
+                    ALTER TABLE {sch}.schedules
+                        ADD COLUMN IF NOT EXISTS task_type text NOT NULL
+                            DEFAULT 'build',
+                        ADD COLUMN IF NOT EXISTS target_key text NOT NULL
+                            DEFAULT '',
+                        ADD COLUMN IF NOT EXISTS config jsonb NOT NULL
+                            DEFAULT '{{}}'::jsonb,
+                        ADD COLUMN IF NOT EXISTS last_count bigint NOT NULL
+                            DEFAULT 0
+                    """
+                )
+                cur.execute(
+                    f"""
+                    ALTER TABLE {sch}.schedule_runs
+                        ADD COLUMN IF NOT EXISTS task_type text NOT NULL
+                            DEFAULT 'build',
+                        ADD COLUMN IF NOT EXISTS target_key text NOT NULL
+                            DEFAULT '',
+                        ADD COLUMN IF NOT EXISTS detail jsonb NOT NULL
+                            DEFAULT '{{}}'::jsonb
+                    """
+                )
+                # Fold the legacy build-only column into ``config`` so the
+                # executor reads every option from one place.
+                cur.execute(
+                    f"""
+                    UPDATE {sch}.schedules
+                    SET config = jsonb_build_object(
+                            'drop_existing', COALESCE(drop_existing, true))
+                    WHERE config = '{{}}'::jsonb AND task_type = 'build'
+                    """
+                )
+                # The old constraint allows a single row per domain, which
+                # blocks a second task type. Drop it by name (Postgres
+                # auto-names it) and by lookup, then add the wider one.
+                cur.execute(
+                    """
+                    SELECT con.conname
+                    FROM pg_constraint con
+                    JOIN pg_class rel ON rel.oid = con.conrelid
+                    JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+                    WHERE ns.nspname = %s AND rel.relname = 'schedules'
+                      AND con.contype = 'u'
+                      AND pg_get_constraintdef(con.oid)
+                          = 'UNIQUE (registry_id, domain_name)'
+                    """,
+                    (self._schema,),
+                )
+                for row in cur.fetchall() or []:
+                    cur.execute(
+                        f"ALTER TABLE {sch}.schedules "
+                        f"DROP CONSTRAINT IF EXISTS {self._q(row[0])}"
+                    )
+                cur.execute(
+                    f"""
+                    ALTER TABLE {sch}.schedules
+                        ADD CONSTRAINT schedules_type_domain_target_key
+                        UNIQUE (registry_id, task_type, domain_name, target_key)
+                    """
+                )
+                cur.execute(
+                    f"""
+                    CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
+                        ON {sch}.schedule_runs(registry_id, task_type,
+                                               domain_name, target_key,
+                                               run_ts DESC)
+                    """
+                )
+            self._schedule_columns_ready = True
+            logger.info(
+                "Migrated schedules/schedule_runs to the generic "
+                "scheduled-task shape (task_type/target_key/config)"
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not migrate the schedules tables to generic tasks — "
                 "run `make bootstrap-lakebase` (or scripts/bootstrap-lakebase-perms.sh) "
                 "as the schema owner to apply the migration: %s",
                 exc,
@@ -1914,6 +2013,65 @@ class LakebaseRegistryStore(RegistryStore):
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_build_runs(%s) failed: %s", folder, exc)
             return []
+
+    @staticmethod
+    def _scalar_total(row: Any) -> int:
+        """Read a ``COUNT(*) AS total`` result whatever the row factory is."""
+        if row is None:
+            return 0
+        if isinstance(row, dict):
+            return int(row.get("total") or 0)
+        return int(row[0] or 0)
+
+    def load_all_build_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[BuildRunEntry], int]:
+        if not self._ensure_build_runs_table():
+            return [], 0
+        try:
+            _psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            where = "WHERE d.registry_id = %s"
+            params: List[Any] = [self._registry()]
+            if folder:
+                where += " AND d.folder = %s"
+                params.append(folder)
+            source = f"""
+                FROM {sch}.build_runs b
+                JOIN {sch}.domains d ON d.id = b.domain_id
+                {where}
+            """
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(f"SELECT COUNT(*) AS total {source}", tuple(params))
+                total = self._scalar_total(cur.fetchone())
+                cur.execute(
+                    f"""
+                    SELECT b.id, d.folder AS domain, b.version, b.build_kind,
+                           b.status, b.message, b.error, b.started_at,
+                           b.finished_at, b.duration_s, b.triple_count,
+                           b.entity_count, b.relationship_count, b.sql_chars,
+                           b.graph_engine, b.sync_mode, b.view_table,
+                           b.graph_name, b.task_id, b.phase_times, b.stats
+                    {source}
+                    ORDER BY b.started_at DESC, b.id DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    tuple(params) + (int(limit), int(offset)),
+                )
+                rows = cur.fetchall()
+            entries = []
+            for r in rows:
+                entry = self._build_run_row_to_entry(r)
+                entry["domain"] = r.get("domain") or ""
+                entries.append(entry)
+            return entries, total
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("load_all_build_runs(folder=%s) failed: %s", folder, exc)
+            return [], 0
 
     # ------------------------------------------------------------------
     # Graph analytics cache (one row per (domain_id, version), UPSERT)
@@ -2227,13 +2385,19 @@ class LakebaseRegistryStore(RegistryStore):
         }
 
     def load_graph_analytics_runs(
-        self, folder: str, version: str, *, limit: int = 100
+        self, folder: str, version: Optional[str] = None, *, limit: int = 100
     ) -> List[GraphAnalyticsRun]:
         if not self._ensure_graph_analytics_runs_table():
             return []
         try:
             _psycopg, dict_row = _require_psycopg()
             sch = self._q(self._schema)
+            where = "WHERE d.registry_id = %s AND d.folder = %s"
+            params: List[Any] = [self._registry(), folder]
+            if version is not None:
+                where += " AND r.version = %s"
+                params.append(version)
+            params.append(int(limit))
             with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     f"""
@@ -2243,17 +2407,67 @@ class LakebaseRegistryStore(RegistryStore):
                            r.computed_at
                     FROM {sch}.graph_analytics_runs r
                     JOIN {sch}.domains d ON d.id = r.domain_id
-                    WHERE d.registry_id = %s AND d.folder = %s AND r.version = %s
+                    {where}
                     ORDER BY r.computed_at DESC, r.id DESC
                     LIMIT %s
                     """,
-                    (self._registry(), folder, version, int(limit)),
+                    tuple(params),
                 )
                 rows = cur.fetchall()
             return [self._graph_analytics_run_row_to_entry(r) for r in rows]
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_graph_analytics_runs(%s) failed: %s", folder, exc)
             return []
+
+    def load_all_graph_analytics_runs(
+        self,
+        *,
+        folder: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> Tuple[List[GraphAnalyticsRun], int]:
+        if not self._ensure_graph_analytics_runs_table():
+            return [], 0
+        try:
+            _psycopg, dict_row = _require_psycopg()
+            sch = self._q(self._schema)
+            where = "WHERE d.registry_id = %s"
+            params: List[Any] = [self._registry()]
+            if folder:
+                where += " AND d.folder = %s"
+                params.append(folder)
+            source = f"""
+                FROM {sch}.graph_analytics_runs r
+                JOIN {sch}.domains d ON d.id = r.domain_id
+                {where}
+            """
+            with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(f"SELECT COUNT(*) AS total {source}", tuple(params))
+                total = self._scalar_total(cur.fetchone())
+                cur.execute(
+                    f"""
+                    SELECT r.id, d.folder AS domain, r.version, r.status,
+                           r.class_filter, r.node_count, r.edge_count,
+                           r.connected_components, r.avg_degree, r.density,
+                           r.duration_ms, r.task_id, r.error, r.computed_at
+                    {source}
+                    ORDER BY r.computed_at DESC, r.id DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    tuple(params) + (int(limit), int(offset)),
+                )
+                rows = cur.fetchall()
+            entries = []
+            for r in rows:
+                entry = self._graph_analytics_run_row_to_entry(r)
+                entry["domain"] = r.get("domain") or ""
+                entries.append(entry)
+            return entries, total
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(
+                "load_all_graph_analytics_runs(folder=%s) failed: %s", folder, exc
+            )
+            return [], 0
 
     @staticmethod
     def _empty_analytics() -> Dict[str, Any]:
@@ -3514,11 +3728,12 @@ class LakebaseRegistryStore(RegistryStore):
             if not row:
                 return {}
             data = dict(row["config"] or {})
-            # ``schedules`` lives in its own table on Lakebase; ``schedule_history``
-            # in ``schedule_runs``. Strip both so the JSONB blob is the single
-            # source of truth only for instance-wide settings.
-            data.pop(_SCHEDULES_KEY, None)
-            data.pop("schedule_history", None)
+            # Schedules live in their own table on Lakebase (``schedules``),
+            # their history in ``schedule_runs``. Strip every legacy schedule
+            # key so the JSONB blob is the single source of truth only for
+            # instance-wide settings.
+            for legacy in _LEGACY_SCHEDULE_KEYS:
+                data.pop(legacy, None)
             return data
         except Exception as exc:  # noqa: BLE001
             logger.debug("load_global_config failed: %s", exc)
@@ -3531,10 +3746,10 @@ class LakebaseRegistryStore(RegistryStore):
             sanitized_updates = {
                 k: v
                 for k, v in (updates or {}).items()
-                if k not in (_SCHEDULES_KEY, "schedule_history")
+                if k not in _LEGACY_SCHEDULE_KEYS
             }
-            data.pop(_SCHEDULES_KEY, None)
-            data.pop("schedule_history", None)
+            for legacy in _LEGACY_SCHEDULE_KEYS:
+                data.pop(legacy, None)
             data.update(sanitized_updates)
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
@@ -3644,7 +3859,8 @@ class LakebaseRegistryStore(RegistryStore):
         is discarded so that broken sessions are never reused.
 
         The pool itself owns cold-start retry and OAuth token
-        rotation — see :class:`_LakebasePool._open_one`.
+        rotation — see
+        :class:`back.core.databricks.lakebase.LakebaseConnectionPool`.
         """
         return _get_pool(
             self._auth, self._schema, self._database
@@ -3769,35 +3985,45 @@ class LakebaseRegistryStore(RegistryStore):
             cur.execute(ddl)
 
     def _scrub_global_config_legacy_keys(self) -> None:
-        """Remove ``schedules`` / ``schedule_history`` from the JSONB blob.
+        """Remove the schedule keys from the global-config JSONB blob.
 
-        Both keys belong to dedicated tables on Lakebase (``schedules`` and
-        ``schedule_runs``). They used to leak into ``global_config.config``
-        through the Volume → Lakebase migration path, which fed the entire
-        Volume ``.global_config.json`` blob — schedules included — into
-        ``save_global_config``. The duplicated state was harmless at read
-        time (callers go through ``load_schedules``) but caused the JSONB
-        blob to grow unbounded and confused operators inspecting the row
-        directly. This one-shot ``UPDATE`` runs at every ``initialize()``
-        so existing deployments self-heal on next app start. The ``WHERE``
-        clause keeps the scrub a no-op once the blob is clean.
+        All four (``schedules``, ``schedule_history``, ``cohort_schedules``,
+        ``cohort_schedule_history``) belong to dedicated tables on Lakebase
+        (``schedules`` and ``schedule_runs``). The build keys used to leak
+        into ``global_config.config`` through the Volume → Lakebase
+        migration path, which fed the entire Volume ``.global_config.json``
+        blob — schedules included — into ``save_global_config``; the cohort
+        keys lived there by design until cohort schedules moved into the
+        generic ``schedules`` table. The duplicated state was harmless at
+        read time (callers go through ``load_schedules``) but caused the
+        JSONB blob to grow unbounded and confused operators inspecting the
+        row directly. This one-shot ``UPDATE`` runs at every
+        ``initialize()`` so existing deployments self-heal on next app
+        start. The ``WHERE`` clause keeps the scrub a no-op once the blob
+        is clean.
         """
         try:
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     f"""
                     UPDATE {self._q(self._schema)}.global_config
-                    SET config = (config - 'schedules') - 'schedule_history',
+                    SET config = (((config - 'schedules')
+                                   - 'schedule_history')
+                                   - 'cohort_schedules')
+                                   - 'cohort_schedule_history',
                         updated_at = now()
-                    WHERE config ? 'schedules' OR config ? 'schedule_history'
+                    WHERE config ? 'schedules'
+                       OR config ? 'schedule_history'
+                       OR config ? 'cohort_schedules'
+                       OR config ? 'cohort_schedule_history'
                     """
                 )
                 scrubbed = cur.rowcount or 0
             if scrubbed:
                 logger.info(
-                    "Scrubbed legacy schedules/schedule_history keys from "
-                    "global_config (%d row(s)) — Lakebase keeps schedules "
-                    "in the dedicated 'schedules' table.",
+                    "Scrubbed legacy schedule keys from global_config "
+                    "(%d row(s)) — Lakebase keeps schedules in the "
+                    "dedicated 'schedules' table.",
                     scrubbed,
                 )
         except Exception as exc:  # noqa: BLE001

@@ -7,8 +7,8 @@ future Cypher / Gremlin engine would supply its own translator via
 :meth:`GraphDBBackend.get_query_translator`.
 
 Violation detection for SWRL rules is handled separately by the
-Data Quality runner (see ``run_sql_checks`` / ``run_graph_checks``
-in ``back.objects.digitaltwin``).
+Data Quality runner (see ``run_sql_checks`` in
+``back.objects.digitaltwin``).
 """
 
 import time
@@ -42,7 +42,7 @@ class SWRLEngine:
         Args:
             rules: List of rule dicts with ``name``, ``antecedent``,
                    ``consequent``, and optionally ``description``.
-            store: A :class:`TripleStoreBackend` instance.
+            store: A :class:`GraphDBBackend` instance.
             table_name: The logical triple-store table/graph name.
             materialize: If True, also insert inferred triples into the store.
             inference_limit: Max inferred triples per rule (None = unlimited).

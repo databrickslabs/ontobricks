@@ -34,7 +34,7 @@ async function loadDomainGateway() {
         if (!domains.length) {
             container.innerHTML =
                 '<div class="ob-domain-grid-empty text-muted">' +
-                '<div><i class="bi bi-folder2-open fs-3 d-block mb-2"></i>No domains yet.</div>' +
+                '<div><i class="bi bi-box fs-3 d-block mb-2"></i>No domains yet.</div>' +
                 '<button type="button" class="ob-domain-empty-cta" data-action="newDomain">' +
                 '<i class="bi bi-file-earmark-plus"></i> Create your first domain</button>' +
                 '</div>';

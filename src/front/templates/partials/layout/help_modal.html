@@ -173,7 +173,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#hw1">
-                                            <i class="bi bi-archive me-2"></i><strong>1. Registry</strong> &mdash; manage domains
+                                            <i class="bi bi-boxes me-2"></i><strong>1. Registry</strong> &mdash; manage domains
                                         </button>
                                     </h2>
                                     <div id="hw1" class="accordion-collapse collapse show" data-bs-parent="#helpWorkflowAccordion">
@@ -183,11 +183,10 @@
                                                 <li><strong>Browse</strong> &mdash; list and open existing domains</li>
                                                 <li><strong>New Domain</strong> (navbar) &mdash; create a fresh domain</li>
                                                 <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from UC</li>
+                                                <li><strong>Export / Import</strong> &mdash; move domains between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/import-export" data-help-jump="docs" data-help-doc="import-export">Import / Export</a> guide)</li>
                                                 <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one graph viewer to another</li>
-                                                <li><strong>Schedule</strong> &mdash; automation / recurring sync jobs</li>
-                                                <li><strong>API</strong> &mdash; REST API reference for developers</li>
-                                                <li><strong>Registry Location</strong> &mdash; UC Volume where domains are persisted</li>
                                             </ul>
+                                            <p class="text-muted small mb-0">Automation (<em>Settings &rarr; Automation &rarr; Scheduler</em>), the REST <em>API</em> reference (<em>Settings &rarr; Developer</em>) and the <em>Registry Location</em> volume (<em>Settings &rarr; Registry</em>) are configured from Settings, not the Registry modal.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -196,7 +195,7 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw2">
-                                            <i class="bi bi-folder2 me-2"></i><strong>2. Domain</strong> &mdash; configure metadata, sources, documents
+                                            <i class="bi bi-box me-2"></i><strong>2. Domain</strong> &mdash; configure metadata, sources, documents
                                         </button>
                                     </h2>
                                     <div id="hw2" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
@@ -227,15 +226,20 @@
                                                 <li><strong>Model (Designer)</strong> &mdash; drag &amp; drop entities, relationships, inheritance arrows on the OntoViz canvas. Auto-save. Click the smiley face (<i class="bi bi-emoji-smile"></i>) to auto-assign emoji icons via LLM.</li>
                                                 <li><strong>Generate (Wizard)</strong> &mdash; AI generates the full ontology from your UC metadata. Pick a Quick Template or write custom guidelines.</li>
                                                 <li><strong>Import</strong> &mdash; load OWL/RDFS files, or pull industry standards: <em>FIBO</em>, <em>CDISC</em>, <em>IOF</em>.</li>
-                                                <li><strong>Form-based</strong> &mdash; use the <strong>Entities</strong> and <strong>Relationships</strong> sidebar sections to add classes and object properties manually.</li>
+                                                <li><strong>Form-based</strong> &mdash; use the <strong>Entities</strong> and <strong>Relationships</strong> sidebar sections to add entities and object properties manually.</li>
                                             </ol>
+                                            <p>Additional sidebar sections:</p>
+                                            <ul>
+                                                <li><strong>Groups</strong> &mdash; organize entities logically for readability</li>
+                                                <li><strong>Business Views</strong> &mdash; curated subsets for end-users</li>
+                                            </ul>
                                             <p><strong>Advanced features</strong> (Advanced section):</p>
                                             <ul>
                                                 <li><strong>Data Quality (SHACL)</strong> &mdash; define shapes for completeness, cardinality, pattern, consistency...</li>
                                                 <li><strong>Business Rules (SWRL)</strong> &mdash; author inference rules using the graphical D3 editor</li>
+                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;); run &amp; preview them from <strong>Knowledge Graph &rarr; Cohorts</strong>. See the <a href="#help-docs/cohort-discovery" data-help-jump="docs" data-help-doc="cohort-discovery">Cohort Discovery</a> guide.</li>
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
-                                                <li><strong>Groups</strong> &mdash; organize entities logically for readability</li>
-                                                <li><strong>Business Views</strong> &mdash; curated subsets for end-users</li>
+                                                <li><strong>Pitfalls</strong> &mdash; detect structural, logical and semantic modeling issues, with a precision score</li>
                                             </ul>
                                             <p>Preview the generated OWL/Turtle under <strong>W3C Standards &rarr; OWL</strong>.</p>
                                         </div>
@@ -270,17 +274,20 @@
                                 <div class="accordion-item">
                                     <h2 class="accordion-header">
                                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw5">
-                                            <i class="bi bi-box-fill me-2"></i><strong>5. Knowledge Graph</strong> &mdash; materialize &amp; explore
+                                            <i class="bi bi-radar me-2"></i><strong>5. Knowledge Graph</strong> &mdash; materialize &amp; explore
                                         </button>
                                     </h2>
                                     <div id="hw5" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
                                         <div class="accordion-body">
                                             <ul>
-                                                <li><strong>Overview</strong> &mdash; insight dashboard: entity counts, relationship counts, last sync timestamp, quality status</li>
-                                                <li><strong>Graph Viewer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
-                                                <li><strong>GraphQL</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
+                                                <li><strong>Build</strong> / <strong>Runs</strong> &mdash; trigger a synchronization and inspect its run history</li>
+                                                <li><strong>Overview</strong> / <strong>Analytics</strong> &mdash; insight dashboards: entity &amp; relationship counts, last sync timestamp, quality status, usage trends</li>
+                                                <li><strong>Explorer</strong> &mdash; interactive sigma.js WebGL graph. Search, filter, detect clusters (Louvain / Label Propagation / Greedy Modularity), color-by-cluster, collapse into super-nodes</li>
+                                                <li><strong>Query</strong> &mdash; auto-generated GraphQL playground for programmatic access</li>
+                                                <li><strong>Chat</strong> &mdash; ask natural-language questions over the materialized graph</li>
                                                 <li><strong>Data Quality</strong> &mdash; run SHACL / constraint validation against the triple store</li>
-                                                <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning on Delta / Lakebase (SQL)</li>
+                                                <li><strong>Inference</strong> &mdash; OWL 2 RL &amp; SWRL reasoning (SQL on Delta / Lakebase; Cypher on Neo4j)</li>
+                                                <li><strong>Cohorts</strong> &mdash; run &amp; preview the constraint-based grouping rules designed in <strong>Ontology &rarr; Advanced &rarr; Cohorts</strong></li>
                                             </ul>
                                             <p>A <em>Readiness Status</em> indicator tells you when ontology &amp; mapping are both ready to sync.</p>
                                         </div>
@@ -303,7 +310,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="help-feature">
-                                        <div class="help-feature-icon"><i class="bi bi-layers-half"></i></div>
+                                        <div class="help-feature-icon"><i class="bi bi-share"></i></div>
                                         <h5>Interactive Graph Viewer</h5>
                                         <p>Two-phase search, configurable depth, cross-domain bridges, cluster detection (client-side Graphology / server-side NetworkX), color-by-cluster, super-nodes.</p>
                                     </div>
@@ -326,7 +333,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-lightning"></i></div>
                                         <h5>SWRL Reasoning</h5>
-                                        <p>Graphical D3 rule editor. Rules compile to SQL (Delta or Lakebase). Per-rule progress tracking during inference.</p>
+                                        <p>Graphical D3 rule editor. Rules compile to SQL (Delta / Lakebase) or run as Cypher on Neo4j. Per-rule progress tracking during inference.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -334,6 +341,20 @@
                                         <div class="help-feature-icon"><i class="bi bi-signpost-split"></i></div>
                                         <h5>Cross-domain Bridges</h5>
                                         <p>Link entities from different domains. The navbar bridges navigation automatically switches domains and focuses the target entity.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-chat-dots"></i></div>
+                                        <h5>Graph Chat</h5>
+                                        <p>Ask natural-language questions about your materialized graph from <strong>Knowledge Graph &rarr; Chat</strong> and get answers grounded in real entities and relationships.</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="help-feature">
+                                        <div class="help-feature-icon"><i class="bi bi-people-fill"></i></div>
+                                        <h5>Cohort Discovery</h5>
+                                        <p>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo;. Design in <strong>Ontology &rarr; Advanced &rarr; Cohorts</strong>, run &amp; preview in <strong>Knowledge Graph &rarr; Cohorts</strong>.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -347,7 +368,7 @@
                                     <div class="help-feature">
                                         <div class="help-feature-icon"><i class="bi bi-cloud-arrow-up"></i></div>
                                         <h5>Unity Catalog first</h5>
-                                        <p>All domains are stored in UC volumes; triples land in Delta tables and the configured graph backend (Lakebase). Incremental sync by default.</p>
+                                        <p>All domains are stored in UC volumes; triples land in a Delta view plus the domain's Graph DB engine (<strong>Lakebase</strong>, <strong>Lakehouse</strong>, or <strong>Neo4j</strong>). Incremental sync by default.</p>
                                     </div>
                                 </div>
                             </div>
@@ -368,7 +389,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>
-                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">Persistent storage uses <strong>Delta</strong> (native Unity Catalog, best for large volumes and SQL integration). The configured <strong>Graph DB</strong> backend (currently <strong>Lakebase</strong> Postgres) is used for graph queries and reasoning. Pick the engine in <em>Settings</em>.</div></div>
+                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each domain also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Domain &rarr; Information &rarr; Knowledge Graph</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/neo4j-requirements" data-help-jump="docs" data-help-doc="neo4j-requirements">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
@@ -472,8 +493,10 @@
                                 <dt>SWRL</dt><dd>Semantic Web Rule Language &mdash; &ldquo;IF ... THEN ...&rdquo; inference rules.</dd>
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
-                                <dt>Triple Store</dt><dd>Backend where triples are physically stored (Delta tables in Unity Catalog).</dd>
-                                <dt>Graph DB</dt><dd>Engine that exposes the triples for graph queries and reasoning (currently Lakebase Postgres).</dd>
+                                <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Ontology &rarr; Advanced &rarr; Cohorts</em>, run under <em>Knowledge Graph &rarr; Cohorts</em>.</dd>
+                                <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the domain Graph DB.</dd>
+                                <dt>Graph DB</dt><dd>Per-domain engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
+                                <dt>Neo4j</dt><dd>Optional Graph DB backend that stores the Knowledge Graph as a typed property graph (nodes, labels, relationships) instead of flat triples. Requires Neo4j 5.x (Aura recommended).</dd>
                                 <dt>Unity Catalog (UC)</dt><dd>Databricks unified governance for catalogs, schemas, tables and volumes.</dd>
                                 <dt>MCP</dt><dd>Model Context Protocol &mdash; exposes the graph viewer to LLM agents.</dd>
                             </dl>
@@ -495,7 +518,13 @@
                                             <li><a href="#help-docs/architecture" data-help-jump="docs" data-help-doc="architecture"><i class="bi bi-diagram-3 me-1"></i>Architecture</a></li>
                                             <li><a href="#help-docs/deployment" data-help-jump="docs" data-help-doc="deployment"><i class="bi bi-cloud-arrow-up me-1"></i>Deployment</a></li>
                                             <li><a href="#help-docs/api" data-help-jump="docs" data-help-doc="api"><i class="bi bi-braces me-1"></i>API Reference</a></li>
+                                            <li><a href="#help-docs/graphdb-integration" data-help-jump="docs" data-help-doc="graphdb-integration"><i class="bi bi-diagram-3 me-1"></i>GraphDB Integration</a></li>
+                                            <li><a href="#help-docs/neo4j-requirements" data-help-jump="docs" data-help-doc="neo4j-requirements"><i class="bi bi-bezier2 me-1"></i>Neo4j Backend</a></li>
+                                            <li><a href="#help-docs/lakebase-graphdb" data-help-jump="docs" data-help-doc="lakebase-graphdb"><i class="bi bi-database me-1"></i>Lakebase GraphDB</a></li>
+                                            <li><a href="#help-docs/cohort-discovery" data-help-jump="docs" data-help-doc="cohort-discovery"><i class="bi bi-people-fill me-1"></i>Cohort Discovery</a></li>
+                                            <li><a href="#help-docs/import-export" data-help-jump="docs" data-help-doc="import-export"><i class="bi bi-box-arrow-in-down me-1"></i>Import / Export</a></li>
                                             <li><a href="#help-docs/data-access" data-help-jump="docs" data-help-doc="data-access"><i class="bi bi-hdd-network me-1"></i>Data Access</a></li>
+                                            <li><a href="#help-docs/code-organization" data-help-jump="docs" data-help-doc="code-organization"><i class="bi bi-diagram-3 me-1"></i>Code Map</a></li>
                                             <li><a href="#help-docs" data-help-jump="docs"><i class="bi bi-collection me-1"></i>Browse all docs</a></li>
                                         </ul>
                                         <hr class="my-2">

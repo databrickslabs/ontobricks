@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.6.2</h1>
+<h1 align="center">OntoBricks 0.7.0</h1>
 
 <p align="center">
   <strong>Knowledge Graph Builder for Databricks</strong>
@@ -12,6 +12,8 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/fastapi-0.109+-green.svg" alt="FastAPI">
 </p>
+
+**Website:** [https://databrickslabs.github.io/ontobricks/](https://databrickslabs.github.io/ontobricks/)
 
 ## Project Description
 
@@ -91,9 +93,9 @@ make deploy
 
 `scripts/deploy.sh` generates `app.yaml` from `app.yaml.template` +
 `scripts/deploy.config.sh`, validates and deploys the DAB bundle on
-target `dev-lakebase`, runs `scripts/bootstrap-app-permissions.sh`
+target `dev-lakebase`, runs `scripts/bootstrap/app-permissions.sh`
 (app SP `CAN_MANAGE` on itself), then runs
-`scripts/bootstrap-lakebase-perms.sh` on the registry / graph / sync
+`scripts/bootstrap/lakebase-perms.sh` on the registry / graph / sync
 schemas. All steps are idempotent.
 
 After the first deploy, bind the **sql-warehouse**, **volume**, and
@@ -108,9 +110,9 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 > **"Create graph DB from scratch"** button that provisions the Lakebase
 > instance + database + schema and applies all grants (app + MCP service
 > principals) as an async job with live progress. It automates
-> `scripts/setup-lakebase.sh` + `scripts/bootstrap-lakebase-perms.sh` (which
+> `scripts/bootstrap/setup-lakebase.sh` + `scripts/bootstrap/lakebase-perms.sh` (which
 > remain the fallback when the app SP lacks instance-creation rights). See
-> `docs/lakebase-graphdb.md` §3.1b.
+> `documentation/lakebase-graphdb.md` §3.1b.
 
 > **Lakebase deploy targets.** Pick a Databricks Lakebase Autoscaling
 > project + branch and a Postgres database, then set the
@@ -126,18 +128,18 @@ afterwards so the freshly created schema picks up `USAGE/DML`.
 
 > **Upgrading from a pre-v0.4.0 deployment.** Pre-v0.4.0 stored the
 > entire registry as JSON on the Unity Catalog Volume. Run
-> `scripts/migrate-registry-to-lakebase.sh` once before upgrading to
+> `scripts/migrations/migrate-registry-to-lakebase.sh` once before upgrading to
 > v0.4.0+ to copy every JSON-shaped artefact (domains, versions,
 > permissions, schedules, global config) into Lakebase. Binary
 > artefacts on the Volume are left untouched.
 
-> **First deploy only:** `make deploy` runs `scripts/bootstrap-app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself. Without that grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
+> **First deploy only:** `make deploy` runs `scripts/bootstrap/app-permissions.sh` automatically, which grants each app's service principal `CAN_MANAGE` on itself and `CAN_MANAGE_RUN` on the graph-analytics job. Without the app grant the middleware cannot read the app's own ACL and every first-time visitor — including the deploying `CAN_MANAGE` user — lands on the access-denied page. Without the job grant, KG analysis cannot list or trigger the serverless job. If you deploy via `databricks bundle deploy` directly, run `make bootstrap-perms` once afterwards (it is idempotent).
 
-See [Deployment Guide](docs/deployment.md) for the full checklist including resource configuration and permissions.
+See [Deployment Guide](documentation/deployment.md) for the full checklist including resource configuration and permissions.
 
 ## Testing
 
-- **Routine / CI:** `uv run pytest -q -m "not scenario"` — the fast in-process suite (the opt-in live scenarios are excluded).
+- **Routine / CI:** `uv run --frozen pytest -q -m "not scenario"` — the fast in-process suite (the opt-in live scenarios are excluded). Keep `--frozen`: a bare `uv run` re-resolves dependencies against the internal pypi proxy and rewrites `uv.lock`, which breaks the next deploy.
 - **Live scenario campaign:** `make scenario-campaign` — an ordered, billable end-to-end journey (import → generate → collaborate → rules/analysis → validate) against a **running** app, writing reports to `artifacts/scenarios/`. See [`tests/e2e/scenarios/README.md`](tests/e2e/scenarios/README.md) for env vars, chaining, isolation, and how to add a scenario.
 
 ## Releasing the Project
@@ -172,32 +174,36 @@ git push origin main --tags
 - **Single-editor concurrency** — a DRAFT version is editable by **one user at a time**. The first opener edits; anyone else opening the same version is automatically **read-only** with a banner naming the editor. The lock uses a **renew-only lease**: the editor's browser keeps it alive in the background while the domain is open (a hover **countdown tooltip** on the navbar domain badge shows the remaining time), so an active session never expires, but a lock left behind by a crashed/abandoned tab **auto-releases** once its lease lapses (`ONTOBRICKS_EDIT_LOCK_TTL_S`, default 10 min; `0` disables → hold-until-close). It is also released immediately when the editor clicks **Close** (which prompts *Save before closing?*, releases the lock and returns to Home) or an **app-admin takes over**. **Opening a different domain closes the current one first** — the previous domain's lock is released server-side *before* the new one loads, so you never hold two locks; a same-domain **version** switch releases the old version's lock after the new one loads. The **Save** and **Close** buttons sit together in the domain sub-navigation. Admins also get a registry-wide **Settings → Locks** panel listing every active lock (domain, version, status, holder, acquired time, staleness) with a **force-unlock** action.
 - **Domain Cockpit (Validation)** — **Published Version** shows which registry version is exposed via **API / MCP**; it can differ from the version you have loaded in the editor.
 - **Registry → Browse** — drives the **lifecycle status transitions** for a domain's versions; **Domain → Versions** shows that status as a read-only badge.
-- **Validation & Review workflow** — a business-user-oriented review layer on top of the lifecycle. **Registry → My Tasks** is a cross-domain worklist of versions waiting on you (submit, sign off, or publish). **Domain → Validation** shows a soft consistency-check summary, a reviewer sign-off panel and the full audit trail. Submit-for-review and Publish stay builder/admin (Publish unlocks for a builder once the **sign-off quorum** is met — a **per-domain** setting, default 1, editable on **Domain → Information → Global** — while an **admin can publish at any time, overriding the quorum**, with the override flagged in the audit trail); **sign-off** (approve / request-changes) is open to any domain member, and request-changes reopens the version to DRAFT. Every decision (with `from → to` status snapshots) is persisted append-only in the `domain_review_events` registry table.
+- **Validation & Review workflow** — a business-user-oriented review layer on top of the lifecycle. **Home → My Tasks** is a cross-domain worklist of versions waiting on you (submit, sign off, or publish). **Domain → Validation** shows a soft consistency-check summary, a reviewer sign-off panel and the full audit trail. Submit-for-review and Publish stay builder/admin (Publish unlocks for a builder once the **sign-off quorum** is met — a **per-domain** setting, default 1, editable on **Domain → Information → Global** — while an **admin can publish at any time, overriding the quorum**, with the override flagged in the audit trail); **sign-off** (approve / request-changes) is open to any domain member, and request-changes reopens the version to DRAFT. Every decision (with `from → to` status snapshots) is persisted append-only in the `domain_review_events` registry table.
 - **New domain** — after **New Domain**, a full-page loading overlay runs until Domain Information finishes its first load.
 - **Domain Information** — triple-store / snapshot / local graph paths update when you **commit** the domain name (blur or change) or change version (aligned with naming rules before save).
 - **Duplicate names** — **Save to Unity Catalog** is blocked if the sanitized domain name already exists in the registry (inline check + confirmation before POST).
 - **Navbar** — domain name and version in the top bar refresh after load, save, clear, import, and version switches (browser cache invalidated on those actions).
 
-### Graph DB engine (Settings → Graph DB)
+### Graph DB engine (per-domain — Domain → Information → Knowledge Graph)
 
-The **graph** triple-store backend is pluggable; the abstraction (`GraphDBFactory` / `GraphDBBackend`) is preserved so additional engines can be added in the future. Today only one engine ships:
+The **graph** triple-store backend is pluggable (`GraphDBFactory` / `GraphDBBackend`). The **selection is made per domain** — each domain picks its backend from a single **Graph Backend** dropdown under **Domain → Information → Knowledge Graph** (mandatory; defaults to `lakebase`). Three engines ship:
 
 - **Lakebase (Postgres)** — default; **three Postgres objects per domain version** (`*_sync` bulk-data table, `*__app` companion for reasoning/cohort writes, `g_<dom>_v<n>` UNION view for reads) inside a configurable Postgres schema on the **App-bound** Lakebase database (same connection as the optional Lakebase registry backend). Requires the `lakebase` extra (`uv sync --extra lakebase`) so `psycopg` is installed.
+- **Lakehouse** — governed Unity Catalog Delta triple tables; no separate graph database to provision.
+- **Neo4j** — native graph database over Bolt (Neo4j Aura or self-hosted). The `neo4j` Python driver is a core dependency.
 
-Engine-specific options are stored as global JSON (`graph_engine_config`). For Lakebase the supported keys are **`database`** (optional override of `PGDATABASE`), **`schema`** (optional, default `ontobricks_graph`), **`sync_mode`** (`app_managed` default, or `managed_synced` to delegate bulk ingest to a Databricks Lakeflow snapshot pipeline), **`sync_table_mode`** (`snapshot` / `triggered` / `continuous` — `snapshot` is the recommended mode), **`sync_timeout_s`** (default 600), **`sync_uc_catalog`** (UC catalog the synced table is registered in; defaults to the snapshot Delta catalog when unset), and **`sync_uc_schema`** (UC schema segment for the synced-table FQN; defaults to the registry UC schema so the Lakeflow object lands in the same UC namespace as other registry artefacts). See `docs/lakebase-graphdb.md` for the full reference.
+The backend *selection* is stored per-domain in `DomainSession.info['graph_backend']` and versioned with the domain. Switching a domain's backend after a build requires **rebuilding** the Knowledge Graph — graph artifacts are not migrated between engines.
 
-> **Lakebase permission grants.** The app service principal needs `USAGE + DML` on each Postgres schema it touches — granted by `scripts/bootstrap-lakebase-perms.sh`:
+Engine *connection* config remains **workspace-global** and is configured under **Settings → Back end** (Lakebase / Lakehouse / Neo4j sections). Engine-specific options are stored as global JSON (`graph_engine_config`). For Lakebase the supported keys are **`database`** (optional override of `PGDATABASE`), **`schema`** (optional, default `ontobricks_graph`), **`sync_mode`** (`app_managed` default, or `managed_synced` to delegate bulk ingest to a Databricks Lakeflow snapshot pipeline), **`sync_table_mode`** (`snapshot` / `triggered` / `continuous` — `snapshot` is the recommended mode), **`sync_timeout_s`** (default 600), **`sync_uc_catalog`** (UC catalog the synced table is registered in; defaults to the snapshot Delta catalog when unset), and **`sync_uc_schema`** (UC schema segment for the synced-table FQN; defaults to the registry UC schema so the Lakeflow object lands in the same UC namespace as other registry artefacts). See `documentation/lakebase-graphdb.md` for the full reference.
+
+> **Lakebase permission grants.** The app service principal needs `USAGE + DML` on each Postgres schema it touches — granted by `scripts/bootstrap/lakebase-perms.sh`:
 >
 > | Schema | When to run | Who runs it |
 > |---|---|---|
 > | Registry schema (e.g. `ontobricks_registry`) | After `Settings → Registry → Initialize` | `scripts/deploy.sh` automatically on every `dev-lakebase` deploy (coords: `LAKEBASE_PROJECT` / `LAKEBASE_BRANCH` / `LAKEBASE_REGISTRY_DATABASE` / `LAKEBASE_REGISTRY_SCHEMA`) |
 > | Graph schema (e.g. `ontobricks_graph`) | After first Knowledge Graph `Build` | The in-app "Create graph DB" flow, or a manual `bootstrap-lakebase-perms.sh` run |
 >
-> The deploy script is **registry-scoped** — it only grants on the registry schema. The graph DB is configured in-app (`Settings → Graph DB`) and may live in a **different** Lakebase project, so its grant is handled separately.
+> The deploy script is **registry-scoped** — it only grants on the registry schema. The graph DB connection is configured in-app (`Settings → Back end`) and may live in a **different** Lakebase project, so its grant is handled separately.
 
 > **Lakebase build performance.** When the active engine is Lakebase, the Knowledge Graph build streams warehouse rows in `fetchmany` batches (`SQLWarehouse.iter_rows`) and ingests them via `COPY FROM STDIN` into a per-batch temp table followed by `INSERT … ON CONFLICT DO NOTHING` (and the symmetrical `DELETE … USING` for incremental removes). The FastAPI process never holds the full graph or the full diff: snapshot CTAS and `EXCEPT` execution stay warehouse-side, the app pipes one batch at a time. There is no Volume archive thread — Postgres is the system of record for the graph.
 
-> **Lakebase managed-synced mode.** When `graph_engine_config.sync_mode = "managed_synced"`, the bulk R2RML data movement is moved entirely off the app: a Databricks Lakeflow snapshot pipeline keeps a Postgres synced table in lock-step with the R2RML view, and the FastAPI process only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`). Reasoning + cohort writes stay on the direct PG path through a writable companion table; readers see both via a UNION view (back-compat name). PG layout per graph version: `g_<dom>_v<n>_sync` (Lakeflow), `g_<dom>_v<n>__app` (app), `g_<dom>_v<n>` (UNION view). See `docs/graphdb-integration.md §9` for the full architecture.
+> **Lakebase managed-synced mode.** When `graph_engine_config.sync_mode = "managed_synced"`, the bulk R2RML data movement is moved entirely off the app: a Databricks Lakeflow snapshot pipeline keeps a Postgres synced table in lock-step with the R2RML view, and the FastAPI process only orchestrates (`SyncedTableManager.ensure` + `trigger_and_wait`). Reasoning + cohort writes stay on the direct PG path through a writable companion table; readers see both via a UNION view (back-compat name). PG layout per graph version: `g_<dom>_v<n>_sync` (Lakeflow), `g_<dom>_v<n>__app` (app), `g_<dom>_v<n>` (UNION view). See `documentation/graphdb-integration.md §9` for the full architecture.
 
 ### Manual Workflow
 
@@ -213,8 +219,9 @@ Engine-specific options are stored as global JSON (`graph_engine_config`). For L
 - **Configurable search depth** — control the maximum traversal depth and entity cap for graph expansion
 - **Right-click "Expand neighbours"** — enrich the current graph in place with N-hop neighbours of any selected node (depth follows the right-pane Depth slider, default 2); newly added entities are highlighted and the camera zooms to frame them, with a non-blocking spinner in the canvas top-right while the request runs
 - **Bridge navigation** — follow cross-domain bridges to automatically switch domains and focus on the target entity in the graph viewer
+- **Class actions (Unity Catalog functions)** — bind any number of UC functions to an ontology class (**Ontology → Designer → External**), then run them on a node from the details pane or its right-click menu and read the result in a popup. Each function takes exactly one argument, the entity's ID, and only functions declared on the node's class can be invoked. The same actions are exposed to the MCP server via `get_entity_context` and `invoke_entity_action`. See [`documentation/user-guide.md`](documentation/user-guide.md#class-actions-unity-catalog-functions).
 - **Data cluster detection** — detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms; available client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; cluster results can be visualized with color-by-cluster mode and collapsed into super-nodes
-- **Cohort discovery** — group entities that travel together using rule-based linkage (shared resources via predicates) and compatibility constraints (same-value, value-equals, value-in, value-range); deterministic, explainable cohorts with live counters, why/why-not explainers, and idempotent materialisation as graph triples (`:inCohort`) or Unity Catalog Delta tables. See [`docs/cohort_discovery.md`](docs/cohort_discovery.md).
+- **Cohort discovery** — group entities that travel together using rule-based linkage (shared resources via predicates) and compatibility constraints (same-value, value-equals, value-in, value-range); deterministic, explainable cohorts with live counters, why/why-not explainers, and idempotent materialisation as graph triples (`:inCohort`) or Unity Catalog Delta tables. See [`documentation/cohort_discovery.md`](documentation/cohort_discovery.md).
 - **Data quality violation limits** — cap the number of violations displayed per rule (configurable via dropdown, default 10) for faster quality checks
 - **Per-rule progress tracking** — SWRL inference and data quality checks report progress for each individual rule
 
@@ -248,7 +255,7 @@ For automated promotion pipelines use the
 `scripts/registry_transfer.sh` command-line tool — export a curated subset
 of domains/versions from a source registry into a `.zip`, then preview and
 commit it into the target registry. See
-[Registry Import / Export](docs/import-export.md) for the full reference,
+[Registry Import / Export](documentation/import-export.md) for the full reference,
 examples, and a comparison of the OBX UI vs CLI approaches.
 
 ### Ontology Pitfalls Detector
@@ -264,4 +271,4 @@ uv sync --extra pitfalls
 
 ### Documentation
 
-Full documentation is available in [`docs/`](docs/README.md). For a comprehensive feature list and architecture details, see [INFO.md](docs/INFO.md).
+Full documentation is available in [`documentation/`](documentation/README.md). For a comprehensive feature list and architecture details, see [INFO.md](documentation/INFO.md).

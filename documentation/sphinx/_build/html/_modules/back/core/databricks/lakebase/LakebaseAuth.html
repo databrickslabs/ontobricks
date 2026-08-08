@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>back.core.databricks.lakebase.LakebaseAuth &#8212; OntoBricks Documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/alabaster.css?v=0a2ff9d5" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <script src="../../../../../_static/documentation_options.js?v=fe7df9b0"></script>
+    <script src="../../../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../../index.html">OntoBricks</a></h1>
+
+
+
+<p class="blurb">Graph Viewer Builder for Databricks</p>
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Topic guides</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/documentation.html">OntoBricks Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/get-started.html">Getting Started with OntoBricks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/features.html">OntoBricks Features</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/deployment.html">OntoBricks Deployment Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/architecture.html">OntoBricks Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/code_organization.html">OntoBricks code organization (for contributors)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/user-guide.html">OntoBricks User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/import-export.html">Registry Import / Export</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/api.html">OntoBricks External REST API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/data-access.html">Data Access Wrappers — Engine Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/graphdb-integration.html">Adding a New Graph DB Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/lakebase-graphdb.html">Lakebase as Graph DB — OntoBricks Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/cohort_discovery.html">Cohort Discovery</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/mcp.html">OntoBricks MCP Server</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/development.html">Development</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/sizing.html">OntoBricks Production Sizing Questionnaire</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/product.html">Product &amp; go-to-market</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../guides/examples.html">Examples</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer overview</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/architecture.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../overview/getting-started.html">Getting Started</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.html">OntoBricks Application Packages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.fastapi.html">FastAPI application (UI server)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/api_external.html"><code class="docutils literal notranslate"><span class="pre">api</span></code> – External REST API (mounted at <code class="docutils literal notranslate"><span class="pre">/api</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.html"><code class="docutils literal notranslate"><span class="pre">back.core</span></code> – Core Domain Logic</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.databricks.html"><code class="docutils literal notranslate"><span class="pre">back.core.databricks</span></code> – Databricks Integration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.html"><code class="docutils literal notranslate"><span class="pre">back.core.external</span></code> — Vendored / Third-Party Integrations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.external.pitfalls.html"><code class="docutils literal notranslate"><span class="pre">back.core.external.pitfalls</span></code> — Ontology Pitfalls Detector</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb</span></code> – Pluggable Graph Database Backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.lakebase.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.lakebase</span></code> — Lakebase Postgres graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphdb.neo4j.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphdb.neo4j</span></code> — Neo4j (Cypher) graph engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.graphql.html"><code class="docutils literal notranslate"><span class="pre">back.core.graphql</span></code> – GraphQL Schema Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.industry.html"><code class="docutils literal notranslate"><span class="pre">back.core.industry</span></code> – Industry Standard Ontology Importers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.reasoning.html"><code class="docutils literal notranslate"><span class="pre">back.core.reasoning</span></code> – OWL 2 RL &amp; SWRL Inference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.objects.html"><code class="docutils literal notranslate"><span class="pre">back.objects</span></code> – Application domain objects</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.sqlwizard.html"><code class="docutils literal notranslate"><span class="pre">back.core.sqlwizard</span></code> – LLM-Assisted SQL Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.core.w3c.html"><code class="docutils literal notranslate"><span class="pre">back.core.w3c</span></code> – W3C Standard Parsers &amp; Generators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.frontend.html"><code class="docutils literal notranslate"><span class="pre">front.routes</span></code> &amp; internal JSON API – Web UI and HTMX/API helpers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/app.config.html"><code class="docutils literal notranslate"><span class="pre">shared.config</span></code> &amp; <code class="docutils literal notranslate"><span class="pre">front.config</span></code> – Settings and constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../api/agents.html"><code class="docutils literal notranslate"><span class="pre">agents</span></code> – LLM Agents &amp; Tools</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Additional</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../changelog.html">Changelog</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for back.core.databricks.lakebase.LakebaseAuth</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Authentication helper for Databricks Lakebase (Postgres) connections.</span>
+
+<span class="sd">OntoBricks targets **Lakebase Autoscaling exclusively**. The legacy</span>
+<span class="sd">Provisioned tier and the Database Instance API</span>
+<span class="sd">(``WorkspaceClient.database.list_database_instances`` /</span>
+<span class="sd">``generate_database_credential``) are deliberately not used here —</span>
+<span class="sd">Autoscaling-only projects are invisible to that API and any code path</span>
+<span class="sd">that touches it is a foot-gun on a sandbox bound to such a project.</span>
+
+<span class="sd">When OntoBricks runs inside a Databricks App with a ``database``</span>
+<span class="sd">resource bound to a Lakebase Autoscaling project, the platform injects:</span>
+
+<span class="sd">- ``PGHOST``      — Lakebase endpoint hostname</span>
+<span class="sd">  (``ep-&lt;id&gt;.database.&lt;region&gt;.cloud.databricks.com``)</span>
+<span class="sd">- ``PGPORT``      — Postgres port (typically ``5432``)</span>
+<span class="sd">- ``PGDATABASE``  — the bound database name (e.g. ``ontobricks_registry`` or ``databricks_postgres``)</span>
+<span class="sd">- ``PGUSER``      — Postgres role (the app&#39;s service principal)</span>
+
+<span class="sd">The Postgres password is *not* injected. Instead, the app mints a</span>
+<span class="sd">short-lived Lakebase JWT via the Postgres API</span>
+<span class="sd">(``POST /api/2.0/postgres/credentials`` with the matching</span>
+<span class="sd">``endpoint`` resource) and uses it as the password. The plain</span>
+<span class="sd">workspace bearer token returned by ``config.authenticate()`` is</span>
+<span class="sd">**not** accepted by Lakebase — it&#39;s not a JWT.</span>
+
+<span class="sd">Endpoint resolution walks ``GET /api/2.0/postgres/projects`` →</span>
+<span class="sd">branches → endpoints and matches ``status.hosts.host`` /</span>
+<span class="sd">``status.hosts.read_only_host`` against ``PGHOST``. The matched</span>
+<span class="sd">endpoint&#39;s full resource path</span>
+<span class="sd">(``projects/&lt;project_id&gt;/branches/&lt;branch_id&gt;/endpoints/&lt;endpoint_id&gt;``)</span>
+<span class="sd">is cached on the instance and used as the ``endpoint`` body of the</span>
+<span class="sd">credential mint.</span>
+
+<span class="sd">``PGAPPNAME`` is **not** consulted — it&#39;s libpq&#39;s</span>
+<span class="sd">``application_name`` (a free-form connection tracing label) and the</span>
+<span class="sd">Databricks Apps runtime populates it with the *app&#39;s* name (e.g.</span>
+<span class="sd">``ontobricks-dev``), which has nothing to do with the Lakebase</span>
+<span class="sd">project.</span>
+
+<span class="sd">Tokens are valid for ~1 h, so :class:`LakebaseAuth` refreshes them</span>
+<span class="sd">~5 minutes before expiry.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.databricks.lakebase.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">TOKEN_TTL_S</span> <span class="k">as</span> <span class="n">_TOKEN_TTL_S</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.errors</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">back.core.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="LakebaseAuth">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.LakebaseAuth">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">LakebaseAuth</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Source ``PG*`` env vars and mint refreshing OAuth tokens.</span>
+
+<span class="sd">    The class is safe to construct outside of Databricks Apps for</span>
+<span class="sd">    testing — it only reads environment variables on demand. The</span>
+<span class="sd">    workspace client is created lazily on the first ``password()``</span>
+<span class="sd">    call so that volume-only environments never need the Databricks</span>
+<span class="sd">    SDK to be importable.</span>
+
+<span class="sd">    **Host resolution order** (first non-empty wins):</span>
+
+<span class="sd">    1. ``PGHOST`` — auto-injected by Databricks Apps at runtime; or</span>
+<span class="sd">       set directly in ``.env`` if you already know the endpoint URL.</span>
+<span class="sd">    2. ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH`` — resolved via</span>
+<span class="sd">       the Postgres API (``/api/2.0/postgres/projects/&lt;name&gt;/branches``</span>
+<span class="sd">       → endpoints). Use these in local ``.env`` to select a branch</span>
+<span class="sd">       without looking up the endpoint hostname manually.</span>
+
+<span class="sd">    **Database resolution order** (first non-empty wins):</span>
+
+<span class="sd">    1. ``PGDATABASE`` — auto-injected by Databricks Apps.</span>
+<span class="sd">    2. ``LAKEBASE_DATABASE`` — explicit override for local dev or</span>
+<span class="sd">       when you want to point at a database that differs from the</span>
+<span class="sd">       bound default.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_w</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># WorkspaceClient, lazily constructed</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="c1"># Project_id (final segment of ``projects/&lt;id&gt;``) — populated</span>
+        <span class="c1"># by the Postgres API endpoint walk.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Full endpoint resource path</span>
+        <span class="c1"># (``projects/&lt;project_id&gt;/branches/&lt;branch_id&gt;/endpoints/&lt;endpoint_id&gt;``)</span>
+        <span class="c1"># — populated alongside ``_instance_name`` and required by</span>
+        <span class="c1"># :meth:`password` to mint a JWT scoped to that endpoint.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Resolved host cache — avoids re-walking the API on every access</span>
+        <span class="c1"># when PGHOST is absent and we resolved via branch resolution.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cached_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Connection parameters (read directly from environment)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">host</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">host</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGHOST&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="p">:</span>
+            <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cached_host</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_host_from_project_branch</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Cannot determine Lakebase host: set PGHOST (or both &quot;</span>
+                <span class="s2">&quot;LAKEBASE_PROJECT and LAKEBASE_BRANCH) in .env, &quot;</span>
+                <span class="s2">&quot;or bind a Lakebase &#39;database&#39; resource to the Databricks App.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">host</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">port</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGPORT&quot;</span><span class="p">,</span> <span class="s2">&quot;5432&quot;</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">database</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGDATABASE&quot;</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;LAKEBASE_DATABASE&quot;</span><span class="p">)</span>
+            <span class="ow">or</span> <span class="s2">&quot;ontobricks_registry&quot;</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">user</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGUSER&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;PGUSER is not set — bind a Lakebase &#39;database&#39; resource. &quot;</span>
+                <span class="s2">&quot;Lakebase is required since v0.4.0.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">user</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">branch_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the branch name extracted from the resolved endpoint resource path.</span>
+
+<span class="sd">        Forces endpoint resolution via :attr:`instance_name` (cached) so the</span>
+<span class="sd">        value is available even when the caller only checked ``instance_name``</span>
+<span class="sd">        previously.  Returns an empty string when the endpoint path cannot be</span>
+<span class="sd">        parsed (e.g. provisioned legacy instances).</span>
+
+<span class="sd">        Endpoint resource path format:</span>
+<span class="sd">        ``projects/&lt;project_id&gt;/branches/&lt;branch_id&gt;/endpoints/&lt;endpoint_id&gt;``</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Trigger resolution so _endpoint_resource is populated.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instance_name</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="c1"># Expected: [&quot;projects&quot;, &quot;&lt;proj&gt;&quot;, &quot;branches&quot;, &quot;&lt;branch&gt;&quot;, &quot;endpoints&quot;, &quot;&lt;ep&gt;&quot;]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">4</span> <span class="ow">and</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;projects&quot;</span> <span class="ow">and</span> <span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;branches&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">branch_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return ``projects/&lt;proj&gt;/branches/&lt;branch&gt;`` for the bound Lakebase.</span>
+
+<span class="sd">        Triggers endpoint resolution on the first call (same cost as</span>
+<span class="sd">        :attr:`host`).  Returns an empty string on failure so callers</span>
+<span class="sd">        can guard with ``if auth.branch_path``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">inst</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instance_name</span>
+            <span class="n">branch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">branch_name</span>
+            <span class="k">if</span> <span class="n">inst</span> <span class="ow">and</span> <span class="n">branch</span><span class="p">:</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;projects/</span><span class="si">{</span><span class="n">inst</span><span class="si">}</span><span class="s2">/branches/</span><span class="si">{</span><span class="n">branch</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">pass</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_available</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True when the Lakebase connection can be established.</span>
+
+<span class="sd">        Accepts either:</span>
+
+<span class="sd">        - ``PGHOST`` + ``PGUSER`` (auto-injected by Databricks Apps, or set</span>
+<span class="sd">          directly in ``.env`` with the raw endpoint URL), or</span>
+<span class="sd">        - ``LAKEBASE_PROJECT`` + ``LAKEBASE_BRANCH`` + ``PGUSER``</span>
+<span class="sd">          (local dev with branch-based host resolution).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">has_user</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGUSER&quot;</span><span class="p">))</span>
+        <span class="n">has_host</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGHOST&quot;</span><span class="p">))</span>
+        <span class="n">has_branch_coords</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;LAKEBASE_PROJECT&quot;</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;LAKEBASE_BRANCH&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">has_user</span> <span class="ow">and</span> <span class="p">(</span><span class="n">has_host</span> <span class="ow">or</span> <span class="n">has_branch_coords</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Token (Postgres password)</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">instance_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the Lakebase Autoscaling project_id (cached).</span>
+
+<span class="sd">        Walks ``GET /api/2.0/postgres/projects`` → branches →</span>
+<span class="sd">        endpoints and matches ``status.hosts.host`` /</span>
+<span class="sd">        ``status.hosts.read_only_host`` against ``PGHOST``. On a hit</span>
+<span class="sd">        we cache both the project_id and the matched endpoint</span>
+<span class="sd">        resource path; the latter is consumed by :meth:`password`.</span>
+
+<span class="sd">        Raises :class:`ValidationError` if no endpoint matches —</span>
+<span class="sd">        that&#39;s the canonical &quot;the bundle is binding the wrong</span>
+<span class="sd">        project&quot; failure and must surface loudly rather than</span>
+<span class="sd">        silently fall back to a different code path.</span>
+
+<span class="sd">        ``PGAPPNAME`` is intentionally **not** consulted: Databricks</span>
+<span class="sd">        Apps populates it with the app&#39;s name (e.g. ``ontobricks-dev``)</span>
+<span class="sd">        which is unrelated to the Lakebase project.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span>
+
+        <span class="n">host</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_workspace</span><span class="p">()</span>
+            <span class="n">project_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lookup_via_postgres_api</span><span class="p">(</span><span class="n">host</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Could not resolve Lakebase Autoscaling project from &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;PGHOST=</span><span class="si">{</span><span class="n">host</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">project_id</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;No Lakebase Autoscaling endpoint matched PGHOST=</span><span class="si">{</span><span class="n">host</span><span class="si">!r}</span><span class="s2">. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Confirm the Apps ``postgres`` resource binding points &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;at an Autoscaling project (legacy Provisioned &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;instances are not supported).&quot;</span>
+            <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span> <span class="o">=</span> <span class="n">project_id</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">&quot;Resolved Lakebase Autoscaling project </span><span class="si">%r</span><span class="s2"> from PGHOST=</span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">project_id</span><span class="p">,</span>
+            <span class="n">host</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_host_from_project_branch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the Lakebase endpoint hostname from project + branch name.</span>
+
+<span class="sd">        Reads ``LAKEBASE_PROJECT`` (project) and ``LAKEBASE_BRANCH``</span>
+<span class="sd">        (branch) from the environment, then walks</span>
+<span class="sd">        ``GET /api/2.0/postgres/projects/&lt;project&gt;/branches`` →</span>
+<span class="sd">        ``GET /api/2.0/postgres/&lt;branch_path&gt;/endpoints`` to find the</span>
+<span class="sd">        primary endpoint host for that branch.</span>
+
+<span class="sd">        On success also populates ``_instance_name`` and</span>
+<span class="sd">        ``_endpoint_resource`` so subsequent :meth:`password` calls do</span>
+<span class="sd">        not need to re-walk the API. Returns ``None`` (never raises) on</span>
+<span class="sd">        any configuration gap or API error — the caller falls back to a</span>
+<span class="sd">        descriptive ``ValidationError``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">project</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;LAKEBASE_PROJECT&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="n">branch_name</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;LAKEBASE_BRANCH&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">project</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">branch_name</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_workspace</span><span class="p">()</span>
+            <span class="n">api</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_w</span><span class="p">,</span> <span class="s2">&quot;api_client&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">api</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="s2">&quot;do&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">branches</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span>
+                    <span class="s2">&quot;GET&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/projects/</span><span class="si">{</span><span class="n">project</span><span class="si">}</span><span class="s2">/branches&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="ow">or</span> <span class="p">{}</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;branches&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">branch</span> <span class="ow">in</span> <span class="n">branches</span><span class="p">:</span>
+                <span class="n">branch_path</span> <span class="o">=</span> <span class="n">branch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">branch_path</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">branch_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">branch_name</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">endpoints</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/</span><span class="si">{</span><span class="n">branch_path</span><span class="si">}</span><span class="s2">/endpoints&quot;</span><span class="p">)</span>
+                    <span class="ow">or</span> <span class="p">{}</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;endpoints&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">endpoint</span> <span class="ow">in</span> <span class="n">endpoints</span><span class="p">:</span>
+                    <span class="n">hosts</span> <span class="o">=</span> <span class="p">(</span><span class="n">endpoint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hosts&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+                    <span class="n">host</span> <span class="o">=</span> <span class="p">(</span><span class="n">hosts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">host</span><span class="p">:</span>
+                        <span class="k">continue</span>
+                    <span class="n">endpoint_path</span> <span class="o">=</span> <span class="n">endpoint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                    <span class="k">if</span> <span class="n">endpoint_path</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span> <span class="o">=</span> <span class="n">endpoint_path</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span> <span class="o">=</span> <span class="n">project</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cached_host</span> <span class="o">=</span> <span class="n">host</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;Resolved Lakebase host </span><span class="si">%r</span><span class="s2"> from project=</span><span class="si">%r</span><span class="s2"> branch=</span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">host</span><span class="p">,</span>
+                        <span class="n">project</span><span class="p">,</span>
+                        <span class="n">branch_name</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">return</span> <span class="n">host</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;Branch-based Lakebase host resolution failed &quot;</span>
+                <span class="s2">&quot;(project=</span><span class="si">%r</span><span class="s2"> branch=</span><span class="si">%r</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">project</span><span class="p">,</span>
+                <span class="n">branch_name</span><span class="p">,</span>
+                <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lookup_via_postgres_api</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Match ``host`` against Lakebase Autoscaling endpoints.</span>
+
+<span class="sd">        Walks ``/api/2.0/postgres/projects`` → branches → endpoints</span>
+<span class="sd">        and compares ``status.hosts.host`` / ``status.hosts.read_only_host``</span>
+<span class="sd">        against ``host``. Returns the project_id (final segment of</span>
+<span class="sd">        the resource name ``projects/&lt;id&gt;``) on a hit, ``None`` otherwise.</span>
+
+<span class="sd">        On a hit, also caches the matched endpoint&#39;s full resource</span>
+<span class="sd">        path on ``self._endpoint_resource`` so :meth:`password` can</span>
+<span class="sd">        mint via ``POST /api/2.0/postgres/credentials``.</span>
+
+<span class="sd">        Uses ``WorkspaceClient.api_client.do`` directly so we work</span>
+<span class="sd">        across SDK versions that may or may not have ``w.postgres``</span>
+<span class="sd">        bound on the public surface.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">api</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_w</span><span class="p">,</span> <span class="s2">&quot;api_client&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">api</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="s2">&quot;do&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">projects</span> <span class="o">=</span> <span class="p">(</span><span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="s2">&quot;/api/2.0/postgres/projects&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+            <span class="s2">&quot;projects&quot;</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">project</span> <span class="ow">in</span> <span class="n">projects</span><span class="p">:</span>
+            <span class="n">project_path</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">project_path</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">branches</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/</span><span class="si">{</span><span class="n">project_path</span><span class="si">}</span><span class="s2">/branches&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;branches&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">branch</span> <span class="ow">in</span> <span class="n">branches</span><span class="p">:</span>
+                <span class="n">branch_path</span> <span class="o">=</span> <span class="n">branch</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">branch_path</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">endpoints</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/</span><span class="si">{</span><span class="n">branch_path</span><span class="si">}</span><span class="s2">/endpoints&quot;</span><span class="p">)</span>
+                    <span class="ow">or</span> <span class="p">{}</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;endpoints&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">endpoint</span> <span class="ow">in</span> <span class="n">endpoints</span><span class="p">:</span>
+                    <span class="n">hosts</span> <span class="o">=</span> <span class="p">(</span><span class="n">endpoint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hosts&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+                    <span class="n">h</span> <span class="o">=</span> <span class="p">(</span><span class="n">hosts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="n">ro</span> <span class="o">=</span> <span class="p">(</span><span class="n">hosts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;read_only_host&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">host</span> <span class="ow">in</span> <span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="n">ro</span><span class="p">):</span>
+                        <span class="n">endpoint_path</span> <span class="o">=</span> <span class="n">endpoint</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                        <span class="k">if</span> <span class="n">endpoint_path</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span> <span class="o">=</span> <span class="n">endpoint_path</span>
+                        <span class="k">return</span> <span class="n">project_path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ensure_workspace</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Lazily build the workspace client.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_w</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">databricks.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">WorkspaceClient</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_w</span> <span class="o">=</span> <span class="n">WorkspaceClient</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Cannot initialise Databricks WorkspaceClient for Lakebase &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;authentication: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+<div class="viewcode-block" id="LakebaseAuth.password">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.LakebaseAuth.password">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">password</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a (cached) Lakebase JWT suitable as PG password.</span>
+
+<span class="sd">        Mints via ``POST /api/2.0/postgres/credentials`` with the</span>
+<span class="sd">        endpoint resource discovered by :attr:`instance_name`. This is</span>
+<span class="sd">        the single supported path — the legacy Database Instance API</span>
+<span class="sd">        (``WorkspaceClient.database.generate_database_credential``)</span>
+<span class="sd">        cannot mint credentials for Autoscaling-only projects and is</span>
+<span class="sd">        deliberately not called.</span>
+
+<span class="sd">        The resulting token is a Lakebase-issued JWT (valid ~1 h) —</span>
+<span class="sd">        distinct from the plain workspace bearer token, which Lakebase</span>
+<span class="sd">        rejects with ``Provided authentication token is not a valid</span>
+<span class="sd">        JWT encoding``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token</span> <span class="ow">and</span> <span class="p">(</span><span class="n">now</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">_TOKEN_TTL_S</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_workspace</span><span class="p">()</span>
+        <span class="c1"># Force project resolution so the endpoint resource path is</span>
+        <span class="c1"># populated. ``instance_name`` caches; this is cheap on</span>
+        <span class="c1"># subsequent calls.</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instance_name</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">:</span>
+            <span class="c1"># Defensive: ``instance_name`` either populates the</span>
+            <span class="c1"># endpoint or raises. Reaching here means a future</span>
+            <span class="c1"># refactor broke that invariant.</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;Lakebase endpoint resource was not populated during &quot;</span>
+                <span class="s2">&quot;project resolution; cannot mint JWT.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mint_via_postgres_api</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Failed to mint Lakebase JWT for project &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="si">!r}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;Lakebase JWT was empty&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token</span> <span class="o">=</span> <span class="n">token</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span> <span class="o">=</span> <span class="n">now</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">&quot;Minted fresh Lakebase JWT for project </span><span class="si">%s</span><span class="s2"> (endpoint=</span><span class="si">%s</span><span class="s2">)&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mint_via_postgres_api</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">endpoint_resource</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Mint a JWT via ``POST /api/2.0/postgres/credentials``.</span>
+
+<span class="sd">        ``endpoint_resource`` is the full Postgres-API endpoint</span>
+<span class="sd">        resource path, e.g.</span>
+<span class="sd">        ``projects/&lt;project_id&gt;/branches/&lt;branch_id&gt;/endpoints/&lt;endpoint_id&gt;``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">api</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_w</span><span class="p">,</span> <span class="s2">&quot;api_client&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">api</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="s2">&quot;do&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;WorkspaceClient.api_client unavailable; cannot mint &quot;</span>
+                <span class="s2">&quot;Lakebase JWT via Postgres API.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">resp</span> <span class="o">=</span> <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span>
+            <span class="s2">&quot;POST&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;/api/2.0/postgres/credentials&quot;</span><span class="p">,</span>
+            <span class="n">body</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;endpoint&quot;</span><span class="p">:</span> <span class="n">endpoint_resource</span><span class="p">},</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="k">return</span> <span class="n">resp</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+<div class="viewcode-block" id="LakebaseAuth.invalidate">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.LakebaseAuth.invalidate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invalidate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Drop the cached token so the next call re-authenticates.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span> <span class="o">=</span> <span class="mf">0.0</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Convenience: assemble psycopg connection kwargs</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="LakebaseAuth.conninfo">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.LakebaseAuth.conninfo">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">conninfo</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">application_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ontobricks&quot;</span><span class="p">,</span> <span class="n">connect_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a libpq conninfo string with a freshly-minted token.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;host=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="si">}</span><span class="s2"> port=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="si">}</span><span class="s2"> dbname=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">database</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;user=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="si">}</span><span class="s2"> password=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">()</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;sslmode=require connect_timeout=</span><span class="si">{</span><span class="n">connect_timeout</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;application_name=</span><span class="si">{</span><span class="n">application_name</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="c1"># TCP keepalives: detect server-side connection drops in ~25s</span>
+            <span class="c1"># instead of the OS default ~130s (tcp_retries2). Without these,</span>
+            <span class="c1"># a borrowed-but-dead pool connection blocks the next query for</span>
+            <span class="c1"># 2+ minutes, which shows up as a &quot;preview timeout&quot; client side.</span>
+            <span class="sa">f</span><span class="s2">&quot;keepalives=1 keepalives_idle=10 &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;keepalives_interval=5 keepalives_count=3&quot;</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LakebaseAuth.kwargs">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.LakebaseAuth.kwargs">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">kwargs</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">application_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ontobricks&quot;</span><span class="p">,</span>
+        <span class="n">connect_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return psycopg-style keyword arguments for ``connect()``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;host&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span>
+            <span class="s2">&quot;port&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+            <span class="s2">&quot;dbname&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">database</span><span class="p">,</span>
+            <span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="p">,</span>
+            <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">(),</span>
+            <span class="s2">&quot;sslmode&quot;</span><span class="p">:</span> <span class="s2">&quot;require&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;connect_timeout&quot;</span><span class="p">:</span> <span class="n">connect_timeout</span><span class="p">,</span>
+            <span class="s2">&quot;application_name&quot;</span><span class="p">:</span> <span class="n">application_name</span><span class="p">,</span>
+            <span class="c1"># See ``conninfo`` for the rationale on TCP keepalives.</span>
+            <span class="s2">&quot;keepalives&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;keepalives_idle&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+            <span class="s2">&quot;keepalives_interval&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+            <span class="s2">&quot;keepalives_count&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="BranchLakebaseAuth">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.BranchLakebaseAuth">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BranchLakebaseAuth</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lakebase auth for an explicit branch resource path.</span>
+
+<span class="sd">    Identical interface to :class:`LakebaseAuth` but resolves the Postgres</span>
+<span class="sd">    host and mints JWTs for a specific branch</span>
+<span class="sd">    (``projects/&lt;proj&gt;/branches/&lt;branch&gt;``) rather than reading PGHOST from</span>
+<span class="sd">    the environment.  Use this when the graph engine should target a</span>
+<span class="sd">    different Lakebase project than the bound registry instance.</span>
+
+<span class="sd">    Token caching follows the same ~55-minute TTL as :class:`LakebaseAuth`.</span>
+<span class="sd">    The SP identity (``PGUSER``) and port (``PGPORT``) are still read from</span>
+<span class="sd">    the environment — they belong to the app regardless of which project it</span>
+<span class="sd">    connects to.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">branch_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">database</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># branch_path: full resource path, e.g. &quot;projects/xxx/branches/yyy&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span> <span class="o">=</span> <span class="n">branch_path</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_database_override</span> <span class="o">=</span> <span class="p">(</span><span class="n">database</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_w</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Availability</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_available</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_resolved_host</span><span class="p">())</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Connection parameters</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">host</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_host</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">h</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Could not resolve Lakebase endpoint host for branch </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="si">!r}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">h</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">port</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGPORT&quot;</span><span class="p">,</span> <span class="s2">&quot;5432&quot;</span><span class="p">))</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">database</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_database_override</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGDATABASE&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;postgres&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">user</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">u</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;PGUSER&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">u</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="s2">&quot;PGUSER is not set — required for Lakebase psycopg connections&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">u</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">instance_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the project name (segment after &#39;projects/&#39; in the resource path).&quot;&quot;&quot;</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="c1"># &quot;projects/&lt;proj&gt;/branches/&lt;branch&gt;&quot; → parts[1] = project name</span>
+        <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">branch_name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the branch name (last segment of the resource path).&quot;&quot;&quot;</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+        <span class="c1"># &quot;projects/&lt;proj&gt;/branches/&lt;branch&gt;&quot; → parts[-1] = branch name</span>
+        <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">parts</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">branch_path</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the full branch resource path (``projects/&lt;proj&gt;/branches/&lt;branch&gt;``).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Token minting</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="BranchLakebaseAuth.password">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.BranchLakebaseAuth.password">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">password</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token</span> <span class="ow">and</span> <span class="p">(</span><span class="n">now</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">_TOKEN_TTL_S</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolved_host</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;No endpoint resolved for branch </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="si">!r}</span><span class="s2">; cannot mint JWT&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_workspace</span><span class="p">()</span>
+        <span class="n">api</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_w</span><span class="p">,</span> <span class="s2">&quot;api_client&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">api</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="s2">&quot;do&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span><span class="s2">&quot;WorkspaceClient.api_client unavailable&quot;</span><span class="p">)</span>
+        <span class="n">resp</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span>
+                <span class="s2">&quot;POST&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;/api/2.0/postgres/credentials&quot;</span><span class="p">,</span>
+                <span class="n">body</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;endpoint&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="p">},</span>
+            <span class="p">)</span>
+            <span class="ow">or</span> <span class="p">{}</span>
+        <span class="p">)</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">resp</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">token</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">ValidationError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Failed to mint Lakebase JWT for endpoint </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span><span class="si">!r}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token</span> <span class="o">=</span> <span class="n">token</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span> <span class="o">=</span> <span class="n">now</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token</span></div>
+
+
+<div class="viewcode-block" id="BranchLakebaseAuth.invalidate">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.BranchLakebaseAuth.invalidate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">invalidate</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_token_ts</span> <span class="o">=</span> <span class="mf">0.0</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Convenience</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="BranchLakebaseAuth.kwargs">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.BranchLakebaseAuth.kwargs">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">kwargs</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">application_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;ontobricks&quot;</span><span class="p">,</span>
+        <span class="n">connect_timeout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;host&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span>
+            <span class="s2">&quot;port&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+            <span class="s2">&quot;dbname&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">database</span><span class="p">,</span>
+            <span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="p">,</span>
+            <span class="s2">&quot;password&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">password</span><span class="p">(),</span>
+            <span class="s2">&quot;sslmode&quot;</span><span class="p">:</span> <span class="s2">&quot;require&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;connect_timeout&quot;</span><span class="p">:</span> <span class="n">connect_timeout</span><span class="p">,</span>
+            <span class="s2">&quot;application_name&quot;</span><span class="p">:</span> <span class="n">application_name</span><span class="p">,</span>
+            <span class="s2">&quot;keepalives&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;keepalives_idle&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+            <span class="s2">&quot;keepalives_interval&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+            <span class="s2">&quot;keepalives_count&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Internal helpers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ensure_workspace</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_w</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">databricks.sdk</span><span class="w"> </span><span class="kn">import</span> <span class="n">WorkspaceClient</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">_w</span> <span class="o">=</span> <span class="n">WorkspaceClient</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolved_host</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_host</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_workspace</span><span class="p">()</span>
+            <span class="n">api</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_w</span><span class="p">,</span> <span class="s2">&quot;api_client&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">api</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="s2">&quot;do&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">endpoints</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">api</span><span class="o">.</span><span class="n">do</span><span class="p">(</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;/api/2.0/postgres/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="si">}</span><span class="s2">/endpoints&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;endpoints&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">ep</span> <span class="ow">in</span> <span class="n">endpoints</span><span class="p">:</span>
+                <span class="n">h</span> <span class="o">=</span> <span class="p">((</span><span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;status&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hosts&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;host&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">h</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_host</span> <span class="o">=</span> <span class="n">h</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_endpoint_resource</span> <span class="o">=</span> <span class="n">ep</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                        <span class="s2">&quot;BranchLakebaseAuth resolved host </span><span class="si">%r</span><span class="s2"> for branch </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">h</span><span class="p">,</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">return</span> <span class="n">h</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s2">&quot;BranchLakebaseAuth endpoint resolution failed (branch=</span><span class="si">%r</span><span class="s2">): </span><span class="si">%s</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_branch_path</span><span class="p">,</span>
+                <span class="n">exc</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span></div>
+
+
+
+<span class="n">_default</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">LakebaseAuth</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="get_lakebase_auth">
+<a class="viewcode-back" href="../../../../../api/app.core.databricks.html#back.core.databricks.lakebase.LakebaseAuth.get_lakebase_auth">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_lakebase_auth</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">LakebaseAuth</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a process-wide :class:`LakebaseAuth` singleton.&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_default</span>
+    <span class="k">if</span> <span class="n">_default</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_default</span> <span class="o">=</span> <span class="n">LakebaseAuth</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_default</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2024-2026, OntoBricks Contributors.
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

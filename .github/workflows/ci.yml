@@ -265,7 +265,7 @@ jobs:
 
       - name: Build Sphinx docs
         run: |
-          cd docs/sphinx
+          cd documentation/sphinx
           uv run make html || echo "Sphinx build completed with warnings"
 
   security:

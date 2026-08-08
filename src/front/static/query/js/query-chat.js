@@ -56,6 +56,35 @@
     // Markdown rendering
     // =====================================================
 
+    const UNREADABLE_REPLY = "I couldn't display that answer. Please try again.";
+
+    function _extractReadableParts(value) {
+        if (typeof value === 'string') return value.trim() ? [value] : [];
+        if (Array.isArray(value)) {
+            return value.flatMap(function (item) {
+                return _extractReadableParts(item);
+            });
+        }
+        if (value && typeof value === 'object') {
+            const type = value.type;
+            if (type && type !== 'text' && type !== 'output_text') return [];
+            for (const key of ['text', 'content', 'value']) {
+                if (Object.prototype.hasOwnProperty.call(value, key)) {
+                    return _extractReadableParts(value[key]);
+                }
+            }
+        }
+        return [];
+    }
+
+    function readableMessage(value) {
+        if (typeof value === 'string' && value.trim()) return value;
+        const parts = _extractReadableParts(value)
+            .map(function (part) { return part.trim(); })
+            .filter(Boolean);
+        return parts.length ? parts.join('\n\n') : UNREADABLE_REPLY;
+    }
+
     function renderMarkdown(text) {
         if (typeof marked !== 'undefined' && marked.parse) {
             try {
@@ -210,7 +239,7 @@
         if (isUser) {
             body.textContent = text;
         } else {
-            body.innerHTML = renderMarkdown(text);
+            body.innerHTML = renderMarkdown(readableMessage(text));
             enhanceEntityLinks(body);
         }
 
@@ -251,6 +280,169 @@
         wrap.appendChild(title);
         wrap.appendChild(ul);
         return wrap;
+    }
+
+    // =====================================================
+    // Pending action confirm / cancel card
+    //
+    // Actions are never auto-confirmed and typed chat text (e.g. "yes")
+    // is never treated as confirmation -- the only way to invoke a
+    // pending action is an explicit click on the Confirm button below,
+    // which POSTs the one-time server-minted token.
+    // =====================================================
+
+    /**
+     * Pure helper: turn a raw `pending_action` payload (from the SSE
+     * `done` event) into a small, display-ready model. Returns null for
+     * anything that isn't usable (e.g. missing token).
+     */
+    function buildPendingActionCardModel(pending) {
+        if (!pending || typeof pending !== 'object') return null;
+        const token = String(pending.token || '').trim();
+        if (!token) return null;
+        return {
+            token: token,
+            entityLabel: String(pending.entity_label || pending.entity_uri || 'this entity'),
+            action: String(pending.action || 'action'),
+            description: pending.description ? String(pending.description) : '',
+            expiresInSec: Number.isFinite(pending.expires_in_sec) ? pending.expires_in_sec : null,
+        };
+    }
+
+    /**
+     * Format a `/dtwin/nodes/action/confirm` response as a short markdown
+     * message, mirroring the server-side `format_node_action_response`.
+     */
+    function formatActionResultText(data) {
+        if (!data || !data.success) {
+            const msg = data && (data.message || (typeof data.error === 'string' ? data.error : null));
+            return msg || 'Could not invoke the action.';
+        }
+        const lines = [
+            'Action: ' + (data.action || ''),
+            'Entity: ' + (data.entity_local_id || '') + '  (' + (data.class_name || 'Unknown') + ')',
+            '',
+        ];
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (!rows.length) {
+            lines.push('Completed — no result rows returned.');
+            return lines.join('\n');
+        }
+        lines.push('Result (' + rows.length + ' row' + (rows.length !== 1 ? 's' : '') + '):');
+        rows.forEach(function (row) {
+            const parts = Object.keys(row).map(function (k) { return k + ': ' + row[k]; });
+            lines.push('  ' + parts.join('  |  '));
+        });
+        return lines.join('\n');
+    }
+
+    function _setPendingCardStatus(card, text, kind) {
+        const statusEl = card.querySelector('.graph-chat-pending-action-status');
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.classList.remove('is-success', 'is-error');
+        if (kind) statusEl.classList.add(kind);
+    }
+
+    function _disablePendingCardButtons(card) {
+        card.querySelectorAll('button').forEach(function (btn) { btn.disabled = true; });
+    }
+
+    async function confirmPendingAction(card, model) {
+        _disablePendingCardButtons(card);
+        _setPendingCardStatus(card, 'Running…');
+        card.classList.add('is-resolved');
+
+        let data = {};
+        try {
+            const resp = await fetch('/dtwin/nodes/action/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ token: model.token }),
+            });
+            data = await resp.json().catch(function () { return {}; });
+            if (!resp.ok && data.success === undefined) data.success = false;
+        } catch (err) {
+            data = { success: false, message: 'Network error: ' + err.message };
+        }
+
+        const text = formatActionResultText(data);
+        appendMessage('assistant', text);
+        conversationHistory.push({ role: 'assistant', content: text });
+
+        _setPendingCardStatus(card, data.success ? 'Confirmed' : 'Failed', data.success ? 'is-success' : 'is-error');
+    }
+
+    function cancelPendingAction(card, model) {
+        card.remove();
+        fetch('/dtwin/nodes/action/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ token: model.token }),
+        }).catch(function () { /* best effort -- server TTL still expires the token */ });
+    }
+
+    /**
+     * Build the Confirm / Cancel card DOM for a `pending_action` payload.
+     * Returns null when the payload isn't usable (see buildPendingActionCardModel).
+     */
+    function buildPendingActionCard(pending) {
+        const model = buildPendingActionCardModel(pending);
+        if (!model) return null;
+
+        const card = document.createElement('div');
+        card.className = 'graph-chat-pending-action';
+        card.setAttribute('data-token', model.token);
+
+        const header = document.createElement('div');
+        header.className = 'graph-chat-pending-action-header';
+        header.innerHTML = '<i class="bi bi-exclamation-diamond-fill"></i><span>Confirm action</span>';
+        card.appendChild(header);
+
+        const body = document.createElement('div');
+        body.className = 'graph-chat-pending-action-body';
+        const nameLine = document.createElement('div');
+        nameLine.className = 'graph-chat-pending-action-name';
+        const code = document.createElement('code');
+        code.textContent = model.action;
+        nameLine.appendChild(document.createTextNode('Run '));
+        nameLine.appendChild(code);
+        nameLine.appendChild(document.createTextNode(' on ' + model.entityLabel));
+        body.appendChild(nameLine);
+        if (model.description) {
+            const desc = document.createElement('div');
+            desc.className = 'graph-chat-pending-action-desc';
+            desc.textContent = model.description;
+            body.appendChild(desc);
+        }
+        card.appendChild(body);
+
+        const actions = document.createElement('div');
+        actions.className = 'graph-chat-pending-action-actions';
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.className = 'graph-chat-pending-action-confirm';
+        confirmBtn.textContent = 'Confirm';
+        confirmBtn.addEventListener('click', function () { confirmPendingAction(card, model); });
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'graph-chat-pending-action-cancel';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', function () { cancelPendingAction(card, model); });
+
+        actions.appendChild(confirmBtn);
+        actions.appendChild(cancelBtn);
+        card.appendChild(actions);
+
+        const status = document.createElement('div');
+        status.className = 'graph-chat-pending-action-status';
+        card.appendChild(status);
+
+        return card;
     }
 
     function appendError(text) {
@@ -365,7 +557,7 @@
         }
 
         // Render the final markdown reply
-        const reply = event.reply || '(no reply)';
+        const reply = readableMessage(event.reply);
         bodyEl.innerHTML = renderMarkdown(reply);
         enhanceEntityLinks(bodyEl);
 
@@ -373,8 +565,16 @@
             bodyEl.appendChild(buildToolTrace(event.tools));
         }
 
+        // Actions are proposed only -- render Confirm/Cancel and wait for
+        // an explicit click. Never auto-confirm here.
+        if (event.pending_action) {
+            const card = buildPendingActionCard(event.pending_action);
+            if (card) bodyEl.appendChild(card);
+        }
+
         const container = messagesEl();
         if (container) container.scrollTop = container.scrollHeight;
+        return reply;
     }
 
     /**
@@ -480,10 +680,10 @@
             const doneEvent = await _consumeStream(bubble, response);
 
             if (doneEvent) {
-                finalizeStreamingBubble(bubble, doneEvent);
+                const reply = finalizeStreamingBubble(bubble, doneEvent);
                 conversationHistory.push({
                     role: 'assistant',
-                    content: doneEvent.reply || '',
+                    content: reply,
                 });
             } else {
                 errorStreamingBubble(bubble, 'Stream ended without a final response.');
@@ -537,10 +737,13 @@
         hideWelcome();
         conversationHistory = [];
         messages.forEach(function (m) {
-            if (!m || typeof m.content !== 'string') return;
+            if (!m || !Object.prototype.hasOwnProperty.call(m, 'content')) return;
             const role = m.role === 'assistant' ? 'assistant' : 'user';
-            appendMessage(role, m.content);
-            conversationHistory.push({ role: role, content: m.content });
+            const content = role === 'assistant'
+                ? readableMessage(m.content)
+                : String(m.content || '');
+            appendMessage(role, content);
+            conversationHistory.push({ role: role, content: content });
         });
     }
 
@@ -705,7 +908,8 @@
     window.initGraphChat = init;
     window.chatSendMessage = function (text) { sendMessage(text); };
     window.appendChatAssistantMessage = function (text) {
-        appendMessage('assistant', text);
-        conversationHistory.push({ role: 'assistant', content: text });
+        const content = readableMessage(text);
+        appendMessage('assistant', content);
+        conversationHistory.push({ role: 'assistant', content: content });
     };
 })();

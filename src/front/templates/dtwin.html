@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-cohorts.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-api.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-chat.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-analytics.css') }}?v={{ asset_version }}">
 <!-- Query page specific styles -->
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/query.css') }}">
 <!-- Ontology map styles for read-only viewer modal -->
@@ -34,9 +35,14 @@
         
         <!-- Right Content Area -->
         <div class="sidebar-content">
-            <!-- Build Section -->
+            <!-- Build Section (Lakebase or Delta panel toggled by triple_store_backend) -->
             <div id="sync-section" class="sidebar-section">
-                {% include "partials/dtwin/_query_sync.html" %}
+                <div id="sync-lakebase-panel">
+                    {% include "partials/dtwin/_query_sync.html" %}
+                </div>
+                <div id="sync-databricks-panel" class="d-none">
+                    {% include "partials/dtwin/_query_databricks_build.html" %}
+                </div>
             </div>
 
             <!-- Runs Section -->
@@ -92,7 +98,9 @@
 {
     "view_table": "{{ view_table|default('', true) }}",
     "graph_name": "{{ graph_name|default('', true) }}",
+    "data_table": "{{ data_table|default('', true) }}",
     "graph_engine": "{{ graph_engine|default('lakebase', true) }}",
+    "triple_store_backend": "{{ triple_store_backend|default('lakebase', true) }}",
     "cache": {{ triplestore_cache|default({})|tojson }}
 }
 </script>
@@ -117,17 +125,38 @@
     </div>
 </div>
 
+<!-- Analytics run details (page level: see the note in _domain_runs.html) -->
+<div class="modal fade" id="analyticsRunDetailsModal" tabindex="-1" aria-labelledby="analyticsRunDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="analyticsRunDetailsModalLabel">
+                    <i class="bi bi-graph-up-arrow me-2"></i>Analytics run details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="analyticsRunDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- All scripts use defer: page paints immediately, scripts run in order after HTML parsing.
      CDN libs (D3, Graphology, Sigma, GraphiQL) are lazy-loaded on first use by their modules. -->
 <script defer src="{{ url_for('static', filename='query/js/query.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-loaders.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-execute.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-databricks-build.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sync.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='global/js/runs-render.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='domain/js/domain-runs.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-d3graph.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-entity-details.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dashboard.js') }}?v={{ asset_version }}"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-analytics.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dataquality.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-reasoning.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>

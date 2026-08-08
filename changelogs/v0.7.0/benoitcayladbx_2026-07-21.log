@@ -1,0 +1,61 @@
+## Keep Graph Chat answers readable
+
+Context: Some serving endpoints return assistant answers as structured content
+blocks. Graph Chat previously coerced those blocks to JavaScript strings and
+displayed `[object Object]` before the tool trace.
+
+Changes:
+
+1. src/agents/agent_dtwin_chat/engine.py
+   Normalize structured model content into readable Markdown before persistence.
+2. src/front/static/query/js/query-chat.js
+   Add a defensive renderer for streamed, saved, and externally inserted replies.
+3. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Cover string, structured, mixed, nested, and unreadable model content.
+4. tests/units/front/test_query_chat_rendering.py
+   Protect the frontend normalization and rendering integration points.
+5. docs/superpowers/specs/2026-07-21-graph-chat-readable-results-design.md
+   Record the approved behavior and success criteria.
+6. docs/superpowers/plans/2026-07-21-graph-chat-readable-results.md
+   Record the test-driven implementation and verification plan.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- src/front/static/query/js/query-chat.js
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- tests/units/front/test_query_chat_rendering.py
+- docs/superpowers/specs/2026-07-21-graph-chat-readable-results-design.md
+- docs/superpowers/plans/2026-07-21-graph-chat-readable-results.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-21.log
+
+Tests: uv run pytest -q -m "not scenario" could not synchronize hatchling
+because the package firewall DNS was unavailable; uv run --no-sync pytest -q
+-m "not scenario" -> 3242 passed, 275 skipped, 5 deselected, 23 warnings in
+22.08s.
+
+## Fix R2RML generation when ontology URIs contain spaces
+
+Context: R2RML Turtle serialization failed (502) when the domain/ontology
+name contained spaces (e.g. "WRFM - Shell"). Changing ontology.base_uri alone
+did not rewrite stale class/property/mapping IRIs that still carried spaces.
+RDFLib then refused to serialize those URIRefs.
+
+Changes:
+
+1. src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Percent-encode illegal IRI characters in base_uri and all config-derived URIRefs before Turtle serialization.
+2. src/back/objects/domain/Domain.py
+   Sanitize auto-generated and custom base URIs; replace non-IRI-safe chars in domain names used for auto base_uri.
+3. tests/units/mapping/test_r2rml_generator.py
+   Cover spaced base_uri init and generation with a spaced class URI.
+4. tests/units/domain/test_domain_service.py
+   Cover auto/custom base_uri sanitization for names and URIs with spaces.
+
+Modified files:
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/objects/domain/Domain.py
+- tests/units/mapping/test_r2rml_generator.py
+- tests/units/domain/test_domain_service.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-21.log
+
+Tests: uv run --no-sync pytest -q -m "not scenario" → 3246 passed, 275 skipped, 5 deselected, 23 warnings in 25.34s

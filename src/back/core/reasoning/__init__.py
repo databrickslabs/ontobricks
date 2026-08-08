@@ -17,6 +17,10 @@ from back.core.reasoning.SWRLBuiltinRegistry import (  # noqa: F401
     SWRLBuiltinRegistry,
 )
 from back.core.reasoning.SWRLParser import SWRLParser  # noqa: F401
+from back.core.reasoning.SWRLTextCodec import (  # noqa: F401
+    parse_rules as parse_swrl_text,
+    serialize_rules as serialize_swrl_text,
+)
 from back.core.reasoning.DecisionTableEngine import DecisionTableEngine  # noqa: F401
 from back.core.reasoning.SPARQLRuleEngine import SPARQLRuleEngine  # noqa: F401
 from back.core.reasoning.AggregateRuleEngine import AggregateRuleEngine  # noqa: F401
@@ -49,4 +53,6 @@ __all__ = [
     "builtins_by_category",
     "get_builtin",
     "is_builtin",
+    "parse_swrl_text",
+    "serialize_swrl_text",
 ]

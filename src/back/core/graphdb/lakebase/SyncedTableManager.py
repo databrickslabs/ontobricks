@@ -6,7 +6,7 @@ plane (Databricks Delta -> Lakebase Postgres) without iterating triples
 in the FastAPI process.
 
 The full architecture is described in
-:doc:`/graphdb-integration` (Lakebase managed-synced section).
+:doc:`/guides/graphdb-integration` (Lakebase managed-synced section).
 
 SDK compatibility
 -----------------

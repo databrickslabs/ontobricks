@@ -544,6 +544,24 @@ class TestManagedSyncedRouting:
         assert any("CREATE TABLE IF NOT EXISTS g_v1__app" in s for s in executed)
         assert not any("CREATE OR REPLACE VIEW" in s for s in executed)
 
+    def test_drop_app_owned_sync_artifacts_skips_lakeflow_owner(self, synced_store):
+        cur = MagicMock()
+        cur.fetchone.return_value = {"owner": "databricks_writer_16536"}
+        with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
+            assert synced_store.drop_app_owned_sync_artifacts_if_present("G_V1") is False
+        executed = [str(c[0][0]) for c in cur.execute.call_args_list]
+        assert not any("DROP VIEW" in s for s in executed)
+        assert not any("DROP TABLE" in s for s in executed)
+
+    def test_drop_app_owned_sync_artifacts_drops_user_owned_sync(self, synced_store):
+        cur = MagicMock()
+        cur.fetchone.return_value = {"owner": "benoit.cayla@databricks.com"}
+        with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
+            assert synced_store.drop_app_owned_sync_artifacts_if_present("G_V1") is True
+        executed = [str(c[0][0]) for c in cur.execute.call_args_list]
+        assert any("DROP VIEW IF EXISTS g_v1" in s for s in executed)
+        assert any("DROP TABLE IF EXISTS g_v1_sync" in s for s in executed)
+
     def test_truncate_companion_runs_truncate(self, synced_store):
         cur = MagicMock()
         with patch.object(synced_store, "_cursor", _cursor_ctx(cur)):
@@ -726,7 +744,8 @@ def test_wrap_triple_view_sql_for_lakeflow_adds_object_hash():
 
     inner = "SELECT 's' AS subject, 'p' AS predicate, 'o' AS object"
     wrapped = wrap_triple_view_sql_for_lakeflow(inner)
-    assert "sha2(cast(object AS string), 256) AS object_hash" in wrapped
+    assert "sha2(TRY_CAST(object AS STRING), 256) AS object_hash" in wrapped
+    assert "CAST(" not in wrapped.replace("TRY_CAST(", "")
     assert wrapped.endswith("FROM (SELECT 's' AS subject, 'p' AS predicate, 'o' AS object) AS _ob_triples")
 
 
@@ -762,7 +781,7 @@ def test_create_triple_table_migrates_legacy_before_indexes():
 
 
 def test_scheduled_view_sql_wraps_object_hash_for_managed_synced():
-    from back.objects.registry.scheduler import _view_sql_for_graph_store
+    from back.objects.registry.scheduler_tasks.build import _view_sql_for_graph_store
 
     inner = "SELECT subject, predicate, object FROM t"
     managed = MagicMock()

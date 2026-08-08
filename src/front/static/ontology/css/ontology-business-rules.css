@@ -124,3 +124,11 @@
     word-break: break-word;
     white-space: normal;
 }
+
+/* SWRL text modal editor (mirrors Data Quality SHACL modal) */
+#brSwrlEditor {
+    font-size: 0.8rem;
+    background: var(--bs-gray-100);
+    resize: vertical;
+    min-height: 22rem;
+}

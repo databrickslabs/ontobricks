@@ -9,7 +9,7 @@ keeps it last). Extend the ``[Scenario N]`` groups below as new scenarios add
 assets/actions worth asserting.
 
 Unlike scenarios 1-3 (which *do* things), this journey is **read-only**: it
-inspects the durable ``test_scenario_1`` domain and asserts that every asset,
+inspects the durable ``testscenario1`` domain and asserts that every asset,
 comment, and action the prior scenarios were supposed to create is actually
 present in the registry. At the end it prints a compact **validation report**
 (PASS / FAIL / INFO per check) to stdout, then fails the test if any hard check
@@ -47,7 +47,7 @@ Run (against the local dev server, after the other scenarios):
 
 Override the target via env:
     ONTOBRICKS_LIVE_BASE       base URL (default http://localhost:8000)
-    ONTOBRICKS_SCENARIO_DOMAIN reused domain folder (default test_scenario_1)
+    ONTOBRICKS_SCENARIO_DOMAIN reused domain folder (default testscenario1)
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ pytestmark = [
     pytest.mark.skipif(
         os.environ.get("ONTOBRICKS_SCENARIO_LIVE") != "1",
         reason="live scenario — set ONTOBRICKS_SCENARIO_LIVE=1 to run "
-        "(needs a running app + the test_scenario_1 domain from scenarios 1-3)",
+        "(needs a running app + the testscenario1 domain from scenarios 1-3)",
     ),
     *chain_marker(
         "scenario_validation",
@@ -80,7 +80,7 @@ pytestmark = [
 ]
 
 
-_DOMAIN_NAME = os.environ.get("ONTOBRICKS_SCENARIO_DOMAIN", "test_scenario_1")
+_DOMAIN_NAME = os.environ.get("ONTOBRICKS_SCENARIO_DOMAIN", "testscenario1")
 _BASE_VERSION = "1"
 
 # Hard thresholds — the minimum each prior scenario is expected to have created.

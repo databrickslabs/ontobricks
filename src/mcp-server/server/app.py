@@ -41,6 +41,7 @@ import logging
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from typing import Callable, Optional
 
 import httpx
@@ -62,6 +63,9 @@ API_V1_DT_REGISTRY = "/api/v1/digitaltwin/registry"
 API_V1_DT_STATUS = "/api/v1/digitaltwin/status"
 API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
 API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
+API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
+API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"
+API_V1_DT_NODE_ACTION = "/api/v1/digitaltwin/nodes/action"
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -159,6 +163,141 @@ def _format_entity_block(
     return "\n".join(lines)
 
 
+def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
+    """Append a [Context] block for a node's class Actions metadata."""
+    dataset = cls_actions.get("dataset")
+    bridges = cls_actions.get("bridges") or []
+    actions = cls_actions.get("actions") or []
+    if not dataset and not bridges and not actions:
+        return ""
+
+    lines: list[str] = []
+    lines.append(f"  [Context — class: {cls_actions.get('name', '')}]")
+
+    if dataset and dataset.get("fullName"):
+        key_col = dataset.get("key_column")
+        if key_col:
+            lines.append(f"  Dataset: {dataset['fullName']}  (key: {key_col} = '{local_id}')")
+            lines.append(
+                "    → call get_entity_context(fetch_dataset_rows=True) to retrieve rows"
+            )
+        else:
+            lines.append(f"  Dataset: {dataset['fullName']}  (key_column not configured)")
+        purpose = (dataset.get("description") or "").strip()
+        if purpose:
+            lines.append(f"  Description: {purpose}")
+
+    if bridges:
+        lines.append("  Bridges:")
+        for b in bridges:
+            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            label = f"  \"{b['label']}\"" if b.get("label") else ""
+            lines.append(f"    → {target}{label}")
+        lines.append(
+            "    → call get_entity_context(follow_bridges=True) to load cross-domain data"
+        )
+
+    if actions:
+        lines.append("  Actions:")
+        for a in actions:
+            lines.append(f"    → {a.get('fullName', '')}: {a.get('description', '')}")
+        lines.append(
+            "    → call invoke_entity_action(entity_uri, action) to run one"
+        )
+
+    return "\n".join(lines)
+
+
+def _format_node_context_response(data: dict) -> str:
+    """Format the /nodes/context JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return data.get("message", "Could not retrieve node context.")
+
+    entity_uri = data.get("entity_uri", "")
+    local_id = data.get("entity_local_id", "") or _local_name(entity_uri)
+    class_name = data.get("class_name", "Unknown")
+
+    lines: list[str] = [
+        f"Node Context — {local_id}  ({class_name})",
+        f"URI: {entity_uri}",
+        "",
+    ]
+
+    dataset = data.get("dataset")
+    if dataset:
+        lines.append(f"Dataset: {dataset.get('fullName', '')}")
+        key_col = dataset.get("key_column")
+        if key_col:
+            lines.append(f"  Key: {key_col} = '{local_id}'")
+        purpose = (dataset.get("description") or "").strip()
+        if purpose:
+            lines.append(f"  Description: {purpose}")
+        if dataset.get("key_column_missing"):
+            lines.append("  ⚠ key_column not configured — row fetch skipped")
+        rows = dataset.get("rows")
+        if rows:
+            lines.append(f"  Rows ({len(rows)}):")
+            for row in rows:
+                lines.append("    " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
+        lines.append("")
+
+    bridges = data.get("bridges") or []
+    if bridges:
+        lines.append("Cross-domain Bridges:")
+        for b in bridges:
+            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            label = f"  \"{b['label']}\"" if b.get("label") else ""
+            lines.append(f"  → {target}{label}")
+            entities = b.get("entities")
+            if entities:
+                lines.append(f"    Entities ({len(entities)}):")
+                for e in entities:
+                    lines.append(f"      • {_local_name(e.get('uri', ''))}  {e.get('predicate', '')} → {e.get('object', '')}")
+        lines.append("")
+
+    actions = data.get("actions") or []
+    if actions:
+        lines.append("Actions (Unity Catalog functions):")
+        for a in actions:
+            lines.append(f"  → {a.get('fullName', '')}")
+            desc = (a.get("description") or "").strip()
+            if desc:
+                lines.append(f"    Description: {desc}")
+        lines.append(
+            f"  → call invoke_entity_action(entity_uri, action) with the entity's ID ('{local_id}')"
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_node_action_response(data: dict) -> str:
+    """Format the /nodes/action JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return (
+            data.get("message")
+            or (data.get("error") if isinstance(data.get("error"), str) else None)
+            or "Could not invoke the action."
+        )
+
+    local_id = data.get("entity_local_id", "")
+    lines: list[str] = [
+        f"Action: {data.get('action', '')}",
+        f"Entity: {local_id}  ({data.get('class_name', 'Unknown')})",
+        "",
+    ]
+
+    rows = data.get("rows") or []
+    if not rows:
+        lines.append("Completed — no result rows returned.")
+        return "\n".join(lines)
+
+    lines.append(f"Result ({len(rows)} row{'s' if len(rows) != 1 else ''}):")
+    for row in rows:
+        lines.append("  " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
+    return "\n".join(lines)
+
+
 def _merge_uri_aliases(by_subject: dict[str, list[dict]]) -> dict[str, list[dict]]:
     """Merge triples from URI aliases into a single entity.
 
@@ -187,7 +326,11 @@ def _merge_uri_aliases(by_subject: dict[str, list[dict]]) -> dict[str, list[dict
     return merged
 
 
-def _format_find_response(data: dict, label_or_local: "Callable[[str], str] | None" = None) -> str:
+def _format_find_response(
+    data: dict,
+    label_or_local: "Callable[[str], str] | None" = None,
+    class_actions: "dict | None" = None,
+) -> str:
     """Convert a /triples/find JSON response into a full-text description."""
     if not data.get("success"):
         return data.get("message", "Search failed.")
@@ -231,7 +374,18 @@ def _format_find_response(data: dict, label_or_local: "Callable[[str], str] | No
 
     parts.append("── Matching Entities ──")
     for uri in seed_uris:
-        parts.append(_format_entity_block(uri, by_subject.get(uri, []), label_or_local))
+        block = _format_entity_block(uri, by_subject.get(uri, []), label_or_local)
+        parts.append(block)
+        # Append class Actions context if available
+        if class_actions:
+            triples_for_uri = by_subject.get(uri, [])
+            type_uris = [t["object"] for t in triples_for_uri if t["predicate"] == RDF_TYPE]
+            for type_uri in type_uris:
+                if type_uri in class_actions:
+                    ctx = _format_class_context_block(_local_name(uri), class_actions[type_uri])
+                    if ctx:
+                        parts.append(ctx)
+                    break
         parts.append("")
 
     if related_uris:
@@ -425,11 +579,25 @@ def _get_auth_headers(mode: str) -> dict:
 
 
 _RETRYABLE_STATUSES = {502, 503}
-_RETRY_DELAYS = (5, 10, 20)  # seconds between successive attempts (3 retries)
+_RETRY_DELAYS = (2, 5, 10)  # seconds between successive attempts (3 retries)
 
 
 def _retryable(status: int) -> bool:
     return status in _RETRYABLE_STATUSES
+
+
+def _retry_delays_for(client: httpx.AsyncClient) -> list[int]:
+    """Retry schedule for *client*.
+
+    502/503 retries exist to ride out Databricks Apps cold-start / proxy
+    transients on the *remote* app hop. When we talk to a same-host app
+    (``mounted`` mode, ``localhost``) there is no proxy in front, so a
+    5xx is a real error — retrying only stacks latency. Disable retries
+    there.
+    """
+    if "localhost" in str(client.base_url) or "127.0.0.1" in str(client.base_url):
+        return []
+    return list(_RETRY_DELAYS)
 
 
 async def _get(
@@ -447,36 +615,38 @@ async def _get(
     errors) are retried up to 3 times with increasing delays before
     the error is propagated.
     """
-    delays = list(_RETRY_DELAYS)
+    delays = _retry_delays_for(client)
     attempt = 0
     while True:
         logger.info(
             "GET %s%s params=%s (attempt %d)", client.base_url, path, params or {}, attempt + 1
         )
+        started = time.monotonic()
         resp = await client.get(path, params=params, timeout=120)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
             logger.warning(
-                "GET %s%s → %s body=%r",
+                "GET %s%s → %s in %dms body=%r",
                 client.base_url,
                 path,
                 resp.status_code,
+                elapsed_ms,
                 body_excerpt,
             )
             if _retryable(resp.status_code) and delays:
                 delay = delays.pop(0)
                 logger.info(
-                    "Retrying in %ds (status=%s, attempt %d/%d)…",
+                    "Retrying in %ds (status=%s, attempt %d)…",
                     delay,
                     resp.status_code,
                     attempt + 1,
-                    len(_RETRY_DELAYS) + 1,
                 )
                 await asyncio.sleep(delay)
                 attempt += 1
                 continue
         else:
-            logger.info("GET %s%s → %s", client.base_url, path, resp.status_code)
+            logger.info("GET %s%s → %s in %dms", client.base_url, path, resp.status_code, elapsed_ms)
         resp.raise_for_status()
         return resp.json()
 
@@ -488,34 +658,36 @@ async def _post(
 
     502/503 responses are retried up to 3 times with increasing delays.
     """
-    delays = list(_RETRY_DELAYS)
+    delays = _retry_delays_for(client)
     attempt = 0
     while True:
         logger.info("POST %s%s (attempt %d)", client.base_url, path, attempt + 1)
+        started = time.monotonic()
         resp = await client.post(path, json=json or {}, timeout=120)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
             logger.warning(
-                "POST %s%s → %s body=%r",
+                "POST %s%s → %s in %dms body=%r",
                 client.base_url,
                 path,
                 resp.status_code,
+                elapsed_ms,
                 body_excerpt,
             )
             if _retryable(resp.status_code) and delays:
                 delay = delays.pop(0)
                 logger.info(
-                    "Retrying in %ds (status=%s, attempt %d/%d)…",
+                    "Retrying in %ds (status=%s, attempt %d)…",
                     delay,
                     resp.status_code,
                     attempt + 1,
-                    len(_RETRY_DELAYS) + 1,
                 )
                 await asyncio.sleep(delay)
                 attempt += 1
                 continue
         else:
-            logger.info("POST %s%s → %s", client.base_url, path, resp.status_code)
+            logger.info("POST %s%s → %s in %dms", client.base_url, path, resp.status_code, elapsed_ms)
         resp.raise_for_status()
         return resp.json()
 
@@ -548,6 +720,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
     _selected_domain: dict = {"name": None}
     _ontology_labels: dict[str, str] = {}   # uri/name (lower) → display label
+    _class_actions: dict[str, dict] = {}    # class URI → {"dataset": {...}, "bridges": [...]}
     _registry: dict = {
         "catalog": "",
         "schema": "",
@@ -555,10 +728,35 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         "_loaded": False,
     }
 
-    def _client() -> httpx.AsyncClient:
-        """Create an httpx client with base URL and auth headers."""
-        headers = {"User-Agent": _USER_AGENT, **_get_auth_headers(mode)}
-        return httpx.AsyncClient(base_url=base, headers=headers)
+    # Single shared client per server so HTTP keep-alive / the connection
+    # pool are reused across tool calls instead of paying a fresh
+    # handshake (and, in databricks mode, a fresh MCP-App → OntoBricks-App
+    # network hop) on every request.
+    _shared_client: dict = {"client": None}
+
+    @asynccontextmanager
+    async def _client():
+        """Yield the shared httpx client with fresh auth headers.
+
+        Intentionally does **not** close the client on exit — it is
+        pooled for the lifetime of the process. Auth headers are
+        refreshed per call (the underlying M2M token is itself cached).
+        """
+        c = _shared_client["client"]
+        if c is None or c.is_closed:
+            c = httpx.AsyncClient(
+                base_url=base,
+                headers={"User-Agent": _USER_AGENT},
+                timeout=120,
+                limits=httpx.Limits(
+                    max_keepalive_connections=10, max_connections=20
+                ),
+            )
+            _shared_client["client"] = c
+        auth = _get_auth_headers(mode)
+        if auth:
+            c.headers.update(auth)
+        yield c
 
     async def _ensure_registry() -> dict:
         """Resolve registry config: volume path → env vars → main app API."""
@@ -640,28 +838,6 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         """Return the ontology label for a URI, falling back to its local name."""
         key = _local_name(uri).lower()
         return _ontology_labels.get(uri, _ontology_labels.get(key, _local_name(uri)))
-
-    async def _load_ontology_labels(client: httpx.AsyncClient) -> None:
-        """Fetch ontology config and build a URI/name → label lookup map."""
-        _ontology_labels.clear()
-        try:
-            params = _domain_params()
-            resp = await client.post("/api/v1/domain/ontology", json=params, timeout=30)
-            resp.raise_for_status()
-            payload = resp.json()
-            # SuccessResponse wraps the ontology under "data"
-            ontology = payload.get("data", payload) if isinstance(payload, dict) else {}
-            for item in list(ontology.get("classes", [])) + list(ontology.get("properties", [])):
-                lbl = item.get("label") or item.get("name") or ""
-                uri = item.get("uri", "")
-                name = item.get("name", "")
-                if uri and lbl:
-                    _ontology_labels[uri] = lbl
-                if name and lbl:
-                    _ontology_labels[name.lower()] = lbl
-            logger.info("Loaded %d ontology labels", len(_ontology_labels))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not load ontology labels: %s", exc)
 
     mcp = FastMCP(
         "OntoBricks",
@@ -867,7 +1043,34 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             if not data.get("success") and data.get("message"):
                 return f"Error selecting domain: {data['message']}"
             _selected_domain["name"] = domain_name
-            await _load_ontology_labels(client)
+            # Ontology labels are resolved lazily via ``_label_or_local``
+            # (local-name fallback). A dedicated read-only label endpoint
+            # can repopulate ``_ontology_labels`` here in the future; the
+            # previous eager POST hit the legacy UC handler (wrong
+            # contract) and only added a wasted round trip.
+            _ontology_labels.clear()
+            _class_actions.clear()
+            # Fetch class Actions for the selected domain — reuse the same client
+            try:
+                cls_data = await _get(
+                    client,
+                    API_V1_DOMAIN_CLASSES,
+                    params={**_registry_params(), "domain_name": domain_name},
+                )
+                for cls in cls_data.get("classes", []):
+                    uri = cls.get("uri", "")
+                    if uri:
+                        _class_actions[uri] = {
+                            "name": cls.get("name", ""),
+                            "dataset": cls.get("dataset") or None,
+                            "bridges": cls.get("bridges") or [],
+                            "actions": cls.get("actions") or [],
+                        }
+                logger.info(
+                    "select_domain: loaded class Actions for %d classes", len(_class_actions)
+                )
+            except Exception as exc:
+                logger.warning("select_domain: could not load class Actions: %s", exc)
 
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
@@ -891,6 +1094,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         Returns a readable summary of every entity type (rdf:type) present
         in the triple store together with instance counts, plus overall
         statistics (total triples, distinct subjects, etc.).
+
+        When a type has a linked external dataset in the ontology, also
+        includes the dataset full name and Description.
 
         A domain must be selected first via ``select_domain``.
         """
@@ -934,6 +1140,17 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                 name = _label_or_local(uri)
                 lines.append(f"  • {name}  ({count:,} instances)")
                 lines.append(f"    URI: {uri}")
+                actions = _class_actions.get(uri) or {}
+                dataset = actions.get("dataset") or {}
+                if dataset.get("fullName"):
+                    lines.append(f"    Dataset: {dataset['fullName']}")
+                    desc = (dataset.get("description") or "").strip()
+                    if desc:
+                        lines.append(f"    Description: {desc}")
+                for fn_action in actions.get("actions") or []:
+                    fn_desc = (fn_action.get("description") or "").strip()
+                    suffix = f" — {fn_desc}" if fn_desc else ""
+                    lines.append(f"    Action: {fn_action.get('fullName', '')}{suffix}")
             lines.append("")
 
         top_predicates = data.get("top_predicates", [])
@@ -970,6 +1187,8 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
           - All attributes (e.g. email, phone, city …)
           - All relationships to other entities, including inferred ones
           - Related entities discovered at each traversal depth
+          - Linked external dataset name, key column, and description when
+            configured on the ontology class
 
         Use this as the PRIMARY tool for any question about a specific
         entity. Do NOT rely on ``query_graphql`` alone — it may miss
@@ -1001,7 +1220,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         params = _domain_params(
             {
                 "depth": min(max(depth, 1), 10),
-                "limit": 500,
+                # Keep the LLM payload tight: 100 triples is plenty to
+                # describe an entity + its immediate neighbours, and cuts
+                # both backend fetch size and token cost. The backend still
+                # reports ``total`` so the model can page for more.
+                "limit": 100,
                 "offset": 0,
             }
         )
@@ -1013,7 +1236,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         async with _client() as client:
             data = await _get(client, API_V1_DT_TRIPLES_FIND, params=params)
 
-        return _format_find_response(data, _label_or_local)
+        return _format_find_response(data, _label_or_local, class_actions=_class_actions)
 
     @mcp.tool()
     async def get_status() -> str:
@@ -1166,6 +1389,91 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             return f"Error executing GraphQL query: {exc}"
 
         return _format_graphql_response(data, domain_name)
+
+    @mcp.tool()
+    async def get_entity_context(
+        entity_uri: str,
+        fetch_dataset_rows: bool = False,
+        dataset_row_limit: int = 5,
+        follow_bridges: bool = False,
+    ) -> str:
+        """Return complete context for an entity node: linked dataset rows
+        and/or cross-domain bridge entities.
+
+        Requires a domain to be selected first via select_domain.
+        The class must have dataset / bridges configured in the ontology.
+        Use the entity URI from describe_entity output.
+
+        When a dataset is linked, the response includes its full name, key
+        column, and ontology-authored Description (from the class dataset
+        ``description`` field).
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+            fetch_dataset_rows: If true, query the linked UC table/view for rows.
+            dataset_row_limit: Max rows to return (1–20, default 5).
+            follow_bridges: If true, load entities from bridge target domains.
+        """
+        if not _selected_domain["name"]:
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
+
+        params = _domain_params(
+            {
+                "entity_uri": entity_uri,
+                "fetch_dataset_rows": str(fetch_dataset_rows).lower(),
+                "dataset_row_limit": min(max(dataset_row_limit, 1), 20),
+                "follow_bridges": str(follow_bridges).lower(),
+            }
+        )
+
+        async with _client() as client:
+            data = await _get(client, API_V1_DT_NODE_CONTEXT, params=params)
+
+        return _format_node_context_response(data)
+
+    @mcp.tool()
+    async def invoke_entity_action(entity_uri: str, action: str) -> str:
+        """Run a Unity Catalog function action configured on an entity's class.
+
+        Requires a domain to be selected first via select_domain. Discover the
+        available actions with get_entity_context or describe_entity — only
+        functions declared on the entity's ontology class can be invoked.
+
+        The function is called with exactly one argument: the entity's local ID,
+        derived server-side from *entity_uri*.
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+            action: Fully qualified function name (catalog.schema.function).
+        """
+        if not _selected_domain["name"]:
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
+
+        body: dict = {"entity_uri": entity_uri, "action_full_name": action}
+        body.update(_registry_params())
+        body["domain_name"] = _selected_domain["name"]
+
+        try:
+            async with _client() as client:
+                data = await _post(client, API_V1_DT_NODE_ACTION, json=body)
+        except httpx.HTTPStatusError as exc:
+            try:
+                err_body = exc.response.json()
+            except Exception:
+                err_body = {}
+            return (
+                err_body.get("message")
+                or err_body.get("error")
+                or f"Could not invoke the action (HTTP {exc.response.status_code})."
+            )
+
+        return _format_node_action_response(data)
 
     # ── Resources ─────────────────────────────────────────────────────
 

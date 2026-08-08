@@ -9,7 +9,7 @@ entities before accepting.
 
 ``call_serving_endpoint`` is patched to return scripted Turtle answers so the
 guard runs without a live endpoint. The pitfall/quality loop is disabled via
-``options={"generation_max_iterations": 0}`` to isolate the class-cap guard.
+``options={"generation_max_iterations": 0, "owl_eval_max_rounds": 0}`` to isolate the class-cap guard.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def _complete(turtle: str) -> dict:
 
 
 def _run(responses, options=None):
-    opts = {"generation_max_iterations": 0}
+    opts = {"generation_max_iterations": 0, "owl_eval_max_rounds": 0}
     if options:
         opts.update(options)
     with patch.object(owl_engine, "call_serving_endpoint") as mock_llm:

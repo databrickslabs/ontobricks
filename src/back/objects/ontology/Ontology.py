@@ -713,9 +713,10 @@ class Ontology:
         """Parse OWL content, apply to project, return the appropriate success payload.
 
         ``outcome`` controls the response shape:
-        - ``"import"``  → :meth:`build_import_owl_success_payload`
-        - ``"parse"``   → :meth:`build_parse_owl_success_payload`
-        - ``"load_file"``→ :meth:`build_load_owl_file_success_payload`
+
+        - ``"import"`` → :meth:`build_import_owl_success_payload`
+        - ``"parse"`` → :meth:`build_parse_owl_success_payload`
+        - ``"load_file"`` → :meth:`build_load_owl_file_success_payload`
         """
         result = Ontology.parse_owl(owl_content, extract_advanced=True)
         (
@@ -1583,6 +1584,8 @@ class Ontology:
                 "dashboardParams", existing.get("dashboardParams", {})
             ),
             "bridges": data.get("bridges", existing.get("bridges", [])),
+            "dataset": data.get("dataset", existing.get("dataset", None)),
+            "actions": data.get("actions", existing.get("actions", [])),
         }
 
     @staticmethod
@@ -1685,7 +1688,14 @@ class Ontology:
                     except (ValueError, TypeError):
                         return f"{key} must be an integer"
 
-        return None
+        from back.core.w3c.shacl import ShapeConditions
+
+        return ShapeConditions.validate(
+            shape.get("conditions"),
+            shape.get("condition_logic", "and"),
+            category,
+            shape.get("target_class_uri", ""),
+        )
 
     @staticmethod
     def validate_classes(classes: List[Dict[str, Any]]) -> tuple:

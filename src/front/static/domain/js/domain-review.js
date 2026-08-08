@@ -324,7 +324,7 @@
             '<h6 class="card-title"><i class="bi bi-people me-2"></i>Domain access</h6>' +
             '<p class="text-muted small mb-3">People and groups with a role on ' +
             'this domain. Roles are managed by administrators in ' +
-            'Registry &rarr; Teams.</p>' +
+            'Settings &rarr; Admin &rarr; Teams.</p>' +
             '<div id="reviewTeam">' + spinner('Loading members...') + '</div>' +
             '</div></div>';
     }

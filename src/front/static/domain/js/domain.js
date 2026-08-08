@@ -58,10 +58,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (section === 'versions' && typeof loadVersionsList === 'function') {
                 loadVersionsList();
             }
-            // Load build runs when switching to runs section
-            if (section === 'runs' && typeof loadDomainRuns === 'function') {
-                loadDomainRuns();
-            }
             // Load the unified audit trail when switching to audit section
             if (section === 'audit' && typeof window.loadDomainAudit === 'function') {
                 window.loadDomainAudit();
@@ -274,6 +270,8 @@ async function saveDomainInfo() {
     const versionEl = document.getElementById('domainVersionSelect');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const graphBackendEl = document.getElementById('domainGraphBackend');
+    const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
 
     if (!nameEl || !descEl || !authorEl) {
         showNotification('Form fields not found', 'error');
@@ -290,16 +288,27 @@ async function saveDomainInfo() {
         return;
     }
 
-    const domainInfoPayload = {
-        name: domainName,
-        version: versionEl ? versionEl.value : '1',
-        description: descEl.value.trim(),
-        author: authorEl.value.trim(),
-        base_uri: baseUriEl ? baseUriEl.value.trim() : '',
-        base_uri_auto: _baseUriAutoMode,
-        llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
-        review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
-    };
+    if (typeof validateDomainInfoForm === 'function' && !validateDomainInfoForm()) {
+        return;
+    }
+
+    // Shared with the pre-UC-save auto-save in navbar.js so both paths always
+    // send the same field set.
+    const domainInfoPayload = typeof buildDomainInfoPayload === 'function'
+        ? buildDomainInfoPayload()
+        : {
+            name: domainName,
+            version: versionEl ? versionEl.value : '1',
+            description: descEl.value.trim(),
+            author: authorEl.value.trim(),
+            base_uri: baseUriEl ? baseUriEl.value.trim() : '',
+            base_uri_auto: _baseUriAutoMode,
+            llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
+            review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
+            graph_backend: graphBackendEl ? graphBackendEl.value : 'lakebase',
+            neo4j_connection: (graphBackendEl && graphBackendEl.value === 'neo4j' && neo4jDbEl)
+                ? neo4jDbEl.value : '',
+        };
     
     try {
         showNotification('Saving domain info...', 'info', 1000);
@@ -315,6 +324,11 @@ async function saveDomainInfo() {
         
         if (data.success) {
             showNotification('Domain info saved successfully!', 'success');
+            // Keep the selector's baseline in step so a later refresh of the
+            // Settings connection list re-selects what was just persisted.
+            if (neo4jDbEl) {
+                neo4jDbEl.dataset.savedValue = domainInfoPayload.neo4j_connection;
+            }
             // ``refreshNavbarIndicators`` invalidates ``/navbar/state``
             // and ``/domain/info`` then re-fetches — no separate
             // ``invalidateDomainCaches`` call (would double-invalidate).
@@ -480,8 +494,8 @@ async function saveDomainFromSettings() {
         baseUriEl.addEventListener('input', () => baseUriEl.classList.remove('is-invalid'), { once: true });
     }
     
-    // Save domain info to session and open Unity Catalog save dialog
-    // (saveDomainInfo only saves to session; domainSave opens the UC dialog for actual persistence)
+    // Save domain info to session and persist to the registry (no confirmation popup)
+    // (saveDomainInfo only saves to session; domainSave writes to the registry)
     if (typeof domainSave === 'function') {
         await domainSave();
     } else {

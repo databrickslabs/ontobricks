@@ -275,8 +275,8 @@ async function _replaceOwlFlow(content, filename) {
                 ImportStatus.updateLastStep('', result.message, 'done');
                 ImportStatus.showResult(true, result.message + ' — check the Data Quality tab');
             } else {
-                ImportStatus.updateLastStep('', 'Replaced: ' + (s.classes||0) + ' classes, ' + (s.properties||0) + ' relationships loaded', 'done');
-                ImportStatus.showResult(true, 'Replaced ontology from ' + filename + ' — ' + (s.classes||0) + ' classes, ' + (s.properties||0) + ' relationships');
+                ImportStatus.updateLastStep('', 'Replaced: ' + (s.classes||0) + ' entities, ' + (s.properties||0) + ' relationships loaded', 'done');
+                ImportStatus.showResult(true, 'Replaced ontology from ' + filename + ' — ' + (s.classes||0) + ' entities, ' + (s.properties||0) + ' relationships');
                 _reloadOntology();
             }
         } else {
@@ -332,8 +332,8 @@ async function _replaceRdfsFlow(content, filename) {
                 ImportStatus.updateLastStep('', result.message, 'done');
                 ImportStatus.showResult(true, result.message + ' — check the Data Quality tab');
             } else {
-                ImportStatus.updateLastStep('', 'Replaced: ' + (s.classes||0) + ' classes, ' + (s.properties||0) + ' properties loaded', 'done');
-                ImportStatus.showResult(true, 'Replaced ontology from ' + filename + ' — ' + (s.classes||0) + ' classes, ' + (s.properties||0) + ' properties');
+                ImportStatus.updateLastStep('', 'Replaced: ' + (s.classes||0) + ' entities, ' + (s.properties||0) + ' properties loaded', 'done');
+                ImportStatus.showResult(true, 'Replaced ontology from ' + filename + ' — ' + (s.classes||0) + ' entities, ' + (s.properties||0) + ' properties');
                 _reloadOntology();
             }
         } else {
@@ -461,7 +461,7 @@ document.getElementById('importFiboBtn').addEventListener('click', async functio
         const result = await _postJson('/ontology/import-fibo', { domains });
         if (result.success) {
             const s = result.stats || {};
-            const msg = 'FIBO imported: ' + (s.classes||0) + ' classes, ' + (s.properties||0) + ' relationships' +
+            const msg = 'FIBO imported: ' + (s.classes||0) + ' entities, ' + (s.properties||0) + ' relationships' +
                         (s.modules_failed > 0 ? ' (' + s.modules_failed + ' modules unavailable)' : '');
             ImportStatus.updateLastStep('', msg, 'done');
             ImportStatus.showResult(true, msg);
@@ -586,7 +586,7 @@ document.getElementById('importFhirBtn').addEventListener('click', async functio
         const result = await _postJson('/ontology/import-fhir', { domains, version });
         if (result.success) {
             const s = result.stats || {};
-            const msg = 'FHIR ' + version + ' imported: ' + (s.classes||0) + ' classes, ' + (s.properties||0) + ' properties';
+            const msg = 'FHIR ' + version + ' imported: ' + (s.classes||0) + ' entities, ' + (s.properties||0) + ' properties';
             ImportStatus.updateLastStep('', msg, 'done');
             ImportStatus.showResult(true, msg);
             statusEl.textContent = 'Import complete!';
@@ -645,7 +645,7 @@ document.getElementById('importIofBtn').addEventListener('click', async function
         const result = await _postJson('/ontology/import-iof', { domains });
         if (result.success) {
             const s = result.stats || {};
-            const msg = 'IOF imported: ' + (s.classes||0) + ' classes, ' + (s.properties||0) + ' relationships' +
+            const msg = 'IOF imported: ' + (s.classes||0) + ' entities, ' + (s.properties||0) + ' relationships' +
                         (s.modules_failed > 0 ? ' (' + s.modules_failed + ' modules unavailable)' : '');
             ImportStatus.updateLastStep('', msg, 'done');
             ImportStatus.showResult(true, msg);

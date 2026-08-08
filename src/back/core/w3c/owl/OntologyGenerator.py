@@ -497,7 +497,7 @@ class OntologyGenerator:
         """Add a class to the ontology.
 
         Args:
-            cls: Class definition with 'name', 'label', 'comment', 'parent', 'emoji', 'dashboard', 'dataProperties'
+            cls: Class definition with 'name', 'label', 'comment', 'parent', 'emoji', 'dashboard', 'dataset', 'dataProperties'
         """
         class_name = cls.get("name", "").strip()
         if not class_name:
@@ -554,6 +554,20 @@ class OntologyGenerator:
         if bridges:
             self.graph.add(
                 (class_uri, ONTOBRICKS_NS.bridges, Literal(json.dumps(bridges)))
+            )
+
+        # Add linked Unity Catalog dataset (table/view) as JSON string
+        dataset = cls.get("dataset")
+        if dataset:
+            self.graph.add(
+                (class_uri, ONTOBRICKS_NS.dataset, Literal(json.dumps(dataset)))
+            )
+
+        # Add linked Unity Catalog function actions as JSON string
+        actions = cls.get("actions", [])
+        if actions:
+            self.graph.add(
+                (class_uri, ONTOBRICKS_NS.actions, Literal(json.dumps(actions)))
             )
 
         # Add parent class (subClassOf)

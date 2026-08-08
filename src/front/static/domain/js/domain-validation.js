@@ -552,10 +552,66 @@ function updateDtwinCard(data) {
         }
     }
 
-    // Graph DB card — Lakebase details
+    // Graph DB card — render engine-aware title and architecture.
+    //
+    // `dt.graph_engine` is the engine recorded on the domain at build time and
+    // can be stale relative to the active global engine. Reconcile unconditionally
+    // against `/settings/graph-engine`.
     var eng = dt.graph_engine || 'lakebase';
-    var titleGraph = document.getElementById('psDtGraphBackendTitle');
-    if (titleGraph) titleGraph.textContent = 'Graph DB (Lakebase)';
+    var engineLabels = {
+        'lakebase': 'Graph DB (Lakebase)',
+        'databricks': 'Graph DB (Lakehouse)',
+        'delta':     'Graph DB (Lakehouse)',
+        'neo4j':    'Graph DB (Neo4j)'
+    };
+
+    function _psSetBackendBrandIcon(element, backend) {
+        if (!element) return;
+        var key = String(backend || 'lakebase').toLowerCase();
+        var iconClass = 'ob-icon-postgresql';
+        if (key === 'databricks' || key === 'delta' || key === 'lakehouse') {
+            iconClass = 'ob-icon-lakehouse';
+        } else if (key === 'neo4j') {
+            iconClass = 'ob-icon-neo4j';
+        }
+        element.classList.remove(
+            'ob-icon-postgresql',
+            'ob-icon-lakehouse',
+            'ob-icon-databricks',
+            'ob-icon-neo4j',
+            'd-none'
+        );
+        element.classList.add(iconClass);
+    }
+
+    function _psRenderEngineUi(activeEng) {
+        var container = document.getElementById('psDtLakebaseDetails');
+        var titleEl   = document.getElementById('psDtGraphBackendTitle');
+        var graphIcon = document.getElementById('psDtGraphBackendIcon');
+        var syncRow   = document.getElementById('psDtLakebaseSyncedUcRow');
+        var boltRow   = document.getElementById('psDtNeo4jBoltCard');
+        var graphFn   = document.getElementById('psDtLakebaseFullName');
+        if (container) container.classList.remove('d-none');
+        if (titleEl)   titleEl.textContent = engineLabels[activeEng] || ('Graph DB (' + activeEng + ')');
+        _psSetBackendBrandIcon(graphIcon, activeEng);
+        if (activeEng === 'neo4j') {
+            if (syncRow) syncRow.classList.add('d-none');
+            if (boltRow) boltRow.classList.remove('d-none');
+            if (graphFn) graphFn.textContent = (dt.graph_name || 'Knowledge Graph');
+        } else {
+            if (syncRow) syncRow.classList.remove('d-none');
+            if (boltRow) boltRow.classList.add('d-none');
+        }
+    }
+    _psRenderEngineUi(eng);
+    fetch('/settings/graph-engine', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            var globalEng = data && data.graph_engine;
+            if (!globalEng || globalEng === eng) return;
+            _psRenderEngineUi(globalEng);
+        })
+        .catch(function () { /* leave fallback in place */ });
 
     var graphCard = document.getElementById('psDtGraphCard');
     if (graphCard) {
@@ -563,9 +619,6 @@ function updateDtwinCard(data) {
         if (dt.lakebase_table_exists === true) graphCard.classList.add('border-success');
         else if (dt.lakebase_table_exists === false) graphCard.classList.add('border-danger');
     }
-
-    var lkDetails = document.getElementById('psDtLakebaseDetails');
-    if (lkDetails) lkDetails.classList.toggle('d-none', eng !== 'lakebase');
 
     if (eng === 'lakebase') {
         var psDb  = document.getElementById('psDtLakebaseDatabase');

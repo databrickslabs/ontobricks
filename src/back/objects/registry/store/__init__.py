@@ -19,7 +19,7 @@ Always go through :class:`RegistryFactory` to obtain a concrete store
 
 Domain-scoped binary artefacts (the ``documents/`` uploads imported by
 the ontology designer) always live on the Unity Catalog Volume and are
-managed by :class:`back.core.databricks.VolumeFileService` — the store
+managed by :class:`back.core.databricks.unity_catalog.VolumeFileService` — the store
 handles JSON-shaped data only.
 
 The historical JSON-on-Volume backend (``VolumeRegistryStore``) was

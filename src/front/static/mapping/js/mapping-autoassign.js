@@ -7,6 +7,21 @@
 // Session storage key for persisting task ID
 const AUTO_ASSIGN_TASK_KEY = 'ontobricks_autoassign_task';
 
+const AUTO_ASSIGN_PROGRESS_CFG = {
+    hostId: 'autoassign-section',
+    overlayId: 'autoAssignFormOverlay',
+    overlayClass: 'task-progress-overlay',
+    titleId: 'autoAssignOverlayTitle',
+    messageId: 'autoAssignOverlayMessage',
+    progressBarId: 'autoAssignOverlayProgress',
+    stepLogId: 'autoAssignStepLog',
+    activityPanelId: 'autoAssignActivityLogPanel',
+    activityLogId: 'autoAssignActivityLog',
+    agentMountId: 'autoAssignAgentStepsMount',
+    title: 'Auto-mapping in progress…',
+    subtitle: 'Generating SQL queries and column mappings with AI…',
+};
+
 window.AutoAssignModule = {
     initialized: false,
     isRunning: false,
@@ -344,66 +359,64 @@ window.AutoAssignModule = {
     },
     
     /**
-     * Show progress UI and disable the page with overlay
+     * Show progress overlay and disable action buttons.
      */
     showProgressUI: function() {
-        const progressSection = document.getElementById('autoAssignProgressSection');
         const reportSection = document.getElementById('autoAssignReportSection');
         const startBtn = document.getElementById('startAutoAssignBtn');
         const reassignBtn = document.getElementById('reassignAttrsBtn');
         const cancelBtn = document.getElementById('cancelAutoAssignBtn');
-        
-        if (progressSection) progressSection.style.display = 'block';
+
         if (reportSection) reportSection.style.display = 'none';
         if (startBtn) startBtn.style.display = 'none';
         if (reassignBtn) reassignBtn.style.display = 'none';
         if (cancelBtn) cancelBtn.style.display = 'inline-block';
+
+        if (typeof TaskProgressUI !== 'undefined') {
+            TaskProgressUI.clearPanels(AUTO_ASSIGN_PROGRESS_CFG);
+            TaskProgressUI.setOverlayVisible(AUTO_ASSIGN_PROGRESS_CFG, true);
+        }
     },
-    
+
     /**
-     * Hide progress UI and remove overlay
+     * Hide progress overlay and restore action buttons.
      */
     hideProgressUI: function() {
-        const progressSection = document.getElementById('autoAssignProgressSection');
         const startBtn = document.getElementById('startAutoAssignBtn');
         const cancelBtn = document.getElementById('cancelAutoAssignBtn');
-        
-        if (progressSection) progressSection.style.display = 'none';
+
+        if (typeof TaskProgressUI !== 'undefined') {
+            TaskProgressUI.setOverlayVisible(AUTO_ASSIGN_PROGRESS_CFG, false);
+        }
         if (startBtn) startBtn.style.display = 'inline-block';
         if (cancelBtn) cancelBtn.style.display = 'none';
     },
-    
+
     /**
-     * Update progress from task object (uses correct element IDs from HTML)
+     * Update progress from task object (step checklist, activity log, live gauges).
      */
     updateProgressFromTask: function(task) {
-        const progressBar = document.getElementById('autoAssignProgressBar');
-        const percentEl = document.getElementById('autoAssignProgressPercent');
-        const statusEl = document.getElementById('autoAssignCurrentItem');
-        const labelEl = document.getElementById('autoAssignProgressLabel');
-        
-        if (progressBar) {
-            progressBar.style.width = (task.progress || 0) + '%';
+        if (typeof TaskProgressUI !== 'undefined') {
+            TaskProgressUI.updateFromTask(AUTO_ASSIGN_PROGRESS_CFG, task);
         }
-        if (percentEl) {
-            percentEl.textContent = (task.progress || 0) + '%';
-        }
-        if (statusEl) {
-            statusEl.innerHTML = '<i class="bi bi-hourglass-split"></i> <span>' + (task.message || 'Processing...') + '</span>';
-        }
-        if (labelEl) {
-            labelEl.textContent = 'Processing...';
-        }
-        
+
         const res = task.result;
         if (res && res.live_stats) {
             const entityCountEl = document.getElementById('autoAssignEntityCount');
             const relCountEl = document.getElementById('autoAssignRelCount');
-            if (entityCountEl) entityCountEl.textContent = `${res.entities_assigned} / ${res.entities_total}`;
-            if (relCountEl) relCountEl.textContent = `${res.relationships_assigned} / ${res.relationships_total}`;
+            if (entityCountEl) {
+                entityCountEl.textContent = `${res.entities_assigned} / ${res.entities_total}`;
+            }
+            if (relCountEl) {
+                relCountEl.textContent = `${res.relationships_assigned} / ${res.relationships_total}`;
+            }
 
-            const ePct = res.entities_total > 0 ? (res.entities_assigned / res.entities_total) * 100 : null;
-            const rPct = res.relationships_total > 0 ? (res.relationships_assigned / res.relationships_total) * 100 : null;
+            const ePct = res.entities_total > 0
+                ? (res.entities_assigned / res.entities_total) * 100
+                : null;
+            const rPct = res.relationships_total > 0
+                ? (res.relationships_assigned / res.relationships_total) * 100
+                : null;
             _drawMappingGauge('gaugeAutoEntities', ePct);
             _drawMappingGauge('gaugeAutoRelationships', rPct);
         }
@@ -503,7 +516,7 @@ window.AutoAssignModule = {
         const properties = this.filterObjectProperties(ontology.properties || []);
         
         if (classes.length === 0 && properties.length === 0) {
-            showNotification('No ontology classes or properties found', 'info');
+            showNotification('No ontology entities or properties found', 'info');
             return;
         }
         
@@ -679,7 +692,8 @@ window.AutoAssignModule = {
             this.isRunning = true;
             this.isCancelled = false;
             this.results = [];
-            
+
+            this.disableSidebarMenus();
             this.showProgressUI();
             
             if (typeof refreshTasks === 'function') refreshTasks();
@@ -705,8 +719,8 @@ window.AutoAssignModule = {
                 method: 'POST',
                 credentials: 'same-origin'
             });
-            const labelEl = document.getElementById('autoAssignProgressLabel');
-            if (labelEl) labelEl.textContent = 'Cancelling...';
+            const messageEl = document.getElementById('autoAssignOverlayMessage');
+            if (messageEl) messageEl.textContent = 'Cancelling…';
         } catch (e) {
             console.error('[AutoAssign] Cancel error:', e);
         }
@@ -718,7 +732,9 @@ window.AutoAssignModule = {
      * Show the report
      */
     showReport: function() {
-        document.getElementById('autoAssignProgressSection').style.display = 'none';
+        if (typeof TaskProgressUI !== 'undefined') {
+            TaskProgressUI.setOverlayVisible(AUTO_ASSIGN_PROGRESS_CFG, false);
+        }
         document.getElementById('autoAssignReportSection').style.display = 'block';
         document.getElementById('cancelAutoAssignBtn').style.display = 'none';
         document.getElementById('startAutoAssignBtn').style.display = 'inline-block';
@@ -784,7 +800,10 @@ window.AutoAssignModule = {
      */
     reset: function() {
         this.results = [];
-        document.getElementById('autoAssignProgressSection').style.display = 'none';
+        if (typeof TaskProgressUI !== 'undefined') {
+            TaskProgressUI.setOverlayVisible(AUTO_ASSIGN_PROGRESS_CFG, false);
+            TaskProgressUI.clearPanels(AUTO_ASSIGN_PROGRESS_CFG);
+        }
         document.getElementById('autoAssignReportSection').style.display = 'none';
         document.getElementById('startAutoAssignBtn').style.display = 'inline-block';
         document.getElementById('cancelAutoAssignBtn').style.display = 'none';

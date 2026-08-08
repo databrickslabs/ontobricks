@@ -301,6 +301,137 @@ class TestExportImport:
         assert export["info"]["name"] == "Export Test"
         assert "versions" in export
 
+    def test_export_includes_graph_backend(self, domain_session):
+        """Per-domain graph backend must survive UC export (Domain → Information)."""
+        domain_session.info["graph_backend"] = "neo4j"
+        export = domain_session.export_for_save()
+        assert export["info"]["graph_backend"] == "neo4j"
+
+    def test_import_restores_graph_backend(self, domain_session):
+        """Reloading a domain from UC must restore the saved graph backend."""
+        domain_data = {
+            "info": {
+                "name": "Imported",
+                "description": "Test import",
+                "graph_backend": "databricks",
+            },
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "ImpOntology",
+                        "base_uri": "http://imp.org#",
+                        "classes": [{"name": "Imp"}],
+                        "properties": [],
+                        "constraints": [],
+                        "swrl_rules": [],
+                        "axioms": [],
+                        "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                }
+            },
+        }
+        domain_session.import_from_file(domain_data)
+        assert domain_session.info["graph_backend"] == "databricks"
+
+    def test_graph_backend_round_trip(self, domain_session):
+        domain_session.info["name"] = "RoundTrip"
+        domain_session.info["graph_backend"] = "neo4j"
+        export = domain_session.export_for_save()
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["graph_backend"] == "neo4j"
+
+    def test_class_dataset_and_actions_round_trip(self, domain_session):
+        """Registry export/import must preserve External dataset + UC actions."""
+        dataset = {
+            "catalog": "main",
+            "schema": "crm",
+            "asset": "customers",
+            "type": "TABLE",
+            "fullName": "main.crm.customers",
+            "key_column": "id",
+            "description": "Customer master",
+        }
+        actions = [
+            {
+                "catalog": "main",
+                "schema": "ops",
+                "function": "recompute_risk",
+                "fullName": "main.ops.recompute_risk",
+                "description": "Recompute risk",
+                "returns_table": False,
+            }
+        ]
+        domain_session.info["name"] = "ExtMeta"
+        domain_session.ontology["classes"] = [
+            {
+                "uri": "https://example.com/Customer",
+                "name": "Customer",
+                "label": "Customer",
+                "dataset": dataset,
+                "actions": actions,
+                "bridges": [
+                    {
+                        "target_domain": "Finance",
+                        "target_class_name": "Contract",
+                        "label": "Owns",
+                    }
+                ],
+            }
+        ]
+        export = domain_session.export_for_save()
+        exported_cls = export["versions"]["1"]["ontology"]["classes"][0]
+        assert exported_cls["dataset"] == dataset
+        assert exported_cls["actions"] == actions
+        assert exported_cls["bridges"][0]["target_domain"] == "Finance"
+
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        loaded = domain_session.get_classes()[0]
+        assert loaded["dataset"] == dataset
+        assert loaded["actions"] == actions
+        assert loaded["bridges"][0]["label"] == "Owns"
+
+    def test_export_includes_neo4j_connection(self, domain_session):
+        """Per-domain Neo4j connection name must survive UC export."""
+        domain_session.info["graph_backend"] = "neo4j"
+        domain_session.info["neo4j_connection"] = "Aura Prod"
+        export = domain_session.export_for_save()
+        assert export["info"]["neo4j_connection"] == "Aura Prod"
+        assert "neo4j_database" not in export["info"]
+
+    def test_neo4j_connection_round_trip(self, domain_session):
+        domain_session.info["name"] = "RoundTrip"
+        domain_session.info["graph_backend"] = "neo4j"
+        domain_session.info["neo4j_connection"] = "Aura Prod"
+        export = domain_session.export_for_save()
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["neo4j_connection"] == "Aura Prod"
+
+    def test_neo4j_connection_defaults_empty_on_import(self, domain_session):
+        """A legacy export without neo4j_connection imports as empty (no crash)."""
+        domain_data = {
+            "info": {"name": "Legacy", "graph_backend": "neo4j"},
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "O", "base_uri": "http://x#", "classes": [],
+                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "axioms": [], "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                }
+            },
+        }
+        domain_session.import_from_file(domain_data)
+        assert domain_session.info.get("neo4j_connection", "") == ""
+        assert "neo4j_database" not in domain_session.info or not domain_session.info.get(
+            "neo4j_database"
+        )
     def test_import_from_file(self, domain_session):
         domain_data = {
             "info": {"name": "Imported", "description": "Test import"},

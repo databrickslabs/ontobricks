@@ -1,0 +1,204 @@
+<!-- JS: /static/config/js/settings-runs.js -->
+<!-- Settings → Automation → Runs: build and analytics history across EVERY
+     domain in the registry (admin only). Same two-tab layout as Knowledge
+     Graph → Management → Runs, plus a Domain column, a Domain filter whose
+     default is every domain, and server-side pagination — cross-domain
+     history has no natural bound the way one domain's does.
+
+     Element ids are prefixed `sr` so a grep for a Runs id is never ambiguous
+     between this page and the per-domain one. Each tab owns its own loading /
+     empty / error / pagination elements: a failure fetching one must never
+     blank the other. -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-list-check me-2"></i>Runs</h4>
+            <p class="text-muted mb-0 small">
+                Build and analytics history across every domain (newest first)
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadSettingsRuns"
+                    title="Reload runs from the registry">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-sm-6 col-md-4">
+            <label for="settingsRunsDomain" class="form-label fw-semibold small mb-1">Domain</label>
+            <select class="form-select form-select-sm" id="settingsRunsDomain">
+                <option value="">All domains</option>
+            </select>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs ob-tabs" id="settingsRunsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="srtab-btn-build" data-bs-toggle="tab"
+                    data-bs-target="#srtab-build" type="button" role="tab"
+                    aria-controls="srtab-build" aria-selected="true">
+                <i class="bi bi-hammer me-1 text-primary"></i>Build runs
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="srtab-btn-analytics" data-bs-toggle="tab"
+                    data-bs-target="#srtab-analytics" type="button" role="tab"
+                    aria-controls="srtab-analytics" aria-selected="false">
+                <i class="bi bi-graph-up-arrow me-1 text-success"></i>Analytics runs
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content ob-tab-content" id="settingsRunsTabContent">
+
+        <!-- ── TAB: Build runs ── -->
+        <div class="tab-pane fade show active" id="srtab-build" role="tabpanel"
+             aria-labelledby="srtab-btn-build">
+
+            <div id="srBuildLoading" class="text-center py-5" style="display:none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 small">Loading build runs from registry&hellip;</p>
+            </div>
+
+            <div id="srBuildEmpty" class="text-center py-5" style="display:none;">
+                <i class="bi bi-list-check text-muted fs-1"></i>
+                <p class="text-muted mt-2 mb-1">No build runs recorded</p>
+                <p class="text-muted small" id="srBuildEmptyScope"></p>
+            </div>
+
+            <div id="srBuildError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <span id="srBuildErrorMessage"></span>
+            </div>
+
+            <div id="srBuildTableWrapper" style="display:none;">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-end" style="width:7%;">ID</th>
+                                <th style="width:18%;">Domain</th>
+                                <th style="width:21%;">Date &amp; Time</th>
+                                <th class="text-center" style="width:13%;">Version</th>
+                                <th class="text-center" style="width:15%;">Status</th>
+                                <th class="text-end" style="width:14%;">Triples</th>
+                                <th class="text-center" style="width:12%;">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="srBuildTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Hidden via `d-none`, not an inline style: Bootstrap's
+                 `.d-flex` is `display: flex !important` and would win. -->
+            <div class="d-flex d-none justify-content-between align-items-center mt-3 flex-wrap gap-2"
+                 id="srBuildPagination">
+                <div class="d-flex align-items-center gap-2">
+                    <label for="srBuildPageSize" class="text-muted small mb-0">Rows</label>
+                    <select class="form-select form-select-sm w-auto" id="srBuildPageSize">
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <!-- Page label + Prev/Next hide on their own when the result
+                     fits one page, so the Rows selector above stays reachable. -->
+                <div class="d-flex d-none align-items-center gap-2" id="srBuildPagingControls">
+                    <span class="text-muted small" id="srBuildPageInfo"></span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Build runs pagination">
+                        <button type="button" class="btn btn-outline-secondary" id="srBuildPrev">
+                            <i class="bi bi-chevron-left"></i> Prev
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="srBuildNext">
+                            Next <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TAB: Analytics runs ── -->
+        <div class="tab-pane fade" id="srtab-analytics" role="tabpanel"
+             aria-labelledby="srtab-btn-analytics">
+
+            <div id="srAnalyticsLoading" class="text-center py-5" style="display:none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted mt-2 small">Loading analytics runs from registry&hellip;</p>
+            </div>
+
+            <div id="srAnalyticsEmpty" class="text-center py-5" style="display:none;">
+                <i class="bi bi-graph-up-arrow text-muted fs-1"></i>
+                <p class="text-muted mt-2 mb-1">No analytics runs recorded</p>
+                <p class="text-muted small" id="srAnalyticsEmptyScope"></p>
+            </div>
+
+            <div id="srAnalyticsError" class="alert alert-warning m-3" role="alert" style="display:none;">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <span id="srAnalyticsErrorMessage"></span>
+            </div>
+
+            <div id="srAnalyticsTableWrapper" style="display:none;">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size:0.85rem">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date &amp; Time</th>
+                                <th>Domain</th>
+                                <th>Scope</th>
+                                <th class="text-center">Version</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Nodes</th>
+                                <th class="text-end">Edges</th>
+                                <th class="text-end">Components</th>
+                                <th class="text-end">Avg Degree</th>
+                                <th class="text-end">Density</th>
+                                <th class="text-end">Duration</th>
+                                <th class="text-center">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="srAnalyticsTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- See the note on #srBuildPagination above. -->
+            <div class="d-flex d-none justify-content-between align-items-center mt-3 flex-wrap gap-2"
+                 id="srAnalyticsPagination">
+                <div class="d-flex align-items-center gap-2">
+                    <label for="srAnalyticsPageSize" class="text-muted small mb-0">Rows</label>
+                    <select class="form-select form-select-sm w-auto" id="srAnalyticsPageSize">
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <!-- See the note on #srBuildPagingControls above. -->
+                <div class="d-flex d-none align-items-center gap-2" id="srAnalyticsPagingControls">
+                    <span class="text-muted small" id="srAnalyticsPageInfo"></span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Analytics runs pagination">
+                        <button type="button" class="btn btn-outline-secondary" id="srAnalyticsPrev">
+                            <i class="bi bi-chevron-left"></i> Prev
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="srAnalyticsNext">
+                            Next <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- NOTE: both run-details modals are rendered at page level in settings.html
+     so they work from any section (a modal inside a hidden .sidebar-section
+     shows its backdrop but leaves the dialog invisible). -->

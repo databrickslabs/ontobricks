@@ -1,0 +1,50 @@
+<!-- Databricks triple-store build (Delta TABLE only — no Lakebase sync) -->
+<div class="content-section sync-content-section" id="databricksBuildRoot">
+
+    <div id="dbxBuildLoadingOverlay" class="sync-loading-overlay">
+        <div class="ob-loading-spinner">
+            <span class="ob-spinner-label">Loading triple store information...</span>
+        </div>
+    </div>
+
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="bi bi-fast-forward me-2"></i>Build</h4>
+            <p class="text-muted mb-0 small">Materialize mapped triples into a governed Delta table in Unity Catalog</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span id="dbxBuildStatusText" class="text-muted small"></span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="dbxBuildRefreshBtn">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+            {% set _dr = get_user_domain_role() %}
+            {% if _dr not in ('viewer', 'editor', 'none') %}
+            <button type="button" class="btn btn-sm btn-outline-primary" id="dbxBuildStartBtn" disabled>
+                <i class="bi bi-fast-forward me-1"></i>Build
+            </button>
+            {% else %}
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Builders only">
+                <i class="bi bi-lock me-1"></i>Build
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="dbxBuildProgressArea" class="mt-2 mb-3 d-none">
+        <div class="progress mb-2 ob-progress-md">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" id="dbxBuildProgressBar" role="progressbar">0%</div>
+        </div>
+        <small class="text-muted" id="dbxBuildProgressStep"></small>
+    </div>
+
+    <div id="dbxBuildResultAlert" class="alert small mb-3 d-none" role="alert"></div>
+
+    <div class="alert alert-light border small mb-3">
+        <strong>Target Delta table</strong>
+        <div class="font-monospace mt-1" id="dbxBuildDataTable">—</div>
+        <div class="text-muted mt-1">Triple-Store Gateway: <span class="font-monospace" id="dbxBuildViewTable">—</span></div>
+    </div>
+
+    <div id="dbxBuildReadinessCard" class="mb-3"></div>
+    <div id="dbxBuildStatusCard" class="mb-3"></div>
+</div>

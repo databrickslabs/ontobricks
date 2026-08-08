@@ -36,9 +36,20 @@ def tool_submit_entity_mapping(
     id_column: str = "",
     label_column: str = "",
     attribute_mappings: Optional[dict] = None,
+    unmapped_attributes: Optional[list] = None,
     **_kwargs,
 ) -> str:
-    """Record a completed entity mapping."""
+    """Record a completed entity mapping.
+
+    ``unmapped_attributes`` lets the Generator stage declare ontology attributes
+    it intentionally did not map to a column, with a one-sentence ``reason``.
+    Items may be either bare strings (attribute name only) or dicts of shape
+    ``{"name": str, "reason": str}`` — the richer dict form is preferred for
+    downstream consumption but bare strings round-trip too. Anything else is
+    coerced to a string for safety. This enforces the PGE "no silent drops"
+    invariant: every ontology attribute is either in ``attribute_mappings`` or
+    in ``unmapped_attributes``.
+    """
     # Normalise column names: strip any surrounding backticks the LLM may have added.
     id_column = _strip_backticks(id_column)
     label_column = _strip_backticks(label_column)
@@ -58,6 +69,22 @@ def tool_submit_entity_mapping(
     clean_sql = SQLWizardService._deduplicate_select_columns(
         clean_sql, mapping_type="entity"
     )
+
+    # Normalise ``unmapped_attributes`` — accept either form, persist as-is for
+    # dicts, leave bare strings as strings (validation/coverage is downstream).
+    normalised_unmapped: List = []
+    for item in unmapped_attributes or []:
+        if isinstance(item, dict) and "name" in item:
+            normalised_unmapped.append(
+                {
+                    "name": str(item.get("name", "")),
+                    "reason": str(item.get("reason", "")),
+                }
+            )
+        elif isinstance(item, str):
+            normalised_unmapped.append(item)
+        else:
+            normalised_unmapped.append(str(item))
 
     # Restrict attribute_mappings to attributes declared in the ontology for this entity.
     # This prevents the LLM from inventing mappings for columns that are not ontology
@@ -111,18 +138,20 @@ def tool_submit_entity_mapping(
         "id_column": id_column,
         "label_column": label_column,
         "attribute_mappings": filtered_mappings,
+        "unmapped_attributes": normalised_unmapped,
     }
     # Preserve user-set excluded_attributes across auto-map runs.
     if existing_excl:
         mapping["excluded_attributes"] = existing_excl
 
     logger.debug(
-        "tool_submit_entity_mapping: '%s' — ID=%s, Label=%s, attrs=%d, excl=%d",
+        "tool_submit_entity_mapping: '%s' — ID=%s, Label=%s, attrs=%d, excl=%d, unmapped=%d",
         class_name,
         id_column,
         label_column,
         len(mapping["attribute_mappings"]),
         len(existing_excl),
+        len(normalised_unmapped),
     )
 
     if existing_idx >= 0:
@@ -136,12 +165,14 @@ def tool_submit_entity_mapping(
         logger.debug("tool_submit_entity_mapping: appended new mapping")
 
     mapped_attrs = len(mapping["attribute_mappings"])
+    unmapped_count = len(mapping["unmapped_attributes"])
     logger.info(
-        "tool_submit_entity_mapping: '%s' recorded — ID=%s, Label=%s, %d attr(s) mapped",
+        "tool_submit_entity_mapping: '%s' recorded — ID=%s, Label=%s, %d attr(s) mapped, %d unmapped",
         class_name,
         id_column,
         label_column,
         mapped_attrs,
+        unmapped_count,
     )
     return json.dumps(
         {
@@ -150,6 +181,7 @@ def tool_submit_entity_mapping(
             "id_column": id_column,
             "label_column": label_column,
             "attributes_mapped": mapped_attrs,
+            "attributes_unmapped": unmapped_count,
             "total_entity_mappings": len(ctx.entity_mappings),
         }
     )
@@ -318,6 +350,30 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
                         ),
                         "additionalProperties": {"type": "string"},
                     },
+                    "unmapped_attributes": {
+                        "type": "array",
+                        "description": (
+                            "Ontology attributes you intentionally did NOT map to a column, "
+                            "each with a one-sentence reason. Use this to satisfy the "
+                            'no-silent-drops invariant. Preferred shape: '
+                            '[{"name": "apgarScore", "reason": "absent from source table"}]. '
+                            "Bare strings are also accepted but discouraged."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "description": "Ontology attribute name.",
+                                },
+                                "reason": {
+                                    "type": "string",
+                                    "description": "Why this attribute was not mapped.",
+                                },
+                            },
+                            "required": ["name", "reason"],
+                        },
+                    },
                 },
                 "required": [
                     "class_uri",
@@ -354,11 +410,19 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
                     },
                     "source_id_column": {
                         "type": "string",
-                        "description": "Column name for the source entity identifier.",
+                        "description": (
+                            "The output-column alias in sql_query that holds the "
+                            "source id — alias it AS source_id and pass "
+                            '"source_id" here (NOT the entity\'s id_column).'
+                        ),
                     },
                     "target_id_column": {
                         "type": "string",
-                        "description": "Column name for the target entity identifier.",
+                        "description": (
+                            "The output-column alias in sql_query that holds the "
+                            "target id — alias it AS target_id and pass "
+                            '"target_id" here (NOT the entity\'s id_column).'
+                        ),
                     },
                     "domain": {
                         "type": "string",
@@ -391,4 +455,11 @@ MAPPING_TOOL_DEFINITIONS: List[dict] = [
 MAPPING_TOOL_HANDLERS: Dict[str, Callable] = {
     "submit_entity_mapping": tool_submit_entity_mapping,
     "submit_relationship_mapping": tool_submit_relationship_mapping,
+}
+
+# Name-indexed view of MAPPING_TOOL_DEFINITIONS so callers needing a single
+# definition (e.g. the EntityGenerator, which only exposes the entity submit
+# tool) can look it up by name without re-scanning the list.
+MAPPING_TOOL_DEFINITIONS_BY_NAME: Dict[str, dict] = {
+    d["function"]["name"]: d for d in MAPPING_TOOL_DEFINITIONS
 }

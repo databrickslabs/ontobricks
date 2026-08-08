@@ -3,6 +3,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# Preflight before touching the venv or downloading packages.
+chmod +x scripts/_internal/check-deploy-prerequisites.sh
+scripts/_internal/check-deploy-prerequisites.sh --local
+
 echo "====================================="
 echo "  OntoBricks Setup"
 echo "====================================="
@@ -32,7 +39,8 @@ echo "Activating virtual environment..."
 source .venv/bin/activate
 echo ""
 
-# Install dependencies (including optional lakebase and pitfalls extras for local dev)
+# Install dependencies (including lakebase and pitfalls extras for local dev;
+# neo4j is a core dependency in pyproject.toml)
 echo "Installing dependencies..."
 uv sync --frozen --extra lakebase --extra pitfalls
 echo ""

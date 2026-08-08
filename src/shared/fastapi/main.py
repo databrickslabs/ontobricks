@@ -5,6 +5,8 @@ This is the main FastAPI application (UI, GraphQL, health).
 Run with: uvicorn shared.fastapi.main:app --reload --port 8000
 """
 
+import os
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,11 +15,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from contextlib import asynccontextmanager
-import os
 
 from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
-from back.objects.session import FileSessionMiddleware
+from back.objects.session import FileSessionMiddleware, reap_expired_sessions
 from back.core.logging import setup_logging, get_logger
 
 setup_logging()
@@ -103,6 +104,12 @@ async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown events."""
     settings = get_settings()
     os.makedirs(settings.session_dir, exist_ok=True)
+    try:
+        reaped = reap_expired_sessions(settings.session_dir, settings.session_max_age)
+        if reaped:
+            logger.info("Removed %d expired session file(s) at startup", reaped)
+    except Exception as e:
+        logger.warning("Session sweep failed, continuing startup: %s", e)
     logger.info("OntoBricks FastAPI starting — session_dir=%s", settings.session_dir)
     logger.info("App docs: /docs | External REST: /api/docs")
 
@@ -158,9 +165,10 @@ _PERM_ADMIN_ONLY_EXCEPTIONS = {
     "/settings/registry": {"GET"},
     "/settings/registry/domains": {"GET"},
     "/settings/registry/bridges": {"GET"},
-    # Graph DB engine is global; non-admins need read access so the Settings UI
-    # (and tab refresh) match persisted state. Writes remain POST + admin-only.
-    "/settings/graph-engine": {"GET"},
+    # Graph DB engine *connection* config is global; non-admins need read access
+    # so the Settings UI (and tab refresh) match persisted state. Writes remain
+    # POST + admin-only. The backend *selection* moved per-domain.
+    "/settings/delta-warehouse": {"GET"},
     "/settings/graph-engine-config": {"GET"},
     "/settings/graph-engine/lakebase-health": {"GET"},
     "/settings/graph-engine/uc-catalogs": {"GET"},

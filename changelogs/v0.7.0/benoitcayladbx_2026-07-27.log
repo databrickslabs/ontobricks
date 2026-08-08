@@ -1,0 +1,810 @@
+## feat(kg-ui): modal popup for empty Filter-tab search results
+
+**Context:** In the Graph Explorer Filter tab, a search that matched nothing only updated a small inline info line ("No entities found matching the filter criteria."), which was easy to miss. The message is now surfaced via a centered modal popup.
+
+**Changes:**
+1. `src/front/static/global/js/utils.js` — Added reusable `showInfoDialog({ title, message, okText, okClass, icon })` helper (single OK button, auto-cleanup on dismiss) and exported it on `window`.
+2. `src/front/static/query/js/query-sigmagraph.js` — In `_executeGraphSearch`, the empty-seeds branch now also calls `showInfoDialog({ title: 'No results', icon: 'search' })` (guarded by a `typeof` check) while still updating the inline info text as a fallback.
+
+**Modified files:**
+- `src/front/static/global/js/utils.js`
+- `src/front/static/query/js/query-sigmagraph.js`
+
+**Test result:** No automated tests cover this JS UI. Lint clean on both files; full suite unchanged (see below).
+
+---
+
+## feat(kg-ui): show entity icon (not count) in Filter tab Entity dropdown
+
+**Context:** Follow-up — the Filter tab Entity dropdown options showed a trailing instance count `(N)`. Replaced the count with the entity's icon before the name for quicker visual scanning.
+
+**Changes:**
+1. `src/front/static/query/js/query-sigmagraph.js` — In `_populateFilterEntityTypes` (graph-active branch) and `_renderStatsDropdown`, option text is now `<icon> <name>` (via `_iconForType`) instead of `<name> (<count>)`.
+
+**Modified files:**
+- `src/front/static/query/js/query-sigmagraph.js`
+
+**Test result:** UI-only change; full backend suite green (3320 passed, 275 skipped).
+
+---
+
+## feat(kg-ui): add Entity dropdown to Graph Explorer Filter tab
+
+**Context:** The Graph Explorer Filter tab had no way to scope a search to a single entity type. The JS (`_executeGraphSearch`, `_populateFilterEntityTypes`, `clearGraphFilter`) already referenced a `sgFilterEntityType` control, but the `<select>` was never added to the template. Added the missing dropdown (default "All") and ensured it populates whenever the Filter tab opens.
+
+**Changes:**
+1. `src/front/templates/partials/dtwin/_query_sigmagraph.html` — Added an "Entity" `<select id="sgFilterEntityType">` at the top of the Filter tab with a default `All` option; the existing search flow already sends its value as `entity_type` to restrict the search.
+2. `src/front/static/query/js/query-sigmagraph.js` — Relabeled the populated default option from "All types" to "All" (4 spots in `_populateFilterEntityTypes` / `_renderStatsDropdown`); added a `shown.bs.tab` listener on `#sgTabFilter` so directly clicking the Filter tab also populates the dropdown (previously only `_switchToTab` paths did).
+
+**Modified files:**
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/static/query/js/query-sigmagraph.js`
+
+**Test result:** UI-only change; full backend suite green (3320 passed, 275 skipped).
+
+---
+
+## feat(kg-ui): show the active backend in the "Graph ready" badge
+
+**Context:** Follow-up to the graph-readiness indicator — the "Graph ready" badge now also shows which triple-store backend the graph runs on (Lakehouse / Neo4j / Lakebase).
+
+**Changes:**
+1. `src/front/static/query/js/query-sync.js` — Added `_kgBackendLabel()` deriving a friendly label from the injected `triplestore-config` (`triple_store_backend`/`graph_engine`: databricks or delta -> "Lakehouse", neo4j -> "Neo4j", else "Lakebase"). The ready badge appends `· <backend>` and the tooltip names the backend.
+
+**Modified files:**
+- `src/front/static/query/js/query-sync.js`
+
+**Test result:** UI-only change; full backend suite green (3320 passed, 275 skipped).
+
+---
+
+## feat(kg-ui): add graph-readiness indicator to all Knowledge Graph sub-pages
+
+**Context:** The Knowledge Graph sub-pages (Overview, Analytics, Graph Explorer, Query, Chat, Data Quality, Inference, Cohorts) gave no at-a-glance signal of whether the graph had actually been built. Added a small status indicator next to each sub-page title: a green "Graph ready" badge when the graph is built, a "Building…" badge while a build/sync task runs, or a "Graph not built" message with a "Go to Build" button that jumps to the Build sub-page.
+
+**Changes:**
+1. `src/front/templates/partials/dtwin/_kg_status_indicator.html` (new) — Reusable inline `[data-kg-status]` container, dropped inside each sub-page `<h4>`; populated by JS.
+2. `src/front/templates/partials/dtwin/_query_insights.html`, `_query_analytics.html`, `_query_sigmagraph.html`, `_query_graphql.html`, `_query_chat.html`, `_query_dataquality.html`, `_query_reasoning.html`, `_query_cohorts.html` — Included the indicator partial inside each title `<h4>`.
+3. `src/front/static/query/js/query-sync.js` — Added `updateKgReadyIndicators()` (building / ready / not-built states from the shared `tripleStoreHasData` + `syncIsRunning` status) called at the end of `updateDataMenus()`, plus a one-time delegated click handler that routes any `.kg-go-build-btn` to the Build sub-page (`[data-section="sync"]`).
+4. `src/front/static/query/css/query-sync.css` — Minor styling for the badge, in-badge spinner, and Go-to-Build button.
+
+**Modified files:**
+- `src/front/templates/partials/dtwin/_kg_status_indicator.html` (new)
+- `src/front/templates/partials/dtwin/_query_insights.html`
+- `src/front/templates/partials/dtwin/_query_analytics.html`
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/templates/partials/dtwin/_query_graphql.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/dtwin/_query_dataquality.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/static/query/css/query-sync.css`
+
+**Test result:** UI-only change (no automated JS coverage); full backend suite run below to confirm no regressions.
+
+---
+
+## fix(mapping-ui): wire Designer "Unmap all" via addEventListener for reliable confirm popup
+
+**Context:** Follow-up to the "Unmap all" work below. The Designer button was wired with an inline `onclick="confirmResetMappings()"`, which reintroduced the inline-handler pattern the team deliberately dropped in v0.2.0 (in favor of id-based `addEventListener`). Switched it to the same robust wiring as the Information button so the confirmation dialog (`showConfirmDialog`) fires reliably before any mappings are cleared.
+
+**Changes:**
+1. `src/front/templates/partials/mapping/_mapping_design.html` — Removed the inline `onclick="confirmResetMappings()"` from `#resetMappingsDesignBtn` (kept the id).
+2. `src/front/static/global/js/mapping-information.js` — `_initMappingInformationButtons()` now wires both `#resetMappingsBtn` and `#resetMappingsDesignBtn` to `confirmResetMappings()` via `addEventListener` with the existing `obResetWired` de-dup guard.
+
+**Modified files:**
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/static/global/js/mapping-information.js`
+
+**Test result:** UI-only change (no automated JS coverage); full backend suite green (3320 passed, 275 skipped).
+
+---
+
+## feat(mapping-ui): rename Reset to "Unmap all" and add it to the Designer page
+
+**Context:** The mapping "Reset" button (which deletes all entity and relationship mappings) was only available on Mapping/Information and its label was unclear. Renamed it to "Unmap all" and added the same action to the Mapping/Designer page toolbar so users can unmap everything without leaving the visual designer.
+
+**Changes:**
+1. `src/front/templates/partials/mapping/_mapping_information.html` — Renamed the `#resetMappingsBtn` label from "Reset" to "Unmap all" and added a descriptive `title`.
+2. `src/front/templates/partials/mapping/_mapping_design.html` — Added an "Unmap all" button (`#resetMappingsDesignBtn`, `btn-outline-danger`) to the designer header toolbar, wired to the existing `confirmResetMappings()` handler.
+3. `src/front/static/global/js/mapping-information.js` — `resetAllMappings()` now targets whichever button is rendered (`resetMappingsBtn` or `resetMappingsDesignBtn`) for its spinner and guards the `finally` reset; updated the confirm dialog title/button text to "Unmap all".
+
+**Modified files:**
+- `src/front/templates/partials/mapping/_mapping_information.html`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/static/global/js/mapping-information.js`
+
+**Test result:** UI-only change (no automated JS coverage in this repo); backend suite run below to confirm no regressions.
+
+---
+
+## fix(api): SQL identifier validation, bridge_depth le=1, test coverage, cleanup
+
+**Context:** Final code-review fixes for the MCP node-context feature. Addresses 6 findings: SQL injection guards on `fullName` and `key_column`, bridge `target_table` identifier validation, `bridge_depth` constrained to `le=1` for this version, a new `follow_bridges` unit test, `response_model_exclude_none=True` on the domain classes endpoint, and minor cleanup (module-level `_RDF_TYPE` constant, test rename).
+
+**Changes:**
+1. `src/api/routers/digitaltwin.py` — Added `import re`, module-level `_SAFE_SQL_IDENT`, `_SAFE_COL_IDENT`, and `_RDF_TYPE` constants.
+2. `src/api/routers/digitaltwin.py` — Added regex validation of `fullName` and `key_column` before any SQL is constructed in `dt_nodes_context`; returns HTTP 200 with `success=False` on invalid identifiers.
+3. `src/api/routers/digitaltwin.py` — Added regex validation of `target_table` inside the bridge traversal block; logs warning and `continue`s (skips the entry) on invalid identifiers.
+4. `src/api/routers/digitaltwin.py` — Changed `bridge_depth` query param from `le=5` to `le=1` to hard-cap at depth 1 for this version.
+5. `src/api/routers/digitaltwin.py` — Replaced inline `rdf_type = "http://..."` string in bridge traversal with `_RDF_TYPE` constant.
+6. `src/api/routers/domains.py` — Added `response_model_exclude_none=True` to the `GET /domain/classes` decorator.
+7. `tests/units/api/test_node_context_endpoint.py` — Added `test_follow_bridges_returns_entities` using mocked `resolve_domain`, `get_graphdb`, and `effective_graph_query_table`; asserts `bridges[0]["entities"]` is populated.
+8. `tests/units/api/test_domain_classes_endpoint.py` — Renamed `test_filters_empty_actions` → `test_empty_actions_class_has_null_dataset_and_no_bridges`.
+
+**Modified files:**
+- `src/api/routers/digitaltwin.py`
+- `src/api/routers/domains.py`
+- `tests/units/api/test_node_context_endpoint.py`
+- `tests/units/api/test_domain_classes_endpoint.py`
+
+**Test result:** 8/8 targeted tests pass; full suite 3320 passed, 275 skipped, 0 failures.
+
+---
+
+## test(mcp): register get_entity_context in marquee tool schema assertions
+
+**Context:** Task 6 (final) of the MCP node-context feature. Adds `get_entity_context` to the `expected` set in `test_expected_core_tools_registered`, completing the public MCP contract assertion for all tools introduced in this feature branch.
+
+**Changes:**
+1. `tests/mcp/integration/test_tool_schemas.py` — Added `"get_entity_context"` to the `expected` set in `test_expected_core_tools_registered`.
+
+**Modified files:**
+- `tests/mcp/integration/test_tool_schemas.py`
+
+**Test result:** 5/5 MCP schema tests pass; full suite 3319 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(mcp): add get_entity_context tool with dataset rows + bridge traversal
+
+**Context:** Task 5 of the MCP node-context feature. Adds the `get_entity_context` MCP tool that calls the `GET /api/v1/digitaltwin/nodes/context` endpoint (Task 3) to return complete context for an entity node including linked dataset rows and/or cross-domain bridge entities.
+
+**Changes:**
+1. `src/mcp-server/server/app.py` — Added `API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"` path constant after `API_V1_DOMAIN_CLASSES`.
+2. `src/mcp-server/server/app.py` — Added `_format_node_context_response(data: dict) -> str` module-level helper after `_format_class_context_block`; formats node context JSON as LLM-friendly text with entity header, dataset rows, and bridge info.
+3. `src/mcp-server/server/app.py` — Added `get_entity_context` `@mcp.tool()` inside `create_mcp_server()` after `query_graphql`; takes `entity_uri`, `fetch_dataset_rows`, `dataset_row_limit`, `follow_bridges` parameters; guards for missing domain selection.
+4. `tests/mcp/integration/test_more_smoke_tools.py` — Added `TestGetEntityContext` class with 2 smoke tests: metadata-only and no-domain-selected guard.
+
+**Modified files:**
+- `src/mcp-server/server/app.py`
+- `tests/mcp/integration/test_more_smoke_tools.py`
+
+**Test result:** 9/9 MCP smoke tests pass; full suite 3319 passed, 275 skipped, 0 failures.
+
+---
+
+## fix(mcp): reuse client in select_domain cache fetch; strengthen context test
+
+**Context:** Two small polish fixes for Task 4's implementation. Fix 1 eliminates a redundant nested `_client()` context manager inside `select_domain` — the cache fetch now reuses the already-open `client` from the outer block. Fix 2 adds a concrete assertion in `test_describe_entity_includes_context_block`: when `[Context` appears in the output, it must contain the expected dataset or bridge text.
+
+**Changes:**
+1. `src/mcp-server/server/app.py` — Removed inner `async with _client() as client:` block inside `select_domain`; class Actions cache fetch now calls `await _get(client, ...)` directly on the outer client.
+2. `tests/mcp/integration/test_more_smoke_tools.py` — Added `if "[Context" in text: assert "main.crm.customers" in text or "Finance" in text` assertion in `test_describe_entity_includes_context_block`.
+
+**Modified files:**
+- `src/mcp-server/server/app.py`
+- `tests/mcp/integration/test_more_smoke_tools.py`
+
+**Test result:** 7/7 MCP smoke tests pass; full suite 3317 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(mcp): class-actions cache + describe_entity [Context] enrichment
+
+**Context:** Task 4 of the MCP node-context feature. Wires the `GET /api/v1/domain/classes` endpoint (Task 2) into the MCP server: populates a `_class_actions` closure cache on `select_domain`, then enriches `describe_entity` output with a `[Context]` block showing the entity's linked dataset and bridge metadata.
+
+**Changes:**
+1. `src/mcp-server/server/app.py` — Added `API_V1_DOMAIN_CLASSES` path constant.
+2. `src/mcp-server/server/app.py` — Added `_class_actions: dict[str, dict] = {}` closure variable inside `create_mcp_server()`.
+3. `src/mcp-server/server/app.py` — In `select_domain`: clears and repopulates `_class_actions` from the domain classes API (non-fatal on error).
+4. `src/mcp-server/server/app.py` — Added `_format_class_context_block` module-level helper.
+5. `src/mcp-server/server/app.py` — Extended `_format_find_response` with optional `class_actions` param; appends context block for each seed entity whose class is in the cache.
+6. `src/mcp-server/server/app.py` — Updated `describe_entity` call to pass `class_actions=_class_actions`.
+7. `tests/mcp/integration/test_more_smoke_tools.py` — Added `test_describe_entity_includes_context_block` to `TestDescribeEntity`.
+
+**Modified files:**
+- `src/mcp-server/server/app.py`
+- `tests/mcp/integration/test_more_smoke_tools.py`
+
+**Test result:** 7/7 MCP smoke tests pass; full suite 3317 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(api): add GET /api/v1/digitaltwin/nodes/context endpoint
+
+**Context:** Task 3 of the MCP node-context feature. Adds the REST endpoint that resolves an entity URI to its ontology class and returns linked dataset metadata (with optional row retrieval) and bridge definitions (with optional cross-domain traversal).
+
+**Changes:**
+1. `src/api/routers/digitaltwin.py` — Added `NodeContextDataset`, `NodeContextBridge`, `NodeContextResponse` Pydantic models in the response-models section.
+2. `src/api/routers/digitaltwin.py` — Added `dt_nodes_context` route handler for `GET /nodes/context`; resolves class by URI prefix, returns dataset metadata and bridges; caps dataset rows at 1–20; skips row fetch when `key_column` missing; swallows per-bridge traversal errors with a warning.
+3. `tests/units/api/test_node_context_endpoint.py` — Created unit tests (TDD, 4 cases): `test_metadata_only_by_default`, `test_missing_entity_uri_returns_422`, `test_unknown_class_returns_empty_context`, `test_dataset_rows_skipped_when_key_column_missing`.
+
+**Modified files:**
+- `src/api/routers/digitaltwin.py`
+- `tests/units/api/test_node_context_endpoint.py` (new)
+
+**Test result:** 4/4 new tests pass; full suite 3316 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(api): add GET /api/v1/domain/classes for class Actions metadata
+
+**Context:** Task 2 of the MCP node-context feature. Adds a lightweight endpoint that returns per-class dataset and bridge metadata from the domain's published ontology, preserving `key_column` in the dataset dict as set by Task 1's UI work.
+
+**Changes:**
+1. `src/api/routers/domains.py` — Added `ClassActionsItem` and `ClassActionsResponse` Pydantic models in the response-models section (after `VersionsResponse`).
+2. `src/api/routers/domains.py` — Added `get_domain_classes` route handler for `GET /domain/classes`; uses `DigitalTwin.resolve_domain` + `domain.get_classes()` following existing patterns; passes `dataset` (including `key_column`) through as-is.
+3. `tests/units/api/test_domain_classes_endpoint.py` — Created unit tests (TDD): `test_returns_classes_with_actions`, `test_filters_empty_actions`, `test_missing_domain_name_uses_session`.
+
+**Modified files:**
+- `src/api/routers/domains.py`
+- `tests/units/api/test_domain_classes_endpoint.py` (new)
+
+**Test result:** 3/3 new tests pass; full suite 3312 passed, 275 skipped, 0 failures.
+
+---
+
+## feat(ontology-ui): add key_column field to Dataset panel
+
+**Context:** The Dataset section of the ontology class Actions panel needed a "Key column" input so users can specify which UC table column maps to the node ID. This is Task 1 of the MCP node-context feature (key_column flows through to Task 2's backend round-trip).
+
+**Changes:**
+1. `src/front/static/ontology/js/ontology-shared-panels.js` — Added `key_column: null` to `sharedPanelDataset` object in `_datasetSelectAsset` (line ~1188).
+2. `src/front/static/ontology/js/ontology-shared-panels.js` — Replaced `renderSharedEntityDataset` body to render a `<input id="datasetKeyColumnInput">` below the asset display when not in view-only mode; shows read-only `<code>` snippet in view-only mode.
+3. `src/front/static/ontology/js/ontology-shared-panels.js` — Added `onDatasetKeyColumnChange(value)` handler immediately after `renderSharedEntityDataset`.
+
+**Modified files:**
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+
+**Test result:** No automated tests cover JS UI in this repo. Manual inspection confirms balanced braces, correct template literals, and that `key_column` flows through the existing save payload (`dataset: sharedPanelDataset || undefined`) without additional changes.
+
+## Ontology dataset key-column dropdown
+
+Context: Ontology entities linked to external Unity Catalog datasets required
+users to type a key column manually, allowing invalid column names. Replaced
+the free-text control with an asynchronously populated dropdown. Reviewed
+behavior: empty `columns` responses must not be cached and the disabled
+“No columns found” state must offer Retry, because the backend can degrade UC
+errors to an empty successful response.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Replaced the free-text key-column control with an asynchronously populated,
+   cached dropdown with loading, empty (retryable), missing-key, failure, and
+   retry states; empty column lists are not cached.
+2. tests/units/front/test_ontology_dataset_key_dropdown.py
+   Added regression contracts for dropdown rendering, API usage, caching,
+   empty-list non-caching + retry, stale-response protection, DOM option
+   building, and dirty-state persistence.
+3. docs/superpowers/specs/2026-07-27-ontology-dataset-key-column-dropdown-design.md
+   Documented the approved design, including empty-response non-caching and
+   retryable “No columns found”.
+4. docs/superpowers/plans/2026-07-27-ontology-dataset-key-column-dropdown.md
+   Documented the implementation plan.
+5. changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+   Recorded this change with verified test summaries.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_dataset_key_dropdown.py
+- docs/superpowers/specs/2026-07-27-ontology-dataset-key-column-dropdown-design.md
+- docs/superpowers/plans/2026-07-27-ontology-dataset-key-column-dropdown.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_key_dropdown.py → 7 passed, 1 warning in 0.15s
+- uv run pytest -q -m "not scenario" → 3327 passed, 275 skipped, 5 deselected, 23 warnings in 23.63s
+- Browser verification → 6 UC columns loaded; selection persisted; dataset
+  change cleared the key; empty result exposed Retry and re-fetched.
+
+## External dataset description
+
+Context: Class-linked external Unity Catalog datasets needed an editable
+purpose description, defaulted from the UC table/view comment on first link,
+and surfaced to MCP agents plus Graph Explorer.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Added Description textarea; first selection defaults from asset.comment;
+   switching datasets preserves the existing description.
+2. src/api/routers/digitaltwin.py
+   Exposed optional dataset.description on NodeContextDataset /nodes/context.
+3. src/mcp-server/server/app.py
+   Included Purpose lines in describe_entity and get_entity_context formatters.
+4. src/front/static/query/js/query-loaders.js
+   Retained class dataset objects in ontology/entity mapping loaders.
+5. src/front/static/query/js/query-entity-details.js
+   Rendered Dataset section with table, key, and purpose in Graph Explorer.
+6. tests/units/front/test_ontology_dataset_description.py
+   Added ontology UI selection/defaulting contracts.
+7. tests/units/front/test_query_dataset_description.py
+   Added Graph Explorer loader/details contracts.
+8. tests/units/api/test_node_context_endpoint.py
+   Asserted description round-trip on node context.
+9. tests/units/mcp/test_node_context_formatting.py
+   Added MCP Purpose formatting contracts.
+10. docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+    Documented the approved design.
+11. docs/superpowers/plans/2026-07-27-external-dataset-description.md
+    Documented the implementation plan.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/api/routers/digitaltwin.py
+- src/mcp-server/server/app.py
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-entity-details.js
+- tests/units/front/test_ontology_dataset_description.py
+- tests/units/front/test_query_dataset_description.py
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/mcp/test_node_context_formatting.py
+- docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+- docs/superpowers/plans/2026-07-27-external-dataset-description.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_description.py tests/units/front/test_query_dataset_description.py tests/units/api/test_node_context_endpoint.py tests/units/mcp/test_node_context_formatting.py → 12 passed
+- uv run pytest -q -m "not scenario" → 3334 passed, 275 skipped, 5 deselected, 23 warnings in 29.47s
+
+## Dataset description UC fill button
+
+Context: Authors needed a one-click way to refill the dataset purpose text
+from the linked Unity Catalog table/view comment without reselecting the asset.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Added a right-aligned cloud-download button next to Description that loads
+   the UC table comment via /settings/uc-assets and updates the textarea.
+2. tests/units/front/test_ontology_dataset_description.py
+   Added a contract for the right-aligned UC metadata button and fetch path.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_description.py → 4 passed
+- uv run pytest -q -m "not scenario" → 3335 passed, 275 skipped, 5 deselected, 23 warnings in 21.88s
+
+## Dataset description from Data Sources
+
+Context: The Description fill button must use the domain Data Sources
+table/view description (`/domain/metadata`), not a live Unity Catalog assets
+lookup.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   Rewired the fill button to load comment/description from Data Sources and
+   match the linked dataset by full name / asset name.
+2. tests/units/front/test_ontology_dataset_description.py
+   Updated the contract to assert `/domain/metadata` usage.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_ontology_dataset_description.py → 4 passed
+- uv run pytest -q -m "not scenario" → 3335 passed, 275 skipped, 5 deselected, 23 warnings in 21.30s
+
+## Fix Data Sources table details save
+
+Context: Editing a table description in Data Sources and clicking Save Changes
+only updated the in-memory cache. ``saveMetadataChanges`` (POST
+``/domain/metadata/save``) was never wired, so descriptions were lost on reload
+and the ontology Description fill button had nothing useful to read.
+
+Changes:
+
+1. src/front/static/domain/js/domain-metadata.js
+   Made modal Save Changes persist immediately via ``await saveMetadataChanges``.
+2. tests/units/front/test_domain_metadata_save.py
+   Added a regression contract that table-details save posts metadata.
+
+Modified files:
+- src/front/static/domain/js/domain-metadata.js
+- tests/units/front/test_domain_metadata_save.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_domain_metadata_save.py → 1 passed
+- uv run pytest -q -m "not scenario" → 3336 passed, 275 skipped, 5 deselected, 23 warnings in 25.61s
+
+## MCP surfaces external dataset description
+
+Context: Ensure agents see the ontology-authored external dataset Description
+via MCP (not only Graph Explorer / REST). Formatters already read
+``dataset.description``; rename the LLM label to ``Description:``, expose it
+from ``list_entity_types``, and cover with behavioral tests.
+
+Changes:
+
+1. src/mcp-server/server/app.py
+   Emit ``Description:`` in describe_entity / get_entity_context formatters;
+   include Dataset + Description under list_entity_types; document in tool
+   docstrings.
+2. tests/units/mcp/test_node_context_formatting.py
+   Behavioral tests that formatters include (and omit blank) descriptions.
+3. docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+   Spec wording updated from Purpose to Description / list_entity_types.
+
+Modified files:
+- src/mcp-server/server/app.py
+- tests/units/mcp/test_node_context_formatting.py
+- docs/superpowers/specs/2026-07-27-external-dataset-description-design.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/mcp/test_node_context_formatting.py tests/units/api/test_node_context_endpoint.py → 9 passed
+- uv run pytest -q -m "not scenario" → 3338 passed, 275 skipped, 5 deselected, 23 warnings in 23.53s
+
+## Graph Explorer dataset preview box
+
+Context: Graph Explorer Details needed a Dashboard-style Dataset section with
+metadata and a Preview rows action capped at 10 UC rows via existing
+``/nodes/context``.
+
+Changes:
+
+1. src/front/static/query/js/query-dashboard.js
+   Added ``openDatasetPreviewModal`` that loads up to 10 rows from
+   ``/api/v1/digitaltwin/nodes/context``.
+2. src/front/static/query/js/query-entity-details.js
+   Dataset section shows Description + Preview rows (disabled without key).
+3. src/front/static/query/js/query-sigmagraph.js
+   Added matching Dataset section after Dashboard in Sigma Details.
+4. tests/units/front/test_query_dataset_description.py
+   Contracts for both Details surfaces and the 10-row preview fetch.
+5. docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+   Design for the preview box.
+6. docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+   Implementation plan.
+
+Modified files:
+- src/front/static/query/js/query-dashboard.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query.js
+- tests/units/front/test_query_dataset_description.py
+- docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+- docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_query_dataset_description.py → 4 passed
+- uv run pytest -q -m "not scenario" → 3340 passed, 275 skipped, 5 deselected, 23 warnings in 26.22s
+
+## Fix nodes/context class match for path-based URIs
+
+Context: Graph Explorer Dataset Preview showed "No linked dataset" because
+``/nodes/context`` only matched ``entity_uri.startswith(class_uri + "/")``.
+Cust360Auto instances are ``.../Meter/id`` while class URIs are
+``...#Meter``, so the class (and dataset) never resolved.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Added ``_match_ontology_class`` with URI-prefix then local-name/path
+   segment fallback; log when no class matches.
+2. tests/units/api/test_node_context_endpoint.py
+   Regression for hash class URI + path-based entity URI.
+3. src/front/static/query/js/query-dashboard.js
+   Clearer modal message when the class URI cannot be resolved.
+
+Modified files:
+- src/api/routers/digitaltwin.py
+- tests/units/api/test_node_context_endpoint.py
+- src/front/static/query/js/query-dashboard.js
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py → 6 passed
+- uv run pytest -q -m "not scenario" → 3341 passed, 275 skipped, 5 deselected, 23 warnings in 22.69s
+
+## Fix dataset preview Databricks client call
+
+Context: Preview showed "No matching rows" even after class matching worked.
+Server logs showed the real failure: ``get_databricks_client(settings)`` was
+missing the required ``domain`` argument; the exception was swallowed and the
+UI treated missing rows as an empty result.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Call ``get_databricks_client(domain, settings)``; surface fetch errors via
+   response ``message``; treat missing client as an explicit error.
+2. src/front/static/query/js/query-dashboard.js
+   Show fetch failure message instead of false "No matching rows".
+3. tests/units/api/test_node_context_endpoint.py
+   Regression asserting domain+settings are passed to the client.
+4. tests/units/front/test_query_dataset_description.py
+   Contract for failed-row messaging.
+
+Modified files:
+- src/api/routers/digitaltwin.py
+- src/front/static/query/js/query-dashboard.js
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/front/test_query_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py → 7 passed
+- uv run pytest -q -m "not scenario" → 3342 passed, 275 skipped, 5 deselected, 23 warnings in 22.07s
+
+## Fix dataset preview SQL method name
+
+Context: After correcting the Databricks client constructor args, preview failed
+with ``'DatabricksClient' object has no attribute 'execute'``. The client API
+is ``execute_query``.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Use ``client_db.execute_query`` for dataset row preview.
+2. tests/units/api/test_node_context_endpoint.py
+   Mock ``execute_query`` instead of ``execute``.
+
+Modified files:
+- src/api/routers/digitaltwin.py
+- tests/units/api/test_node_context_endpoint.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py → 7 passed
+- uv run pytest -q -m "not scenario" → 3342 passed, 275 skipped, 5 deselected, 23 warnings in 21.27s
+
+## Graph Explorer context-menu Dataset preview
+
+Context: Right-click on a node with a linked dataset should open the same
+preview modal as Details → Preview rows, mirroring View Dashboard.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Resolve dataset in node meta; add Dataset preview context-menu item and
+   handler calling ``openDatasetPreviewModal``.
+2. tests/units/front/test_query_dataset_description.py
+   Contract for the context-menu Dataset preview action.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_query_dataset_description.py
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/front/test_query_dataset_description.py → 5 passed
+- uv run pytest -q -m "not scenario" → 3343 passed, 275 skipped, 5 deselected, 23 warnings in 23.06s
+
+## Strengthen external dataset addon tests
+
+Context: The dataset addon needed behavioral coverage across its API, Graph
+Explorer, and MCP boundaries. Previous MCP smoke tests tolerated backend route
+errors and frontend tests only checked a minimal set of source strings.
+
+Changes:
+
+1. tests/units/api/test_node_context_endpoint.py
+   Added exact SQL/key/limit, query failure, and limit-validation tests.
+2. tests/mcp/integration/test_dataset_context_tools.py
+   Added FastMCP integration tests proving select-domain cache propagation,
+   dataset descriptions in list/describe tools, and row-fetch formatting and
+   request parameters in get_entity_context.
+3. tests/units/front/test_query_dataset_description.py
+   Added contracts for modal states, safe row/column rendering, and right-click
+   context-menu argument forwarding.
+4. docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+   Documented the API, MCP, and Graph Explorer test matrix.
+5. docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+   Added the behavioral coverage implementation task.
+
+Modified files:
+- tests/units/api/test_node_context_endpoint.py
+- tests/mcp/integration/test_dataset_context_tools.py
+- tests/units/front/test_query_dataset_description.py
+- docs/superpowers/specs/2026-07-27-graph-explorer-dataset-preview-design.md
+- docs/superpowers/plans/2026-07-27-graph-explorer-dataset-preview.md
+- changelogs/v0.7.0/benoitcayladbx_2026-07-27.log
+
+Tests:
+- uv run pytest -q tests/units/api/test_node_context_endpoint.py tests/mcp/integration/test_dataset_context_tools.py tests/units/mcp/test_node_context_formatting.py tests/units/front/test_query_dataset_description.py → 25 passed
+- uv run pytest -q -m "not scenario" → 3352 passed, 275 skipped, 5 deselected, 23 warnings in 22.64s
+
+---
+
+## Restrict new domain names to CamelCase alphanumeric
+
+Context: Creating a new domain accepted spaces and special characters in the
+name (New Domain dialog only checked non-empty). That diverged from the Domain
+Information page rule and produced awkward registry folder / URI slugs. New
+domains now allow CamelCase alphanumeric names only (letters and digits).
+
+Changes:
+
+1. src/back/objects/session/DomainSession.py
+   Added `is_valid_domain_name` (`^[A-Z][a-zA-Z0-9]*$`).
+2. src/back/objects/session/__init__.py
+   Exported `is_valid_domain_name`.
+3. src/back/objects/domain/Domain.py
+   Reject invalid names when saving info / UC for unregistered (new) domains.
+4. src/front/static/global/js/utils.js
+   New Domain dialog live-strips non-alnum, enforces CamelCase, and blocks
+   create until the name is valid; helper hint updated.
+5. tests/units/session/test_domain_name_validation.py
+   Parametrized unit tests for `is_valid_domain_name`.
+6. tests/units/front/test_new_domain_name_validation.py
+   Source contract for the New Domain dialog validation.
+7. tests/units/domain/test_domain_service.py
+   Coverage for new-domain accept/reject paths in `save_domain_info`.
+
+Modified files:
+- src/back/objects/session/DomainSession.py
+- src/back/objects/session/__init__.py
+- src/back/objects/domain/Domain.py
+- src/front/static/global/js/utils.js
+- tests/units/session/test_domain_name_validation.py
+- tests/units/front/test_new_domain_name_validation.py
+- tests/units/domain/test_domain_service.py
+- releasereq/TODO.md
+
+Tests: uv run pytest -q -m "not scenario" → 3370 passed, 275 skipped, 5 deselected in 21.76s
+
+---
+
+## feat(registry): Backend column in Browse domain list
+
+Context: Registry → Browse domain table showed Name / URI / Description / Versions but not which graph backend each domain uses. Surface `graph_backend` from the latest version info as a Backend column immediately after URI.
+
+Changes:
+
+1. `src/back/objects/registry/store/base.py`
+   Add optional `graph_backend` field to `DomainSummary`.
+2. `src/back/objects/registry/store/lakebase/store.py`
+   `list_domains_with_metadata` returns normalized `graph_backend` from the latest version `info` (default lakebase).
+3. `src/front/static/registry/js/registry.js`
+   Add Backend column after URI (Lakebase / Lakehouse / Neo4j badges); expand version-panel colspan to 6.
+4. `tests/units/front/test_registry_backend_column.py`
+   Front contract: Backend header sits between URI and Description; reads `d.graph_backend`.
+
+Modified files:
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_registry_backend_column.py
+
+Tests: uv run pytest -q -m "not scenario" → 3371 passed, 275 skipped, 5 deselected in 28.46s
+
+---
+
+## chore(settings): remove Admin Permissions page
+
+Context: Settings → Admin → Permissions was a read-only mirror of Databricks App principals; domain roles already live in Teams. Remove the redundant page and keep Teams / Lakebase Permissions / APIs.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Drop Admin → Permissions sidebar item.
+2. `src/front/templates/settings.html`
+   Remove `#permissions-section` markup and `permissions.js` include.
+3. `src/front/static/config/js/permissions.js`
+   Delete unused page script.
+4. `src/api/routers/internal/settings.py` / `SettingsService.py`
+   Docstrings now point at Teams only (API kept).
+5. `docs/{get-started,deployment,data-access,development}.md`
+   Point admins at Teams / Databricks App permissions.
+6. `tests/units/front/test_settings_permissions_removed.py`
+   Contract: menu + template no longer expose Permissions page.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/static/config/js/permissions.js (deleted)
+- src/api/routers/internal/settings.py
+- src/back/objects/domain/SettingsService.py
+- docs/get-started.md
+- docs/deployment.md
+- docs/data-access.md
+- docs/development.md
+- tests/units/settings/test_settings_domain_permissions.py
+- tests/units/front/test_settings_permissions_removed.py
+
+Tests: uv run pytest -q -m "not scenario" → 3374 passed, 275 skipped, 5 deselected in 25.22s
+
+---
+
+## feat(ontology): Class Actions — Unity Catalog functions on ontology classes
+
+Context: classes could link one external UC dataset but had no way to expose
+*behaviour*. Add a multi-entry Actions section to the Ontology External tab
+where each action binds a Unity Catalog function plus a description. Actions
+round-trip through OWL, are surfaced by the MCP server, and are invokable from
+the Graph Explorer. Contract enforced everywhere: the bound function must accept
+exactly one parameter — the ID of the entity being acted on.
+
+Changes:
+
+1. `src/back/core/databricks/uc/UnityCatalog.py`
+   New `list_functions(catalog, schema)` over `GET /api/2.1/unity-catalog/functions`,
+   returning `param_count` / `input_params` / `returns_table` per function.
+2. `src/back/core/databricks/DatabricksClient.py`
+   `list_functions` passthrough alongside the other UC methods.
+3. `src/back/objects/domain/SettingsService.py`
+   `fetch_uc_functions` service wrapper (mirrors `fetch_uc_assets`).
+4. `src/api/routers/internal/settings.py`
+   New `GET /settings/uc-functions?catalog=&schema=` for the picker.
+5. `src/back/objects/ontology/Ontology.py`
+   `build_class_from_data` threads an `actions` list (defaults to `[]`).
+6. `src/back/core/w3c/owl/OntologyGenerator.py` / `OntologyParser.py`
+   Serialize/parse `ontobricks:actions` as a JSON literal on the class.
+7. `src/api/routers/domains.py`
+   `ClassActionsItem.actions` exposed on `GET /domain/classes`.
+8. `src/api/routers/digitaltwin.py`
+   `NodeContextAction` + `actions` on `/nodes/context`; new
+   `POST /nodes/action` that resolves the class, enforces the class `actions`
+   allow-list, validates the identifier, and runs the function off-thread
+   (`SELECT * FROM fn('id')` for table-valued, `SELECT fn('id') AS result` else).
+9. `src/mcp-server/server/app.py`
+   `_class_actions` cache carries `actions`; `Actions:` blocks in the class and
+   node context formatters and in `list_entity_types`; new
+   `invoke_entity_action(entity_uri, action)` tool posting to `/nodes/action`.
+10. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Actions box in the External tab with a catalog → schema → function picker;
+   functions whose param count is not 1 are disabled with a hint; inline
+   description editing; `actions` wired into save + hydration.
+11. `src/front/static/query/js/query-loaders.js`
+   Class/mapping info retains `actions`.
+12. `src/front/static/query/js/query-entity-details.js` / `query-sigmagraph.js`
+   Actions section in both details panels, context-menu group
+   (`data-sg-node-action="action-invoke"`) and dispatch branch.
+13. `src/front/static/query/js/query-dashboard.js`
+   `openEntityActionModal` / `_runEntityAction`: POSTs the action and renders a
+   scalar result or a rows table with escaped output.
+14. Tests: new `tests/units/api/test_node_action_endpoint.py`,
+   `tests/units/mcp/test_node_action_formatting.py`,
+   `tests/units/front/test_class_actions_ui.py`; extended UC listing, OWL
+   round-trip, `build_class_from_data`, `/domain/classes`, `/nodes/context`, and
+   MCP integration suites.
+15. Docs: one-parameter contract and Graph Explorer behaviour in
+   `docs/user-guide.md`; the two new endpoints in `docs/api.md`; the two MCP
+   tools in `docs/mcp.md`.
+
+Note: the AI-feature eval gate does not apply — `invoke_entity_action` wraps a
+Unity Catalog function, not an LLM agent.
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/objects/ontology/Ontology.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/api/routers/domains.py
+- src/api/routers/digitaltwin.py
+- src/mcp-server/server/app.py
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-dashboard.js
+- tests/units/api/test_node_action_endpoint.py (new)
+- tests/units/mcp/test_node_action_formatting.py (new)
+- tests/units/front/test_class_actions_ui.py (new)
+- tests/units/api/test_node_context_endpoint.py
+- tests/units/api/test_domain_classes_endpoint.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/ontology/test_ontology_service.py
+- tests/mcp/integration/test_dataset_context_tools.py
+- docs/user-guide.md
+- docs/api.md
+- docs/mcp.md
+
+Tests: uv run pytest -q -m "not scenario" → 3412 passed, 275 skipped, 5 deselected in 31.55s

@@ -173,6 +173,9 @@ async function initOntologyMap() {
             name: cls.name,
             label: cls.label || cls.name,
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
+            // True when the backing class has a Dashboard, Dataset, Actions, or
+            // Bridges configured under the entity panel's References tab.
+            hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
             parent: cls.parent,
             // Use saved position if available, fix positions to prevent animation
             x: x,
@@ -460,6 +463,18 @@ async function initOntologyMap() {
             if (typeof editPropertyByName === 'function') {
                 editPropertyByName(d.name);
             }
+        })
+        .on('contextmenu', function(event, d) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (window.isActiveVersion === false) return;
+
+            // Clear entity selection, then highlight both endpoints
+            d3.selectAll('.map-node').classed('selected', false);
+            highlightLink(d);
+
+            showMapRelationshipContextMenu(event, d, container);
         });
 
     // Draw relationship labels
@@ -507,6 +522,27 @@ async function initOntologyMap() {
         .attr('class', 'map-node-label')
         .attr('dy', 35)
         .text(d => d.label || d.name);
+
+    // Small badge overlay signalling the class has Dashboard/Dataset/Actions/
+    // Bridges configured (entity panel's "References" tab). Purely visual — no
+    // tooltip, no click handler — so it's rendered only for matching nodes
+    // and marked pointer-events: none in CSS.
+    const externalBadgeNodes = nodeElements.filter(d => d.hasExternal);
+
+    externalBadgeNodes.append('circle')
+        .attr('class', 'map-node-external-badge-bg')
+        .attr('cx', 16)
+        .attr('cy', -16)
+        .attr('r', 9)
+        .attr('role', 'img')
+        .attr('aria-label', 'Has external configuration');
+
+    externalBadgeNodes.append('text')
+        .attr('class', 'map-node-external-badge-icon')
+        .attr('x', 16)
+        .attr('y', -16)
+        .attr('aria-hidden', 'true')
+        .text('\uf46d'); // bi-lightning-charge codepoint (bootstrap-icons font) — same glyph/colour as the entity panel's References tab
 
     // Tooltip on hover
     nodeElements.append('title')
@@ -1270,6 +1306,23 @@ function showMapContextMenu(event, entityData, container) {
             <span class="map-context-title">${entityData.name}</span>
         </div>
         <div class="map-context-divider"></div>
+        <div class="map-context-item" data-action="open-tab-details">
+            <i class="bi bi-info-circle"></i>
+            <span>Details</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-attributes">
+            <i class="bi bi-tags"></i>
+            <span>Attributes</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-actions">
+            <i class="bi bi-lightning"></i>
+            <span>References</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-constraints">
+            <i class="bi bi-sliders"></i>
+            <span>Constraints</span>
+        </div>
+        <div class="map-context-divider"></div>
         <div class="map-context-item" data-action="create-relationship">
             <i class="bi bi-arrow-right"></i>
             <span>Create Relationship</span>
@@ -1311,6 +1364,15 @@ function showMapContextMenu(event, entityData, container) {
     }
     
     // Handle menu item clicks
+    ['details', 'attributes', 'actions', 'constraints'].forEach(tab => {
+        menu.querySelector(`[data-action="open-tab-${tab}"]`).addEventListener('click', () => {
+            hideMapContextMenu();
+            if (typeof editClassByName === 'function') {
+                editClassByName(entityData.name, tab);
+            }
+        });
+    });
+
     menu.querySelector('[data-action="delete"]').addEventListener('click', async () => {
         hideMapContextMenu();
         await deleteEntityFromMap(entityData.name);
@@ -1331,6 +1393,70 @@ function showMapContextMenu(event, entityData, container) {
         await createBusinessViewFromEntity(entityData);
     });
     
+    // Close menu when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', hideMapContextMenuOnClickOutside);
+        document.addEventListener('contextmenu', hideMapContextMenuOnClickOutside);
+    }, 0);
+}
+
+/**
+ * Show a right-click context menu for a relationship link, offering
+ * shortcuts straight to each tab of its edit panel (Details, Constraints —
+ * relationships have no Attributes/References tab).
+ */
+function showMapRelationshipContextMenu(event, linkData, container) {
+    // Remove existing menu
+    hideMapContextMenu();
+
+    const menu = document.createElement('div');
+    menu.id = 'mapContextMenu';
+    menu.className = 'map-context-menu';
+    menu.innerHTML = `
+        <div class="map-context-header">
+            <span class="map-context-icon"><i class="bi bi-arrow-left-right"></i></span>
+            <span class="map-context-title">${linkData.label || linkData.name}</span>
+        </div>
+        <div class="map-context-divider"></div>
+        <div class="map-context-item" data-action="open-tab-details">
+            <i class="bi bi-info-circle"></i>
+            <span>Details</span>
+        </div>
+        <div class="map-context-item" data-action="open-tab-constraints">
+            <i class="bi bi-sliders"></i>
+            <span>Constraints</span>
+        </div>
+    `;
+
+    // Position the menu
+    const containerRect = container.getBoundingClientRect();
+    let x = event.clientX - containerRect.left;
+    let y = event.clientY - containerRect.top;
+
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+
+    container.appendChild(menu);
+
+    // Adjust if menu goes off-screen
+    const menuRect = menu.getBoundingClientRect();
+    if (menuRect.right > containerRect.right) {
+        menu.style.left = (x - menuRect.width) + 'px';
+    }
+    if (menuRect.bottom > containerRect.bottom) {
+        menu.style.top = (y - menuRect.height) + 'px';
+    }
+
+    // Handle menu item clicks
+    ['details', 'constraints'].forEach(tab => {
+        menu.querySelector(`[data-action="open-tab-${tab}"]`).addEventListener('click', () => {
+            hideMapContextMenu();
+            if (typeof editPropertyByName === 'function') {
+                editPropertyByName(linkData.name, tab);
+            }
+        });
+    });
+
     // Close menu when clicking outside
     setTimeout(() => {
         document.addEventListener('click', hideMapContextMenuOnClickOutside);
@@ -1595,17 +1721,29 @@ async function deleteRelationshipFromMap(propertyName) {
  * @param {string} type - 'relationship' or 'inheritance'
  */
 function startMapConnectionMode(sourceEntity, container, type = 'relationship') {
-    // Get the SVG element
-    const svg = container.querySelector('svg');
+    // Use the map SVG specifically. NOTE: `container` (#ontology-map-container)
+    // also holds the loading-spinner SVG, so `container.querySelector('svg')`
+    // would wrongly return the spinner. `ontologyMapSvg` is the graph SVG; fall
+    // back to the first *direct-child* svg of the container (the map is appended
+    // directly, the spinner is nested inside the loading overlay).
+    const svg = (ontologyMapSvg && ontologyMapSvg.node())
+        || container.querySelector(':scope > svg');
     if (!svg) return;
-    
+
     // Get the main group (g element with transform)
     const mainGroup = svg.querySelector('g');
     if (!mainGroup) return;
     
-    // Create a temporary line for visual feedback
+    // Create a temporary line for visual feedback. Inline stroke attributes
+    // are a belt-and-suspenders fallback so the thread is visible even if the
+    // CSS class fails to apply for any reason.
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('class', type === 'inheritance' ? 'map-connection-line map-inheritance-line' : 'map-connection-line');
+    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : '#0d6efd');
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-dasharray', type === 'inheritance' ? '5,5' : '8,4');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('pointer-events', 'none');
     line.setAttribute('x1', sourceEntity.x);
     line.setAttribute('y1', sourceEntity.y);
     line.setAttribute('x2', sourceEntity.x);
@@ -1658,32 +1796,15 @@ function startMapConnectionMode(sourceEntity, container, type = 'relationship') 
  */
 function handleMapConnectionMouseMove(event) {
     if (!mapConnectionMode) return;
-    
-    const svg = mapConnectionMode.svg;
+
     const mainGroup = mapConnectionMode.mainGroup;
     const line = mapConnectionMode.lineElement;
-    
-    // Get current transform of main group
-    const transform = mainGroup.getAttribute('transform');
-    let translateX = 0, translateY = 0, scale = 1;
-    
-    if (transform) {
-        const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-        if (translateMatch) {
-            translateX = parseFloat(translateMatch[1]);
-            translateY = parseFloat(translateMatch[2]);
-        }
-        const scaleMatch = transform.match(/scale\(([^)]+)\)/);
-        if (scaleMatch) {
-            scale = parseFloat(scaleMatch[1]);
-        }
-    }
-    
-    // Calculate mouse position in SVG coordinates
-    const rect = svg.getBoundingClientRect();
-    const mouseX = (event.clientX - rect.left - translateX) / scale;
-    const mouseY = (event.clientY - rect.top - translateY) / scale;
-    
+
+    // d3.pointer maps the event into the local coordinate space of mainGroup,
+    // correctly accounting for the zoom/pan transform on the group (and any
+    // svg viewBox scaling) — so the thread tracks the cursor at any zoom level.
+    const [mouseX, mouseY] = d3.pointer(event, mainGroup);
+
     // Update line end position
     line.setAttribute('x2', mouseX);
     line.setAttribute('y2', mouseY);
@@ -1797,20 +1918,22 @@ function hideMapConnectionTooltip() {
  * Create a new relationship between two entities
  */
 async function createRelationshipFromMap(sourceEntity, targetEntity) {
-    // Show dialog to get relationship name
-    const relationshipName = await showMapRelationshipDialog(sourceEntity, targetEntity);
+    // Show dialog to get the relationship's ID (name) and Label
+    const result = await showMapRelationshipDialog(sourceEntity, targetEntity);
     
-    if (!relationshipName) return; // Cancelled
+    if (!result) return; // Cancelled
+    
+    const relationshipName = result.name;
+    const relationshipLabel = result.label || relationshipName;
     
     try {
         if (typeof OntologyState !== 'undefined' && OntologyState.config) {
-            // Check if relationship already exists
-            const existingProp = OntologyState.config.properties.find(p => 
-                p.name === relationshipName && p.domain === sourceEntity.name && p.range === targetEntity.name
-            );
+            // Property IDs are unique across the whole ontology (defensive
+            // re-check — the dialog already blocks duplicates before this point).
+            const existingProp = OntologyState.config.properties.find(p => p.name === relationshipName);
             
             if (existingProp) {
-                showNotification(`Relationship "${relationshipName}" already exists`, 'warning');
+                showNotification(`A relationship with ID "${relationshipName}" already exists`, 'warning');
                 return;
             }
             
@@ -1818,6 +1941,7 @@ async function createRelationshipFromMap(sourceEntity, targetEntity) {
             const newProperty = {
                 name: relationshipName,
                 localName: relationshipName,
+                label: relationshipLabel,
                 type: 'ObjectProperty',
                 domain: sourceEntity.name,
                 range: targetEntity.name,
@@ -2224,10 +2348,16 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Relationship Name</label>
-                                <input type="text" class="form-control" id="mapRelationshipName" 
-                                       placeholder="e.g., hasRelation, belongsTo, contains" autofocus>
-                                <div class="form-text">Use camelCase naming convention (e.g., hasCustomer, belongsTo)</div>
+                                <label class="form-label" for="mapRelationshipLabel">Label</label>
+                                <input type="text" class="form-control" id="mapRelationshipLabel"
+                                       placeholder="e.g., Has Customer, Belongs To" autofocus>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="mapRelationshipName">ID <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="mapRelationshipName"
+                                       placeholder="e.g., hasCustomer, belongsTo">
+                                <div class="invalid-feedback" id="mapRelationshipNameError">This ID already exists in the ontology.</div>
+                                <div class="form-text">Unique identifier, camelCase convention. Mirrors the Label until edited directly.</div>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -2244,28 +2374,66 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modalEl = document.getElementById('mapRelationshipModal');
         const modal = new bootstrap.Modal(modalEl);
+        const labelInput = document.getElementById('mapRelationshipLabel');
         const nameInput = document.getElementById('mapRelationshipName');
+        const nameError = document.getElementById('mapRelationshipNameError');
         
         let resolved = false;
+        let idManuallyEdited = false;
+        
+        const isDuplicateId = (id) => {
+            const props = (typeof OntologyState !== 'undefined' && OntologyState.config && OntologyState.config.properties) || [];
+            return props.some(p => p.name === id);
+        };
+        
+        // Validates the ID field and reflects the result in the UI.
+        // Returns true when the ID is non-empty and not already used.
+        const validateName = () => {
+            const id = nameInput.value.trim();
+            if (!id) {
+                nameInput.classList.add('is-invalid');
+                nameError.textContent = 'ID is required.';
+                return false;
+            }
+            if (isDuplicateId(id)) {
+                nameInput.classList.add('is-invalid');
+                nameError.textContent = 'This ID already exists in the ontology.';
+                return false;
+            }
+            nameInput.classList.remove('is-invalid');
+            return true;
+        };
+        
+        // Mirror the Label into the ID (camelCase) until the user edits the ID directly.
+        labelInput.addEventListener('input', () => {
+            if (idManuallyEdited) return;
+            nameInput.value = typeof columnToCamelCase === 'function'
+                ? columnToCamelCase(labelInput.value)
+                : labelInput.value;
+            validateName();
+        });
+        
+        nameInput.addEventListener('input', () => {
+            idManuallyEdited = true;
+            validateName();
+        });
         
         // Handle create button
         document.getElementById('mapRelationshipCreate').addEventListener('click', () => {
-            const name = nameInput.value.trim();
-            if (!name) {
-                nameInput.classList.add('is-invalid');
-                return;
-            }
+            if (!validateName()) return;
             resolved = true;
             modal.hide();
-            resolve(name);
+            resolve({ name: nameInput.value.trim(), label: labelInput.value.trim() });
         });
         
-        // Handle enter key in input
-        nameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('mapRelationshipCreate').click();
-            }
-            nameInput.classList.remove('is-invalid');
+        // Handle enter key in either input
+        [labelInput, nameInput].forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('mapRelationshipCreate').click();
+                }
+            });
         });
         
         // Handle modal close
@@ -2276,7 +2444,13 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
             }
         }, { once: true });
         
+        // Bootstrap's own focus-trap grabs focus once the modal's shown
+        // transition completes, so focus the Label field only after that
+        // (a synchronous .focus() right after .show() gets overridden).
+        modalEl.addEventListener('shown.bs.modal', () => {
+            labelInput.focus();
+        }, { once: true });
+        
         modal.show();
-        nameInput.focus();
     });
 }

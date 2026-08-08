@@ -29,8 +29,20 @@ document.addEventListener('DOMContentLoaded', function() {
  * separate requests. Admin-only nav items are now gated declaratively
  * via ``[data-requires-app="admin"]`` in ``permissions.css`` so no
  * extra fetch or JS pass is needed.
+ *
+ * Cross-domain ``/resolve`` bridges switch the session server-side and
+ * land with ``?domain_switched=1``. Bust the navbar cache *before* the
+ * first fetch so the Domain name/version update immediately.
  */
 function initNavbar() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('domain_switched') === '1') {
+        invalidateDomainCaches();
+        params.delete('domain_switched');
+        const qs = params.toString();
+        const clean = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+        try { history.replaceState(null, '', clean); } catch (_) { /* ignore */ }
+    }
     loadNavbarState();
     initSubnavActiveState();
 }
@@ -321,20 +333,30 @@ function enableMenusAfterSave() {
 }
 
 /**
- * Update domain dropdown menu visibility based on domain state
- * Note: All menu items are now always visible
+ * Update domain L1 entry + L2 subnav visibility based on domain state.
+ * When nothing is loaded, hide the Domain navbar item entirely.
+ *
+ * The L2 subnav is domain-contextual (Domain/Ontology/Mapping/KG tabs), so
+ * it stays hidden on Settings pages even when a domain is open in session —
+ * Settings is a cross-domain area with its own left sidebar navigation.
  */
 function updateDomainMenuVisibility(hasDomain) {
+    const isSettingsPage = document.body.dataset.page === 'settings';
+
     // Show/hide L2 subnav
     const subnav = document.getElementById('obSubnav');
     if (subnav) {
-        subnav.classList.toggle('d-none', !hasDomain);
+        subnav.classList.toggle('d-none', !hasDomain || isSettingsPage);
         if (typeof window.OBBreadcrumb !== 'undefined' && typeof window.OBBreadcrumb._updateChromeHeight === 'function') {
             window.OBBreadcrumb._updateChromeHeight();
         }
     }
 
-    // Disable/enable the L1 Domain link and highlight when a domain is loaded
+    const domainNav = document.getElementById('domainL1NavItem');
+    const domainSep = document.getElementById('domainL1PathSep');
+    if (domainNav) domainNav.classList.toggle('d-none', !hasDomain);
+    if (domainSep) domainSep.classList.toggle('d-none', !hasDomain);
+
     const domainL1 = document.getElementById('domainL1Link');
     if (domainL1) {
         if (hasDomain) {
@@ -434,11 +456,13 @@ async function domainNew() {
 }
 
 /**
- * Save domain to Unity Catalog Volume
- * Volume path uses the domain folder; file name = version number
+ * Save domain to the registry.
+ * Persists domain info / design layout first, then saves without a confirmation popup.
  */
 async function domainSave() {
     try {
+        if (!validateDomainInfoForm()) return;
+
         // First, save domain info from form if on the domain page
         await saveDomainInfoBeforeSave();
         
@@ -475,13 +499,79 @@ async function domainSave() {
             }
         }
         
-        // Show catalog/schema selection dialog
-        showDomainSaveDialog();
+        await doDomainSave();
     } catch (error) {
         console.error('Error preparing save:', error);
         showNotification('Failed to prepare save: ' + error.message, 'error');
     }
 }
+
+/**
+ * Build the ``/domain/info`` payload from the Information form.
+ *
+ * Single source of truth for both save entry points (the Information form's
+ * own Save and the auto-save that runs before a UC save) so the two cannot
+ * drift and silently drop a field.
+ */
+function buildDomainInfoPayload() {
+    const nameEl = document.getElementById('domainName');
+    const descEl = document.getElementById('domainDescription');
+    const authorEl = document.getElementById('domainAuthor');
+    const quorumEl = document.getElementById('domainReviewQuorum');
+    const baseUriEl = document.getElementById('domainBaseUri');
+    const llmEndpointEl = document.getElementById('domainLlmEndpoint');
+    const graphBackendEl = document.getElementById('domainGraphBackend');
+    const neo4jConnEl = document.getElementById('domainNeo4jDatabase');
+    const versionEl = document.getElementById('domainVersionSelect');
+
+    const payload = {
+        name: nameEl ? nameEl.value.trim() : undefined,
+        description: descEl ? descEl.value.trim() : undefined,
+        author: authorEl ? authorEl.value.trim() : undefined,
+        base_uri: baseUriEl ? baseUriEl.value.trim() : undefined,
+        base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
+        llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
+        review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : undefined,
+        graph_backend: graphBackendEl ? graphBackendEl.value : undefined,
+        // Only meaningful for Neo4j; cleared for other backends so a stale
+        // connection name cannot linger on the domain.
+        neo4j_connection: graphBackendEl
+            ? (graphBackendEl.value === 'neo4j' && neo4jConnEl ? neo4jConnEl.value : '')
+            : undefined,
+        version: versionEl ? versionEl.value : undefined,
+    };
+
+    // Drop absent fields so a page without the full form cannot clobber
+    // values already stored on the domain.
+    Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) delete payload[key];
+    });
+    return payload;
+}
+
+window.buildDomainInfoPayload = buildDomainInfoPayload;
+
+/**
+ * True when the Information form can be persisted.
+ *
+ * A Neo4j domain must name a connection — the server rejects a blank one, so
+ * catch it here with a message that names the fix.
+ */
+function validateDomainInfoForm() {
+    const graphBackendEl = document.getElementById('domainGraphBackend');
+    if (!graphBackendEl || graphBackendEl.value !== 'neo4j') return true;
+    const neo4jConnEl = document.getElementById('domainNeo4jDatabase');
+    if (neo4jConnEl && neo4jConnEl.value) return true;
+    if (typeof showNotification === 'function') {
+        showNotification(
+            'Select a Neo4j connection (managed in Settings → Neo4j) before saving.',
+            'warning'
+        );
+    }
+    return false;
+}
+
+window.validateDomainInfoForm = validateDomainInfoForm;
 
 /**
  * Save domain info from form fields before saving to UC
@@ -491,29 +581,14 @@ async function saveDomainInfoBeforeSave() {
     const nameEl = document.getElementById('domainName');
     const descEl = document.getElementById('domainDescription');
     const authorEl = document.getElementById('domainAuthor');
-    const quorumEl = document.getElementById('domainReviewQuorum');
     const baseUriEl = document.getElementById('domainBaseUri');
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
-    const versionEl = document.getElementById('domainVersionSelect');
+    const graphBackendEl = document.getElementById('domainGraphBackend');
 
     // If any form fields exist, save the domain info
-    if (nameEl || descEl || authorEl || baseUriEl || llmEndpointEl) {
-        const domainInfoPayload = {
-            name: nameEl ? nameEl.value.trim() : undefined,
-            description: descEl ? descEl.value.trim() : undefined,
-            author: authorEl ? authorEl.value.trim() : undefined,
-            base_uri: baseUriEl ? baseUriEl.value.trim() : undefined,
-            base_uri_auto: (typeof _baseUriAutoMode !== 'undefined') ? _baseUriAutoMode : undefined,
-            llm_endpoint: llmEndpointEl ? llmEndpointEl.value : undefined,
-            review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : undefined,
-            version: versionEl ? versionEl.value : undefined,
-        };
-        
-        // Remove undefined values
-        Object.keys(domainInfoPayload).forEach(key => {
-            if (domainInfoPayload[key] === undefined) delete domainInfoPayload[key];
-        });
-        
+    if (nameEl || descEl || authorEl || baseUriEl || llmEndpointEl || graphBackendEl) {
+        const domainInfoPayload = buildDomainInfoPayload();
+
         // Only save if we have something to save
         if (Object.keys(domainInfoPayload).length > 0) {
             console.log('[Domain] Auto-saving domain info before UC save:', domainInfoPayload);
@@ -533,73 +608,13 @@ async function saveDomainInfoBeforeSave() {
 }
 
 /**
- * Show confirmation dialog before saving to the registry.
+ * Persist the domain to the registry (no confirmation popup).
+ * Kept as a named export for callers that previously opened the save dialog.
  * @param {Object} [opts]
  * @param {string} [opts.afterSave] - URL to navigate to after a successful save.
  */
 async function showDomainSaveDialog(opts = {}) {
-    const modalHtml = `
-        <div class="modal fade" id="domainSaveModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-cloud-upload"></i> Save Domain to Registry</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div id="saveRegistryInfo" class="mb-3">
-                            <span class="spinner-border spinner-border-sm me-1"></span> Checking registry...
-                        </div>
-                        <div class="alert alert-info small">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Domain:</strong> <span id="saveDomainName">Loading...</span><br>
-                            <strong>Version:</strong> <span id="saveDomainVersion">Loading...</span>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="btnConfirmSave" disabled>
-                            <i class="bi bi-cloud-upload"></i> Save
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const existingModal = document.getElementById('domainSaveModal');
-    if (existingModal) existingModal.remove();
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('domainSaveModal'));
-    modal.show();
-
-    try {
-        const infoData = await fetchOnce('/domain/info');
-        if (infoData.success) {
-            document.getElementById('saveDomainName').textContent = infoData.info.name || 'NewDomain';
-            document.getElementById('saveDomainVersion').textContent = infoData.info.version || '1';
-        }
-    } catch (_) { /* ignore */ }
-
-    // Check registry
-    try {
-        const regResp = await fetch('/settings/registry', { credentials: 'same-origin' });
-        const reg = await regResp.json();
-        const infoDiv = document.getElementById('saveRegistryInfo');
-        if (reg.configured) {
-            infoDiv.innerHTML = '<div class="alert alert-success small mb-0"><i class="bi bi-check-circle-fill text-success me-1"></i> Registry</div>';
-            document.getElementById('btnConfirmSave').disabled = false;
-        } else {
-            infoDiv.innerHTML = '<div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Registry not configured. <a href="/settings">Go to Settings</a></div>';
-        }
-    } catch (e) {
-        document.getElementById('saveRegistryInfo').innerHTML = '<div class="alert alert-danger small mb-0">Error checking registry</div>';
-    }
-
-    document.getElementById('btnConfirmSave').addEventListener('click', async () => {
-        modal.hide();
-        await doDomainSave({ afterSave: opts.afterSave });
-    });
+    return doDomainSave({ afterSave: opts.afterSave });
 }
 
 async function doDomainSave(opts = {}) {

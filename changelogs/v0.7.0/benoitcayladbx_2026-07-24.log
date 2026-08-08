@@ -1,0 +1,689 @@
+## Merge PR#47 — Neo4j backend into develop
+
+### Context
+
+PR#47 (`feature/neo4j-graphdb-skeleton`, author: hourdays / Hugues Journeau) adds Neo4j (Bolt / Cypher)
+as a fully-functional third graph DB engine alongside Lakebase and Delta. Merged into `develop`
+with develop-takes-priority conflict resolution. Version: 0.7.0.
+
+### Changes
+
+1. **scripts/deploy.config.sh** — Kept develop's default app name (`ontobricks-060`); dropped PR's
+   demo-instance override (`ontobricks-070`).
+
+2. **src/back/core/graphdb/GraphDBFactory.py** — Added `neo4j` engine dispatch beside `delta`;
+   added `_create_neo4j()` constructor; kept all develop helpers (`_create_auto`, `_resolve_*`,
+   `_create_delta_view`).
+
+3. **src/back/core/graphdb/neo4j/Neo4jReadOps.py** — Fixed stale import:
+   `back.core.triplestore.constants` → `back.core.graphdb.constants` (module moved when develop
+   folded TripleStore into GraphDB).
+
+4. **src/back/objects/session/GlobalConfigService.py** — `ALLOWED_GRAPH_ENGINES` now includes
+   `"neo4j"`; `ALLOWED_TRIPLE_STORE_BACKENDS` (`lakebase`, `databricks`) preserved from develop.
+
+5. **src/front/config/menu_config.json** — Both `delta` and `neo4j` entries kept under TRIPLE
+   STORE section (Delta from develop, Neo4j from PR).
+
+6. **src/front/fastapi/dependencies.py** — Used develop's `GraphDBFactory._resolve_graph_engine`
+   path; removed the lakebase-only coercion (`_raw if _raw == "lakebase" else "lakebase"`) so
+   neo4j (and future engines) pass through correctly.
+
+7. **src/front/static/query/js/query-sync.js** — Adopted PR's `labels` map (`neo4j` →
+   `Graph DB (Neo4j)`) over develop's hardcoded ternary.
+
+### Modified files
+
+- `scripts/deploy.config.sh`
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/core/graphdb/neo4j/Neo4jReadOps.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/front/config/menu_config.json`
+- `src/front/fastapi/dependencies.py`
+- `src/front/static/query/js/query-sync.js`
+- Plus all PR#47 net-new files (Neo4jStore, Neo4jConnection, Neo4jWriteOps, Neo4jReadOps,
+  SWRLFlatCypherTranslator, settings routes, templates, tests, docs)
+
+### Test results
+
+`uv run pytest -q -m "not scenario"` → **3248 passed, 309 skipped, 2 pre-existing failures**
+(both failures confirmed pre-existing on PR branch before merge; not introduced by conflict
+resolution).
+
+---
+
+## Add Neo4j card to Back End settings page
+
+### Context
+
+The Back End page (Settings → Triple Store → Back End) only showed Lakebase and Delta.
+Neo4j was already a supported graph engine (from PR#47) but was hidden behind a
+legacy dropdown. Added a third card for Neo4j at parity with the other two backends.
+
+### Changes
+
+1. **src/front/templates/settings.html** — Added Neo4j card to the backend card grid;
+   changed grid columns from `col-md-6` (2-col) to `col-md-4` (3-col); updated helper
+   text. Neo4j card pre-selected server-side when `graph_engine == "neo4j"`.
+
+2. **src/front/static/config/js/settings.js**:
+   - `isNeo4jCardSelected()` helper added.
+   - `applyNeo4jCardFromEngine()` helper selects the Neo4j card when engine=neo4j.
+   - `loadTripleStoreBackend()` now also fetches `/settings/graph-engine` in parallel
+     and selects the Neo4j card when graph_engine=neo4j.
+   - `saveGraphDbSettings()` translates the Neo4j card selection to
+     `triple_store_backend=lakebase` + `graph_engine=neo4j` before posting.
+   - Radio change listener triggers `applyNeo4jAuthMethodVisibility()` and
+     `prefillNeo4jConnectionFromConfig()` when Neo4j card is selected.
+
+### Modified files
+
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+
+### Test results
+
+`uv run pytest -q -m "not scenario"` (settings + contract) → 161 passed, 2 pre-existing failures.
+
+---
+
+## Build page layout fix (Lakebase)
+
+### Context
+The PR#47 merge changed `_renderEngineUi` to actively remove `d-none` from `dtLakebaseBuildNote` for Lakebase engine. The build note element carries Bootstrap's `w-100` class (intended to push it below the architecture cards). However, `.dt-arch-lakebase-section` was a flex container without `flex-wrap`, so the 100%-wide note could not wrap and instead squashed the Triple Store → Sync → Graph DB card row.
+
+### Changes
+1. `src/front/static/query/css/query-sync.css` — Added `flex-wrap: wrap` to `.dt-arch-lakebase-section:not(.d-none)` so the `w-100` build note wraps below the three arch cards as intended.
+
+### Modified files
+- `src/front/static/query/css/query-sync.css`
+
+### Test results
+No unit tests cover CSS layout; visual fix verified via code inspection.
+
+---
+
+## Per-domain graph backend selection (moved out of global Settings)
+
+### Context
+
+The graph backend (Lakebase / Delta / Neo4j) was an instance-wide global setting chosen in
+Settings → Triple Store → Back End. Moved the *selection* to a mandatory per-domain choice in
+Domain → Information → Knowledge Graph, exposed as a single unified dropdown. The backend
+selector was removed from admin Settings. Engine *connection* config (Neo4j Bolt creds, Lakebase
+schema/sync, Delta SQL warehouse) stays workspace-global — only the selection moved.
+
+### Changes
+
+1. **src/back/core/graphdb/GraphDBFactory.py** — Added the unified per-domain vocabulary
+   (`GRAPH_BACKENDS`, `DEFAULT_GRAPH_BACKEND`, `normalize_graph_backend`) and `_resolve_graph_backend`.
+   Rewrote `_resolve_triple_store_backend` / `_resolve_graph_engine` to read
+   `DomainSession.info['graph_backend']` and map it (`lakebase`→lakebase, `databricks`→delta,
+   `neo4j`→lakebase+neo4j). `_resolve_graph_engine_config` now only reads global connection config;
+   removed the `domain.settings['registry']` selection mirror.
+
+2. **src/back/objects/session/DomainSession.py** — Seeded `info['graph_backend'] = "lakebase"` in the
+   empty-domain template.
+
+3. **src/back/objects/domain/Domain.py** — `save_domain_info` persists a validated `graph_backend`;
+   `get_domain_info` / `get_domain_template_data` expose it; added `_coerce_graph_backend` validator
+   (defaults to `lakebase`).
+
+4. **src/back/objects/digitaltwin/DigitalTwin.py** — `resolve_graph_engine` now returns the resolved
+   per-domain engine (no longer collapses everything to `lakebase`).
+
+5. **src/back/objects/session/GlobalConfigService.py** — Removed `get/set_graph_engine`,
+   `get/set_triple_store_backend`, `ALLOWED_GRAPH_ENGINES`, `ALLOWED_TRIPLE_STORE_BACKENDS`, and the
+   `graph_engine` / `triple_store_backend` keys from `_empty()`. Kept `graph_engine_config`.
+
+6. **src/back/objects/domain/SettingsService.py** — Removed `get/set_graph_engine_result` and
+   `set_triple_store_backend_result`; replaced `get_triple_store_backend_result` with
+   `get_delta_warehouse_result` (drops backend/allowed fields, keeps Delta warehouse + registry info);
+   dropped `graph_engine` from `build_registry_get_payload`; simplified
+   `_mirror_graph_engine_to_domain_registry` to connection-only (config + delta_warehouse_id).
+
+7. **src/api/routers/internal/settings.py** — Removed GET/POST `/graph-engine` and
+   `/triple-store-backend` selection endpoints; added GET `/delta-warehouse`.
+
+8. **src/shared/fastapi/main.py** — Updated the permission-middleware read-only exception list
+   (`/settings/graph-engine` → `/settings/delta-warehouse`).
+
+9. **src/front/routes/home.py** — Settings page no longer resolves a global `graph_engine`.
+
+10. **src/front/templates/partials/domain/_domain_information.html** — Added the mandatory
+    `#domainGraphBackend` dropdown to the Knowledge Graph tab with a rebuild warning.
+
+11. **src/front/static/domain/js/domain.js** — Added `graph_backend` to the `saveDomainInfo` payload.
+
+12. **src/front/static/domain/js/domain-information.js** — Loads/refreshes the backend dropdown.
+
+13. **src/front/templates/settings.html** — Removed the backend radio cards + legacy engine select;
+    replaced with an info banner pointing to the per-domain choice.
+
+14. **src/front/static/config/js/settings.js** — Removed selection helpers/wiring; renamed
+    `loadTripleStoreBackend` → `loadDeltaWarehouseState` (GET `/settings/delta-warehouse`);
+    `saveGraphDbSettings` now persists only connection config + Delta warehouse.
+
+15. **tests** — Updated `test_triple_store_backend_config.py`, `test_graph_engine_config.py`,
+    `test_delta_warehouse_config.py`, `test_permission_middleware.py` for the new per-domain design.
+
+### Modified files
+
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/objects/session/DomainSession.py`
+- `src/back/objects/domain/Domain.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `src/shared/fastapi/main.py`
+- `src/front/routes/home.py`
+- `src/front/templates/partials/domain/_domain_information.html`
+- `src/front/templates/settings.html`
+- `src/front/static/domain/js/domain.js`
+- `src/front/static/domain/js/domain-information.js`
+- `src/front/static/config/js/settings.js`
+- `tests/units/graphdb/delta/test_triple_store_backend_config.py`
+- `tests/units/settings/test_graph_engine_config.py`
+- `tests/units/settings/test_delta_warehouse_config.py`
+- `tests/units/auth/test_permission_middleware.py`
+
+### Test results
+
+`uv run pytest -q -m "not scenario"` → **3243 passed, 309 skipped, 1 pre-existing failure**
+(`test_graphql_schema.py::test_schema_content_shape`, confirmed failing on a clean tree before these
+changes — unrelated to this work).
+
+
+## Rename navbar Switch button to Versions
+
+Context: User-facing navbar label for the domain version switcher was "Switch";
+rename it to "Versions" for clearer intent.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Changed domainSwitch navbar_action label from "Switch" to "Versions".
+
+2. docs/user-guide.md
+   Updated user-guide references from **Switch** to **Versions** button.
+
+Modified files:
+- src/front/config/menu_config.json
+- docs/user-guide.md
+
+Tests: `uv run pytest -q -m "not scenario"` → 3243 passed, 309 skipped, 1 pre-existing failure (`test_graphql_schema.py::test_schema_content_shape`, unrelated).
+
+
+## Remove the "Back End" settings page
+
+Context: With graph-backend *selection* now living per-domain (Domain → Information →
+Knowledge Graph), the Settings → Triple store → "Back End" sub-page held only an
+informational banner and no longer served a purpose. Removed it entirely; the shared
+engine *connection* config still lives under the Lakebase / Delta / Neo4j sidebar sections.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Removed the entire `#ts-global-section` block (header, `backendSectionBanner`
+   spinner, and the `graphDbTabContent` info banner).
+
+2. src/front/config/menu_config.json
+   Removed the `ts-global` / "Back End" item from the Triple store sidebar group.
+
+3. src/front/static/config/js/settings.js
+   Dropped the `setBackendTabLoading` helper and its calls; removed `ts-global` from
+   the `sidebarSectionChanged` lazy-load guard (now scoped to lakebase/delta); the
+   Delta warehouse preload runs without the removed banner wrapper.
+
+4. src/front/static/global/css/config.css
+   Removed the dead `#ts-global-section.active` selector, the `.ob-backend-card*`
+   selection-card styles, and the unused `.settings-graph-engine-select` rule.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/config/menu_config.json
+- src/front/static/config/js/settings.js
+- src/front/static/global/css/config.css
+
+Tests: `uv run pytest -q -m "not scenario" tests/units/settings/` → 134 passed. `node --check settings.js` → OK.
+
+
+## Rename Settings sidebar section Triple store → Back end
+
+Context: User-facing Settings menu group label was "Triple store"; rename it to
+"Back end" and align docs / health messages that cite that UI path.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Changed settings-triplestore group title from "Triple store" to "Back end".
+
+2. docs/user-guide.md, docs/lakebase-graphdb.md, docs/graphdb-integration.md, README.md
+   Updated Settings → Triple Store path references to Settings → Back end.
+
+3. src/shared/fastapi/health.py, src/back/core/helpers/DatabricksHelpers.py,
+   src/api/routers/internal/settings.py, src/api/routers/internal/dtwin.py,
+   src/front/static/config/js/settings.js
+   Updated user/help strings that pointed at the old Settings section name.
+
+4. tests/integration/neo4j_smoke_test.md, docs/pr47-neo4j-demo/*
+   Aligned smoke/demo navigation paths with the new section label.
+
+Modified files:
+- src/front/config/menu_config.json
+- docs/user-guide.md
+- docs/lakebase-graphdb.md
+- docs/graphdb-integration.md
+- README.md
+- src/shared/fastapi/health.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/api/routers/internal/settings.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/config/js/settings.js
+- tests/integration/neo4j_smoke_test.md
+- docs/pr47-neo4j-demo/secret-configuration.md
+- docs/pr47-neo4j-demo/README.md
+
+Tests: `uv run pytest -q -m "not scenario"` → 3243 passed, 309 skipped, 1 pre-existing failure (`test_graphql_schema.py::test_schema_content_shape`, unrelated).
+
+
+## Rename Settings Delta section to Lakehouse
+
+Context: User-facing Settings backend label and Domain Information dropdown still said
+"Delta"; rename the product label to "Lakehouse" while keeping technical Delta Lake
+references where they describe the storage format.
+
+Changes:
+
+1. src/front/config/menu_config.json
+   Settings sidebar item label Delta → Lakehouse.
+
+2. src/front/templates/settings.html
+   Page title, loading banner, and overview/warehouse copy now say Lakehouse.
+
+3. src/front/templates/partials/domain/_domain_information.html
+   Graph backend dropdown option "Databricks (Delta)" → "Lakehouse".
+
+4. src/front/static/config/js/settings.js
+   User-visible warehouse status/toast strings updated to Lakehouse.
+
+5. README.md, docs/user-guide.md, docs/graphdb-integration.md,
+   src/shared/fastapi/health.py, helpers/docs comments
+   Aligned Settings path and backend naming with Lakehouse.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/config/js/settings.js
+- src/shared/fastapi/health.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/graphdb/delta/objects.py
+- src/back/core/graphdb/delta/health.py
+- README.md
+- docs/user-guide.md
+- docs/graphdb-integration.md
+
+Tests: `uv run pytest -q -m "not scenario"` → 3243 passed, 309 skipped, 1 pre-existing failure (`test_graphql_schema.py::test_schema_content_shape`, unrelated).
+
+
+## Build page inline spinners for Lakebase arch cards
+
+Context: After the Build page overlay dismissed, Lakebase Triple Store / Sync /
+Graph DB cards showed "—" or "Unable to check" while `/dtwin/sync/dt-existence`
+was still retrieving. Add compact inline spinners on badges and unresolved names.
+
+Changes:
+
+1. src/front/static/query/js/query-sync.js
+   Added `_archSpinnerBadge` / `_archSpinnerName` / `_setArchRetrievalLoading`;
+   pending existence paints Loading spinners; `_loadDtExistence` sets loading
+   before fetch and clears on error; removed stale `/settings/graph-engine` fetch.
+
+2. src/back/objects/digitaltwin/DigitalTwin.py
+   `pending_dt_existence` now resolves Lakebase schema/table/synced-UC names
+   from config (no network probes) while keeping existence flags pending.
+
+3. tests/units/api/test_build_page_spinners.py
+   Contract tests for spinner helpers, loading-before-fetch, and pending skeleton.
+
+4. docs/superpowers/specs/2026-07-24-build-page-inline-spinners-design.md
+   Expanded scope to Triple Store + Sync + Graph DB badges/names.
+
+Modified files:
+- src/front/static/query/js/query-sync.js
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/units/api/test_build_page_spinners.py
+- docs/superpowers/specs/2026-07-24-build-page-inline-spinners-design.md
+
+Tests: `uv run pytest -q -m "not scenario"` → 3249 passed, 309 skipped, 1 pre-existing failure (`test_graphql_schema.py::test_schema_content_shape`, unrelated).
+
+
+## Include neo4j extra in default install paths
+
+Context: Settings → Back end → Neo4j "Test connection" failed with
+`driver-missing: neo4j is required…` because the driver was an optional extra
+not pulled by Databricks Apps (`requirements.txt`) or local `scripts/setup.sh`.
+
+Changes:
+
+1. requirements.txt
+   Added `neo4j` to the editable install extras (`.[lakebase,pitfalls,neo4j]`).
+
+2. scripts/setup.sh
+   `uv sync` now includes `--extra neo4j` alongside lakebase and pitfalls.
+
+3. pyproject.toml / README.md
+   Clarified that the neo4j extra is installed by default via deploy/setup paths.
+
+Modified files:
+- requirements.txt
+- scripts/setup.sh
+- pyproject.toml
+- README.md
+
+Tests: local `uv sync --extra neo4j` → `import neo4j` OK (6.2.0); Neo4jConnection driver present.
+
+
+## Align Neo4j unit tests with single-label Cypher
+
+Context: Installing the neo4j extra unskipped `test_neo4j_store.py`; two assertions
+still expected multi-label `:Triple:<store>` patterns rejected by Neo4j 5+.
+
+Changes:
+
+1. tests/units/graphdb/test_neo4j_store.py
+   Expect backtick-quoted single labels (`dom_V1`) in constraint/stats Cypher.
+
+Modified files:
+- tests/units/graphdb/test_neo4j_store.py
+
+Tests: `uv run pytest -q tests/units/graphdb/test_neo4j_store.py tests/units/settings/test_graph_engine_config.py -m "not scenario"` → 64 passed.
+
+
+## Persist Neo4j Settings form into registry graph_engine_config
+
+Context: Neo4j URI/user/database appeared not to save — the Settings form never
+hydrated from registry `graph_engine_config`, opening Neo4j did not load config,
+and Save only merged the Neo4j panel after a Lakebase/Delta heavy load (often
+wiping typed values when config loaded empty just before POST).
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Added `applyNeo4jFormFromConfigTextarea`; hydrate on config load; preload
+   config on page open; load on Neo4j sidebar visit; always merge Neo4j panel
+   on Save (Lakebase merge still gated on heavy load).
+
+2. tests/units/settings/test_neo4j_settings_persistence.py
+   Contract tests for hydrate/save/sidebar wiring.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_neo4j_settings_persistence.py
+
+Tests: `uv run pytest -q tests/units/settings/test_neo4j_settings_persistence.py tests/units/settings/test_graph_engine_config.py -m "not scenario"` → 34 passed.
+
+
+## Make neo4j a core dependency (fix driver-missing)
+
+Context: Settings Neo4j Test connection kept failing with driver-missing because
+``neo4j`` was an optional extra; ``uv sync`` without ``--extra neo4j`` removed it
+from ``.venv``, and the running uvicorn worker still held ``_neo4j = None`` from
+import time.
+
+Changes:
+
+1. pyproject.toml
+   Moved ``neo4j>=5.0`` into core ``[project].dependencies``; removed optional
+   ``[neo4j]`` extra.
+
+2. requirements.txt / scripts/setup.sh / README.md
+   Dropped ``--extra neo4j`` / ``.[...,neo4j]`` now that the driver is core.
+
+3. uv.lock
+   Regenerated via ``uv sync`` so neo4j stays installed by default.
+
+Modified files:
+- pyproject.toml
+- requirements.txt
+- scripts/setup.sh
+- README.md
+- uv.lock
+
+Tests: local verify ``.venv/bin/python -c "import neo4j; ..."`` → OK 6.2.0
+
+
+## Restore Neo4j password on Settings hydrate
+
+Context: Neo4j password field always appeared empty after reload. Hydration
+skipped password, and merge deleted `password` when the input was blank —
+wiping a previously saved registry credential on Save/Test.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Hydrate password when input enabled; keep persisted password if field blank.
+
+2. src/front/templates/settings.html
+   Clarified local-dev password persistence vs Apps secret.
+
+3. tests/units/settings/test_neo4j_settings_persistence.py
+   Contract coverage for hydrate + blank-field preserve.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- src/front/templates/settings.html
+- tests/units/settings/test_neo4j_settings_persistence.py
+
+Tests: `uv run pytest -q tests/units/settings/test_neo4j_settings_persistence.py -m "not scenario"` → 6 passed.
+
+
+## Separate Neo4j Bolt DB from Lakebase Postgres database key
+
+Context: Saving Neo4j Settings wrote `database: "neo4j"` into shared
+`graph_engine_config`, so Lakebase health probed Postgres DB `neo4j` and failed.
+
+Changes:
+
+1. src/back/core/graphdb/neo4j/Neo4jConnection.py + Neo4jStore.py
+   Added `resolve_neo4j_database()` preferring `neo4j_database` (legacy `database`
+   only when a Neo4j URI is present).
+
+2. src/back/core/graphdb/lakebase/LakebaseBase.py + GraphDBFactory.py +
+   SettingsService lakebase health / neo4j test
+   Added `resolve_postgres_database_override()` that ignores Neo4j pollution.
+
+3. src/front/static/config/js/settings.js
+   Neo4j merge writes `neo4j_database` and clears polluted `database: "neo4j"`.
+
+4. tests/units/graphdb/test_graph_engine_config_keys.py
+   Unit coverage for both resolvers.
+
+Modified files:
+- src/back/core/graphdb/neo4j/Neo4jConnection.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/domain/SettingsService.py
+- src/front/static/config/js/settings.js
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/settings/test_neo4j_settings_persistence.py
+
+Tests: `uv run pytest -q tests/units/graphdb/test_graph_engine_config_keys.py tests/units/settings/test_neo4j_settings_persistence.py -m "not scenario"` → 16 passed.
+
+## Separate per-backend graph_engine_config (lakebase / neo4j)
+
+Context: Admin requirement that each graph backend's connection config is
+stored totally separately (nothing in common). The previous flat shared
+`graph_engine_config` blob let Neo4j and Lakebase collide on `database`
+(Lakebase health probing Postgres DB `neo4j`). Nest `{lakebase:{}, neo4j:{}}`
+with read-time migration of legacy flat blobs; Delta stays on top-level
+`delta_warehouse_id`.
+
+Changes:
+
+1. src/back/core/graphdb/engine_config.py
+   New normalizer + `lakebase_section` / `neo4j_section` helpers.
+
+2. src/back/objects/session/GlobalConfigService.py
+   get/set always normalize to nested shape; validate Lakebase keys on the
+   lakebase bucket only.
+
+3. src/back/core/graphdb/GraphDBFactory.py + consumers (SettingsService,
+   health.py, DigitalTwin, _build_pipeline, dtwin)
+   Pass only the relevant backend section into constructors / probes.
+
+4. src/front/static/config/js/settings.js
+   Settings → Back end panels read/write `lakebase` / `neo4j` buckets;
+   client-side flat→nested migrate on load/save.
+
+5. docs/graphdb-integration.md + docs/lakebase-graphdb.md
+   Document nested storage and independent admin setup.
+
+6. tests/units/graphdb/test_graph_engine_config_keys.py +
+   tests/units/settings/test_graph_engine_config.py +
+   tests/units/settings/test_neo4j_settings_persistence.py
+   Cover migrate, nested resolvers, GlobalConfigService/SettingsService.
+
+Modified files:
+- src/back/core/graphdb/engine_config.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- src/back/core/graphdb/neo4j/Neo4jConnection.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/api/routers/internal/dtwin.py
+- src/shared/fastapi/health.py
+- src/front/static/config/js/settings.js
+- docs/graphdb-integration.md
+- docs/lakebase-graphdb.md
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/settings/test_graph_engine_config.py
+- tests/units/settings/test_neo4j_settings_persistence.py
+
+Tests: `uv run pytest -q -m "not scenario"` → 3298 passed, 2 failed (pre-existing: `test_schema_content_shape`; flaky `test_run_emits_info_log_with_cypher_and_metrics` passes on re-run), 275 skipped in 28.16s
+
+## Add lakehouse bucket to nested graph_engine_config
+
+Context: Storage shape for per-backend config omitted Lakehouse; warehouse
+lived only on top-level `delta_warehouse_id`. Admin asked for symmetry —
+all three backends under the nested blob.
+
+Changes:
+
+1. src/back/core/graphdb/engine_config.py
+   Added `lakehouse: { warehouse_id }` + `lakehouse_section` /
+   `resolve_lakehouse_warehouse_id`.
+
+2. src/back/objects/session/GlobalConfigService.py
+   get overlays legacy `delta_warehouse_id`; set mirrors warehouse both ways;
+   `set_delta_warehouse_id` updates nested lakehouse too.
+
+3. src/back/core/helpers/DatabricksHelpers.py
+   resolve prefers `graph_engine_config.lakehouse.warehouse_id`.
+
+4. src/front/static/config/js/settings.js
+   Persist/hydrate `lakehouse` bucket on Save/load.
+
+5. docs + unit tests updated for the three-bucket shape.
+
+Modified files:
+- src/back/core/graphdb/engine_config.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/front/static/config/js/settings.js
+- docs/graphdb-integration.md
+- docs/lakebase-graphdb.md
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/settings/test_graph_engine_config.py
+
+Tests: `uv run pytest -q tests/units/graphdb/test_graph_engine_config_keys.py tests/units/settings/test_graph_engine_config.py tests/units/settings/test_neo4j_settings_persistence.py -m "not scenario"` → 48 passed
+
+## Drop lakehouse delta_warehouse_id mirror
+
+Context: No dual storage for Lakehouse warehouse — single source of truth is
+`graph_engine_config.lakehouse.warehouse_id`. Resolvers / health / Settings
+APIs still work via `get/set_delta_warehouse_id` and `resolve_delta_warehouse_id`
+which now read/write that nested key (API response field names unchanged).
+
+Changes:
+
+1. src/back/objects/session/GlobalConfigService.py
+   Removed top-level `delta_warehouse_id` from `_empty()` and all mirror
+   writes; get/set_delta_warehouse_id use lakehouse bucket only.
+
+2. src/back/core/helpers/DatabricksHelpers.py + health.py + SettingsService
+   Warehouse resolution and health probe use nested lakehouse config.
+
+3. docs + unit tests updated (no mirror assertions).
+
+Modified files:
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/graphdb/engine_config.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/objects/domain/SettingsService.py
+- src/shared/fastapi/health.py
+- docs/graphdb-integration.md
+- docs/lakebase-graphdb.md
+- tests/units/settings/test_delta_warehouse_config.py
+- tests/units/settings/test_graph_engine_config.py
+
+Tests: `uv run pytest -q tests/units/settings/test_delta_warehouse_config.py tests/units/settings/test_graph_engine_config.py tests/units/graphdb/test_graph_engine_config_keys.py tests/units/core/test_graphdb_factory.py -m "not scenario"` → 69 passed
+
+## Fix graph backend not persisted from Domain → Information
+
+Context: Changing Graph Backend on Domain → Information appeared to work in
+the UI but was lost after Save / reload. Root cause was incomplete wiring from
+the per-domain backend feature: navbar pre-save omitted `graph_backend`, and
+`export_for_save` / `import_from_file` never round-tripped it through UC.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   Include `#domainGraphBackend` in `saveDomainInfoBeforeSave` payload so
+   navbar Save persists the selection to session before UC write.
+
+2. src/back/objects/session/DomainSession.py
+   Export and import `info.graph_backend` (normalized) so UC save/load keeps
+   the per-domain backend.
+
+3. tests/units/domain/test_domain_session.py
+   Round-trip + export/import coverage for `graph_backend`.
+
+4. tests/units/domain/test_domain_service.py
+   `save_domain_info` coverage for graph backend (incl. normalization).
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/back/objects/session/DomainSession.py
+- tests/units/domain/test_domain_session.py
+- tests/units/domain/test_domain_service.py
+
+Tests: `uv run pytest -q -m "not scenario"` → 3304 passed initially (2 unrelated failures fixed in later section), 275 skipped
+
+## Fix GraphQL schema contract + Neo4j Cypher caplog tests
+
+Context: Full suite had 2 failures blocking commit: GraphQL contract still
+expected raw SDL / 400 for empty ontology, while `/dtwin/graphql/schema` now
+returns a 200 readiness JSON envelope; Neo4j Cypher INFO logs were emitted
+but missed by caplog because LogManager sets `propagate=False`.
+
+Changes:
+
+1. tests/contract/test_graphql_schema.py
+   Assert readiness envelope (`ready` / `sdl` / `reason`) instead of raw SDL
+   or HTTP 400 for empty ontologies.
+
+2. tests/units/graphdb/test_neo4j_store.py
+   Attach `caplog.handler` directly to the Neo4jConnection logger (TaskManager
+   pattern) so Cypher INFO lines are captured under LogManager.
+
+Modified files:
+- tests/contract/test_graphql_schema.py
+- tests/units/graphdb/test_neo4j_store.py
+
+Tests: `uv run pytest -q -m "not scenario"` → 3306 passed, 275 skipped

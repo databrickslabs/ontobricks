@@ -28,9 +28,9 @@ from back.core.errors import (
     InfrastructureError,
 )
 from back.objects.registry import RegistryService
-from back.core.triplestore import get_triplestore
+from back.core.graphdb import get_graphdb
 from shared.config.constants import DEFAULT_BASE_URI
-from back.core.helpers import effective_graph_name
+from back.core.helpers import effective_graph_name, effective_graph_query_table
 
 logger = get_logger(__name__)
 
@@ -173,8 +173,43 @@ def _load_domain_from_registry(domain_name, session_mgr, settings, *, external=F
     return domain
 
 
+def _diagnose_empty_ontology(classes, properties_list):
+    """Return a structured ``(reason, message)`` tuple when the ontology
+    cannot back a GraphQL schema, else ``None``.
+
+    Surfaces the SAME information the route layer used to swallow into
+    a 400 — but now consumers (UI Playground, MCP introspection) can
+    branch on ``reason`` and render a friendly state instead of a
+    blunt "HTTP 400".
+
+    Reasons:
+    - ``"no_classes"`` — ontology has zero classes (nothing to query).
+    - ``"no_properties"`` — classes exist but no relationships/data
+      properties. The auto-generated schema would have no fields to
+      traverse beyond the bare type list; we treat this as
+      "GraphQL not ready" rather than serve a degenerate schema.
+    """
+    if not classes:
+        return ("no_classes",
+                "Ontology has no classes — add classes in the Designer "
+                "before querying the knowledge graph via GraphQL.")
+    if not properties_list:
+        return ("no_properties",
+                "Ontology has classes but no relationships or data "
+                "properties — GraphQL needs at least one property to "
+                "expose meaningful query fields. Add properties in the "
+                "Designer or via OWL import.")
+    return None
+
+
 def _get_schema_and_context(domain, settings):
-    """Build (or retrieve cached) GraphQL schema and execution context."""
+    """Build (or retrieve cached) GraphQL schema and execution context.
+
+    Raises :class:`ValidationError` only when the ontology is genuinely
+    unusable. For the "no classes / no properties" cases the caller
+    should prefer :func:`_diagnose_empty_ontology` to render a friendly
+    state instead of catching the exception.
+    """
     from back.core.graphql import build_schema_for_domain
 
     ontology = domain.ontology or {}
@@ -182,6 +217,14 @@ def _get_schema_and_context(domain, settings):
     properties_list = ontology.get("properties", [])
     base_uri = ontology.get("base_uri", DEFAULT_BASE_URI)
     display_name = (domain.info or {}).get("name", "")
+
+    diag = _diagnose_empty_ontology(classes, properties_list)
+    if diag is not None:
+        # Route handlers call ``_diagnose_empty_ontology`` first and
+        # return early; if we still got here, the caller chose to keep
+        # the legacy "raise" behaviour (e.g. ``/execute``).
+        reason, message = diag
+        raise ValidationError(message, detail=reason)
 
     result = build_schema_for_domain(classes, properties_list, base_uri, display_name)
     if not result:
@@ -191,13 +234,13 @@ def _get_schema_and_context(domain, settings):
 
     schema, metadata = result
 
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError(
             "Graph backend not configured or unreachable."
         )
 
-    table = effective_graph_name(domain)
+    table = effective_graph_query_table(domain, settings, store=store)
 
     logger.info(
         "GraphQL context: table=%s, store=%s, classes=%d",
@@ -354,12 +397,34 @@ async def graphql_sdl(
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
+
+    # Friendly fallback: when the ontology is too thin to back a GraphQL
+    # schema, return a 200 with ``sdl=null`` + a typed ``reason`` + a
+    # human message. The Playground JS branches on this to render an
+    # in-context hint instead of a blunt "HTTP 400" toast.
+    ontology = domain.ontology or {}
+    classes = ontology.get("classes", []) or []
+    properties_list = ontology.get("properties", []) or []
+    diag = _diagnose_empty_ontology(classes, properties_list)
+    if diag is not None:
+        reason, message = diag
+        return JSONResponse(content={
+            "sdl": None,
+            "ready": False,
+            "reason": reason,
+            "message": message,
+            "stats": {
+                "classes": len(classes),
+                "properties": len(properties_list),
+            },
+        })
+
     schema, _ = _get_schema_and_context(domain, settings)
 
     from strawberry.printer import print_schema
 
     sdl = print_schema(schema)
-    return JSONResponse(content={"sdl": sdl})
+    return JSONResponse(content={"sdl": sdl, "ready": True})
 
 
 @router.get(

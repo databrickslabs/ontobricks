@@ -12,7 +12,7 @@ import os
 import re
 import threading
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from shared.config.settings import Settings
 from back.core.errors import (
@@ -47,7 +47,7 @@ from back.core.logging import get_logger
 from back.objects.registry import RegistryService
 from back.objects.registry.registry_cache import invalidate_registry_cache
 from back.objects.registry.version_lifecycle import is_editable
-from back.objects.session import sanitize_domain_folder
+from back.objects.session import is_valid_domain_name, sanitize_domain_folder
 from back.core.task_manager import get_task_manager
 from back.objects.domain._metadata_tasks import (
     run_metadata_load_task,
@@ -168,6 +168,10 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "status": self._s.info.get("status", "DRAFT"),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "graph_backend": self._coerce_graph_backend(
+                self._s.info.get("graph_backend")
+            ),
+            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -263,7 +267,20 @@ class Domain:
         Returns:
             dict: Updated project info
         """
-        domain_name = data.get("name", self._s.info.get("name", "NewDomain"))
+        if "name" in data:
+            domain_name = (data.get("name") or "").strip()
+            # New domains (not yet registered) must use CamelCase alphanumeric
+            # names — no spaces or special characters.
+            if not (self._s.domain_folder or "") and not is_valid_domain_name(
+                domain_name
+            ):
+                raise ValidationError(
+                    "Domain name must be CamelCase alphanumeric only "
+                    "(letters and digits, no spaces or special characters), "
+                    "e.g. MyOntologyDomain",
+                )
+        else:
+            domain_name = self._s.info.get("name", "NewDomain")
 
         self._s.info.update(
             {
@@ -284,8 +301,29 @@ class Domain:
                         self._s.info.get("review_quorum", 1),
                     )
                 ),
+                "graph_backend": self._coerce_graph_backend(
+                    data.get(
+                        "graph_backend",
+                        self._s.info.get("graph_backend"),
+                    )
+                ),
+                "neo4j_connection": str(
+                    data.get(
+                        "neo4j_connection",
+                        self._s.info.get("neo4j_connection", ""),
+                    )
+                    or ""
+                ).strip(),
             }
         )
+        self._s.info.pop("neo4j_database", None)
+
+        if self._s.info.get("graph_backend") == "neo4j" and not str(
+            self._s.info.get("neo4j_connection") or ""
+        ).strip():
+            raise ValidationError(
+                "Select a Neo4j connection (Settings → Neo4j) when Graph Backend is Neo4j."
+            )
 
         self._s.ontology["name"] = domain_name.lower()
 
@@ -317,6 +355,10 @@ class Domain:
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "graph_backend": self._coerce_graph_backend(
+                self._s.info.get("graph_backend")
+            ),
+            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
         }
 
     @staticmethod
@@ -327,27 +369,66 @@ class Domain:
         except (TypeError, ValueError):
             return 1
 
+    @staticmethod
+    def _coerce_graph_backend(raw: Any) -> str:
+        """Normalise the per-domain graph backend (default ``lakebase``)."""
+        from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
+        return normalize_graph_backend(raw if isinstance(raw, str) else None)
+
+    @staticmethod
+    def _sanitize_base_uri(uri: str) -> str:
+        """Percent-encode illegal IRI characters (e.g. spaces) in a base URI.
+
+        Preserves a trailing ``#`` or ``/`` separator used by ontology namespaces.
+        """
+        if not uri:
+            return uri
+        raw = str(uri).strip()
+        ends_hash = raw.endswith("#")
+        ends_slash = (not ends_hash) and raw.endswith("/")
+        parts = urlsplit(raw)
+        safe = "/:@-._~!$&'()*+,;=%"
+        out = urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                quote(parts.path, safe=safe),
+                parts.query,
+                quote(parts.fragment, safe=safe),
+            )
+        )
+        if ends_hash and not out.endswith("#"):
+            return out + "#"
+        if ends_slash and not out.endswith("/"):
+            return out + "/"
+        return out
+
     def _resolve_base_uri(
         self, domain_name: str, provided: str = "", *, auto: bool = True
     ) -> str:
         """Return the effective ontology base URI for ``domain_name``.
 
         Mirrors the frontend ``updateAutoBaseUri`` (``{default}/{Name}#``):
-        a custom (non-auto) value is kept as-is, while auto mode — or an empty
-        custom value — is generated from the globally configured default base
-        URI domain and the domain name. Guarantees a non-empty, well-formed URI
-        so a new domain never persists an empty or sentinel base_uri.
+        a custom (non-auto) value is kept (after IRI sanitization), while auto
+        mode — or an empty custom value — is generated from the globally
+        configured default base URI domain and a sanitized domain name.
+        Guarantees a non-empty, well-formed URI so a new domain never persists
+        an empty or sentinel base_uri.
         """
         if not auto and provided:
-            return provided
+            return self._sanitize_base_uri(provided)
         try:
             default_domain = resolve_default_base_uri(self._s, self._settings)
         except Exception as exc:  # noqa: BLE001 — never fail a save on URI gen
             logger.debug("default base URI resolve failed: %s", exc)
             default_domain = ""
         default_domain = (default_domain or DEFAULT_BASE_URI).rstrip("/#")
-        safe_name = (domain_name or "").strip() or "MyDomain"
-        return f"{default_domain}/{safe_name}#"
+        # Domain display names often contain spaces ("WRFM - Shell"); those
+        # must not leak into the IRI path or R2RML Turtle serialization fails.
+        raw_name = (domain_name or "").strip() or "MyDomain"
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", raw_name).strip("_") or "MyDomain"
+        return self._sanitize_base_uri(f"{default_domain}/{safe_name}#")
 
     def get_domain_template_data(self) -> Dict[str, Any]:
         """Get project data for template rendering.
@@ -371,6 +452,10 @@ class Domain:
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "graph_backend": self._coerce_graph_backend(
+                self._s.info.get("graph_backend")
+            ),
+            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,
@@ -470,8 +555,6 @@ class Domain:
                 "success": True,
                 "domain_folder": folder,
                 "version": version,
-                "current_version": self._s.current_version,
-                "versions": svc.list_versions_sorted(folder),
                 "runs": runs,
             }
         except OntoBricksError:
@@ -567,12 +650,21 @@ class Domain:
         self,
         entity_uri: str,
         bridge_domain: Optional[str] = None,
+        domain_switched: bool = False,
     ) -> str:
-        """Build ``/dtwin/?section=sigmagraph&focus=...`` URL for entity URI resolution."""
+        """Build ``/dtwin/?section=sigmagraph&focus=...`` URL for entity URI resolution.
+
+        ``domain_switched=True`` adds ``&domain_switched=1`` so the navbar can
+        bust its sessionStorage ``/navbar/state`` cache after a server-side
+        domain load (cross-domain bridges). ``bridge_domain`` is the client
+        fallback when the server could not switch the session.
+        """
         encoded = quote(entity_uri, safe="")
         target = f"/dtwin/?section=sigmagraph&focus={encoded}"
         if bridge_domain:
             target += f"&domain={quote(bridge_domain, safe='')}"
+        if domain_switched:
+            target += "&domain_switched=1"
         logger.info("Resolving entity URI %s -> %s", entity_uri, target)
         return target
 
@@ -584,7 +676,8 @@ class Domain:
         """Resolve owning domain, switch session when needed, return redirect URL path/query.
 
         Used by the ``/resolve`` HTML routes: cross-domain bridges load the target
-        domain server-side; the redirect omits ``&domain=`` when the switch succeeds.
+        domain server-side; the redirect omits ``&domain=`` when the switch succeeds
+        and sets ``domain_switched=1`` so the client invalidates the navbar cache.
         """
         target_domain = domain_hint
         if not target_domain:
@@ -593,7 +686,9 @@ class Domain:
         if target_domain:
             switched = await self._switch_domain_if_needed_for_resolve(target_domain)
             if switched:
-                return self._build_resolve_entity_redirect_url(entity_uri)
+                return self._build_resolve_entity_redirect_url(
+                    entity_uri, domain_switched=True
+                )
 
         return self._build_resolve_entity_redirect_url(
             entity_uri,
@@ -746,8 +841,15 @@ class Domain:
             if not c.is_configured:
                 raise ValidationError("Registry not configured. Go to Settings.")
 
-            folder = sanitize_domain_folder(self._s.info.get("name", "untitled_domain"))
+            raw_name = self._s.info.get("name", "untitled_domain")
+            folder = sanitize_domain_folder(raw_name)
             is_new_domain = not self._s.domain_folder
+            if is_new_domain and not is_valid_domain_name((raw_name or "").strip()):
+                raise ValidationError(
+                    "Domain name must be CamelCase alphanumeric only "
+                    "(letters and digits, no spaces or special characters), "
+                    "e.g. MyOntologyDomain",
+                )
             if is_new_domain and svc.domain_exists(folder):
                 raise ConflictError(
                     f'A domain named "{folder}" already exists in the registry. Please choose a different name.',

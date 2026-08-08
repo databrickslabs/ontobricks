@@ -25,9 +25,9 @@
     // Change-event action -> { icon, cls, label }. Falls back to a generic
     // label built from the action string for any action not listed here.
     const CHANGE_META = {
-        class_added: { icon: 'plus-circle', cls: 'text-success', label: 'Class added' },
-        class_updated: { icon: 'pencil', cls: 'text-primary', label: 'Class updated' },
-        class_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Class removed' },
+        class_added: { icon: 'plus-circle', cls: 'text-success', label: 'Entity added' },
+        class_updated: { icon: 'pencil', cls: 'text-primary', label: 'Entity updated' },
+        class_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Entity removed' },
         property_added: { icon: 'plus-circle', cls: 'text-success', label: 'Property added' },
         property_updated: { icon: 'pencil', cls: 'text-primary', label: 'Property updated' },
         property_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Property removed' },

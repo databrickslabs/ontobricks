@@ -16,6 +16,8 @@ targets a specific version; when omitted, the latest version is used.
 Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versions.
 """
 
+import time
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
@@ -25,25 +27,36 @@ from back.core.errors import ValidationError, NotFoundError, InfrastructureError
 from api.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
-from back.core.triplestore import get_triplestore
+from back.core.graphdb import get_graphdb
 from back.core.helpers import (
-    get_databricks_credentials,
+    get_triplestore_sql_credentials,
     get_databricks_client,
     sql_escape,
     effective_view_table,
     effective_graph_name,
+    effective_graph_query_table,
     run_blocking,
 )
-from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot
+from back.objects.digitaltwin import CohortService, DigitalTwin, DomainSnapshot, NodeContextService
 
 # Tests may patch ``api.routers.digitaltwin`` for registry resolution helpers.
 _resolve_registry = DigitalTwin.resolve_registry
 _extract_local_id = DigitalTwin.extract_local_id
 _expand_uri_aliases = DigitalTwin.expand_uri_aliases
+# Re-exported for tests that assert against the RDF type constant.
+_RDF_TYPE = NodeContextService.RDF_TYPE
 
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+# Short-TTL, in-process cache for ``GET /stats`` results keyed by the graph
+# query table. Triple-store stats only change on a build, so a small TTL
+# removes the 3–4 full-table aggregate scans from repeated read-only tool
+# calls (e.g. an agent probing ``list_entity_types`` several times) while
+# staying fresh within a working session.
+_STATS_CACHE_TTL_SECONDS = 60
+_stats_cache: Dict[str, Dict[str, Any]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -166,13 +179,79 @@ class FindResponse(BaseModel):
     message: Optional[str] = None
 
 
+class NodeContextDataset(BaseModel):
+    fullName: str
+    key_column: Optional[str] = None
+    key_column_missing: Optional[bool] = None
+    description: Optional[str] = None
+    rows: Optional[List[Dict[str, Any]]] = None
+
+
+class NodeContextBridge(BaseModel):
+    target_domain: str
+    target_class_name: str
+    target_class_uri: str = ""
+    label: str = ""
+    entities: Optional[List[Dict[str, Any]]] = None
+
+
+class NodeContextAction(BaseModel):
+    """A Unity Catalog function bound to the node's ontology class.
+
+    The function takes exactly one parameter: the ID of the entity to act on.
+    """
+
+    fullName: str
+    function: str = ""
+    description: Optional[str] = None
+    returns_table: bool = False
+
+
+class NodeContextResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    dataset: Optional[NodeContextDataset] = None
+    bridges: Optional[List[NodeContextBridge]] = None
+    actions: Optional[List[NodeContextAction]] = None
+    message: Optional[str] = None
+
+
+class NodeActionRequest(BaseModel):
+    entity_uri: str = Field(..., description="Instance URI of the node to act on")
+    action_full_name: str = Field(
+        ..., description="Fully qualified UC function name (catalog.schema.function)"
+    )
+    domain_name: Optional[str] = Field(None, description="Domain name in the registry")
+    domain_version: Optional[str] = Field(None, description="Domain version to load")
+    registry_catalog: Optional[str] = None
+    registry_schema: Optional[str] = None
+    registry_volume: Optional[str] = None
+
+
+class NodeActionResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    action: Optional[str] = None
+    returns_table: bool = False
+    rows: Optional[List[Dict[str, Any]]] = None
+    message: Optional[str] = None
+
+
 class DataQualityRequest(BaseModel):
     category: Optional[str] = Field(
         None, description="Filter shapes by category (e.g. 'cardinality', 'value')"
     )
     backend: str = Field(
-        "graph",
-        description="Backend to run checks against: 'view' (SQL) or 'graph' (in-memory)",
+        "view",
+        deprecated=True,
+        description=(
+            "Deprecated and ignored. Checks always run as SQL against the "
+            "triple-store VIEW, which every graph engine builds."
+        ),
     )
 
 
@@ -293,11 +372,12 @@ async def dt_status(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
 
-    graph_store = get_triplestore(domain, settings, backend="graph")
+    graph_store = get_graphdb(domain, settings)
     if not graph_store:
         return StatusResponse(
             success=True,
@@ -306,15 +386,17 @@ async def dt_status(
             reason="Graph backend not configured",
         )
 
+    query_table = effective_graph_query_table(domain, settings, store=graph_store)
+
     try:
-        if not graph_store.table_exists(graph_name):
+        if not graph_store.table_exists(query_table):
             return StatusResponse(
                 success=True,
                 view_table=view_table,
                 graph_name=graph_name,
                 reason="Graph does not exist yet",
             )
-        status = graph_store.get_status(graph_name)
+        status = graph_store.get_status(query_table)
         count = status.get("count", 0)
         last_mod = status.get("last_modified")
         return StatusResponse(
@@ -375,35 +457,38 @@ async def dt_stats(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
     graph_name = effective_graph_name(domain)
 
     if not graph_name:
         raise ValidationError("Graph name not configured")
 
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
 
-    try:
-        stats = store.get_aggregate_stats(graph_name)
+    query_table = effective_graph_query_table(domain, settings, store=store)
+
+    cached = _stats_cache.get(query_table)
+    if cached and (time.monotonic() - cached["_ts"]) < _STATS_CACHE_TTL_SECONDS:
+        logger.info("dt_stats: cache hit for %s", query_table)
+        return cached["resp"]
+
+    def _compute_stats() -> StatsResponse:
+        stats = store.get_aggregate_stats(query_table)
         total = stats["total"]
-        subj = stats["distinct_subjects"]
-        pred = stats["distinct_predicates"]
         type_cnt = stats["type_assertion_count"]
         lbl = stats["label_count"]
 
-        entity_rows = store.get_type_distribution(graph_name)
-        pred_rows = store.get_predicate_distribution(graph_name)
-
-        rel_cnt = max(total - type_cnt - lbl, 0)
-        inferred_cnt = store.get_inferred_triple_count(graph_name)
+        entity_rows = store.get_type_distribution(query_table)
+        pred_rows = store.get_predicate_distribution(query_table)
 
         return StatsResponse(
             success=True,
             total_triples=total,
-            distinct_subjects=subj,
-            distinct_predicates=pred,
+            distinct_subjects=stats["distinct_subjects"],
+            distinct_predicates=stats["distinct_predicates"],
             entity_types=[
                 EntityTypeStat(uri=r["type_uri"], count=int(r["cnt"]))
                 for r in entity_rows
@@ -414,9 +499,22 @@ async def dt_stats(
             ],
             label_count=lbl,
             type_assertion_count=type_cnt,
-            relationship_count=rel_cnt,
-            inferred_triples=inferred_cnt,
+            relationship_count=max(total - type_cnt - lbl, 0),
+            inferred_triples=store.get_inferred_triple_count(query_table),
         )
+
+    try:
+        t0 = time.perf_counter()
+        # Run the (blocking) SQL off the event loop so a slow scan does not
+        # stall other concurrent MCP tool calls.
+        resp = await run_blocking(_compute_stats)
+        logger.info(
+            "dt_stats: computed for %s in %.0fms",
+            query_table,
+            (time.perf_counter() - t0) * 1000,
+        )
+        _stats_cache[query_table] = {"resp": resp, "_ts": time.monotonic()}
+        return resp
     except Exception as e:
         logger.exception("dt_stats failed: %s", e)
         raise InfrastructureError(
@@ -487,7 +585,7 @@ async def dt_build(
     if not r2rml:
         raise ValidationError("No R2RML mapping available")
 
-    host, token, warehouse_id = get_databricks_credentials(domain, settings)
+    host, token, warehouse_id = get_triplestore_sql_credentials(domain, settings)
     if not host or not token:
         raise ValidationError("Databricks not configured")
     if not warehouse_id:
@@ -606,81 +704,36 @@ async def dt_triples_find(
         registry_schema,
         registry_volume,
         domain_version,
+        read_only=True,
     )
-    table = effective_graph_name(domain)
-    if not table:
-        raise ValidationError("Graph name not configured")
-
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
 
-    rdf_type = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+    table = effective_graph_query_table(domain, settings, store=store)
+    if not table:
+        raise ValidationError("Graph name not configured")
 
-    try:
-        rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label"
-
-        seed_conditions: list[str] = []
-
-        if entity_type:
-            esc = sql_escape(entity_type).lower()
-            seed_conditions.append(
-                f"subject IN (SELECT subject FROM {table} "
-                f"WHERE predicate = '{rdf_type}' AND "
-                f"(LOWER(object) LIKE '%#{esc}' OR LOWER(object) LIKE '%/{esc}'))"
-            )
-
-        if search:
-            esc = sql_escape(search).lower()
-            seed_conditions.append(
-                f"(subject IN (SELECT subject FROM {table} "
-                f"WHERE (predicate = '{rdfs_label}' "
-                f"OR predicate LIKE '%#label' OR predicate LIKE '%/label' "
-                f"OR predicate LIKE '%#name' OR predicate LIKE '%/name') "
-                f"AND LOWER(object) LIKE '%{esc}%') "
-                f"OR LOWER(subject) LIKE '%/{esc}%' "
-                f"OR LOWER(subject) LIKE '%#{esc}%')"
-            )
-
-        seed_where = " WHERE " + " AND ".join(seed_conditions)
-
-        bfs_rows = store.bfs_traversal(
+    def _run_find() -> FindResponse:
+        result = DigitalTwin.find_triples_bfs(
+            store,
             table,
-            seed_where,
-            depth,
-            search=search or "",
-            entity_type=entity_type or "",
+            entity_type=entity_type,
+            search=search,
+            depth=depth,
+            limit=limit,
+            offset=offset,
         )
-
-        if not bfs_rows:
+        if result.get("message") and not result.get("triples"):
             return FindResponse(
                 success=True,
                 seed_count=0,
                 depth=depth,
-                message="No matching entities found",
+                message=result["message"],
             )
-
-        all_entities = {r["entity"] for r in bfs_rows}
-        seed_count = sum(1 for r in bfs_rows if int(r.get("min_lvl", 0)) == 0)
-
-        all_entities = DigitalTwin.expand_uri_aliases(store, table, all_entities)
-
-        all_rows = store.get_triples_for_subjects(table, list(all_entities))
-
-        seen_triples: set = set()
-        all_triples: list = []
-        for r in all_rows:
-            key = (r["subject"], r["predicate"], r["object"])
-            if key not in seen_triples:
-                seen_triples.add(key)
-                all_triples.append(r)
-
-        total = len(all_triples)
-        page = all_triples[offset : offset + limit]
-
         return FindResponse(
             success=True,
-            seed_count=seed_count,
+            seed_count=result["seed_count"],
             depth=depth,
             triples=[
                 TripleRow(
@@ -688,14 +741,30 @@ async def dt_triples_find(
                     predicate=r.get("predicate", ""),
                     object=r.get("object", ""),
                 )
-                for r in page
+                for r in result["triples"]
             ],
-            count=len(page),
-            total=total,
+            count=result["count"],
+            total=result["total"],
             limit=limit,
             offset=offset,
-            entity_count=len(all_entities),
+            entity_count=result["entity_count"],
         )
+
+    try:
+        t0 = time.perf_counter()
+        # BFS traversal + alias expansion + bulk triple fetch are all
+        # blocking SQL; run them off the event loop so a dense neighbourhood
+        # walk does not stall other concurrent MCP tool calls.
+        resp = await run_blocking(_run_find)
+        logger.info(
+            "dt_triples_find: search=%r type=%r depth=%d → %d triples in %.0fms",
+            search,
+            entity_type,
+            depth,
+            resp.total,
+            (time.perf_counter() - t0) * 1000,
+        )
+        return resp
     except Exception as e:
         logger.exception("dt_triples_find failed: %s", e)
         raise InfrastructureError("Triple search failed", detail=str(e)) from e
@@ -756,18 +825,18 @@ async def dt_triples(
         registry_volume,
         domain_version,
     )
-    be = backend or "graph"
+    engine = None if (backend or "graph") == "graph" else backend
+    store = get_graphdb(domain, settings, engine=engine)
+    if not store:
+        raise ValidationError("Backend not configured")
+
     table = (
         effective_view_table(domain, settings).strip()
         if be == "view"
-        else effective_graph_name(domain)
+        else effective_graph_query_table(domain, settings, store=store)
     )
     if not table:
         raise ValidationError("Triple store not configured")
-
-    store = get_triplestore(domain, settings, backend=be)
-    if not store:
-        raise ValidationError("Backend not configured")
 
     try:
         conditions = []
@@ -885,11 +954,11 @@ async def dt_dataquality_start(
             + (f" (category={body.category})" if body.category else ""),
         )
 
-    view_table = effective_view_table(domain, settings).strip()
-    graph_name = effective_graph_name(domain)
-    triplestore_table = graph_name if body.backend == "graph" else view_table
+    triplestore_table = effective_view_table(domain, settings).strip()
     if not triplestore_table:
-        raise ValidationError("Triple store not configured")
+        raise ValidationError(
+            "The triple-store VIEW is not available. Build the Knowledge Graph first."
+        )
 
     total = len(shapes) + len(swrl_rules)
     domain_snap = DigitalTwin.make_snapshot(domain)
@@ -901,8 +970,6 @@ async def dt_dataquality_start(
         steps=[{"name": "running", "description": f"Running {total} quality checks"}],
     )
 
-    requested_backend = body.backend
-
     def _run():
         DigitalTwin.run_data_quality_task(
             tm,
@@ -911,7 +978,6 @@ async def dt_dataquality_start(
             domain_snap,
             shapes,
             triplestore_table,
-            requested_backend,
             total,
             swrl_rules=swrl_rules,
             ontology_dict=ontology_dict,
@@ -924,7 +990,7 @@ async def dt_dataquality_start(
         success=True,
         task_id=task.id,
         shape_count=total,
-        message=f"Data quality checks started ({total} shapes, backend={body.backend})",
+        message=f"Data quality checks started ({total} shapes)",
     )
 
 
@@ -1273,10 +1339,11 @@ def _resolve_cohort_context(
     graph_name = effective_graph_name(domain)
     if not graph_name:
         raise ValidationError("Graph name is not configured")
-    store = get_triplestore(domain, settings, backend="graph")
+    store = get_graphdb(domain, settings)
     if not store:
         raise InfrastructureError("Graph backend is not configured")
-    return domain, store, graph_name, CohortService(domain)
+    query_table = effective_graph_query_table(domain, settings, store=store)
+    return domain, store, query_table, CohortService(domain)
 
 
 # ---------------------------------------------------------------------------
@@ -1542,3 +1609,95 @@ async def dt_cohort_materialize(
         materialize_graph_error=result.get("materialize_graph_error"),
         materialize_uc_error=result.get("materialize_uc_error"),
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /nodes/context
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/nodes/context",
+    response_model=NodeContextResponse,
+    response_model_exclude_none=True,
+    summary="Complete node context (dataset + bridges)",
+    description="Resolve the ontology class for an entity URI and return linked "
+    "dataset metadata (with optional row retrieval) and bridge definitions "
+    "(with optional cross-domain entity traversal).",
+)
+async def dt_nodes_context(
+    entity_uri: str = Query(..., description="Full URI of the entity node"),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry",
+    ),
+    domain_version: Optional[str] = Query(None),
+    fetch_dataset_rows: bool = Query(False, description="Fetch rows from the linked UC table/view"),
+    dataset_row_limit: int = Query(5, ge=1, le=20, description="Max rows to return (1–20)"),
+    follow_bridges: bool = Query(False, description="Traverse bridge target domains"),
+    bridge_depth: int = Query(
+        1,
+        ge=1,
+        le=5,
+        description="Bridge traversal depth (BFS hops in the target domain graph)",
+    ),
+    registry_catalog: Optional[str] = Query(None),
+    registry_schema: Optional[str] = Query(None),
+    registry_volume: Optional[str] = Query(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume,
+        domain_version, read_only=True,
+    )
+    payload = await NodeContextService.resolve_context(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        session_mgr=session_mgr,
+        fetch_dataset_rows=fetch_dataset_rows,
+        dataset_row_limit=dataset_row_limit,
+        follow_bridges=follow_bridges,
+        bridge_depth=bridge_depth,
+        registry_catalog=registry_catalog,
+        registry_schema=registry_schema,
+        registry_volume=registry_volume,
+    )
+    return NodeContextResponse(**payload)
+
+
+# ---------------------------------------------------------------------------
+# POST /nodes/action
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/nodes/action",
+    response_model=NodeActionResponse,
+    response_model_exclude_none=True,
+    summary="Invoke a Unity Catalog function action on a node",
+    description="Run one of the ontology class's configured Unity Catalog "
+    "function actions against a node. The function receives exactly one "
+    "argument: the entity's local ID. Only functions declared on the resolved "
+    "class may be invoked.",
+)
+async def dt_nodes_action(
+    payload: NodeActionRequest,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        payload.domain_name, session_mgr, settings,
+        payload.registry_catalog, payload.registry_schema, payload.registry_volume,
+        payload.domain_version, read_only=True,
+    )
+    result = await NodeContextService.invoke_action(
+        domain,
+        settings,
+        entity_uri=payload.entity_uri,
+        action_full_name=payload.action_full_name,
+    )
+    return NodeActionResponse(**result)

@@ -3,12 +3,15 @@
 from .FileSessionMiddleware import (
     FileSessionMiddleware,
     get_session,
+    is_valid_session_id,
+    reap_expired_sessions,
 )
 from .SessionManager import SessionManager, get_session_manager
 from .DomainSession import (
     DomainSession,
     get_domain,
     get_empty_domain,
+    is_valid_domain_name,
     sanitize_domain_folder,
 )
 from .GlobalConfigService import GlobalConfigService, global_config_service
@@ -16,11 +19,14 @@ from .GlobalConfigService import GlobalConfigService, global_config_service
 __all__ = [
     "FileSessionMiddleware",
     "get_session",
+    "is_valid_session_id",
+    "reap_expired_sessions",
     "SessionManager",
     "get_session_manager",
     "DomainSession",
     "get_domain",
     "get_empty_domain",
+    "is_valid_domain_name",
     "sanitize_domain_folder",
     "GlobalConfigService",
     "global_config_service",

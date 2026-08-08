@@ -363,6 +363,49 @@ function extractLocalName(uri) {
 // ========== CONFIRMATION DIALOG ==========
 
 /**
+ * Show a Bootstrap modal above the currently visible modal, if any.
+ * @param {HTMLElement} modalEl - Child modal element to display
+ * @returns {bootstrap.Modal} Bootstrap modal instance
+ */
+function showStackedModal(modalEl) {
+    const openModals = Array.from(document.querySelectorAll('.modal.show'))
+        .filter((el) => el !== modalEl);
+    const parentModal = openModals.length
+        ? openModals[openModals.length - 1]
+        : null;
+    let stackApplied = false;
+
+    const applyStack = () => {
+        if (!parentModal || stackApplied) return;
+        parentModal.classList.add('ob-modal-underlying');
+        modalEl.classList.add('ob-modal-stacked');
+        const backdrops = document.querySelectorAll('.modal-backdrop');
+        const topBackdrop = backdrops.length
+            ? backdrops[backdrops.length - 1]
+            : null;
+        topBackdrop?.classList.add('ob-modal-stacked-backdrop');
+        stackApplied = true;
+    };
+
+    const clearStack = () => {
+        if (!stackApplied) return;
+        parentModal?.classList.remove('ob-modal-underlying');
+        modalEl.classList.remove('ob-modal-stacked');
+        document.querySelectorAll('.modal-backdrop.ob-modal-stacked-backdrop')
+            .forEach((el) => el.classList.remove('ob-modal-stacked-backdrop'));
+        stackApplied = false;
+    };
+
+    modalEl.addEventListener('shown.bs.modal', applyStack, { once: true });
+    modalEl.addEventListener('hidden.bs.modal', clearStack, { once: true });
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    applyStack();
+    return modal;
+}
+
+/**
  * Show a confirmation dialog (replaces native confirm())
  * @param {Object} options - Dialog options
  * @param {string} options.title - Dialog title (default: 'Confirm')
@@ -383,9 +426,9 @@ function showConfirmDialog(options = {}) {
             confirmClass = 'btn-primary',
             icon = 'question-circle'
         } = options;
-        
+
         const modalId = 'confirmDialog_' + Date.now();
-        
+
         const modalHtml = `
             <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
                 <div class="modal-dialog modal-dialog-centered">
@@ -411,35 +454,82 @@ function showConfirmDialog(options = {}) {
                 </div>
             </div>
         `;
-        
-        // Remove any existing dialog with same ID
+
         const existing = document.getElementById(modalId);
         if (existing) existing.remove();
-        
-        // Add modal to page
+
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
+
         const modalEl = document.getElementById(modalId);
-        const modal = new bootstrap.Modal(modalEl);
-        
+
         let resolved = false;
-        
-        // Handle confirm
+
         document.getElementById(`${modalId}_confirm`).addEventListener('click', () => {
             resolved = true;
             modal.hide();
             resolve(true);
         });
-        
-        // Handle cancel/close
+
         modalEl.addEventListener('hidden.bs.modal', () => {
             if (!resolved) {
                 resolve(false);
             }
-            // Clean up modal from DOM
             setTimeout(() => modalEl.remove(), 100);
         });
-        
+
+        const modal = showStackedModal(modalEl);
+    });
+}
+
+/**
+ * Show a simple informational modal with a single dismiss button.
+ * @param {object} options - { title, message, okText, okClass, icon }
+ * @returns {Promise<void>} resolves once the dialog is dismissed
+ */
+function showInfoDialog(options = {}) {
+    return new Promise((resolve) => {
+        const {
+            title = 'Information',
+            message = '',
+            okText = 'OK',
+            okClass = 'btn-primary',
+            icon = 'info-circle'
+        } = options;
+
+        const modalId = 'infoDialog_' + Date.now();
+        const modalHtml = `
+            <div class="modal fade" id="${modalId}" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-${icon} me-2"></i>${title}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0">${message}</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn ${okClass}" id="${modalId}_ok">
+                                ${okText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modalEl = document.getElementById(modalId);
+        const modal = new bootstrap.Modal(modalEl);
+
+        document.getElementById(`${modalId}_ok`).addEventListener('click', () => modal.hide());
+        modalEl.addEventListener('hidden.bs.modal', () => {
+            setTimeout(() => modalEl.remove(), 100);
+            resolve();
+        });
+
         modal.show();
     });
 }
@@ -715,6 +805,27 @@ window.fetch = function(input, init) {
 };
 
 /**
+ * Strip non-alphanumeric chars and force CamelCase on a domain name.
+ * Each "word" (sequence of letters/digits after a non-alnum char or at the
+ * start) gets its first letter uppercased.
+ */
+function enforceDomainNameCamelCase(value) {
+    const stripped = String(value || '').replace(/[^a-zA-Z0-9]/g, ' ');
+    return stripped
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join('');
+}
+
+/**
+ * Domain names must be CamelCase alphanumeric (no spaces or special characters).
+ */
+function isValidDomainName(name) {
+    return /^[A-Z][a-zA-Z0-9]*$/.test(String(name || '').trim());
+}
+
+/**
  * Show a modal that collects a new domain name, description, and LLM endpoint.
  * Resolves with { name, description, llm_endpoint } or null if cancelled.
  */
@@ -736,8 +847,10 @@ function showNewDomainDialog() {
                             <div class="mb-3">
                                 <label for="${modalId}_name" class="form-label fw-semibold">Domain name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="${modalId}_name"
-                                       placeholder="e.g. PatientCare, SupplyChain…" autocomplete="off" maxlength="64">
-                                <div class="invalid-feedback">Please enter a domain name.</div>
+                                       placeholder="e.g. PatientCare, SupplyChain…" autocomplete="off" maxlength="64"
+                                       pattern="[A-Z][A-Za-z0-9]*" inputmode="text" spellcheck="false">
+                                <div class="form-text">CamelCase alphanumeric only — no spaces or special characters.</div>
+                                <div class="invalid-feedback" id="${modalId}_name_err">Please enter a CamelCase alphanumeric name (e.g. MyOntologyDomain).</div>
                             </div>
                             <div class="mb-3">
                                 <label for="${modalId}_desc" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
@@ -804,8 +917,9 @@ function showNewDomainDialog() {
         document.getElementById(`${modalId}_llm_refresh`).addEventListener('click', loadLlmOptions);
 
         document.getElementById(`${modalId}_confirm`).addEventListener('click', () => {
-            const name = nameInput.value.trim();
-            if (!name) {
+            const name = enforceDomainNameCamelCase(nameInput.value).trim();
+            nameInput.value = name;
+            if (!isValidDomainName(name)) {
                 nameInput.classList.add('is-invalid');
                 nameInput.focus();
                 return;
@@ -817,7 +931,18 @@ function showNewDomainDialog() {
             resolve({ name, description: desc, llm_endpoint: llm });
         });
 
-        nameInput.addEventListener('input', () => nameInput.classList.remove('is-invalid'));
+        nameInput.addEventListener('input', () => {
+            const pos = nameInput.selectionStart;
+            const cleaned = enforceDomainNameCamelCase(nameInput.value);
+            if (cleaned !== nameInput.value) {
+                nameInput.value = cleaned;
+                nameInput.setSelectionRange(
+                    Math.min(pos, cleaned.length),
+                    Math.min(pos, cleaned.length)
+                );
+            }
+            nameInput.classList.remove('is-invalid');
+        });
         nameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') document.getElementById(`${modalId}_confirm`).click();
         });
@@ -838,9 +963,12 @@ window.showNotification = showNotification;
 window.NotificationCenter = NotificationCenter;
 window.DocumentPreview = DocumentPreview;
 window.showConfirmDialog = showConfirmDialog;
+window.showInfoDialog = showInfoDialog;
 window.showDeleteConfirm = showDeleteConfirm;
 window.apiRequest = apiRequest;
 window.escapeHtml = escapeHtml;
+window.enforceDomainNameCamelCase = enforceDomainNameCamelCase;
+window.isValidDomainName = isValidDomainName;
 window.showNewDomainDialog = showNewDomainDialog;
 window.fetchOnce = fetchOnce;
 window.fetchOnceInvalidate = fetchOnceInvalidate;

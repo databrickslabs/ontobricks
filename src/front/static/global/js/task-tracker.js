@@ -492,7 +492,11 @@ function computeTaskDuration(task) {
     return formatDuration(start, end);
 }
 
-/** Internal: same scale as formatDuration but starting from a number. */
+/**
+ * Same scale as formatDuration but starting from a number of seconds.
+ * Exported as window.formatTaskSeconds so callers that already hold a
+ * duration (rather than two timestamps) render it on the same scale.
+ */
 function formatSeconds(seconds) {
     if (seconds == null) return '';
     if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
@@ -537,6 +541,7 @@ window.refreshTasks = refreshTasks;
 window.waitForTask = waitForTask;
 window.trackedTasks = trackedTasks;
 window.formatTaskDuration = formatDuration;
+window.formatTaskSeconds = formatSeconds;
 
 // Auto-initialize when DOM is ready
 if (document.readyState === 'loading') {

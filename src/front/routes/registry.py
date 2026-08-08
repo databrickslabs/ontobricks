@@ -1,20 +1,12 @@
-"""Frontend HTML route -- Registry page."""
+"""Frontend HTML route -- Registry (legacy URL → Home + modal)."""
 
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse
-
-from front.fastapi.dependencies import templates
-from back.objects.session import SessionManager, get_session_manager
+from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 
 router = APIRouter(prefix="/registry", tags=["Registry"])
 
 
-@router.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def registry_page(
-    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
-):
-    """Registry management page -- browse projects, configure registry location."""
-    user_role = getattr(request.state, "user_role", "admin")
-    return templates.TemplateResponse(
-        request, "registry.html", {"user_role": user_role}
-    )
+@router.get("/", include_in_schema=False)
+async def registry_page(request: Request):
+    """Legacy /registry/ bookmarks open the Registry modal on Home."""
+    return RedirectResponse(url="/?open=registry", status_code=302)

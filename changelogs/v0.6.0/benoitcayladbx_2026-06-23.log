@@ -178,8 +178,6 @@ Viewer (Sigma.js), which auto-filters on the clicked entity's local name.
 ### Modified files
 - `src/front/templates/partials/dtwin/_query_analytics.html`
 
-<<<<<<< Updated upstream
-=======
 ### Test result
 2420 passed, 15 skipped — all green.
 
@@ -206,7 +204,6 @@ Viewer (Sigma.js), which auto-filters on the clicked entity's local name.
 ### Modified files
 - `src/front/templates/partials/dtwin/_query_analytics.html`
 
->>>>>>> Stashed changes
 ### Test results
 No backend change; 38/38 tests still pass.
 
@@ -609,8 +606,6 @@ Mandatory post-change code review run per `.cursorrules`. Covers all changes mer
 
 ### Test results
 2450 passed, 15 skipped in ~17s (0 regressions).
-<<<<<<< Updated upstream
-=======
 
 ---
 
@@ -627,4 +622,3 @@ User request: remove the "Design" section from the domain left sidebar menu.
 
 ### Test results
 2450 passed, 15 skipped (no regressions).
->>>>>>> Stashed changes

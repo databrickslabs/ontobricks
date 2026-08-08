@@ -21,13 +21,19 @@ from back.core.databricks import VolumeFileService
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.errors import InfrastructureError, ValidationError
+from back.objects.session import is_valid_session_id
 
 logger = get_logger(__name__)
 
 _MAX_DOC_CHARS = 50_000
+# Cap PGE observability extras so repeated auto-map runs cannot grow the
+# session assignment unboundedly. ``mapping_evaluations`` is a dict keyed by
+# item id (naturally bounded); ``mapping_run_log`` is an append-only list.
+_MAX_MAPPING_RUN_LOG_ENTRIES = 500
 
 if TYPE_CHECKING:
     from agents.agent_auto_assignment.engine import AgentResult as AutoAssignAgentResult
+    from agents.agent_mapping_pge.engine import AgentResult as MappingPGEAgentResult
 
 SINGLE_ITEM_MAX_ITERATIONS = 15
 
@@ -100,6 +106,48 @@ class Mapping:
             max_iterations=max_iterations,
         )
 
+    def auto_assign_with_pge_agent(
+        self,
+        *,
+        host: str,
+        token: str,
+        endpoint_name: str,
+        client: Any,
+        metadata: dict,
+        ontology: dict,
+        entity_mappings: Optional[list] = None,
+        relationship_mappings: Optional[list] = None,
+        documents: Optional[list] = None,
+        on_step: Optional[Callable[[str, int], None]] = None,
+        max_iterations: Optional[int] = None,
+    ) -> "MappingPGEAgentResult":
+        """Run the mapping-PGE agent (``agent_mapping_pge``) — blocking.
+
+        Returns an :class:`AgentResult` with the standard ``entity_mappings``
+        and ``relationship_mappings`` plus three PGE-specific extras
+        (``source_model``, ``mapping_evaluations``, ``mapping_run_log``) that
+        the caller can persist on the session via :meth:`save_mappings_to_session`.
+
+        Prefer :meth:`auto_assign_with_agent` for the legacy single-agent loop;
+        use this method (or :meth:`~back.core.agents.AgentClient.run_mapping_pge`)
+        when the orchestrator selects the PGE engine.
+        """
+        from agents.agent_mapping_pge import run_agent
+
+        return run_agent(
+            host=host,
+            token=token,
+            endpoint_name=endpoint_name,
+            client=client,
+            metadata=metadata,
+            ontology=ontology,
+            entity_mappings=entity_mappings,
+            relationship_mappings=relationship_mappings,
+            documents=documents,
+            on_step=on_step,
+            max_iterations=max_iterations,
+        )
+
     def run_auto_assign_task(
         self,
         task: Any,
@@ -130,7 +178,12 @@ class Mapping:
         total_items = len(entities) + len(relationships)
 
         try:
-            tm.start_task(task.id, "Starting auto-mapping agent…")
+            tm.start_task(task.id, "Initializing auto-map…")
+            tm.advance_step(task.id, "Loading schema and documents…")
+
+            documents = Mapping.fetch_documents_for_agent(domain, host, token)
+
+            tm.advance_step(task.id, "Running AI mapping agent…")
             task.result = {
                 "live_stats": True,
                 "entities_assigned": 0,
@@ -139,8 +192,6 @@ class Mapping:
                 "relationships_total": len(relationships),
             }
             logger.info("Auto-assign agent thread started — task=%s", task.id)
-
-            documents = Mapping.fetch_documents_for_agent(domain, host, token)
 
             all_items = [("entity", e) for e in entities] + [
                 ("rel", r) for r in relationships
@@ -165,6 +216,12 @@ class Mapping:
             total_iterations = 0
             total_usage = {"prompt_tokens": 0, "completion_tokens": 0}
             chunk_errors: List[str] = []
+            # PGE-specific extras accumulated across chunks. Each chunk
+            # re-plans, so ``last_source_model`` reflects the most recent
+            # plan; per-item evaluations / run logs concatenate cleanly.
+            last_source_model: Optional[Dict[str, Any]] = None
+            merged_mapping_evaluations: Dict[str, Any] = {}
+            merged_mapping_run_log: List[Any] = []
 
             for chunk_idx, chunk in enumerate(chunks):
                 chunk_num = chunk_idx + 1
@@ -261,6 +318,19 @@ class Mapping:
                 for k in total_usage:
                     total_usage[k] += agent_result.usage.get(k, 0)
 
+                # PGE extras — accumulate. The new engine returns these as
+                # dicts/lists (drop-in compatible). The legacy engine omitted
+                # them; ``getattr`` with defaults keeps us tolerant.
+                chunk_source_model = getattr(agent_result, "source_model", None)
+                if chunk_source_model:
+                    last_source_model = chunk_source_model
+                chunk_evals = getattr(agent_result, "mapping_evaluations", None) or {}
+                if chunk_evals:
+                    merged_mapping_evaluations.update(chunk_evals)
+                chunk_run_log = getattr(agent_result, "mapping_run_log", None) or []
+                if chunk_run_log:
+                    merged_mapping_run_log.extend(chunk_run_log)
+
                 e_done = len(entity_mapping_by_uri)
                 r_done = len(rel_mapping_by_uri)
 
@@ -338,6 +408,8 @@ class Mapping:
                 all_relationship_mappings,
             )
 
+            tm.advance_step(task.id, "Saving mappings…")
+
             Mapping.save_mappings_to_session(
                 session_id,
                 session_ref,
@@ -345,11 +417,32 @@ class Mapping:
                 all_relationship_mappings,
                 existing_entity_mappings=entity_mappings,
                 existing_relationship_mappings=relationship_mappings,
+                source_model=last_source_model,
+                mapping_evaluations=merged_mapping_evaluations or None,
+                mapping_run_log=merged_mapping_run_log or None,
             )
 
+            # Distinguish two failure modes in the completion message:
+            #   (a) chunk-level agent failures (LLM call raised / returned
+            #       agent_result.error) — captured in ``chunk_errors``.
+            #   (b) per-item "no mapping generated" — the agent ran
+            #       cleanly but couldn't (or chose not to) emit a mapping
+            #       for some ontology entries. Common when the source
+            #       table has no columns matching the concept.
+            # The original message conflated both into "(2 chunks had
+            # errors)" which read as a bug. Split them so reviewers can
+            # tell environmental issues apart from "expected — nothing
+            # in the data to map onto".
+            unmapped_items = total_items - e_count - r_count
             message = f"Completed: {e_count} entities, {r_count} relationships mapped"
+            tail_parts = []
             if chunk_errors:
-                message += f" ({len(chunk_errors)} chunk(s) had errors)"
+                tail_parts.append(f"{len(chunk_errors)} chunk(s) errored")
+            no_mapping_items = max(unmapped_items - 0, 0)  # explicit; clarity
+            if no_mapping_items > 0:
+                tail_parts.append(f"{no_mapping_items} item(s) without a generated mapping")
+            if tail_parts:
+                message += " (" + ", ".join(tail_parts) + ")"
 
             tm.complete_task(
                 task.id,
@@ -359,6 +452,8 @@ class Mapping:
                         "total": total_items,
                         "success": e_count + r_count,
                         "failed": total_items - e_count - r_count,
+                        "chunk_errors_count": len(chunk_errors),
+                        "chunk_errors": chunk_errors,  # NEW — exposed for UI/debug
                     },
                     "entity_mappings": all_entity_mappings,
                     "relationship_mappings": all_relationship_mappings,
@@ -449,6 +544,11 @@ class Mapping:
                 tm.fail_task(task.id, "Agent completed but produced no mapping")
                 return
 
+            # PGE extras from this single-item run — passed through verbatim.
+            single_source_model = getattr(agent_result, "source_model", None)
+            single_evals = getattr(agent_result, "mapping_evaluations", None) or None
+            single_run_log = getattr(agent_result, "mapping_run_log", None) or None
+
             if item_type == "entity":
                 Mapping.save_mappings_to_session(
                     session_id,
@@ -456,6 +556,9 @@ class Mapping:
                     agent_result.entity_mappings,
                     None,
                     existing_entity_mappings=existing_entity_mappings,
+                    source_model=single_source_model,
+                    mapping_evaluations=single_evals,
+                    mapping_run_log=single_run_log,
                 )
             else:
                 Mapping.save_mappings_to_session(
@@ -464,6 +567,9 @@ class Mapping:
                     None,
                     agent_result.relationship_mappings,
                     existing_relationship_mappings=existing_relationship_mappings,
+                    source_model=single_source_model,
+                    mapping_evaluations=single_evals,
+                    mapping_run_log=single_run_log,
                 )
 
             tm.complete_task(
@@ -1036,9 +1142,19 @@ class Mapping:
         *,
         existing_entity_mappings: Optional[list] = None,
         existing_relationship_mappings: Optional[list] = None,
+        source_model: Optional[Dict[str, Any]] = None,
+        mapping_evaluations: Optional[Dict[str, Any]] = None,
+        mapping_run_log: Optional[List[Any]] = None,
     ) -> None:
         if not session_id:
             logger.warning("save_mappings_to_session: no session_id — skipping")
+            return
+        if not is_valid_session_id(session_id):
+            logger.warning(
+                "save_mappings_to_session: malformed session_id (%d chars, starts %r) — skipping",
+                len(session_id),
+                session_id[:8],
+            )
             return
 
         settings = get_settings()
@@ -1072,6 +1188,25 @@ class Mapping:
                     )
                 else:
                     assignment["relationships"] = relationship_mappings
+
+            # Mapping-PGE extras — persisted alongside the assignment so the
+            # UI (future work) and downstream observability can surface
+            # planner state, per-item evaluation reports, and the per-item
+            # attempt log without re-running the agent. ``mapping_run_log``
+            # is capped at ``_MAX_MAPPING_RUN_LOG_ENTRIES`` (newest retained)
+            # so repeated auto-map runs cannot grow the session unboundedly.
+            if source_model is not None:
+                assignment["source_model"] = source_model
+            if mapping_evaluations is not None:
+                merged_evals = dict(assignment.get("mapping_evaluations") or {})
+                merged_evals.update(mapping_evaluations)
+                assignment["mapping_evaluations"] = merged_evals
+            if mapping_run_log is not None:
+                existing_log = list(assignment.get("mapping_run_log") or [])
+                existing_log.extend(mapping_run_log)
+                if len(existing_log) > _MAX_MAPPING_RUN_LOG_ENTRIES:
+                    existing_log = existing_log[-_MAX_MAPPING_RUN_LOG_ENTRIES:]
+                assignment["mapping_run_log"] = existing_log
 
             domain_node = bucket.setdefault("domain", {})
             domain_node["assignment_changed"] = True

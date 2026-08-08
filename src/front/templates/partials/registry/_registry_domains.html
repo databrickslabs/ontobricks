@@ -1,7 +1,7 @@
 <div class="content-section">
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-folder2-open me-2"></i>Domains</h4>
+            <h4 class="mb-1"><i class="bi bi-box me-2"></i>Domains</h4>
             <p class="text-muted mb-0 small">Browse, load and manage domains stored in the registry</p>
         </div>
         <div class="d-flex gap-2">
@@ -13,12 +13,6 @@
             </button>
             <button type="button" class="btn btn-sm btn-outline-primary" id="btnImportDomains" data-requires-app="admin" title="Import a .obx file into the registry">
                 <i class="bi bi-box-arrow-in-down me-1"></i> Import
-            </button>
-            <button type="button" class="btn btn-sm btn-primary" onclick="domainNew()">
-                <i class="bi bi-file-earmark-plus me-1"></i> New Domain
-            </button>
-            <button type="button" class="btn btn-sm btn-success" onclick="domainLoad()">
-                <i class="bi bi-cloud-download me-1"></i> Load Domain
             </button>
         </div>
     </div>
@@ -33,6 +27,3 @@
         </div>
     </div>
 </div>
-
-{% include 'partials/registry/_export_obx_modal.html' %}
-{% include 'partials/registry/_import_obx_modal.html' %}

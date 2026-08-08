@@ -18,7 +18,6 @@ from back.objects.registry.PermissionService import (
     role_level,
     min_role,
 )
-from back.objects.registry.guards import require
 from back.objects.registry.registry_cache import (
     invalidate_registry_cache,
     get_registry_cache_snapshot,
@@ -44,7 +43,6 @@ __all__ = [
     "ASSIGNABLE_ROLES",
     "role_level",
     "min_role",
-    "require",
     "BuildScheduler",
     "get_scheduler",
     "invalidate_registry_cache",

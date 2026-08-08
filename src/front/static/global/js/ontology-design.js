@@ -53,7 +53,7 @@ function setDesignerViewMode(viewOnly) {
         if (viewOnly) {
             descEl.textContent = 'View your ontology visually. Click "Edit" to modify entities and relationships.';
         } else {
-            descEl.textContent = 'Design your ontology by creating entities (classes) and relationships (properties) visually. Changes are saved automatically.';
+            descEl.textContent = 'Design your ontology by creating entities and relationships visually. Changes are saved automatically.';
         }
     }
     
@@ -464,6 +464,9 @@ async function syncDesignToOntology(showFeedback = false) {
             description: entity.description || existing.comment || '',
             dashboard: existing.dashboard || '',
             dashboardParams: existing.dashboardParams || {},
+            bridges: existing.bridges || [],
+            dataset: existing.dataset || null,
+            actions: existing.actions || [],
             dataProperties: [...ownProperties, ...inheritedProperties]
         };
         
@@ -1769,7 +1772,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         
         if (classes.length === 0) {
             if (showAlert) {
-                showNotification('No classes defined in the ontology. Please add classes in the Entities tab first.', 'info');
+                showNotification('No entities defined in the ontology. Please add entities in the Entities tab first.', 'info');
             }
             console.log('No classes to load into designer');
             isLoadingData = false;
@@ -1883,7 +1886,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         console.log('Loaded ' + classes.length + ' classes, ' + relCount + ' relationships, and ' + inhCount + ' inheritances into designer');
         
         if (showAlert) {
-            showNotification('Imported ' + classes.length + ' classes, ' + relCount + ' relationships, and ' + inhCount + ' inheritances from ontology', 'success');
+            showNotification('Imported ' + classes.length + ' entities, ' + relCount + ' relationships, and ' + inhCount + ' inheritances from ontology', 'success');
         }
         
         // Re-enable auto-save after loading and layout resolution completes

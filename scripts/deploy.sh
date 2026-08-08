@@ -43,9 +43,9 @@ set -euo pipefail
 #   scripts/deploy.sh --no-bootstrap      # skip the perm/Lakebase bootstrap steps
 #   scripts/deploy.sh --skip-app-yaml     # skip the app.yaml render (use the existing file as-is)
 #
-# Targets (declared in `databricks.yml`):
-#   - `dev`           Volume-only registry backend
-#   - `dev-lakebase`  Volume + Lakebase Autoscaling Postgres binding (default)
+# Targets:
+#   - `dev-lakebase-<INSTANCE_ID>`  default — separate state per id (Lakebase registry)
+#   - `dev` / `dev-lakebase`        legacy unsuffixed (static in databricks.yml)
 #
 # Prerequisites:
 #   - Databricks CLI >= 0.250.0
@@ -75,7 +75,7 @@ warn() { echo "  ${_C_YEL}⚠${_C_RST}  $*" >&2; }
 die()  { echo "" >&2; echo "${_C_RED}✗ ERROR:${_C_RST} $*" >&2; exit 1; }
 
 # shellcheck disable=SC1091
-source "${SCRIPT_DIR}/_lakebase-diag.sh"
+source "${SCRIPT_DIR}/_internal/_deploy-preflight.sh"
 
 # Fired by the ERR trap on any uncaught failure (set -e). Reports which
 # step failed, the exact command + line, and a targeted hint.
@@ -93,7 +93,7 @@ _on_error() {
         *auth*|*Authentication*)
             echo "  hint    : run \`databricks auth login --host https://<workspace>${DATABRICKS_CONFIG_PROFILE:+ --profile $DATABRICKS_CONFIG_PROFILE}\` then retry." >&2 ;;
         *Render*)
-            echo "  hint    : check scripts/_render-app-yaml.py and the APP_* values in ${CONFIG_FILE:-scripts/deploy.config.sh}." >&2 ;;
+            echo "  hint    : check scripts/_internal/_render-app-yaml.py and the APP_* values in ${CONFIG_FILE:-scripts/deploy.config.sh}." >&2 ;;
         *Lakebase*)
             if $IS_LAKEBASE; then
                 _lakebase_print_diag_hints "step failed: ${CURRENT_STEP}" \
@@ -116,6 +116,8 @@ CONFIG_FILE="scripts/deploy.config.sh"
 require_file "$CONFIG_FILE" "the deploy configuration (single source of truth)"
 # shellcheck disable=SC1090
 . "$CONFIG_FILE"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/_internal/_ensure-instance-target.sh"
 
 # Local CLI flags — override (don't pollute) what the config exported.
 TARGET="$DAB_TARGET"
@@ -141,6 +143,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Per-INSTANCE_ID target (``dev-lakebase-<id>``) → write the
+# generated DAB target so Terraform state lives under a fresh directory and
+# cannot destroy an app tracked by another instance's target.
+ensure_instance_target "$TARGET" \
+    || die "failed to materialise DAB target '${TARGET}' (check DEFAULT_INSTANCE_ID)"
+
 IS_LAKEBASE=false
 [[ "$TARGET" == *lakebase* ]] && IS_LAKEBASE=true
 
@@ -155,6 +163,7 @@ _dab_var_overrides=(
     "--var=registry_catalog=${REGISTRY_CATALOG}"
     "--var=registry_schema=${REGISTRY_SCHEMA}"
     "--var=registry_volume=${REGISTRY_VOLUME}"
+    "--var=neo4j_secret_scope=${NEO4J_SECRET_SCOPE}"
     "--var=lakebase_project=${LAKEBASE_PROJECT}"
     "--var=lakebase_branch=${LAKEBASE_BRANCH}"
     "--var=lakebase_database_resource_segment=${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
@@ -168,6 +177,7 @@ EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATAB
 echo "${_C_BLU}=== OntoBricks Deployment (DAB) ===${_C_RST}"
 echo "Config  : $CONFIG_FILE"
 [[ -n "${DATABRICKS_CONFIG_PROFILE:-}" ]] && echo "Profile : $DATABRICKS_CONFIG_PROFILE"
+echo "Instance: ${INSTANCE_ID:-?}"
 echo "Target  : $TARGET"
 echo "App     : $APP_NAME ($APP_RESOURCE_KEY)"
 echo "MCP app : $MCP_APP_NAME ($MCP_APP_RESOURCE_KEY)"
@@ -204,16 +214,30 @@ fi
 if [[ ${#_missing_soft[@]} -gt 0 ]]; then
     warn "the following optional dependencies are NOT installed:"
     for _m in "${_missing_soft[@]}"; do echo "      • ${_m}" >&2; done
-    warn "the deploy will run, but the step(s) relying on them will be skipped or fail."
+    if $IS_LAKEBASE && $DO_BOOTSTRAP; then
+        warn "psql is required for the Lakebase schema GRANT bootstrap (step 11)."
+        warn "If you continue, the Lakebase bootstrap step will be skipped for this run."
+        warn "Install libpq first: brew install libpq && brew link --force libpq"
+    fi
     if [[ -t 0 ]]; then
-        printf "  %sContinue anyway?%s [y/N] " "$_C_YEL" "$_C_RST" >&2
+        printf "\n  %sContinue anyway?%s [y/N] " "$_C_YEL" "$_C_RST" >&2
         read -r _ans
         case "$_ans" in
-            y|Y|yes|YES) info "continuing without the optional dependencies above." ;;
+            y|Y|yes|YES)
+                info "continuing — dependent step(s) will be skipped."
+                if $IS_LAKEBASE && $DO_BOOTSTRAP && ! command -v psql >/dev/null 2>&1; then
+                    DO_BOOTSTRAP=false
+                    warn "Lakebase bootstrap disabled for this run (psql missing)."
+                fi
+                ;;
             *) die "aborted by user — install the missing dependencies and re-run." ;;
         esac
     else
-        warn "non-interactive shell — continuing without the optional dependencies above."
+        warn "non-interactive shell — continuing without the optional dependencies."
+        if $IS_LAKEBASE && $DO_BOOTSTRAP && ! command -v psql >/dev/null 2>&1; then
+            DO_BOOTSTRAP=false
+            warn "Lakebase bootstrap auto-disabled (psql missing, non-interactive)."
+        fi
     fi
 else
     ok "optional dependencies present"
@@ -224,11 +248,14 @@ require_file "databricks.yml" "the DAB bundle definition"
 if $RENDER_APP_YAML; then
     require_file "app.yaml.template" "the app.yaml source template"
     require_file "src/mcp-server/app.yaml.template" "the MCP app.yaml source template"
-    require_file "scripts/_render-app-yaml.py" "the app.yaml renderer"
+    require_file "scripts/_internal/_render-app-yaml.py" "the app.yaml renderer"
 fi
 if $DO_BOOTSTRAP; then
-    require_file "scripts/bootstrap-app-permissions.sh"
-    $IS_LAKEBASE && require_file "scripts/bootstrap-lakebase-perms.sh"
+    require_file "scripts/bootstrap/app-permissions.sh"
+    if $IS_LAKEBASE; then
+        require_file "scripts/bootstrap/lakebase-perms.sh"
+        require_file "scripts/_internal/_lakebase_preflight.py"
+    fi
 fi
 ok "required files present"
 
@@ -249,7 +276,7 @@ if $IS_LAKEBASE; then
         _resolve_out="$(databricks postgres list-databases "$_branch_path" -o json 2>/dev/null || true)"
         if [[ -n "$_resolve_out" ]]; then
             _resolve_hit="$(printf '%s' "$_resolve_out" \
-                | python3 scripts/_lakebase-resolve-db.py "${LAKEBASE_DATABASE}" 2>/dev/null || true)"
+                | python3 scripts/_internal/_lakebase-resolve-db.py "${LAKEBASE_DATABASE}" 2>/dev/null || true)"
             if [[ -n "$_resolve_hit" ]]; then
                 LAKEBASE_DATABASE_RESOURCE_SEGMENT="${_resolve_hit%%$'\t'*}"
                 _resolved_datname="${_resolve_hit#*$'\t'}"
@@ -292,8 +319,8 @@ ok "deploy.config values present"
 
 # 1d. Target sanity (soft — bundle validate is the source of truth).
 case "$TARGET" in
-    dev|dev-lakebase) : ;;
-    *) warn "target '${TARGET}' is not one of the documented targets (dev, dev-lakebase) — continuing; bundle validate will confirm it exists." ;;
+    dev|dev-lakebase|dev-lakebase-*) : ;;
+    *) warn "target '${TARGET}' is not one of the documented targets (dev, dev-lakebase, dev-lakebase-<id>) — continuing; bundle validate will confirm it exists." ;;
 esac
 
 # ── 2. Verify Databricks authentication ─────────────────────────────
@@ -323,11 +350,71 @@ if [[ -z "${APP_ONTOBRICKS_URL:-}" ]]; then
     fi
 fi
 
+# ── 2c. Lakebase bootstrap + migration preflight (read-only) ────────
+if $IS_LAKEBASE && $DO_BOOTSTRAP; then
+    begin_step "Lakebase bootstrap preflight"
+    _PREFLIGHT_FAILED=0
+    _PREFLIGHT_WARNINGS=0
+    if ! _preflight_check_lakebase_bootstrap \
+            "$LAKEBASE_PROJECT" \
+            "$LAKEBASE_BRANCH" \
+            "$LAKEBASE_DATABASE" \
+            "$LAKEBASE_SCHEMA" \
+            "$APP_NAME" \
+            "$MCP_APP_NAME"; then
+        if $DRY_RUN; then
+            die "Lakebase bootstrap preflight failed — fix the issues above before deploying (see documentation/DEPLOY_CHECKLIST.md)."
+        fi
+        warn "Lakebase bootstrap preflight reported blocking issues — deploy will continue but step 11 may fail."
+    else
+        if [[ $_PREFLIGHT_WARNINGS -gt 0 ]]; then
+            info "preflight passed with ${_PREFLIGHT_WARNINGS} warning(s) — review messages above."
+        else
+            ok "bootstrap-lakebase-perms.sh and registry migrations ready"
+        fi
+    fi
+fi
+
+# ── 2d. Destructive-change + app secret preflight ────────────────────
+# Runs before anything is rendered or uploaded, because both failures it looks
+# for are unrecoverable once `terraform apply` starts: renaming an app destroys
+# it, and a missing secret scope then blocks the replacement from being created.
+begin_step "Destructive-change preflight"
+_PREFLIGHT_FAILED=0
+_PREFLIGHT_WARNINGS=0
+
+# A dry run should report the replacement, not interrogate the operator about it.
+if $DRY_RUN; then
+    ALLOW_APP_RENAME=1 _preflight_check_app_rename "$TARGET" "$APP_RESOURCE_KEY" "$APP_NAME" || true
+else
+    _preflight_check_app_rename "$TARGET" "$APP_RESOURCE_KEY" "$APP_NAME" \
+        || die "aborted before any change was made — nothing was destroyed."
+fi
+
+# Only the target that actually binds the secret should be held to it.
+_target_binds_neo4j_secret() {
+    awk -v want="  ${TARGET}:" '
+        $0 == want { inblock = 1; next }
+        inblock && /^  [a-zA-Z]/ { inblock = 0 }
+        inblock && /key: neo4j-password/ { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' databricks.yml
+}
+if _target_binds_neo4j_secret; then
+    if ! _preflight_check_secret_scope "${NEO4J_SECRET_SCOPE:-}" "neo4j-password"; then
+        if $DRY_RUN; then
+            warn "secret binding preflight failed — the app resource would fail to deploy."
+        else
+            die "the app binds a secret that cannot be read — fix it above, or remove the neo4j-password overlay from the '${TARGET}' target in databricks.yml."
+        fi
+    fi
+fi
+
 # ── 3. Render app.yaml from template ────────────────────────────────
 begin_step "Render app.yaml"
 if $RENDER_APP_YAML; then
-    python3 scripts/_render-app-yaml.py \
-        || die "app.yaml render failed — check scripts/_render-app-yaml.py and the APP_* values in ${CONFIG_FILE}."
+    python3 scripts/_internal/_render-app-yaml.py \
+        || die "app.yaml render failed — check scripts/_internal/_render-app-yaml.py and the APP_* values in ${CONFIG_FILE}."
     require_file "app.yaml" "the renderer was expected to produce app.yaml"
     require_file "src/mcp-server/app.yaml" "the renderer was expected to produce src/mcp-server/app.yaml"
     ok "app.yaml and src/mcp-server/app.yaml rendered from templates"
@@ -338,6 +425,10 @@ fi
 
 # ── 4. Validate bundle ──────────────────────────────────────────────
 begin_step "Validate bundle"
+# Re-materialise immediately before validate: unit tests may unlink the
+# gitignored generated target between the early ensure (step 0) and here.
+ensure_instance_target "$TARGET" \
+    || die "failed to materialise DAB target '${TARGET}' before validate"
 databricks bundle validate -t "$TARGET" "${_dab_var_overrides[@]}" \
     || die "bundle validation failed for target '${TARGET}'. Fix the errors above (commonly a bad --var or a target not declared in databricks.yml)."
 ok "bundle valid"
@@ -373,7 +464,7 @@ check_resource "Volume '${EXPECTED_VOLUME_FQN}'" \
 
 if $IS_LAKEBASE; then
     # The Lakebase Postgres database must already exist (created by
-    # scripts/setup-lakebase.sh). Verify the db-… segment is listed under
+    # scripts/bootstrap/setup-lakebase.sh). Verify the db-… segment is listed under
     # the configured project/branch.
     if _pg_dbs="$(databricks postgres list-databases "$EXPECTED_PG_BRANCH_PATH" -o json 2>/dev/null)"; then
         if printf '%s' "$_pg_dbs" | grep -q "$LAKEBASE_DATABASE_RESOURCE_SEGMENT"; then
@@ -381,11 +472,6 @@ if $IS_LAKEBASE; then
             # Auto-derive the PostgreSQL datname from the resource segment when the
             # user left LAKEBASE_DATABASE at the default (app-name slug).
             # This avoids "database does not exist" on first deploy.
-            _derived_datname="$(printf '%s' "$_pg_dbs" \
-                | python3 -c "
-import sys, json
-dbs = json.load(sys.stdin) if isinstance(json.load(open('/dev/stdin')), list) else json.load(sys.stdin).get('databases', [])
-" 2>/dev/null || true)"
             _derived_datname="$(printf '%s' "$_pg_dbs" \
                 | python3 -c "
 import sys, json
@@ -526,9 +612,25 @@ if ! $NO_RUN; then
     ok "app start requested"
 
     begin_step "Start $MCP_APP_NAME"
-    databricks bundle run "$MCP_APP_RESOURCE_KEY" -t "$TARGET" "${_dab_var_overrides[@]}" \
-        || die "failed to start app '${MCP_APP_NAME}'. Inspect the logs: databricks apps logs ${MCP_APP_NAME}"
-    ok "MCP app start requested"
+    # The MCP companion start step is observed to fail transiently with
+    # "App deployment failed unexpectedly" on the very first deploy of a
+    # fresh app — likely a race between the Apps platform reconciling
+    # the freshly-created `mcp_ontobricks_app` resource and the bundle
+    # run call. A second attempt 15 seconds later always succeeds.
+    _mcp_attempt=1
+    _mcp_max_attempts=2
+    while true; do
+        if databricks bundle run "$MCP_APP_RESOURCE_KEY" -t "$TARGET" "${_dab_var_overrides[@]}"; then
+            ok "MCP app start requested"
+            break
+        fi
+        if [ "$_mcp_attempt" -ge "$_mcp_max_attempts" ]; then
+            die "failed to start app '${MCP_APP_NAME}' after ${_mcp_max_attempts} attempts. Inspect: databricks apps logs ${MCP_APP_NAME}"
+        fi
+        info "MCP start failed (attempt $_mcp_attempt) — retrying in 15s (Apps platform race on first-deploy)..."
+        sleep 15
+        _mcp_attempt=$((_mcp_attempt + 1))
+    done
 else
     begin_step "Start apps (skipped)"
     info "skipped per --no-run"
@@ -646,11 +748,14 @@ fi
 # middleware can read the ACL to resolve admin/app-user roles.
 # The MCP app service principal also needs CAN_USE on the main app so
 # MCP tool calls can reach /api/v1/* without 401.
+# Both SPs also need CAN_MANAGE_RUN on the graph-analytics job so the
+# app can list/trigger it (jobs.list is ACL-filtered; without the grant
+# the UI reports a misleading "job not found").
 # Idempotent — safe to re-run. The bootstrap script reads APP_NAME /
 # MCP_APP_NAME from the env we exported via deploy.config.sh.
 begin_step "App self-permissions"
-chmod +x scripts/bootstrap-app-permissions.sh
-if scripts/bootstrap-app-permissions.sh "$APP_NAME" "$MCP_APP_NAME"; then
+chmod +x scripts/bootstrap/app-permissions.sh
+if scripts/bootstrap/app-permissions.sh "$APP_NAME" "$MCP_APP_NAME"; then
     ok "app self-permissions applied"
 else
     warn "app self-permission bootstrap returned non-zero — the app may not yet be reachable; re-run \`make bootstrap-perms\` once it is RUNNING."
@@ -675,7 +780,7 @@ fi
 # script prints actionable guidance in that case.
 if $IS_LAKEBASE; then
     begin_step "Lakebase schema permissions"
-    chmod +x scripts/bootstrap-lakebase-perms.sh
+    chmod +x scripts/bootstrap/lakebase-perms.sh
     # Pass the registry catalog so bootstrap also grants UC ALL_PRIVILEGES —
     # required for the SP to read back synced tables via the Lakebase API.
     _UC_CATALOG_ARG=()
@@ -683,7 +788,7 @@ if $IS_LAKEBASE; then
         _UC_CATALOG_ARG=(-c "$REGISTRY_CATALOG")
     fi
 
-    if ! scripts/bootstrap-lakebase-perms.sh \
+    if ! scripts/bootstrap/lakebase-perms.sh \
             -i "$LAKEBASE_PROJECT" \
             -b "$LAKEBASE_BRANCH" \
             -d "$LAKEBASE_DATABASE" \
@@ -699,7 +804,7 @@ if $IS_LAKEBASE; then
             "${LAKEBASE_DATABASE}" "${LAKEBASE_DATABASE_RESOURCE_SEGMENT:-}" "${CONFIG_FILE}"
         echo "    If the registry schema does not exist yet, initialise it"
         echo "    from Settings > Registry > Initialize and re-run:"
-        echo "      scripts/bootstrap-lakebase-perms.sh \\"
+        echo "      scripts/bootstrap/lakebase-perms.sh \\"
         echo "        -i $LAKEBASE_PROJECT \\"
         echo "        -b $LAKEBASE_BRANCH \\"
         echo "        -d $LAKEBASE_DATABASE \\"

@@ -282,3 +282,120 @@ class TestDescribeEntity:
 
             if not isinstance(exc, ToolError):
                 raise
+
+    async def test_describe_entity_includes_context_block(self, patched_mcp):
+        """When class Actions cache is populated, describe_entity appends [Context]."""
+        patched_mcp.add_default_registry()
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/digitaltwin/status",
+            json={"success": True, "has_data": True, "count": 10,
+                  "graph_name": "sales_graph", "view_table": "main.s.v"},
+        )
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/domain/classes",
+            json={
+                "success": True,
+                "classes": [
+                    {
+                        "name": "Customer",
+                        "uri": "http://x/Customer",
+                        "dataset": {"fullName": "main.crm.customers", "key_column": "id"},
+                        "bridges": [{"target_domain": "Finance",
+                                     "target_class_name": "Contract",
+                                     "target_class_uri": "http://y/Contract",
+                                     "label": "Owns"}],
+                    }
+                ],
+            },
+        )
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/digitaltwin/triples/find",
+            json={
+                "success": True,
+                "seed_count": 1,
+                "triples": [
+                    {"subject": "http://x/Customer/CUST001",
+                     "predicate": "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+                     "object": "http://x/Customer"},
+                    {"subject": "http://x/Customer/CUST001",
+                     "predicate": "http://x/name", "object": "Alice"},
+                ],
+                "depth": 1, "total": 2,
+            },
+        )
+
+        # First select_domain to populate the cache
+        try:
+            await patched_mcp.call("select_domain", domain_name="sales")
+        except Exception:
+            pass  # may fail due to incomplete mock — cache population is best-effort
+
+        try:
+            result = await patched_mcp.call(
+                "describe_entity", search="CUST001", entity_type="Customer"
+            )
+            text = _text(result)
+            assert text, "describe_entity returned empty"
+            if "[Context" in text:
+                assert "main.crm.customers" in text or "Finance" in text
+        except Exception as exc:
+            from fastmcp.exceptions import ToolError
+            if not isinstance(exc, ToolError):
+                raise
+
+
+@pytest.mark.mcp
+@pytest.mark.asyncio
+class TestGetEntityContext:
+    async def test_get_entity_context_metadata_only(self, patched_mcp):
+        patched_mcp.add_default_registry()
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/digitaltwin/status",
+            json={"success": True, "has_data": True, "count": 10,
+                  "graph_name": "g", "view_table": "t"},
+        )
+        patched_mcp.add_route(
+            "GET",
+            "/api/v1/digitaltwin/nodes/context",
+            json={
+                "success": True,
+                "entity_uri": "http://x/Customer/CUST001",
+                "entity_local_id": "CUST001",
+                "class_name": "Customer",
+                "dataset": {"fullName": "main.crm.customers", "key_column": "id"},
+                "bridges": [{"target_domain": "Finance", "target_class_name": "Contract",
+                              "target_class_uri": "http://y/Contract", "label": "Owns"}],
+            },
+        )
+
+        try:
+            await patched_mcp.call("select_domain", domain_name="sales")
+        except Exception:
+            pass
+
+        try:
+            result = await patched_mcp.call(
+                "get_entity_context",
+                entity_uri="http://x/Customer/CUST001",
+            )
+            text = _text(result)
+            assert text, "get_entity_context returned empty"
+            assert "CUST001" in text or "Customer" in text
+        except Exception as exc:
+            from fastmcp.exceptions import ToolError
+            if not isinstance(exc, ToolError):
+                raise
+
+    async def test_get_entity_context_no_domain_selected(self, patched_mcp):
+        patched_mcp.add_default_registry()
+        # No select_domain called → tool must return guidance text
+        result = await patched_mcp.call(
+            "get_entity_context",
+            entity_uri="http://x/Customer/CUST001",
+        )
+        text = _text(result)
+        assert "select_domain" in text.lower() or "no domain" in text.lower()

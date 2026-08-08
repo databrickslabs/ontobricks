@@ -67,6 +67,11 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
+When your workspace blocks Personal Access Token generation, leave
+``DATABRICKS_TOKEN`` empty and authenticate with the Databricks CLI instead
+(``databricks auth login``). The app reads ``~/.databrickscfg`` automatically;
+set ``DATABRICKS_CONFIG_PROFILE`` to select a non-default profile.
+
 ### 3. Start the Development Server
 
 ```bash
@@ -159,10 +164,14 @@ Before committing, ensure:
 
 1. **Tests pass**:
    ```bash
-   uv run pytest -q
+   uv run --frozen pytest -q
    ```
 
-2. **Commit message follows convention**
+2. **`uv.lock` is unchanged** — `git status` must show it clean. Always pass
+   `--frozen` to `uv run`; without it uv re-resolves against the internal pypi
+   proxy and rewrites every URL in the lockfile, which breaks deploys.
+
+3. **Commit message follows convention**
 
 ---
 
@@ -190,7 +199,7 @@ Special prefixes:
 |--------|-------------|
 | New SHACL validation feature | `feat/ontology-shacl-validation` |
 | Fix R2RML nested property bug | `fix/mapping-r2rml-nested-props` |
-| Update API docs | `docs/api-digital-twin-endpoints` |
+| Update API docs | `documentation/api-digital-twin-endpoints` |
 | Extract SPARQL service | `refactor/backend-sparql-service` |
 | Bump Lakebase client version | `build/graphdb-lakebase-client-bump` |
 | Prepare v0.3.0 release | `release/0.3.0` |
@@ -287,7 +296,7 @@ databricks apps deploy <app-name>
 
 2. **Run tests**:
    ```bash
-   uv run pytest -q
+   uv run --frozen pytest -q
    ```
 
 ### PR Guidelines
@@ -357,15 +366,19 @@ async def get_ontology_classes(
 
 ### Running Tests
 
+Always pass `--frozen`. Without it, `uv run` re-resolves dependencies against the
+internal pypi proxy and silently rewrites every URL in `uv.lock`, which breaks
+the next deploy (the container installs verbatim from the lock).
+
 ```bash
 # Run all tests
-uv run pytest -q
+uv run --frozen pytest -q
 
 # Run a specific test file
-uv run pytest tests/test_home_service.py -q
+uv run --frozen pytest tests/test_home_service.py -q
 
 # Run with verbose output
-uv run pytest -v
+uv run --frozen pytest -v
 ```
 
 ### Live integration (deployed Databricks App)
@@ -385,7 +398,7 @@ databricks auth login --profile fevm-ontobricks-int \
 export ONTOBRICKS_LIVE_BASE=https://ontobricks-030-<workspace-id>.aws.databricksapps.com
 export ONTOBRICKS_LIVE_MCP_BASE=https://mcp-ontobricks-<workspace-id>.aws.databricksapps.com
 export DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int
-uv run pytest tests/live_integration/ -v -m live_integration --no-cov
+uv run --frozen pytest tests/live_integration/ -v -m live_integration --no-cov
 ```
 
 **Live e2e — the same Playwright user-journey flows, against the deployed app:**
@@ -393,7 +406,7 @@ uv run pytest tests/live_integration/ -v -m live_integration --no-cov
 ```bash
 export ONTOBRICKS_LIVE_BASE=https://ontobricks-030-<workspace-id>.aws.databricksapps.com
 export DATABRICKS_CONFIG_PROFILE=fevm-ontobricks-int
-uv run pytest tests/e2e/ -v --no-cov
+uv run --frozen pytest tests/e2e/ -v --no-cov
 ```
 
 When `ONTOBRICKS_LIVE_BASE` is set the e2e suite starts no local server: the
@@ -405,7 +418,7 @@ auto-skipped. Opt into the mutating ones with — **CAUTION, the int workspace i
 shared**:
 
 ```bash
-ONTOBRICKS_LIVE_ALLOW_MUTATING=1 uv run pytest tests/e2e/ -v --no-cov
+ONTOBRICKS_LIVE_ALLOW_MUTATING=1 uv run --frozen pytest tests/e2e/ -v --no-cov
 ```
 
 Unset `ONTOBRICKS_LIVE_BASE` to run e2e the normal way (local uvicorn subprocess).

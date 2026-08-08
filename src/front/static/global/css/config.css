@@ -4,7 +4,6 @@
 
 /* Settings sections — each section scrolls independently within the sidebar content */
 #databricks-section.active,
-#ts-global-section.active,
 #lakebase-section.active,
 #global-section.active,
 #permissions-section.active,
@@ -159,10 +158,6 @@
 /* Settings → Graph DB & admin badges (inline styles → classes) */
 .settings-badge-admin-note {
     font-size: 0.65rem;
-}
-
-.settings-graph-engine-select {
-    max-width: 22rem;
 }
 
 .settings-summary-cursor {
@@ -332,5 +327,32 @@
 
 .lk-sync-loading {
     background: #ffffff;
+}
+
+/* Neo4j named connections — match the neutral Settings sidebar selection. */
+.neo4j-connection-list {
+    min-height: 12rem;
+}
+
+.neo4j-connection-list .list-group-item-action {
+    border-left: 3px solid transparent;
+    color: var(--db-text);
+    transition: var(--db-transition);
+}
+
+.neo4j-connection-list .list-group-item-action:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--db-text);
+}
+
+.neo4j-connection-list .list-group-item-action.active {
+    background: rgba(0, 0, 0, 0.15);
+    border-color: var(--db-border);
+    border-left-color: transparent;
+    color: var(--db-text);
+}
+
+.neo4j-connection-list .list-group-item-action.active .text-muted {
+    color: var(--db-text-secondary) !important;
 }
 

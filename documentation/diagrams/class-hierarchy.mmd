@@ -1,0 +1,195 @@
+classDiagram
+    %% ─── Error Hierarchy ───────────────────────────────────────────────────────
+    class Exception
+    class RuntimeError
+    class OntoBricksError { +error_code_from_class() }
+    class NotFoundError
+    class AuthorizationError
+    class ConflictError
+    class ValidationError
+    class InfrastructureError
+    class OperationCancelledError
+    class LakebaseGraphPoolError
+    class StoreError
+
+    Exception    <|-- OntoBricksError
+    OntoBricksError <|-- NotFoundError
+    OntoBricksError <|-- AuthorizationError
+    OntoBricksError <|-- ConflictError
+    OntoBricksError <|-- ValidationError
+    OntoBricksError <|-- InfrastructureError
+    OntoBricksError <|-- OperationCancelledError
+    RuntimeError <|-- LakebaseGraphPoolError
+    RuntimeError <|-- StoreError
+
+    %% ─── Storage / Backend Hierarchy ───────────────────────────────────────────
+    class ABC
+    class GraphDBBackend {
+        <<ABC>>
+        +create_table()
+        +insert_triples()
+        +query_triples()
+        +supports_cypher()
+        +query_dialect()
+        +get_connection()
+    }
+    class DeltaFlatStore {
+        +create_table()
+        +insert_triples()
+        +get_inferred_triple_count()
+    }
+    class LakebaseBase {
+        +physical_table_id()
+        +get_node_table()
+        +get_query_translator()
+    }
+    class LakebaseFlatStore {
+        +sync_mode()
+        +is_synced()
+        +sync_uc_catalog()
+    }
+    class ExampleStore {
+        +get_connection()
+        +close()
+    }
+
+    ABC              <|-- GraphDBBackend
+    GraphDBBackend   <|-- DeltaFlatStore
+    GraphDBBackend   <|-- LakebaseBase
+    GraphDBBackend   <|-- ExampleStore
+    LakebaseBase     <|-- LakebaseFlatStore
+
+    %% ─── Registry Store Hierarchy ───────────────────────────────────────────────
+    class RegistryStore {
+        <<ABC>>
+        +is_initialized()
+        +initialize()
+        +list_domain_folders()
+        +list_domains_with_metadata()
+    }
+    class LakebaseRegistryStore {
+        +schema()
+        +is_initialized()
+        +initialize()
+    }
+
+    ABC           <|-- RegistryStore
+    RegistryStore <|-- LakebaseRegistryStore
+
+    %% ─── Middleware Hierarchy ────────────────────────────────────────────────────
+    class BaseHTTPMiddleware
+    class FileSessionMiddleware
+    class CSRFMiddleware
+    class PermissionMiddleware
+    class RequestTimingMiddleware
+
+    BaseHTTPMiddleware <|-- FileSessionMiddleware
+    BaseHTTPMiddleware <|-- CSRFMiddleware
+    BaseHTTPMiddleware <|-- PermissionMiddleware
+    BaseHTTPMiddleware <|-- RequestTimingMiddleware
+
+    %% ─── Settings ────────────────────────────────────────────────────────────────
+    class BaseSettings
+    class Settings { +sql_warehouse_id() }
+    BaseSettings <|-- Settings
+
+    %% ─── Enum ────────────────────────────────────────────────────────────────────
+    class Enum
+    class TaskStatus
+    Enum <|-- TaskStatus
+
+    %% ─── Agents ──────────────────────────────────────────────────────────────────
+    class ResponsesAgent
+    class OntologyAssistantResponsesAgent {
+        +predict()
+        +predict_stream()
+    }
+    ResponsesAgent <|-- OntologyAssistantResponsesAgent
+
+    %% ─── API Model Chain (Pydantic) ─────────────────────────────────────────────
+    class BaseModel
+    class CredentialsModel
+    class DomainPathModel
+    class QueryModel
+    class UCLocationModel
+    class ErrorResponse
+    class DomainInfo
+    class OntologyStatus
+    class TaskProgressResponse
+    class StatusResponse
+
+    BaseModel      <|-- CredentialsModel
+    CredentialsModel <|-- DomainPathModel
+    DomainPathModel  <|-- QueryModel
+    DomainPathModel  <|-- UCLocationModel
+    BaseModel      <|-- ErrorResponse
+    BaseModel      <|-- DomainInfo
+    BaseModel      <|-- OntologyStatus
+    BaseModel      <|-- TaskProgressResponse
+    BaseModel      <|-- StatusResponse
+
+    %% ─── Reasoning Engines (orchestration, no shared base) ──────────────────────
+    class ReasoningService {
+        +run_full_reasoning()
+        +run_tbox_reasoning()
+        +run_swrl_rules()
+        +run_graph_reasoning()
+        +run_decision_tables()
+    }
+    class SPARQLRuleEngine { +execute_rules() }
+    class SWRLEngine       { +execute_rules() }
+    class AggregateRuleEngine { +execute_rules() }
+    class DecisionTableEngine { +execute_tables() }
+    class OWLRLReasoner    { +compute_closure() }
+
+    ReasoningService --> SPARQLRuleEngine    : uses
+    ReasoningService --> SWRLEngine          : uses
+    ReasoningService --> AggregateRuleEngine : uses
+    ReasoningService --> DecisionTableEngine : uses
+    ReasoningService --> OWLRLReasoner       : uses
+
+    %% ─── Domain Object Graph (composition) ──────────────────────────────────────
+    class DomainSession {
+        +save()
+        +reset()
+        +get_session_status()
+    }
+    class Domain {
+        +get_domain_info()
+        +get_domain_stats()
+        +import_domain()
+    }
+    class Ontology {
+        +generate_with_agent()
+        +ensure_uris()
+        +get_ontology_stats()
+    }
+    class DigitalTwin {
+        +augment_mappings_from_config()
+        +get_ts_cache()
+        +sync_last_build_from_schedule()
+    }
+    class Mapping {
+        +auto_assign_with_agent()
+        +build_entity_mapping()
+    }
+    class RegistryService {
+        +from_context()
+        +cfg()
+        +store()
+    }
+    class AgentClient {
+        +run_owl_generator()
+        +run_ontology_assistant()
+        +run_auto_assignment()
+    }
+
+    DomainSession --> Domain          : owns
+    DomainSession --> RegistryService : uses
+    Domain        --> Ontology        : owns
+    Domain        --> DigitalTwin     : owns
+    Domain        --> Mapping         : owns
+    Ontology      --> AgentClient     : calls
+    Mapping       --> AgentClient     : calls
+    DigitalTwin   --> AgentClient     : calls
+    DigitalTwin   --> ReasoningService : delegates

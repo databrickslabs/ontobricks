@@ -501,10 +501,23 @@ function showValidationSuccessModal(stats) {
 
 // Reset all mappings
 async function confirmResetMappings() {
+    // View / viewer / lock mode: CSS already greys the button; refuse here
+    // so a synthetic click or a race before the body class lands cannot wipe
+    // mappings on a non-editable version.
+    if (window.OB && typeof window.OB.canEditOntology === 'function'
+            && !window.OB.canEditOntology()) {
+        if (typeof showNotification === 'function') {
+            showNotification(
+                'Unmap all is unavailable — this version is read-only.',
+                'warning'
+            );
+        }
+        return;
+    }
     const confirmed = await showConfirmDialog({
-        title: 'Reset All Mappings',
+        title: 'Unmap All',
         message: 'This will delete <strong>all entity and relationship mappings</strong>.<br><br>Are you sure you want to continue?',
-        confirmText: 'Reset All',
+        confirmText: 'Unmap all',
         confirmClass: 'btn-danger',
         icon: 'exclamation-triangle'
     });
@@ -514,10 +527,15 @@ async function confirmResetMappings() {
 }
 
 async function resetAllMappings() {
-    const btn = document.getElementById('resetMappingsBtn');
-    const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    btn.disabled = true;
+    // The button exists on both the Mapping/Information and Mapping/Designer
+    // pages; target whichever one is currently rendered for the spinner.
+    const btn = document.getElementById('resetMappingsBtn')
+        || document.getElementById('resetMappingsDesignBtn');
+    const originalHTML = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        btn.disabled = true;
+    }
     
     try {
         MappingState.config = {
@@ -560,8 +578,10 @@ async function resetAllMappings() {
         console.error('Error resetting:', error);
         showNotification('Error: ' + error.message, 'error');
     } finally {
-        btn.innerHTML = originalHTML;
-        btn.disabled = false;
+        if (btn) {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }
     }
 }
 
@@ -874,11 +894,16 @@ async function exportR2RMLToUC() {
 
 function _initMappingInformationButtons() {
     setupImportExportButtons();
-    var _resetBtn = document.getElementById('resetMappingsBtn');
-    if (_resetBtn && !_resetBtn.dataset.obResetWired) {
-        _resetBtn.addEventListener('click', function() { confirmResetMappings(); });
-        _resetBtn.dataset.obResetWired = '1';
-    }
+    // "Unmap all" appears on both Mapping/Information (#resetMappingsBtn) and
+    // Mapping/Designer (#resetMappingsDesignBtn); both open the same confirm
+    // dialog before clearing mappings.
+    ['resetMappingsBtn', 'resetMappingsDesignBtn'].forEach(function(_id) {
+        var _btn = document.getElementById(_id);
+        if (_btn && !_btn.dataset.obResetWired) {
+            _btn.addEventListener('click', function() { confirmResetMappings(); });
+            _btn.dataset.obResetWired = '1';
+        }
+    });
 }
 
 if (document.readyState === 'loading') {

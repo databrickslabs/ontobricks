@@ -98,6 +98,51 @@ class TestBuildClassFromData:
         assert cls["name"] == "Customer"
         assert cls["emoji"] == "👤"
 
+    def test_dataset_field(self):
+        dataset = {
+            "catalog": "main",
+            "schema": "sales",
+            "asset": "orders",
+            "type": "TABLE",
+            "fullName": "main.sales.orders",
+        }
+        cls = Ontology.build_class_from_data({"name": "Customer", "dataset": dataset})
+        assert cls["dataset"] == dataset
+
+    def test_dataset_defaults_none(self):
+        cls = Ontology.build_class_from_data({"name": "Customer"})
+        assert cls["dataset"] is None
+
+    def test_dataset_preserved_from_existing(self):
+        dataset = {"catalog": "c", "schema": "s", "asset": "t", "type": "VIEW"}
+        existing = {"name": "Customer", "dataset": dataset}
+        cls = Ontology.build_class_from_data({"name": "Customer"}, existing)
+        assert cls["dataset"] == dataset
+
+    def test_actions_field(self):
+        actions = [
+            {
+                "catalog": "main",
+                "schema": "ops",
+                "function": "recompute_risk",
+                "fullName": "main.ops.recompute_risk",
+                "description": "Recompute the risk score",
+                "returns_table": False,
+            }
+        ]
+        cls = Ontology.build_class_from_data({"name": "Customer", "actions": actions})
+        assert cls["actions"] == actions
+
+    def test_actions_defaults_empty(self):
+        cls = Ontology.build_class_from_data({"name": "Customer"})
+        assert cls["actions"] == []
+
+    def test_actions_preserved_from_existing(self):
+        actions = [{"fullName": "main.ops.f", "description": "d"}]
+        existing = {"name": "Customer", "actions": actions}
+        cls = Ontology.build_class_from_data({"name": "Customer"}, existing)
+        assert cls["actions"] == actions
+
 
 class TestBuildPropertyFromData:
     def test_new_property(self):

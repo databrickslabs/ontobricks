@@ -61,7 +61,7 @@
                 '<i class="bi bi-chevron-down diag-chevron ms-auto"></i>' +
             '</div>' +
             '<div id="' + id + '" class="collapse diag-item-body">' +
-                '<div class="diag-detail-row"><strong>Class URI:</strong> ' + _escapeHtml(ent.ontology_class) + '</div>' +
+                '<div class="diag-detail-row"><strong>Entity URI:</strong> ' + _escapeHtml(ent.ontology_class) + '</div>' +
                 '<div class="diag-detail-row"><strong>Source:</strong> <code>' + _escapeHtml(ent.source) + '</code></div>' +
                 '<div class="diag-detail-row"><strong>Available columns:</strong> ' + _escapeHtml(colsStr) + '</div>' +
                 _renderChecks(ent.checks) +

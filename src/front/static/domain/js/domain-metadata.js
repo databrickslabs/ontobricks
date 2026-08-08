@@ -892,7 +892,7 @@ function showTableDetails(tableIndex) {
     modal.show();
 }
 
-function saveTableDetails() {
+async function saveTableDetails() {
     if (currentEditingTableIndex === null || !metadataCache || !metadataCache.tables) {
         return;
     }
@@ -920,8 +920,10 @@ function saveTableDetails() {
     // Refresh the display
     displayMetadataPreview(metadataCache);
     checkMetadataDescriptions(metadataCache);
-    
-    showNotification('Table details updated. Click "Save Changes" to persist.', 'info', 2000);
+
+    // Persist immediately — the modal Save button is the only save affordance.
+    await saveMetadataChanges(true);
+    showNotification('Table details saved', 'success', 2000);
 }
 
 async function clearMetadata() {

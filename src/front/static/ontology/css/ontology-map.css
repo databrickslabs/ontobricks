@@ -70,6 +70,24 @@
     pointer-events: none;
 }
 
+/* Badge shown on entities that have a Dashboard, Dataset, Actions, or
+   Bridges configured under the entity panel's "References" tab. */
+.map-node-external-badge-bg {
+    fill: #333333;
+    stroke: #ffffff;
+    stroke-width: 2px;
+    pointer-events: none;
+}
+
+.map-node-external-badge-icon {
+    font-family: "bootstrap-icons" !important;
+    font-size: 12px;
+    fill: #ffc107;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+}
+
 .map-node-hitarea {
     fill: transparent;
     stroke: none;
@@ -285,6 +303,10 @@
     filter: none;
 }
 .map-node.dimmed .map-node-label {
+    opacity: 0.15;
+}
+.map-node.dimmed .map-node-external-badge-bg,
+.map-node.dimmed .map-node-external-badge-icon {
     opacity: 0.15;
 }
 

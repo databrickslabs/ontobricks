@@ -21,6 +21,21 @@ const WIZARD_TASK_KEY = 'ontobricks_wizard_task';
 const WIZARD_OWL_KEY = 'ontobricks_wizard_owl';
 const WIZARD_STATS_KEY = 'ontobricks_wizard_stats';
 
+const WIZARD_PROGRESS_CFG = {
+    hostId: 'wizard-section',
+    overlayId: 'wizardFormOverlay',
+    overlayClass: 'task-progress-overlay wizard-form-overlay',
+    titleId: 'wizardOverlayTitle',
+    messageId: 'wizardOverlayMessage',
+    progressBarId: 'wizardOverlayProgress',
+    stepLogId: 'wizardStepLog',
+    activityPanelId: 'wizardActivityLogPanel',
+    activityLogId: 'wizardActivityLog',
+    agentMountId: 'wizardAgentStepsMount',
+    title: 'Generating ontology...',
+    subtitle: 'Your ontology is being generated...',
+};
+
 // =====================================================
 // WIZARD INITIALIZATION
 // =====================================================
@@ -108,53 +123,12 @@ function disableWizardForm(disabled) {
     });
     
     // Add/remove overlay
-    let overlay = document.getElementById('wizardFormOverlay');
     if (disabled) {
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'wizardFormOverlay';
-            overlay.className = 'wizard-form-overlay';
-            overlay.innerHTML = `
-                <div class="text-center" style="max-width: 400px;">
-                    <div class="ob-loading-spinner">
-                        <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
-                            <g class="ob-ring">
-                                <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
-                                    <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
-                                    <line x1="70" y1="40" x2="61" y2="61"/><line x1="61" y1="61" x2="40" y2="70"/>
-                                    <line x1="40" y1="70" x2="19" y2="61"/><line x1="19" y1="61" x2="10" y2="40"/>
-                                    <line x1="10" y1="40" x2="19" y2="19"/><line x1="19" y1="19" x2="40" y2="10"/>
-                                </g>
-                                <circle cx="40" cy="10" r="5" fill="#FF3621"/><circle cx="61" cy="19" r="5" fill="#6366F1"/>
-                                <circle cx="70" cy="40" r="5" fill="#4ECDC4"/><circle cx="61" cy="61" r="5" fill="#F59E0B"/>
-                                <circle cx="40" cy="70" r="5" fill="#FF3621"/><circle cx="19" cy="61" r="5" fill="#6366F1"/>
-                                <circle cx="10" cy="40" r="5" fill="#4ECDC4"/><circle cx="19" cy="19" r="5" fill="#F59E0B"/>
-                            </g>
-                            <g transform="translate(40,40)">
-                                <g class="ob-center">
-                                    <path d="M0-12 L10-6 L0 0 L-10-6Z" fill="#FF3621"/>
-                                    <path d="M0-5 L10 1 L0 7 L-10 1Z" fill="#FF3621" opacity="0.85"/>
-                                    <path d="M0 2 L10 8 L0 14 L-10 8Z" fill="#FF3621" opacity="0.7"/>
-                                </g>
-                            </g>
-                        </svg>
-                        <span class="ob-spinner-label" id="wizardOverlayTitle">Generating ontology...</span>
-                    </div>
-                    <p id="wizardOverlayMessage" class="text-muted mt-2 mb-3 small">Your ontology is being generated...</p>
-                    <div class="progress mb-2" style="height: 6px; max-width: 300px; margin: 0 auto;">
-                        <div id="wizardOverlayProgress" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
-                    </div>
-                    <small id="wizardOverlayStep" class="text-muted"></small>
-                </div>
-            `;
-            form.style.position = 'relative';
-            form.appendChild(overlay);
+        if (typeof TaskProgressUI !== 'undefined') {
+            TaskProgressUI.setOverlayVisible(WIZARD_PROGRESS_CFG, true);
         }
-        overlay.style.display = 'flex';
-    } else {
-        if (overlay) {
-            overlay.style.display = 'none';
-        }
+    } else if (typeof TaskProgressUI !== 'undefined') {
+        TaskProgressUI.setOverlayVisible(WIZARD_PROGRESS_CFG, false);
     }
 }
 
@@ -165,16 +139,14 @@ function disableWizardForm(disabled) {
  * the main status message.
  */
 function showWizardTaskProgress(task) {
-    const progressBar = document.getElementById('wizardOverlayProgress');
-    const stepEl = document.getElementById('wizardOverlayStep');
     const messageEl = document.getElementById('wizardOverlayMessage');
-
-    if (progressBar) progressBar.style.width = task.progress + '%';
-    if (stepEl && task.steps && task.current_step < task.steps.length) {
-        stepEl.textContent = task.steps[task.current_step].description;
-    }
-
     const msg = task.message || '';
+
+    if (typeof TaskProgressUI !== 'undefined') {
+        TaskProgressUI.updateFromTask(WIZARD_PROGRESS_CFG, task, {
+            skipMessagePrefixes: ['__iter__:'],
+        });
+    }
 
     // Structured iteration event from the quality loop
     if (msg.startsWith('__iter__:')) {
@@ -185,10 +157,15 @@ function showWizardTaskProgress(task) {
                 messageEl.textContent = `Refining quality — round ${data.round}, score ${data.score}/100…`;
             }
         } catch (_e) { /* ignore malformed */ }
-        return;
     }
+}
 
-    if (messageEl) messageEl.textContent = msg || 'Processing...';
+function _clearWizardProgressPanels() {
+    if (typeof TaskProgressUI !== 'undefined') {
+        TaskProgressUI.clearPanels(WIZARD_PROGRESS_CFG);
+    }
+    const refinement = document.getElementById('wizardRefinementPanel');
+    if (refinement) refinement.remove();
 }
 
 /**
@@ -288,9 +265,21 @@ async function monitorWizardTask(taskId) {
             
             const response = await fetch(`/tasks/${taskId}`, { credentials: 'same-origin' });
             const data = await response.json();
-            
+
+            // In-memory tasks are lost when the dev server hot-reloads.
+            if (response.status === 404 || (!data.success && data.error === 'not_found')) {
+                sessionStorage.removeItem(WIZARD_TASK_KEY);
+                wizardCurrentTaskId = null;
+                disableWizardForm(false);
+                showNotification(
+                    'Generation was interrupted (server restarted). Please try again.',
+                    'warning'
+                );
+                break;
+            }
+
             if (!data.success) {
-                throw new Error('Task not found');
+                throw new Error(data.message || 'Task not found');
             }
             
             const task = data.task;
@@ -705,6 +694,7 @@ async function generateOntologyFromWizard() {
         
         // Disable the form and show progress overlay
         disableWizardForm(true);
+        _clearWizardProgressPanels();
         
         // Trigger refresh of task tracker
         if (typeof refreshTasks === 'function') {
@@ -966,38 +956,10 @@ function formatDocSize(bytes) {
 // =====================================================
 
 function renderAgentStepsLog(steps) {
-    if (!steps || !steps.length) return '';
-
-    const iconFor = {
-        tool_call: 'bi-wrench text-primary',
-        tool_result: 'bi-arrow-return-right text-success',
-        output: 'bi-file-earmark-code text-dark',
-    };
-
-    let rows = steps.map(s => {
-        const icon = iconFor[s.type] || 'bi-dot';
-        const label = s.type === 'tool_call'
-            ? `<strong>${s.tool}</strong>(${s.content || ''})`
-            : s.type === 'tool_result'
-                ? `<span class="text-muted">${s.tool} → ${_truncate(s.content, 80)}</span>`
-                : `<em>Output produced</em>`;
-        const dur = s.ms ? `<span class="text-muted">${s.ms}ms</span>` : '';
-        return `<div class="d-flex align-items-start gap-2 py-1" style="font-size:0.82rem;">
-                    <i class="bi ${icon}" style="margin-top:2px;"></i>
-                    <span class="flex-grow-1 text-truncate">${label}</span>
-                    ${dur}
-                 </div>`;
-    });
-
-    return `
-        <details class="mt-2">
-            <summary class="small text-muted" style="cursor:pointer;">
-                <i class="bi bi-robot me-1"></i>Agent activity log (${steps.length} steps)
-            </summary>
-            <div class="border rounded p-2 mt-1" style="max-height:180px; overflow-y:auto; background:#ffffff;">
-                ${rows.join('')}
-            </div>
-        </details>`;
+    if (typeof TaskProgressUI !== 'undefined') {
+        return TaskProgressUI.renderAgentStepsLogHtml(steps);
+    }
+    return '';
 }
 
 function _truncate(str, max) { return truncate(str, max); }

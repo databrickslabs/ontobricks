@@ -12,6 +12,7 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
+from back.core.helpers import sql_numeric
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.constants import (
@@ -303,7 +304,7 @@ class SPARQLRuleEngine:
         val = m.group(2).strip().strip('"').strip("'")
         try:
             float(val)
-            return f"CAST({ref} AS DOUBLE) {op} {val}"
+            return f"{sql_numeric(ref)} {op} {val}"
         except ValueError:
             return f"{ref} {op} '{val}'"
 

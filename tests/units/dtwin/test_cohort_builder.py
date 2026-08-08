@@ -14,7 +14,7 @@ from back.core.graph_analysis.models import (
     CohortRule,
     CohortUCTarget,
 )
-from back.core.triplestore.constants import RDF_TYPE
+from back.core.graphdb.constants import RDF_TYPE
 
 
 BASE_URI = "http://acme/"

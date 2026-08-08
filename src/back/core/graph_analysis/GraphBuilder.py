@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import networkx as nx
 
-from back.core.triplestore.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 
 # High-cardinality predicates that create noise in graph structure analysis
 _DEFAULT_EXCLUDED_PREDICATES: Set[str] = {
@@ -31,22 +31,44 @@ class GraphBuilder:
         self._graph_name = graph_name
 
     # ------------------------------------------------------------------
-    # Shared helpers (used by CommunityDetector and GraphMetrics)
+    # Shared helpers (used by CommunityDetector)
     # ------------------------------------------------------------------
 
     def _load_triples(self, request: Any) -> List[Dict[str, str]]:
-        """Query triples from the store with a max_triples guard."""
-        triples = self._store.query_triples(self._graph_name)
-        # NOTE: the guard is on the *full* triple load — class/predicate filters
-        # are applied later in ``_build_graph`` and do NOT reduce what is read
-        # here, so the only levers are shrinking the synced graph or raising the
-        # limit (``ONTOBRICKS_ANALYTICS_MAX_TRIPLES``).
+        """Query triples from the store with a max_triples guard.
+
+        Class and predicate filters are pushed down to the store when it
+        supports it, so a filtered analysis reads only the selected subgraph
+        and can succeed on a store whose full triple count is over the limit.
+        """
+        class_filter = list(getattr(request, "class_filter", None) or [])
+        predicate_filter = list(getattr(request, "predicate_filter", None) or [])
+
+        pushdown = getattr(self._store, "query_triples_for_analysis", None)
+        if (class_filter or predicate_filter) and pushdown is not None:
+            triples = pushdown(
+                self._graph_name,
+                class_filter=class_filter or None,
+                predicate_filter=predicate_filter or None,
+            )
+        else:
+            triples = self._store.query_triples(self._graph_name)
+
         if len(triples) > request.max_triples:
+            hint = (
+                "Narrow the analysis with an entity-type filter, reduce the "
+                "synced graph (exclude entity types in KG \u2192 Sync), or raise "
+                "the analytics limit (ONTOBRICKS_ANALYTICS_MAX_TRIPLES)."
+            )
+            if class_filter:
+                hint = (
+                    "Select a smaller entity type, reduce the synced graph "
+                    "(exclude entity types in KG \u2192 Sync), or raise the "
+                    "analytics limit (ONTOBRICKS_ANALYTICS_MAX_TRIPLES)."
+                )
             raise ValueError(
                 f"Triple count ({len(triples)}) exceeds max_triples "
-                f"({request.max_triples}). Reduce the synced graph (exclude "
-                f"entity types in KG \u2192 Sync) or raise the analytics limit "
-                f"(ONTOBRICKS_ANALYTICS_MAX_TRIPLES)."
+                f"({request.max_triples}). {hint}"
             )
         return triples
 

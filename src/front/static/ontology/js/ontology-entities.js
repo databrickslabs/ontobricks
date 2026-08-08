@@ -23,7 +23,7 @@ function updateClassHierarchyTree() {
     const classes = OntologyState.config.classes || [];
     
     if (classes.length === 0) {
-        container.innerHTML = '<div class="text-muted small">No classes defined yet</div>';
+        container.innerHTML = '<div class="text-muted small">No entities defined yet</div>';
         return;
     }
     

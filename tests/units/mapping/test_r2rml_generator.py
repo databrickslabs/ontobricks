@@ -15,6 +15,12 @@ class TestR2RMLGenerator:
         gen = R2RMLGenerator()
         assert gen.base_uri == "https://databricks-ontology.com/"
 
+    def test_init_sanitizes_spaces_in_base_uri(self):
+        gen = R2RMLGenerator("https://databricks-ontology.com/WRFM - Shell#")
+        assert " " not in gen.base_uri
+        assert "%20" in gen.base_uri
+        assert gen.base_uri.endswith("/")
+
 
 class TestEntityMapping:
     def test_generates_triples_map(self):
@@ -393,3 +399,27 @@ class TestDeterministicSerialization:
             "relationships": [],
         }
         assert gen.generate_mapping(mapping_z_first) == gen.generate_mapping(mapping_a_first)
+
+
+class TestSpacedOntologyUris:
+    def test_generate_with_spaces_in_class_uri(self):
+        """Stale class IRIs with spaces must still serialize as Turtle."""
+        gen = R2RMLGenerator("https://databricks-ontology.com/WRFM#")
+        mapping_config = {
+            "entities": [
+                {
+                    "ontology_class": "https://databricks-ontology.com/WRFM - Shell#Sensor",
+                    "ontology_class_label": "Sensor",
+                    "sql_query": "SELECT * FROM sensors",
+                    "id_column": "id",
+                    "attribute_mappings": {},
+                }
+            ],
+            "relationships": [],
+        }
+        r2rml = gen.generate_mapping(mapping_config)
+        assert "TriplesMap" in r2rml
+        assert "Sensor" in r2rml
+        assert " " not in r2rml or "rr:sqlQuery" in r2rml  # spaces only ok in literals
+        # Class IRI must be percent-encoded, not raw spaces
+        assert "WRFM%20-%20Shell" in r2rml or "WRFM%20-%20Shell#Sensor" in r2rml

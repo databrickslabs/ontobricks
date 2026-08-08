@@ -1,6 +1,7 @@
 """R2RML mapping generator."""
 
 from typing import Dict, Any
+from urllib.parse import quote, urlsplit, urlunsplit
 from rdflib import Graph, Namespace, Literal, URIRef, BNode
 from rdflib.namespace import RDF, RDFS, XSD
 import re
@@ -10,13 +11,18 @@ from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 
+# Characters safe to leave unencoded in IRI path/fragment segments.
+# Spaces and other illegal IRI chars are percent-encoded by _safe_uri.
+_IRI_SAFE = "/:@-._~!$&'()*+,;=%"
+
 
 class R2RMLGenerator:
     """Generate R2RML mappings from configuration."""
 
     def __init__(self, base_uri: str = DEFAULT_BASE_URI):
         """Initialize the R2RML generator."""
-        self.base_uri = base_uri.rstrip("/").rstrip("#") + "/"
+        normalized = (base_uri or DEFAULT_BASE_URI).rstrip("/").rstrip("#") + "/"
+        self.base_uri = self._safe_uri(normalized)
         self.rr = Namespace("http://www.w3.org/ns/r2rml#")
         self.ont = Namespace(self.base_uri)
 
@@ -231,7 +237,7 @@ class R2RMLGenerator:
         map_name = self._sanitize_name(class_label or table or f"Entity_{idx}")
 
         # Create TriplesMap
-        triples_map = URIRef(f"{self.base_uri}TriplesMap_{map_name}")
+        triples_map = self._uriref(f"{self.base_uri}TriplesMap_{map_name}")
         g.add((triples_map, RDF.type, self.rr.TriplesMap))
 
         # Add comment for clarity
@@ -277,13 +283,13 @@ class R2RMLGenerator:
         # Add class if specified
         if class_uri:
             if class_uri.startswith("http://") or class_uri.startswith("https://"):
-                g.add((subject_map, self.rr["class"], URIRef(class_uri)))
+                g.add((subject_map, self.rr["class"], self._uriref(class_uri)))
             else:
                 g.add(
                     (
                         subject_map,
                         self.rr["class"],
-                        URIRef(f"{self.base_uri}{class_uri}"),
+                        self._uriref(f"{self.base_uri}{class_uri}"),
                     )
                 )
 
@@ -316,9 +322,9 @@ class R2RMLGenerator:
                 # the current base to avoid mixed-prefix predicates.
                 ont_uri = ont_props.get(attr_name.lower())
                 if ont_uri and ont_uri.startswith(self.base_uri):
-                    attr_uri = URIRef(ont_uri)
+                    attr_uri = self._uriref(ont_uri)
                 else:
-                    attr_uri = URIRef(
+                    attr_uri = self._uriref(
                         f"{self.base_uri}{self._sanitize_name(attr_name)}"
                     )
                 g.add((pom, self.rr.predicate, attr_uri))
@@ -431,7 +437,7 @@ class R2RMLGenerator:
         map_name = f"Rel_{prop_name}_{idx}"
 
         # Create TriplesMap for the relationship
-        triples_map = URIRef(f"{self.base_uri}TriplesMap_{map_name}")
+        triples_map = self._uriref(f"{self.base_uri}TriplesMap_{map_name}")
         g.add((triples_map, RDF.type, self.rr.TriplesMap))
 
         # Add comment for clarity
@@ -500,18 +506,26 @@ class R2RMLGenerator:
         # base-URI change), rebuild it from the current base_uri.
         if property_uri.startswith("http://") or property_uri.startswith("https://"):
             if property_uri.startswith(self.base_uri):
-                g.add((pom, self.rr.predicate, URIRef(property_uri)))
+                g.add((pom, self.rr.predicate, self._uriref(property_uri)))
             else:
                 local = self._extract_local_name(property_uri)
                 g.add(
                     (
                         pom,
                         self.rr.predicate,
-                        URIRef(f"{self.base_uri}{self._sanitize_name(local)}"),
+                        self._uriref(
+                            f"{self.base_uri}{self._sanitize_name(local)}"
+                        ),
                     )
                 )
         else:
-            g.add((pom, self.rr.predicate, URIRef(f"{self.base_uri}{property_uri}")))
+            g.add(
+                (
+                    pom,
+                    self.rr.predicate,
+                    self._uriref(f"{self.base_uri}{property_uri}"),
+                )
+            )
 
         # Object Map - reference to target entity
         obj_map = BNode(f"om_{map_name}")
@@ -671,6 +685,30 @@ class R2RMLGenerator:
             return "unknown"
         sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", str(name))
         return sanitized or "unknown"
+
+    @staticmethod
+    def _safe_uri(uri: str) -> str:
+        """Percent-encode characters illegal in IRIs (e.g. spaces).
+
+        Ontology / domain names with spaces previously produced base URIs
+        and class IRIs that RDFLib refuses to serialize as Turtle.
+        """
+        if not uri:
+            return uri
+        parts = urlsplit(str(uri).strip())
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                quote(parts.path, safe=_IRI_SAFE),
+                parts.query,
+                quote(parts.fragment, safe=_IRI_SAFE),
+            )
+        )
+
+    def _uriref(self, uri: str) -> URIRef:
+        """Build a URIRef from a possibly dirty config URI."""
+        return URIRef(self._safe_uri(uri))
 
     def _extract_local_name(self, uri: str) -> str:
         """Extract the local name from a URI."""

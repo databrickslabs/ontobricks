@@ -5,12 +5,16 @@ import os
 import warnings
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 
 def pytest_configure(config):
     """Runs before collection; filters noisy third-party warnings."""
+    config.addinivalue_line(
+        "markers",
+        "allow_cli_resolve: allow real DatabricksAuth._resolve_cli_config in test",
+    )
     try:
         from urllib3.exceptions import NotOpenSSLWarning
 
@@ -47,6 +51,18 @@ def setup_test_env(monkeypatch):
         "PGDATABASE",
     ):
         monkeypatch.delenv(_lakebase_var, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def isolate_databricks_cli_auth(request):
+    """Prevent accidental ``~/.databrickscfg`` resolution in unit tests."""
+    if request.node.get_closest_marker("allow_cli_resolve"):
+        yield
+        return
+    from back.core.databricks.DatabricksAuth import DatabricksAuth
+
+    with patch.object(DatabricksAuth, "_resolve_cli_config", return_value=None):
+        yield
 
 
 @pytest.fixture

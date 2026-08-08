@@ -342,7 +342,7 @@ class TestAdminOnlyPaths:
             ("/settings/registry", "GET"),
             ("/settings/registry/domains", "GET"),
             ("/settings/registry/bridges", "GET"),
-            ("/settings/graph-engine", "GET"),
+            ("/settings/delta-warehouse", "GET"),
             ("/settings/graph-engine-config", "GET"),
             ("/settings/graph-engine/lakebase-health", "GET"),
         ],
@@ -361,14 +361,6 @@ class TestAdminOnlyPaths:
         NOT benefit from the read-only GET exception."""
         _, resp, result = _dispatch_with_roles(
             ROLE_APP_USER, ROLE_VIEWER, method="POST", path="/settings/registry"
-        )
-        assert resp.status_code in (302, 403)
-        assert not result.get("passed")
-
-    def test_post_graph_engine_still_admin_only(self):
-        """POST /settings/graph-engine must not use the GET read exception."""
-        _, resp, result = _dispatch_with_roles(
-            ROLE_APP_USER, ROLE_VIEWER, method="POST", path="/settings/graph-engine"
         )
         assert resp.status_code in (302, 403)
         assert not result.get("passed")
@@ -400,6 +392,19 @@ class TestAdminOnlyPaths:
             ROLE_BUILDER,
             method="DELETE",
             path="/settings/registry/domains/my_domain/versions/1",
+        )
+        assert resp.status_code in (302, 403)
+        assert not result.get("passed")
+
+    @pytest.mark.parametrize(
+        "path", ["/settings/runs/build", "/settings/runs/analytics"]
+    )
+    def test_cross_domain_run_history_is_admin_only(self, path):
+        """The Runs page reports every domain's builds and analyses, so its
+        readers must not join the read-only exception list the way
+        ``/settings/registry/domains`` did."""
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_BUILDER, method="GET", path=path
         )
         assert resp.status_code in (302, 403)
         assert not result.get("passed")

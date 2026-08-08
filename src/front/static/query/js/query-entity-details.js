@@ -413,6 +413,76 @@ async function showEntityDetails(entity) {
         `;
     }
 
+    // Linked external dataset (Dashboard-style box + preview)
+    const dataset = entityMapping?.dataset || classInfo?.dataset || null;
+    if (dataset && (dataset.fullName || dataset.asset)) {
+        const fullName = dataset.fullName
+            || [dataset.catalog, dataset.schema, dataset.asset].filter(Boolean).join('.');
+        const hasKey = Boolean(dataset.key_column);
+        const previewDisabled = hasKey ? '' : 'disabled';
+        const previewTitle = hasKey
+            ? 'Preview up to 10 matching rows'
+            : 'Key column is not configured — preview unavailable';
+        const previewOnClick = hasKey
+            ? `openDatasetPreviewModal('${escapeHtml(entity.id)}', '${escapeHtml(ontologyTypeName)}', '${escapeHtml(actualIdValue || '')}')`
+            : '';
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-table"></i> Dataset</h6>
+                <div class="entity-detail-item">
+                    <span class="detail-key">Table</span>
+                    <span class="detail-value"><code>${escapeHtml(fullName)}</code></span>
+                </div>
+                ${dataset.key_column ? `
+                <div class="entity-detail-item">
+                    <span class="detail-key">Key</span>
+                    <span class="detail-value"><code>${escapeHtml(dataset.key_column)}</code></span>
+                </div>` : ''}
+                ${dataset.description ? `
+                <div class="entity-detail-item">
+                    <span class="detail-key">Description</span>
+                    <span class="detail-value">${escapeHtml(dataset.description)}</span>
+                </div>` : ''}
+                <div class="entity-detail-item">
+                    <button type="button" onclick="${previewOnClick}"
+                            class="btn btn-sm btn-outline-info w-100" ${previewDisabled}
+                            title="${escapeHtml(previewTitle)}">
+                        <i class="bi bi-table me-1"></i>Preview rows
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Unity Catalog function actions (each takes the entity ID as its only argument)
+    const actions = entityMapping?.actions || classInfo?.actions || [];
+    if (actions.length > 0) {
+        const buttons = actions.map(action => {
+            const fullName = action.fullName
+                || [action.catalog, action.schema, action.function].filter(Boolean).join('.');
+            if (!fullName) return '';
+            const label = action.function || fullName;
+            const title = action.description || `Run ${fullName}`;
+            const description = action.description || '';
+            return `
+                <div class="entity-detail-item">
+                    <button type="button"
+                            onclick="openEntityActionModal('${escapeHtml(entity.id)}', '${escapeHtml(fullName)}', '${escapeHtml(label)}', '${escapeHtml(description)}')"
+                            class="btn btn-sm btn-outline-primary w-100"
+                            title="${escapeHtml(title)}">
+                        <i class="bi bi-lightning-charge me-1"></i>${escapeHtml(label)}
+                    </button>
+                </div>
+            `;
+        }).join('');
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-lightning-charge"></i> Actions</h6>
+                ${buttons}
+            </div>
+        `;
+    }
+
     // Cross-domain bridges
     const bridges = entityMapping?.bridges || classInfo?.bridges || [];
     if (bridges.length > 0) {
@@ -434,7 +504,7 @@ async function showEntityDetails(entity) {
                     <a href="${escapeHtml(resolveUrl)}" onclick="${onClickSpinner}" class="btn btn-sm btn-outline-primary w-100 text-start" title="${tooltip}">
                         <i class="bi bi-signpost-2 me-1"></i>
                         <span class="fw-semibold">${escapeHtml(bridge.target_class_name || '')}</span>
-                        <small class="text-muted ms-1"><i class="bi bi-folder2-open ms-1 me-1"></i>${escapeHtml(tgtDom)}</small>
+                        <small class="text-muted ms-1"><i class="bi bi-box ms-1 me-1"></i>${escapeHtml(tgtDom)}</small>
                         <i class="bi bi-box-arrow-up-right ms-auto float-end mt-1"></i>
                     </a>
                 </div>
