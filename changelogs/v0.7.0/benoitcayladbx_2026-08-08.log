@@ -99,3 +99,27 @@ Tests: `.venv/bin/pytest -q -m "not scenario"`
 → 4787 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 32.42s.
 (`uv run --frozen` could not re-resolve hatchling against the internal pypi
 proxy in this environment — 403 — so the already-synced venv was used.)
+
+## Pin databricks/setup-cli away from @main in release.yml
+
+Context: Supply-chain audit (2026-08-04): `release.yml` ran
+`databricks/setup-cli@main` in the same job as `DATABRICKS_TOKEN`. `@main`
+is a mutable branch ref; a retargeted action could exfiltrate the token.
+Pin to the v1.10.0 commit SHA and pass an explicit CLI `version:` before
+Actions/secrets are re-enabled.
+
+Changes:
+
+1. `.github/workflows/release.yml`
+   Replace `databricks/setup-cli@main` with
+   `databricks/setup-cli@8821c27b1fe57472264eeb6e50c1f31d69552f28` (# v1.10.0)
+   and `with.version: "1.10.0"`.
+
+Modified files:
+- .github/workflows/release.yml
+- changelogs/v0.7.0/benoitcayladbx_2026-08-08.log
+
+Tests: `.venv/bin/pytest -q -m "not scenario"`
+→ 4787 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 40.39s.
+(`uv run --frozen` blocked by pypi-proxy 403 in this environment — used
+already-synced `.venv`.)
