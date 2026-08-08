@@ -1,0 +1,18 @@
+## Update product roadmap — Delta Graph DB in v0.7.0
+
+Context: The July 2026 roadmap listed v0.7.0 as Neo4j-only graph engine expansion.
+Delta Lake is today the governance triple store but not a selectable Graph DB engine
+(`GraphDBFactory` ships Lakebase only). The roadmap now plans Delta as a first-class
+Graph DB backend alongside Neo4j in v0.7.0, and records v0.6.1 as the current stable line.
+
+Changes:
+
+1. releases/Roadmap_2026-07.md
+   Executive summary, storage-layer table, v0.6.1 delivered section, v0.7.0 split into
+   Delta Graph DB + Neo4j pillars, feature matrix row, graph engine comparison table,
+   and open question on dual-layer vs Delta-only deployments.
+
+Modified files:
+- releases/Roadmap_2026-07.md
+
+Tests: N/A (documentation-only change)

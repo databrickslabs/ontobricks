@@ -1,0 +1,70 @@
+## Merge origin/master into develop (resolve PR #130 conflicts)
+
+Context:
+PR #130 (Release v0.7.0 — deploy develop → master) was CONFLICTING because
+master carried 26 commits (0.6.1 / 0.6.2 hotfixes + Dependabot) that never
+landed back on develop. Merged `origin/master` into `develop` and resolved
+all conflicted paths so the release PR can merge cleanly. Version stays
+0.7.0. Most Lakebase hotfixes from master were already present on develop
+via earlier cherry-picks; kept master's release notes / changelogs and the
+portable Databricks CLI profile default.
+
+Changes:
+
+1. `CONTRIBUTORS.md` / `README.md` / `pyproject.toml`
+   Kept develop 0.7.0 branding and version; community contributors list
+   already included both develop and master entries after auto-merge.
+2. `scripts/bootstrap/lakebase-perms.sh`, `scripts/deploy.sh`
+   Kept develop's `scripts/_internal/` paths after the scripts reorg;
+   dropped duplicate root copies of `_lakebase-diag.sh` /
+   `_lakebase-resolve-db.py` that master re-added (identical content).
+3. `scripts/deploy.config.sh`
+   Adopted master's portable
+   `DEFAULT_DATABRICKS_PROFILE="${DEFAULT_DATABRICKS_PROFILE-DEFAULT}"`
+   and removed a duplicated `0e` profile-export block from the auto-merge.
+4. `src/agents/tools/mapping.py`
+   Kept develop's `unmapped_attributes` normalisation.
+5. `src/back/core/graphdb/lakebase/_companion_ddl.py`
+   Kept `TRY_CAST` / `sql_cast` wrap and `is_lakeflow_sync_owner`; removed
+   an auto-merge duplicate of the triple-table DDL constants.
+6. `src/back/objects/digitaltwin/_build_pipeline.py`,
+   `src/back/objects/registry/scheduler.py`
+   Took develop's structural rewrites (generic scheduled-task registry and
+   managed_synced build steps) wholesale.
+7. `tests/units/core/test_lakebase_flat_store.py`,
+   `tests/units/scripts/test_lakebase_resolve_db.py`
+   Kept develop's TRY_CAST assertions, `scheduler_tasks.build` import, and
+   `_internal` resolve-db path.
+8. `changelogs/v0.6.1/*`, `changelogs/v0.6.2/*`,
+   `releases/ReleaseNotes_V0.6.1.md`, `releases/ReleaseNotes_V0.6.2.md`,
+   `releases/Roadmap_2026-07.md`, `tests/conftest.py`,
+   `.github/workflows/lint-pr-title.yml`
+   Brought in from master (historical release docs + pytest `.env` Lakebase
+   isolation).
+
+Modified files:
+- CONTRIBUTORS.md
+- README.md
+- pyproject.toml
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/deploy.config.sh
+- scripts/deploy.sh
+- src/agents/tools/mapping.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/objects/registry/scheduler.py
+- tests/units/core/test_lakebase_flat_store.py
+- tests/units/scripts/test_lakebase_resolve_db.py
+- changelogs/v0.6.1/*
+- changelogs/v0.6.2/*
+- releases/ReleaseNotes_V0.6.1.md
+- releases/ReleaseNotes_V0.6.2.md
+- releases/Roadmap_2026-07.md
+- tests/conftest.py
+- .github/workflows/lint-pr-title.yml
+- changelogs/v0.7.0/benoitcayladbx_2026-08-08.log
+
+Tests: `.venv/bin/pytest -q -m "not scenario"`
+→ 4787 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.92s.
+(`uv run --frozen` could not re-resolve hatchling against the internal pypi
+proxy in this environment — 403 — so the already-synced venv was used.)
