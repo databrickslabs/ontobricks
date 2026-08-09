@@ -347,6 +347,45 @@ def run_preflight(
         report.checks.append(CheckResult("psql_connect", "fail", str(exc)))
         return report
 
+    # Companion tables need digest() from pgcrypto, and it must live in ``public``:
+    # pooled connections use ``search_path = "<graph_schema>", public``, so an
+    # extension stranded in another schema is invisible (lakebase-perms Step 1b).
+    try:
+        ext_schema = psql_query(
+            conn_env,
+            "SELECT n.nspname FROM pg_extension e "
+            "JOIN pg_namespace n ON n.oid = e.extnamespace "
+            "WHERE e.extname = 'pgcrypto'",
+        )
+    except RuntimeError as exc:
+        report.checks.append(CheckResult("pgcrypto", "fail", str(exc)))
+        return report
+    if ext_schema == "public":
+        report.checks.append(
+            CheckResult("pgcrypto", "ok", "installed in public (digest available for companion tables)")
+        )
+    elif ext_schema:
+        report.checks.append(
+            CheckResult(
+                "pgcrypto",
+                "warn",
+                f"pgcrypto is installed in schema '{ext_schema}', not public — it is only "
+                "visible to connections whose search_path includes that schema. Companion "
+                "Builds relocate it automatically; if they fail with "
+                "`function digest(text, unknown) does not exist`, run "
+                "`ALTER EXTENSION pgcrypto SET SCHEMA public` as its owner.",
+            )
+        )
+    else:
+        report.checks.append(
+            CheckResult(
+                "pgcrypto",
+                "warn",
+                "extension pgcrypto is not installed — the app installs it on first Build. "
+                "Run `make bootstrap-lakebase` as a workspace admin if that fails.",
+            )
+        )
+
     try:
         schema_exists = psql_query(
             conn_env,

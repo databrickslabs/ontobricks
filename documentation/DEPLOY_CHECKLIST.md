@@ -83,8 +83,9 @@ make bootstrap-lakebase
 | **psql on PATH** | Connects with a minted Lakebase JWT |
 | **CLI authenticated as schema owner** (or GRANT OPTION) | Applies GRANTs + idempotent DDL migrations |
 | **Active Postgres endpoint** | Project/branch must expose a host via `/api/2.0/postgres/.../endpoints` |
-| **Registry schema exists** | After **Settings → Registry → Initialize** — CAN_USE is granted even before init, but schema GRANTs need the schema |
+| **Registry schema exists** | After **Settings → Registry → Initialize** — CAN_USE + `pgcrypto` are applied even before init, but schema GRANTs need the schema |
 | **Apps deployed** | Service principal ids are resolved from existing apps (warn-only on first deploy) |
+| **`pgcrypto` in `public`** | Companion `__app` tables need `digest(..., 'sha256')`. Step 1b installs it **in `public`** and relocates a stranded copy — an extension sitting in a graph schema is invisible once that schema changes. Applies **per database**, so the graph DB needs it too |
 
 Preflight (read-only):
 

@@ -250,21 +250,70 @@ print(d.get("service_principal_client_id") or "")' 2>/dev/null || true)"
     fi
 done
 
+# ── Step 1b: pgcrypto (DB-level; required for companion object_hash) ──────────
+# Graph companion / sync tables use a generated ``object_hash`` column via
+# ``digest(..., 'sha256')``.
+#
+# The extension MUST live in ``public``: app connections run
+# ``SET search_path TO "<graph_schema>", public``, and a bare
+# ``CREATE EXTENSION`` installs into the *first* search_path entry — i.e. a
+# graph schema. ``IF NOT EXISTS`` then becomes a permanent no-op, so renaming
+# the graph schema strands digest() out of reach. Pin it to public and
+# relocate a stranded install.
+if ! psql "$PGCONN" -tAc "SELECT 1" >/dev/null 2>&1; then
+    echo "ERROR: Cannot connect to Lakebase Postgres (host=${PGHOST}, dbname=${DATABASE})." >&2
+    _lakebase_print_diag_hints \
+        "psql connection failed — wrong datname or endpoint" \
+        "${INSTANCE}" "${BRANCH}" "${DATABASE}"
+    exit 1
+fi
+echo "  Ensuring pgcrypto extension in public (digest for companion object_hash)..."
+# Relocation of an app-owned extension fails for a non-owner admin; the app
+# self-heals in that case (it owns the extension), so warn rather than abort.
+psql "$PGCONN" -q <<'SQL' 2>&1 | grep -vE '^(NOTICE|CREATE EXTENSION|DO)' || true
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+DO $$
+DECLARE ext_schema text;
+BEGIN
+    SELECT n.nspname INTO ext_schema
+    FROM pg_extension e
+    JOIN pg_namespace n ON n.oid = e.extnamespace
+    WHERE e.extname = 'pgcrypto';
+    IF ext_schema IS NOT NULL AND ext_schema <> 'public' THEN
+        RAISE NOTICE 'Relocating pgcrypto from % to public', ext_schema;
+        BEGIN
+            EXECUTE 'ALTER EXTENSION pgcrypto SET SCHEMA public';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE WARNING 'Could not relocate pgcrypto to public: %', SQLERRM;
+        END;
+    END IF;
+END $$;
+SQL
+
+_PGCRYPTO_SCHEMA="$(psql "$PGCONN" -tAc \
+    "SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname='pgcrypto'" \
+    2>/dev/null | tr -d '[:space:]')"
+if [[ "$_PGCRYPTO_SCHEMA" == "public" ]]; then
+    echo "  ✓ pgcrypto ready in public (digest available)"
+elif [[ -n "$_PGCRYPTO_SCHEMA" ]]; then
+    echo "  ⚠ pgcrypto lives in schema '${_PGCRYPTO_SCHEMA}', not public." >&2
+    echo "    It is only visible to connections whose search_path includes that" >&2
+    echo "    schema. The app relocates it automatically on the next Build (it owns" >&2
+    echo "    the extension). To fix manually, run as its owner:" >&2
+    echo "      ALTER EXTENSION pgcrypto SET SCHEMA public;" >&2
+else
+    echo "  ⚠ pgcrypto is not installed on '${DATABASE}' — the app installs it on" >&2
+    echo "    first Build; re-run this script as an admin if that fails." >&2
+fi
+
 # ── Step 2: Postgres schema grants (requires the schema to exist) ────────────
 # Ensure the target schema actually exists. If not, the operator
 # probably ran the script before initialising the registry.
 if ! psql "$PGCONN" -tAc "SELECT 1 FROM information_schema.schemata WHERE schema_name='${SCHEMA}'" \
         2>/dev/null | grep -q 1; then
-    if ! psql "$PGCONN" -tAc "SELECT 1" >/dev/null 2>&1; then
-        echo "ERROR: Cannot connect to Lakebase Postgres (host=${PGHOST}, dbname=${DATABASE})." >&2
-        _lakebase_print_diag_hints \
-            "psql connection failed — wrong datname or endpoint" \
-            "${INSTANCE}" "${BRANCH}" "${DATABASE}"
-        exit 1
-    fi
     echo "ERROR: Schema '${SCHEMA}' does not exist in database '${DATABASE}'." >&2
     echo "       Initialise the registry from the OntoBricks Settings UI first." >&2
-    echo "       CAN_USE grants above were applied — re-run after initialisation" >&2
+    echo "       CAN_USE + pgcrypto above were applied — re-run after initialisation" >&2
     echo "       to apply the Postgres schema grants." >&2
     exit 1
 fi

@@ -27,6 +27,8 @@ env:
   # URL of the OntoBricks FastAPI app that this MCP server proxies.
   # Set DEFAULT_APP_ONTOBRICKS_URL in scripts/deploy.config.sh.
   # Defaults to localhost:8000 when empty (local dev only).
+  - name: ONTOBRICKS_URL  # optional
+    value: "https://ontobricks-08x-2508734981122804.aws.databricksapps.com"
 
   # ── SQL Warehouse ─────────────────────────────────────────────────
   # Injected from the sql-warehouse resource binding. Passed to the

@@ -18,3 +18,88 @@ Modified files:
 - tests/units/settings/test_deploy_instance_id.py
 
 Tests: 4787 passed, 276 skipped, 5 deselected, 1 xfailed (`uv run --frozen pytest -q -m "not scenario"`)
+
+## Install pgcrypto during Lakebase bootstrap (companion digest)
+
+Context: Fresh 08x Lakebase DB lacked `pgcrypto`, so KG Build failed creating
+companion tables with `function digest(text, unknown) does not exist`. App SPs
+cannot reliably `CREATE EXTENSION`; install as admin in bootstrap and fail
+loudly in-app if digest is still missing.
+
+Changes:
+
+1. scripts/bootstrap/lakebase-perms.sh
+   Add Step 1b: `CREATE EXTENSION IF NOT EXISTS pgcrypto` + digest() probe
+   before schema grants (runs even when app SPs cannot create extensions).
+2. scripts/_internal/_lakebase_preflight.py
+   Fail deploy preflight when `pgcrypto` is absent on the target database.
+3. src/back/core/graphdb/lakebase/_companion_ddl.py
+   After `CREATE EXTENSION`, verify `digest` is resolvable; raise
+   InfrastructureError with bootstrap remediation if not.
+4. documentation/DEPLOY_CHECKLIST.md
+   Document the pgcrypto bootstrap requirement.
+5. documentation/lakebase-graphdb.md
+   Document Step 1b and why admin install is required.
+6. tests/units/core/test_companion_ddl_pgcrypto.py
+   Cover ensure_pgcrypto success and missing-digest failure paths.
+7. tests/units/scripts/test_lakebase_preflight.py
+   Assert lakebase-perms.sh installs pgcrypto before the schema-missing exit.
+8. tests/units/core/test_lakebase_flat_store.py
+   Adjust fetchone side_effects for the extra digest probe.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/_internal/_lakebase_preflight.py
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- documentation/DEPLOY_CHECKLIST.md
+- documentation/lakebase-graphdb.md
+- tests/units/core/test_companion_ddl_pgcrypto.py
+- tests/units/scripts/test_lakebase_preflight.py
+- tests/units/core/test_lakebase_flat_store.py
+
+Tests: 4790 passed, 276 skipped, 5 deselected, 1 xfailed (`uv run --frozen pytest -q -m "not scenario"`)
+
+## Pin pgcrypto to public so companion digest() stays reachable
+
+Context: The 08x Build still failed with `function digest(text, unknown) does
+not exist` after installing pgcrypto on the registry DB. Root cause was two
+things the earlier fix missed: (a) the graph store connects to a *different*
+database (`graph_engine_config.database` → `ontobricks_demo_08x_db` in project
+`ontobricks-demo-08x`), and pgcrypto is per-database; (b) `CREATE EXTENSION`
+with no SCHEMA clause installs into the first `search_path` entry — the graph
+schema — so the extension landed in a stale `ntobricks_demo_08x_sc` schema and
+`IF NOT EXISTS` never repaired it after the schema name changed.
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/_companion_ddl.py
+   `ensure_pgcrypto` now installs `WITH SCHEMA public` and relocates a stranded
+   extension (`ALTER EXTENSION ... SET SCHEMA public`, falling back to the
+   current schema), using subtransactions so permission errors cannot abort the
+   caller's transaction; still verifies digest() resolves.
+2. scripts/bootstrap/lakebase-perms.sh
+   Step 1b pins pgcrypto to public and relocates it; warns instead of aborting
+   when the extension is app-owned and the admin cannot move it.
+3. scripts/_internal/_lakebase_preflight.py
+   Report the extension's *schema*; warn (not fail) when it is missing or
+   outside public, since the app self-heals as owner.
+4. documentation/lakebase-graphdb.md, documentation/DEPLOY_CHECKLIST.md
+   Document the public-schema requirement and the per-database scope.
+5. tests/units/core/test_companion_ddl_pgcrypto.py
+   Cover install-into-public, relocation, and the unresolvable-digest error.
+6. tests/units/scripts/test_lakebase_preflight.py
+   Assert Step 1b pins to public and never aborts on a denied relocation.
+7. tests/units/core/test_lakebase_flat_store.py
+   Update the expected CREATE EXTENSION statement.
+
+Modified files:
+- src/back/core/graphdb/lakebase/_companion_ddl.py
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/_internal/_lakebase_preflight.py
+- documentation/lakebase-graphdb.md
+- documentation/DEPLOY_CHECKLIST.md
+- tests/units/core/test_companion_ddl_pgcrypto.py
+- tests/units/scripts/test_lakebase_preflight.py
+- tests/units/core/test_lakebase_flat_store.py
+
+Tests: 4792 passed, 276 skipped, 5 deselected, 1 xfailed (`uv run --frozen pytest -q -m "not scenario"`)
