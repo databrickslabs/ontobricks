@@ -1,0 +1,20 @@
+## Fix Lakebase project name for 08x dry-run deploy
+
+Context: Preparing a parallel `08x` instance deploy. Dry-run failed because
+`DEFAULT_LAKEBASE_PROJECT` used underscores while the live Lakebase project is
+hyphenated (`ontobricks-demo-08-registry`). Unit tests still expected the old
+`07x` default instance id after `DEFAULT_INSTANCE_ID` was bumped to `08x`.
+
+Changes:
+
+1. scripts/deploy.config.sh
+   Set `DEFAULT_LAKEBASE_PROJECT` to the live hyphenated project name
+   `ontobricks-demo-08-registry` so db-… resolution succeeds.
+2. tests/units/settings/test_deploy_instance_id.py
+   Update default-id expectations from `07x` to `08x` to match deploy.config.
+
+Modified files:
+- scripts/deploy.config.sh
+- tests/units/settings/test_deploy_instance_id.py
+
+Tests: 4787 passed, 276 skipped, 5 deselected, 1 xfailed (`uv run --frozen pytest -q -m "not scenario"`)

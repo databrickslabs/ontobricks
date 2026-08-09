@@ -36,12 +36,12 @@
 # Lowercase alphanumeric + hyphens only (becomes part of the app name
 # and the DAB target: ``dev-lakebase-<id>``).
 # Env-overridable: ``DEFAULT_INSTANCE_ID=080 make deploy``.
-DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-07x}"
+DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-08x}"
 
-# Optional: force a DAB target instead of the auto ``dev-lakebase-<id>``.
+# Optional: force a DAB target instead of the auto ``ontobricks-<id>``.
 # Use only to keep managing a pre-INSTANCE_ID deploy whose local state
-# still lives under the unsuffixed ``dev-lakebase``.
-# DEFAULT_DAB_TARGET="dev-lakebase"
+# still lives under the unsuffixed ``ontobricks``.
+#DEFAULT_DAB_TARGET="ontobricks"
 
 # ── 0b. Workspace constants ──────────────────────────────────────────
 # Set once for your workspace. Shared across all instances deployed here.
@@ -57,7 +57,7 @@ DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
 # Unity Catalog
 DEFAULT_REGISTRY_CATALOG="benoit_cayla"
 # UC schema for the Volume registry
-DEFAULT_REGISTRY_SCHEMA="ontobricks_demo"
+DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_08_repository"
 DEFAULT_REGISTRY_VOLUME="registry"
 
 # Workspace secret scope holding ``neo4j-password``, bound to the app on deploy.
@@ -67,16 +67,16 @@ DEFAULT_REGISTRY_VOLUME="registry"
 DEFAULT_NEO4J_SECRET_SCOPE="ontobricks-secrets"
 
 # Lakebase Autoscaling project + branch
-DEFAULT_LAKEBASE_PROJECT="ontobricks-demo2"
+DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-08-registry"
 DEFAULT_LAKEBASE_BRANCH="production"
 # Postgres database (datname) on the shared Lakebase instance — the value of
 # status.postgres_database from list-databases (underscores OK). Do NOT copy the
 # hyphenated database_id from the resource path name; those differ when the
 # datname contains underscores (API uses hyphens only in database_id / RFC-1123).
 # Each app gets its own SCHEMA inside this database.
-DEFAULT_LAKEBASE_DATABASE="ontobricks_demo"
+DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_08_registry_db"
 # Postgres schema inside the Lakebase database, Each instance should have its own schema for isolation.
-DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
+DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_08_registry_sc"
 # Example — reuse existing schema: DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
 
 # ── 0c. Derived defaults (auto-computed — do NOT edit) ────────────────
