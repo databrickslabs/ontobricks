@@ -33,7 +33,7 @@
 
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="bi bi-arrow-repeat me-2"></i>Build Knowledge Graph</h4>
+            <h4 class="mb-1"><i class="bi bi-fast-forward me-2"></i>Build Knowledge Graph</h4>
             <p class="text-muted mb-0 small">Triple store status and build execution</p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -45,7 +45,7 @@
             {% set _dr = get_user_domain_role() %}
             {% if _dr not in ('viewer', 'editor', 'none') %}
             <button type="button" class="btn btn-sm btn-outline-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
-                <i class="bi bi-arrow-repeat me-1"></i> Build
+                <i class="bi bi-fast-forward me-1"></i>Build
             </button>
             {% else %}
             <button type="button" class="btn btn-sm btn-outline-secondary" disabled
@@ -182,7 +182,7 @@
                                 <!-- Card 3: Graph DB (engine-aware) -->
                                 <div class="dt-arch-node" id="dtGraphCard">
                                     <div class="dt-arch-header">
-                                        <img src="/static/global/img/lakebase-icon.svg" class="dt-arch-icon-lakebase-img flex-shrink-0" alt="Lakebase">
+                                        <i id="dtGraphBackendIcon" class="ob-brand-icon ob-icon-postgresql dt-arch-icon-lakebase-img flex-shrink-0" aria-hidden="true"></i>
                                         <span class="dt-arch-title" id="dtGraphBackendTitle">Graph DB (Lakebase)</span>
                                         <span class="dt-arch-badge" id="dtLakebaseTableExists"></span>
                                     </div>

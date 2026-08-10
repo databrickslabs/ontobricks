@@ -20,6 +20,11 @@ Two scopes are supported:
 
 Below-min callers raise :class:`back.core.errors.AuthorizationError`
 which surfaces as a structured 403 via the global exception handler.
+
+Lives under ``api/routers/internal/`` (not ``back/objects/registry/``)
+because it is pure FastAPI route glue -- the only thing importing
+``fastapi.Request`` in this call chain -- matching the sibling
+``_permissions.py`` module in the same package.
 """
 
 from __future__ import annotations
@@ -29,7 +34,7 @@ from typing import Callable
 from fastapi import Request
 
 from back.core.errors import AuthorizationError
-from back.objects.registry.PermissionService import role_level
+from back.objects.registry import role_level
 
 
 _VALID_SCOPES = ("app", "domain")

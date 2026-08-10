@@ -429,10 +429,38 @@ class TestSettingsServiceGraphEngineConfig:
 
     def test_set_graph_engine_config_result_success(self):
         session_mgr, settings = _mock_context()
-        cfg = {"uri": "bolt://localhost", "username": "neo4j"}
+        cfg = {
+            "neo4j": {
+                "connections": [
+                    {
+                        "name": "Local",
+                        "uri": "bolt://localhost",
+                        "username": "neo4j",
+                        "secret_scope": "scope",
+                        "secret_key": "key",
+                        "database": "neo4j",
+                        "auth_method": "databricks_secret",
+                        "encrypted": True,
+                    }
+                ]
+            }
+        }
         nested = {
             "lakebase": {},
-            "neo4j": {"uri": "bolt://localhost", "username": "neo4j"},
+            "neo4j": {
+                "connections": [
+                    {
+                        "name": "Local",
+                        "uri": "bolt://localhost",
+                        "username": "neo4j",
+                        "secret_scope": "scope",
+                        "secret_key": "key",
+                        "database": "neo4j",
+                        "auth_method": "databricks_secret",
+                        "encrypted": True,
+                    }
+                ]
+            },
             "lakehouse": {},
         }
 
@@ -444,6 +472,11 @@ class TestSettingsServiceGraphEngineConfig:
             ),
             patch.object(SettingsService, "require_admin_error"),
             patch.object(SettingsService, "_mirror_graph_engine_to_domain_registry"),
+            patch.object(
+                SettingsService,
+                "_domains_referencing_neo4j_connections",
+                return_value={},
+            ),
             patch.object(_svc_module, "global_config_service") as gcs,
         ):
             gcs.set_graph_engine_config.return_value = (True, "ok")
@@ -455,7 +488,8 @@ class TestSettingsServiceGraphEngineConfig:
         assert result["success"]
         assert result["graph_engine_config"] == nested
         saved = gcs.set_graph_engine_config.call_args[0][3]
-        assert saved == nested
+        assert saved["neo4j"]["connections"][0]["name"] == "Local"
+        assert saved["neo4j"]["connections"][0]["uri"] == "bolt://localhost"
 
     def test_set_graph_engine_config_result_validation_error(self):
         session_mgr, settings = _mock_context()

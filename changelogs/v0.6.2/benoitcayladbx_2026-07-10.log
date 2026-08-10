@@ -1,0 +1,20 @@
+## Optimize Lakebase alias expansion for large local-id sets
+
+Context: `describe_entity` / Graph Chat alias expansion generated SQL with
+1000+ `OR LIKE '%/<local-id>'` predicates on Lakebase, causing long-running
+statements and timeouts. Incorporated from PR #115 review (supersedes external PR).
+
+Changes:
+
+1. src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+   Add `find_subjects_by_patterns()` override grouping `%/<id>` patterns by suffix
+   length into `RIGHT(subject, k) = ANY(ARRAY[...])` clauses (single round-trip).
+
+2. tests/units/core/test_lakebase_flat_store.py
+   Add unit tests for fast-path SQL shape, generic LIKE fallback, and escaping.
+
+Modified files:
+- src/back/core/graphdb/lakebase/LakebaseFlatStore.py
+- tests/units/core/test_lakebase_flat_store.py
+
+Tests: uv run pytest -q -m "not scenario" → 3003 passed, 275 skipped in 21.1s

@@ -3,12 +3,27 @@
 Carved out of :mod:`Neo4jStore` during the PR #47 review split (Benoit
 2026-06-18 — "la classe est trop grosse"). This module owns three concerns:
 
-1. **Auth resolution** — `NEO4J_PASSWORD` env var (production, populated by
-   a Databricks Apps secret resource bound in ``app.yaml``) takes priority
-   over ``engine_config['password']`` (local-dev fallback). When running
-   inside the deployed app (``DATABRICKS_APP_PORT`` is set) the env var
-   becomes mandatory and a missing value raises
-   :class:`InfrastructureError` with a clear remediation pointer.
+1. **Auth resolution** — the username is always read from
+   ``engine_config['username']``. The password comes from one of two
+   methods:
+
+   - ``auth_method="databricks_secret"`` (the only method the Settings UI
+     offers since PR #47 follow-up) — the admin picks a secret scope +
+     key from live dropdowns and the app resolves the value at connect
+     time via the Databricks Secrets REST API
+     (:class:`~back.core.databricks.SecretsService.SecretsService`),
+     using its own identity (SP OAuth in the deployed app, PAT/CLI
+     profile in local dev). Resolved values are cached in-process for a
+     short TTL to avoid hammering the Secrets API on every Neo4jStore
+     instantiation (stores are created per-request, not pooled).
+   - ``auth_method="basic"`` (legacy) — ``NEO4J_PASSWORD`` env var
+     (populated by a Databricks Apps secret resource bound in
+     ``app.yaml``) takes priority over ``engine_config['password']``
+     (local-dev fallback). Kept only for deployments that already rely
+     on the Apps-resource binding; the Settings UI no longer exposes it.
+     When running inside the deployed app (``DATABRICKS_APP_PORT`` is
+     set) the env var becomes mandatory and a missing value raises
+     :class:`InfrastructureError` with a clear remediation pointer.
 2. **Driver lifecycle** — lazy creation of the thread-safe ``neo4j.Driver``
    (acts as a connection pool). One driver per ``Neo4jConnection``.
 3. **Query execution** — :meth:`run` opens a per-query session, executes
@@ -21,6 +36,7 @@ Carved out of :mod:`Neo4jStore` during the PR #47 review split (Benoit
 
 import os
 import re
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -39,8 +55,15 @@ except ImportError:
 
 
 DEFAULT_DATABASE = "neo4j"
-DEFAULT_AUTH_METHOD = "basic"
+DEFAULT_AUTH_METHOD = "databricks_secret"
 SUPPORTED_AUTH_METHODS = ("basic", "databricks_secret")
+
+# TTL for the in-process Databricks-secret value cache. Neo4jStore instances
+# are created fresh per request (no connection-pool-level singleton — see
+# GraphDBFactory), so without a cache every request would round-trip the
+# Secrets API just to build a driver. Short enough that a rotated secret
+# takes effect within minutes, long enough to keep request latency low.
+_SECRET_VALUE_CACHE_TTL_SECONDS = 300
 
 # Legacy namespaced key from when Neo4j / Lakebase shared a flat config blob.
 # Nested ``graph_engine_config.neo4j.database`` is preferred; this alias is
@@ -113,15 +136,25 @@ class Neo4jConnection:
     database:
         Logical Neo4j database name.
     auth_method:
-        ``"basic"`` (username + password) or ``"databricks_secret"``
-        (scope/key — reserved for a follow-up PR).
+        ``"databricks_secret"`` (username + password resolved live from a
+        Databricks secret scope/key — the only method the Settings UI
+        offers) or ``"basic"`` (username + password/env-var — legacy,
+        kept for deployments still bound to the ``neo4j-password`` Apps
+        secret resource).
     engine_config:
         The raw ``engine_config`` dict. Used by :meth:`_resolve_auth`
-        for the username and the local-dev fallback password.
+        for the username and the password source (secret scope/key, env
+        var, or local-dev fallback).
     encrypted:
         Bolt-level encryption flag (ignored when the URI scheme already
         embeds TLS, e.g. ``neo4j+s://``).
     """
+
+    # Class-level cache: { (host, scope, key): (value, ts) }. Shared across
+    # instances so repeated per-request Neo4jStore construction doesn't
+    # re-hit the Secrets API — see _SECRET_VALUE_CACHE_TTL_SECONDS.
+    _secret_value_cache: Dict[Tuple[str, str, str], Tuple[str, float]] = {}
+    _secret_value_cache_lock = threading.Lock()
 
     def __init__(
         self,
@@ -184,12 +217,13 @@ class Neo4jConnection:
 
     def _resolve_auth(self) -> Tuple[str, str]:
         cfg = self._engine_config
+        user = str(cfg.get("username") or "").strip()
+        if not user:
+            raise ValidationError(
+                "Neo4jConnection: auth_method=%s requires engine_config['username']"
+                % self._auth_method
+            )
         if self._auth_method == "basic":
-            user = str(cfg.get("username") or "").strip()
-            if not user:
-                raise ValidationError(
-                    "Neo4jConnection: auth_method=basic requires engine_config['username']"
-                )
             pwd_env = os.environ.get(NEO4J_PASSWORD_ENV, "").strip()
             pwd_cfg = str(cfg.get("password") or "")
             if pwd_env:
@@ -217,16 +251,41 @@ class Neo4jConnection:
             if not scope or not key:
                 raise ValidationError(
                     "Neo4jConnection: auth_method=databricks_secret requires "
-                    "engine_config['secret_scope'] and ['secret_key']"
+                    "engine_config['secret_scope'] and ['secret_key'] — pick both in "
+                    "Settings → Back end → Neo4j."
                 )
-            # TODO(PR3): resolve via Databricks secrets API. The supported
-            # production path today is the env-var-via-Apps-secret-resource
-            # mechanism handled by the ``basic`` branch above.
-            raise NotImplementedError(
-                "auth_method=databricks_secret is reserved for a follow-up PR; "
-                "use auth_method=basic with the NEO4J_PASSWORD secret resource instead."
+            pwd = self._fetch_databricks_secret(scope, key)
+            logger.info(
+                "Neo4j credentials sourced from Databricks secret %s/%s", scope, key
             )
+            return (user, pwd)
         raise ValidationError("Unsupported auth_method: %s" % self._auth_method)
+
+    @classmethod
+    def _fetch_databricks_secret(cls, scope: str, key: str) -> str:
+        """Return the cached-or-live value of a Databricks secret.
+
+        Cache key includes the resolved workspace host so switching
+        workspaces (e.g. local dev pointed at a different profile) never
+        serves a stale cross-workspace value.
+        """
+        from back.core.databricks.DatabricksAuth import DatabricksAuth
+        from back.core.databricks.SecretsService import SecretsService
+
+        auth = DatabricksAuth()
+        cache_key = (auth.host, scope, key)
+        now = time.time()
+
+        with cls._secret_value_cache_lock:
+            cached = cls._secret_value_cache.get(cache_key)
+            if cached and (now - cached[1]) < _SECRET_VALUE_CACHE_TTL_SECONDS:
+                return cached[0]
+
+        value = SecretsService(auth).get_secret_value(scope, key)
+
+        with cls._secret_value_cache_lock:
+            cls._secret_value_cache[cache_key] = (value, now)
+        return value
 
     def run(self, cypher: str, **params: Any) -> List[Dict[str, Any]]:
         """Execute a Cypher statement against the configured database.

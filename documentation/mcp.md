@@ -339,16 +339,27 @@ src/mcp-server/
 
 ### Deployment
 
-```bash
-# One-command deploy (creates the app if it doesn't exist)
-cd mcp-server
-./deploy-mcp-server.sh
+The MCP server ships in the **same Databricks Asset Bundle** as the main app
+(`databricks.yml` → `mcp_ontobricks_app`). Prefer the DAB path:
 
-# Or manual steps:
-databricks sync mcp-server "/Users/$USER/mcp-ontobricks" --watch=false
-databricks apps deploy mcp-ontobricks \
-  --source-code-path "/Workspace/Users/$USER/mcp-ontobricks"
+```bash
+# Deploy both app definitions (from repo root)
+make deploy
+# or: scripts/deploy.sh -t <DAB_TARGET>
+
+# Start the MCP app if it is not already running
+databricks bundle run mcp_ontobricks_app -t <DAB_TARGET>
 ```
+
+Legacy standalone script (still under `src/mcp-server/` for one-off workspace
+deploys outside the bundle):
+
+```bash
+cd src/mcp-server
+./deploy-mcp-server.sh
+```
+
+See `documentation/deployment.md` §7 for Playground wiring and `app.yaml` env.
 
 ### Using in Playground
 

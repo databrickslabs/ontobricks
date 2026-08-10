@@ -110,6 +110,30 @@ class NodeContextService:
         return entries
 
     @staticmethod
+    def class_bridge_entries(cls: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return the class's bridges with ``target_domain`` normalized.
+
+        Ontology authoring historically used ``target_project``; downstream
+        formatters (``agents/tools/graph_formatting.py``, the MCP server) and
+        the front-end all read ``target_domain``. This mirrors the alias
+        resolution :meth:`_resolve_bridges` already does so a shallow, static
+        listing (no traversal) stays consistent with the traversal path.
+        """
+        entries: List[Dict[str, Any]] = []
+        for b in cls.get("bridges") or []:
+            if not isinstance(b, dict):
+                continue
+            entries.append(
+                {
+                    "target_domain": b.get("target_domain") or b.get("target_project", ""),
+                    "target_class_name": b.get("target_class_name", ""),
+                    "target_class_uri": b.get("target_class_uri", ""),
+                    "label": b.get("label", ""),
+                }
+            )
+        return entries
+
+    @staticmethod
     async def resolve_context(
         domain: Any,
         settings: Any,

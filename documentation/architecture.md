@@ -450,9 +450,9 @@ src/
 │   ├── agent_auto_icon_assign/         # Emoji icon mapping agent
 │   └── agent_ontology_assistant/       # Conversational assistant + ResponsesAgent wrapper
 │
-└── mcp-server/                         # MCP Server (separate Databricks App)
-    ├── app.yaml                        # Databricks App config
-    ├── deploy-mcp-server.sh            # Deployment script
+└── mcp-server/                         # MCP Server (separate Databricks App; under src/)
+    ├── app.yaml                        # Databricks App config (also rendered via DAB)
+    ├── deploy-mcp-server.sh            # Legacy standalone deploy (prefer `make deploy`)
     ├── pyproject.toml                  # Python dependencies
     └── server/
         ├── app.py                      # MCP tools, domain selection, text formatting
@@ -786,8 +786,8 @@ User Action → OntoViz Event → Debounce → syncDesignToOntology → /ontolog
 
 OntoBricks separates two concerns:
 
-1. **Triple Store** — the persistent, governance-controlled view of the triples in **Unity Catalog Delta** (`triplestore_<domain>_V<n>`). Always present, never optional.
-2. **Graph DB** — the queryable graph engine used by the Knowledge Graph, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction.
+1. **Triple Store (Lakehouse UC objects)** — a family of Unity Catalog objects in the registry `catalog.schema`, always created by **Knowledge Graph → Build**. Not a single view: see [Lakehouse Unity Catalog objects](#lakehouse-unity-catalog-objects) below.
+2. **Graph DB** — the queryable graph engine used by the Knowledge Graph, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction. When the per-domain backend is `databricks`, the Graph DB *is* those Delta tables; when it is `lakebase` or `neo4j`, Build also mirrors triples into that engine.
 
 The active Graph DB engine is chosen **per domain** via `graph_backend`
 (`lakebase` | `databricks` | `neo4j`), set under **Domain → Information →
@@ -795,10 +795,35 @@ Knowledge Graph**; connection settings live under **Settings → Back end**.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
-| **Delta Triple Store** | `view` | Databricks Delta view via SQL Warehouse | Spark SQL | Yes (R2RML output) |
-| **Lakebase Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the Delta view |
-| **Databricks Graph DB** | `graph` (engine `databricks`) | Delta flat-triple store on the SQL Warehouse (Unity Catalog) | Spark SQL | Mirror of the Delta view |
-| **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the Delta view |
+| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + materialised Delta tables (SQL Warehouse) | Spark SQL | Yes (mapped snapshot = `_data`) |
+| **Lakebase Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the mapped snapshot |
+| **Databricks Graph DB** | `graph` (engine `databricks`) | Same Delta objects as the triple store (no second copy) | Spark SQL | The mapped snapshot itself |
+| **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the mapped snapshot |
+
+### Lakehouse Unity Catalog objects
+
+Every successful **Knowledge Graph → Build** creates (or refreshes) four related objects that share the base name `triplestore_<safe_domain>_V<version>` in the domain's registry `catalog.schema`. Naming helpers live in `src/back/core/graphdb/delta/_table_naming.py`; the CTAS / companion SQL is in `materialize.py`.
+
+| Object | Kind | Role |
+|--------|------|------|
+| `triplestore_<domain>_V<n>` | **VIEW** | Live R2RML mapping: SQL that projects source Unity Catalog tables into `(subject, predicate, object)`. Refreshed on Build. Not a durable store — it recomputes from sources when queried. |
+| `…_data` | **Delta TABLE** | Materialised snapshot of that VIEW (`CREATE OR REPLACE TABLE … AS SELECT subject, predicate, object FROM <view>`), clustered by `(predicate, subject)`. Stable triples used by **Graph Analytics** and as the bulk half of the graph. Build always materialises this; domains built before that step need one rebuild. |
+| `…_inferred` | **Delta TABLE** | Writable companion with the same schema. Holds app-written / reasoning / cohort triples that are *not* in the mapped sources. Truncated on a full rebuild, then refilled as those features write. |
+| `…_graph` | **VIEW** | Read façade: `_data UNION ALL _inferred`. Explorer, filters, stats, GraphQL, and most interactive reads use this when inferred triples are included. |
+
+```text
+source tables
+    → R2RML VIEW          (live mapping definition)
+    → _data TABLE         (frozen mapped triples)
+         ↘
+           _graph VIEW    (what the UI usually reads)
+         ↗
+      _inferred TABLE     (extra triples written by the app)
+```
+
+**Why both a VIEW and `_data`?** The R2RML view is the definition of “what the mapping says.” Analytics and heavy jobs need a fixed Delta table they can scan reliably (and identically across Lakehouse, Lakebase, and Neo4j backends). `_data` is that freeze. `_graph` then layers inferred rows on top for interactive reads without copying them into the mapped snapshot.
+
+**Analytics outputs** (node metrics, `_summary`, `_type_profiles`, …) are a separate family written by the Lakeflow analytics job. They *read* `_data`; they are not part of the graph store.
 
 ### Backend Abstraction
 

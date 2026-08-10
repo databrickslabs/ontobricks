@@ -171,7 +171,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
-            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
+            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -307,15 +307,23 @@ class Domain:
                         self._s.info.get("graph_backend"),
                     )
                 ),
-                "neo4j_database": str(
+                "neo4j_connection": str(
                     data.get(
-                        "neo4j_database",
-                        self._s.info.get("neo4j_database", ""),
+                        "neo4j_connection",
+                        self._s.info.get("neo4j_connection", ""),
                     )
                     or ""
                 ).strip(),
             }
         )
+        self._s.info.pop("neo4j_database", None)
+
+        if self._s.info.get("graph_backend") == "neo4j" and not str(
+            self._s.info.get("neo4j_connection") or ""
+        ).strip():
+            raise ValidationError(
+                "Select a Neo4j connection (Settings → Neo4j) when Graph Backend is Neo4j."
+            )
 
         self._s.ontology["name"] = domain_name.lower()
 
@@ -350,7 +358,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
-            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
+            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
         }
 
     @staticmethod
@@ -447,7 +455,7 @@ class Domain:
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
-            "neo4j_database": str(self._s.info.get("neo4j_database", "") or "").strip(),
+            "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,

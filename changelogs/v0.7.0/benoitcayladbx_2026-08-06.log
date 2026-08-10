@@ -1,0 +1,977 @@
+## Close 0.7 registry SQL deploy gap (schedules generic tasks)
+
+Context: The 0.7 registry schema delta — widening `schedules` /
+`schedule_runs` to the generic `(task_type, domain, target_key)` shape —
+lived only in `schema.sql` and the app's `_ensure_schedule_task_columns`
+self-heal. `make deploy` / `make bootstrap-lakebase` did not apply it, there
+was no `upgrade_0.6_to_0.7.sql`, and preflight did not detect the pending
+columns. An in-place 0.6→0.7 deploy could therefore leave the registry on
+the legacy unique constraint until an admin re-ran Initialize.
+
+Changes:
+
+1. `scripts/bootstrap/lakebase-perms.sh`
+   Step 2b now adds the schedules/schedule_runs columns, folds
+   `drop_existing` into `config`, swaps the unique constraint, and widens
+   `idx_schedule_runs_domain` (as schema owner on every Lakebase deploy).
+2. `scripts/migrations/upgrade_0.6_to_0.7.sql`
+   New auditable one-shot DBA migration mirroring the same DDL.
+3. `scripts/_internal/_lakebase_preflight.py`
+   Expects the new columns + `schedules_type_domain_target_key` so deploy
+   preflight reports them as pending until bootstrap applies them.
+4. `scripts/_internal/_deploy-preflight.sh`
+   Requires `upgrade_0.6_to_0.7.sql` among Lakebase project files.
+5. `tests/units/scripts/test_lakebase_preflight.py`
+   Asserts the new EXPECTED_COLUMNS entries stay aligned with bootstrap.
+6. `src/back/objects/registry/store/lakebase/store.py`
+   Adds missing `domain_change_events` to `_KNOWN_TABLES` (diagnostics).
+7. `documentation/DEPLOY_CHECKLIST.md`
+   Documents the 0.6→0.7 upgrade path and lists the new migration script.
+8. `scripts/update-deployed-app.sh`
+   Comment now mentions the v0.7 schedules migration in the SQL step.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- scripts/migrations/upgrade_0.6_to_0.7.sql
+- scripts/_internal/_lakebase_preflight.py
+- scripts/_internal/_deploy-preflight.sh
+- tests/units/scripts/test_lakebase_preflight.py
+- src/back/objects/registry/store/lakebase/store.py
+- documentation/DEPLOY_CHECKLIST.md
+- scripts/update-deployed-app.sh
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4688 passed, 276 skipped, 5 deselected, 1 xfailed in 33.53s
+
+## Add shared graph context/action formatters
+
+Context: Task 1 of Graph Chat MCP alignment — port MCP server class/node
+context formatting into shared `graph_formatting` helpers so Graph Chat
+agents can render dataset/bridge/action metadata with a parameterized
+action-invoke hint (`request_entity_action` vs MCP's `invoke_entity_action`).
+
+Changes:
+
+1. `src/agents/tools/graph_formatting.py`
+   Add `format_class_context_block`, `format_node_context_response`,
+   `format_node_action_response`; extend `format_find_response` with
+   `class_actions` and `action_invoke_hint`.
+2. `tests/units/agents/test_graph_formatting_context.py`
+   Unit tests for class context blocks, find-response enrichment, and
+   node context/action formatters (TDD).
+
+Modified files:
+- src/agents/tools/graph_formatting.py
+- tests/units/agents/test_graph_formatting_context.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4692 passed, 276 skipped, 5 deselected, 1 xfailed in 33.53s
+
+## Add ToolContext class-actions and pending_action fields
+
+Context: Task 2 of Graph Chat MCP alignment — storage fields on
+`ToolContext` and `AgentResult` so later tasks can populate class-action
+metadata and surface pending entity-action tokens from the agent loop.
+
+Changes:
+
+1. `src/agents/tools/context.py`
+   Add `dtwin_class_actions` and `pending_action` fields to `ToolContext`.
+2. `src/agents/agent_dtwin_chat/engine.py`
+   Add `pending_action` to `AgentResult`; copy `ctx.pending_action` onto
+   the result on success and max-iteration exit paths.
+3. `tests/units/agents/test_agent_dtwin_chat_engine.py`
+   Unit test asserting default field values and `AgentResult.pending_action`.
+
+Modified files:
+- src/agents/tools/context.py
+- src/agents/agent_dtwin_chat/engine.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4693 passed, 276 skipped, 5 deselected, 1 xfailed in 32.65s
+
+## Add session-aware node context routes
+
+Context: Task 3 of Graph Chat MCP alignment needs session-scoped class and
+node-context discovery so Graph Chat can inspect an active draft domain without
+resolving a published registry version.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Add `/dtwin/classes` and `/dtwin/nodes/context`, resolving their domain with
+   `get_domain(session_mgr)` and capping row and bridge traversal limits.
+2. `tests/units/api/test_dtwin_nodes_context.py`
+   Add route-level tests for class actions, metadata-only node context, and
+   route-side limit capping.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_nodes_context.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4696 passed, 276 skipped, 5 deselected, 1 xfailed in 37.97s
+
+## Add pending-action request/confirm/cancel routes
+
+Context: Task 4 of Graph Chat MCP alignment adds the Action confirmation
+flow so Graph Chat can propose a Unity Catalog function call without ever
+auto-invoking it — a one-time token gates the actual invocation behind an
+explicit UI confirm click.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Add `POST /dtwin/nodes/action/request` (validates entity + allow-listed
+   action, mints a session-bound single-use token, no invoke),
+   `POST /dtwin/nodes/action/confirm` (consumes the token, marks it used
+   before invoking so a double-click can't double-invoke, calls
+   `NodeContextService.invoke_action` once), and
+   `POST /dtwin/nodes/action/cancel` (best-effort discard, always 200).
+   Extend the Graph Chat session cache with `pending_actions` keyed by
+   token (`domain`, `entity_uri`, `action_full_name`, `expires_at`,
+   `used`), a 120s TTL (`_PENDING_ACTION_TTL_SEC`), and a
+   `_pending_actions_prune` helper so expired tokens don't accumulate.
+2. `tests/units/api/test_dtwin_nodes_action_confirm.py`
+   TDD coverage: mint-without-invoke, confirm-invokes-once-then-rejects-
+   reuse, unknown action / unmatched entity rejection, missing/unknown/
+   expired/domain-mismatched token rejection, and cancel discarding a
+   token before it can be confirmed.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_nodes_action_confirm.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4706 passed, 276 skipped, 5 deselected, 1 xfailed in 32.78s
+
+## Document single-process assumption for pending actions
+
+Context: Code review (Task 4) flagged that double-invoke protection and
+pending-action tokens rely on in-memory per-process session cache; scaling
+Uvicorn workers would silently break unless documented.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Comment near `_PENDING_ACTION_TTL_SEC` noting per-process cache, single-
+   worker / one-event-loop assumption, and need for sticky sessions or shared
+   state when scaling workers.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_nodes_action_confirm.py → 10 passed in 1.21s
+
+## Wire Graph Chat tools to session-aware node context and pending-action routes
+
+Context: Task 5 of Graph Chat MCP alignment enriches the existing
+`agent_dtwin_chat` tools with per-class Actions metadata and adds the two
+tools the LLM needs to inspect and propose Actions on a node, mirroring the
+MCP server's `get_entity_context` (but deliberately NOT porting
+`invoke_entity_action` — invocation stays gated behind UI confirmation via
+`request_entity_action`, handled by Task 6/7).
+
+Changes:
+
+1. `src/agents/agent_dtwin_chat/tools.py`
+   Add `_get_class_actions` (GET `/dtwin/classes`, cached on
+   `ctx.dtwin_class_actions`) and the `_ACTION_HINT` constant. Enrich
+   `tool_list_entity_types` with per-type dataset/action lines (same text
+   style as the MCP server) and `tool_describe_entity` with
+   `class_actions=`/`action_invoke_hint=` via `format_find_response`. Add
+   `tool_get_entity_context` (GET `/dtwin/nodes/context`, forwards
+   `fetch_dataset_rows`/`dataset_row_limit`/`follow_bridges`, formats via
+   `format_node_context_response`) and `tool_request_entity_action` (POST
+   `/dtwin/nodes/action/request`, sets `ctx.pending_action` on success and
+   returns a short message telling the model the UI will render a
+   confirmation card). Register both in `TOOL_DEFINITIONS`/`TOOL_HANDLERS`.
+2. `tests/units/agents/test_agent_dtwin_chat.py`
+   TDD coverage: `list_entity_types` dataset/action enrichment,
+   `describe_entity` class-actions enrichment, `get_entity_context`
+   flag-forwarding/validation/HTTP-error paths, `request_entity_action`
+   pending-token capture, missing-args guard, and backend-failure /
+   HTTP-error paths that leave `ctx.pending_action` unset.
+
+Modified files:
+- src/agents/agent_dtwin_chat/tools.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat.py tests/units/agents/test_graph_formatting_context.py → 38 passed in 0.85s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4715 passed, 276 skipped, 5 deselected, 1 xfailed in 34.00s
+
+## Complete Graph Chat action response plumbing
+
+Context: Task 6 of the Graph Chat MCP alignment makes proposed class Actions
+available to both blocking and streaming chat clients. The prompt now explains
+the Dataset, Bridge, and confirmation-gated Action workflow.
+
+Changes:
+
+1. `src/agents/agent_dtwin_chat/engine.py`
+   Document the ontology-design context tools and rules that prevent the agent
+   from claiming an Action executed before UI confirmation.
+2. `src/api/routers/internal/dtwin.py`
+   Centralize Graph Chat completion payload construction and include
+   `pending_action` in blocking responses and SSE `done` events when present.
+3. `src/agents/agent_dtwin_chat/__init__.py`
+   Correct the package documentation to cover internal `/dtwin/...` routes.
+4. `tests/units/api/test_dtwin_assistant_chat.py`
+   Add TDD coverage for the prompt guidance and JSON/SSE pending-action payloads.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- src/api/routers/internal/dtwin.py
+- src/agents/agent_dtwin_chat/__init__.py
+- tests/units/api/test_dtwin_assistant_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4717 passed, 276 skipped, 5 deselected, 1 xfailed in 35.49s
+
+## Preserve pending_action on early run_agent exits
+
+Context: Graph Chat could mint a pending action mid-turn via a tool call, then
+drop it when the LLM failed or returned empty choices because only success and
+max-iteration return paths copied `ctx.pending_action` onto `AgentResult`.
+
+Changes:
+
+1. src/agents/agent_dtwin_chat/engine.py
+   Add `_finalize_result` and use it on every `run_agent` return path.
+2. tests/units/agents/test_agent_dtwin_chat_engine.py
+   Add tests for LLM error and empty-choices exits preserving `pending_action`.
+
+Modified files:
+- src/agents/agent_dtwin_chat/engine.py
+- tests/units/agents/test_agent_dtwin_chat_engine.py
+
+Tests: `uv run --frozen pytest -q tests/units/agents/test_agent_dtwin_chat_engine.py tests/units/api/test_dtwin_assistant_chat.py` → 14 passed in 1.07s
+
+## Use the share icon for Graph Explorer
+
+Context: Replace the layered-view glyph with a connected-node share glyph so
+the Explorer navigation and supporting UI more clearly communicate graph
+relationships.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Explorer navigation item icon to `bi-share`.
+2. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Match the Graph Explorer page heading to the new icon.
+3. `src/front/templates/partials/layout/help_modal.html`
+   Match the Interactive Graph Viewer feature card to the new icon.
+4. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage keeping the menu, page heading, and Help Center icon aligned.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/layout/help_modal.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4720 passed, 276 skipped, 5 deselected, 1 xfailed in 33.65s
+
+## Add Graph Chat Confirm/Cancel action card
+
+Context: Task 7 of the Graph Chat MCP alignment renders the `pending_action`
+payload minted by Task 4/6 as an inline card so a proposed UC Action never
+runs without an explicit click — typed chat text (e.g. "yes") is never
+treated as confirmation.
+
+Changes:
+
+1. `src/front/static/query/js/query-chat.js`
+   Add `buildPendingActionCardModel` (pure payload→display-model helper),
+   `buildPendingActionCard`, `confirmPendingAction`/`cancelPendingAction`,
+   and `formatActionResultText`. `finalizeStreamingBubble` now appends the
+   card under the assistant bubble when the SSE `done` event carries a
+   `pending_action`. Confirm POSTs `{token}` to
+   `/dtwin/nodes/action/confirm`, appends the formatted result as a new
+   assistant message, and disables the card; Cancel POSTs `{token}` to
+   `/dtwin/nodes/action/cancel` (best effort) and removes the card.
+2. `src/front/static/query/css/query-chat.css`
+   Minimal `.graph-chat-pending-action*` rules matching the existing
+   assistant/graph-chat visual language (amber "needs attention" card,
+   pill buttons consistent with the send button gradient).
+3. `tests/units/front/test_query_chat_pending_action.py`
+   Source-level contract tests (same style as
+   `test_query_chat_rendering.py`, no JS runtime in this repo): card
+   wiring on `done`, confirm/cancel routes + `same-origin` credentials,
+   no typed-"yes" auto-confirm shortcut, dedicated CSS classes, plus a
+   pure-Python port of `buildPendingActionCardModel` pinning its
+   default-filling contract.
+
+Modified files:
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_query_chat_pending_action.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4727 passed, 276 skipped, 5 deselected, 1 xfailed in 33.15s
+
+Manual smoke checklist (not run in this session — no live Databricks
+workspace / running `./scripts/start.sh` instance available):
+- [ ] Ask Graph Chat to run an allow-listed Action on an entity → card
+      appears under the assistant bubble with action name, entity, and
+      description.
+- [ ] Click Confirm → buttons disable, status shows "Running…", then
+      "Confirmed" once `/dtwin/nodes/action/confirm` resolves, and a new
+      assistant message shows the formatted result rows.
+- [ ] Click Cancel on a fresh pending card → card is removed immediately
+      and no Confirm network call fires.
+- [ ] Type "yes" in the chat input instead of clicking Confirm → message
+      is sent as ordinary chat text; the action is NOT invoked.
+- [ ] Reload the page after a pending card is shown (or wait >120s) →
+      clicking the stale Confirm button surfaces the "Action expired"
+      error message instead of silently succeeding.
+
+## Let the dev server run without auto-reload (unblocks scenario campaign)
+
+Context: `make scenario-campaign` failed repeatedly at Auto-Map with
+"Auto-Map produced no entity SQL within 600s", which wrongly points at the
+serving endpoint or warehouse. Root cause was the local dev server: `run.py`
+hardcoded `reload=True` over `reload_dirs` covering `src/back` and
+`src/agents`, and Auto-Map / the KG build run for minutes in background
+threads whose state lives in the in-memory `TaskManager`. Any concurrent
+`src/` save restarted uvicorn, killed the thread and orphaned the task
+(`GET /tasks/<id>` → 404), so the poll loop burned its full budget. Observed
+seven reloads from three parallel workstreams inside one 25-minute window;
+OWL generation survived only because it finishes in ~80s.
+
+Changes:
+
+1. `run.py`
+   Honour `ONTOBRICKS_NO_RELOAD` (`1/true/yes/on`) to start uvicorn without
+   the reloader; only set `reload`/`reload_dirs` when it is unset. Log the
+   resolved state as `Uvicorn auto-reload enabled|DISABLED` so the mode is
+   verifiable from the log.
+2. `scripts/start.sh`
+   Add a `--no-reload` flag (exports `ONTOBRICKS_NO_RELOAD=1`) and document
+   it in `--help`.
+3. `Makefile`
+   `scenario-campaign` now warns when the target app is running *with*
+   auto-reload, detecting it by topology (a reload-enabled `run.py` forks
+   child processes; a no-reload one has none) since the children are plain
+   `python3` and reload is enabled in-code, not via `--reload`. Header
+   comment documents running the campaign against a no-reload server.
+
+Modified files:
+- run.py
+- scripts/start.sh
+- Makefile
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4706 passed, 276 skipped, 5 deselected, 1 xfailed in 35.12s
+
+Live verification (campaign against a no-reload server, reload count 0):
+- scenario_1 PASSED — Auto-Map completed all 4 chunks (11 entities, 9
+  relationships) and the KG build wrote 54,627 triples in 87.6s. Previously
+  died in chunk 1/4 on every attempt.
+- scenario_2 PASSED.
+- scenario_3 FAILED, for two causes unrelated to reload (both pre-existing):
+  1. `ONTOBRICKS_SCENARIO_DQ_TIMEOUT` default of 300s is too tight — the run
+     was still progressing (89%) when the budget expired. Re-running with
+     900s passed in ~190s (122 checks: 99 passed, 22 failed, 1 warning),
+     then reasoning inferred 2,381 triples and materialised 2,320.
+  2. Graph analysis then 400s: `triplestore_testscenario1_V2_data` does not
+     exist. The `_data` snapshot is created by the build pipeline, but
+     scenario 3 skips the build when `_graph_built()` (which probes
+     `/dtwin/sync/status` on the Lakebase graph) reports data — that is not a
+     sufficient proxy for "the UC mapped snapshot exists" on a freshly
+     branched version. Left unfixed pending a decision on whether the fix
+     belongs in the scenario precondition or in the product.
+
+## Fix Graph Chat pending-action cancel and card styling
+
+Context: Task 7 review — Cancel awaited the server before removing the card,
+leaving a disabled card stuck on a stalled request. Confirm button also used
+primary-red gradient, which violates `.cursor/11-frontend-design.mdc` (plain
+buttons stay neutral grey).
+
+Changes:
+
+1. `src/front/static/query/js/query-chat.js`
+   `cancelPendingAction` now removes the card immediately and fire-and-forgets
+   the `/dtwin/nodes/action/cancel` POST (no await).
+2. `src/front/static/query/css/query-chat.css`
+   Pending-action card/buttons use `--db-*` / Bootstrap tokens; Confirm is
+   outline/secondary instead of primary-red gradient.
+3. `tests/units/front/test_query_chat_pending_action.py`
+   Contract test asserts `card.remove()` precedes the cancel fetch and that
+   cancel does not await the network call.
+
+Modified files:
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- tests/units/front/test_query_chat_pending_action.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_query_chat_pending_action.py → 7 passed in 0.12s
+
+## Fill agent_dtwin_chat AI-feature SPEC and expand its eval dataset
+
+Context: Task 8 of the Graph Chat MCP alignment closes the AI-feature-lifecycle
+gate (CNS §3.5 / `.cursor/12-ai-feature-lifecycle.mdc`) for the tool-surface
+change made in Tasks 5-7: the SPEC skeleton and 3-example seed dataset still
+described 5 tools, and two of the seed's `tool_called_any_of` constraints
+referenced tool names (`search_entities`, `find_triples`, `translate_sparql`)
+that never existed in `TOOL_HANDLERS`.
+
+Changes:
+
+1. `.planning/agents/agent_dtwin_chat/SPEC.md`
+   Fill sections 3-7 with the real 7-tool surface (including JSON schemas for
+   `describe_entity`/`get_entity_context`/`request_entity_action`), 3 concrete
+   success-criteria examples, failure modes for auto-invoke Action and invent
+   Action fullName (mapped to the `does_not_invoke_action` /
+   `does_not_call_tool` / `does_not_claim_action_completed` rule judges), and
+   an updated §7 dataset description. Eval-dimensions table (§5) and
+   `tests/eval/thresholds.yaml` `dtwin_chat:` block are unchanged — no
+   dimension edits needed. §10 sign-off documents the live MLflow baseline run
+   as a deferred follow-up; dry-run is the gate for this task.
+2. `tests/eval/datasets/agent_dtwin_chat/baseline.jsonl`
+   Expand 3 → 12 examples covering discovery (`list_entity_types`), grounded
+   entity lookup (`describe_entity`), Dataset rows and Bridge traversal
+   (`get_entity_context`), status/schema/GraphQL tools, Action proposal
+   without auto-invoke (`request_entity_action`), and three adversarial cases
+   (invented entity/class, invented Action fullName, false completion claim).
+   Every `tool_called`/`tool_called_any_of` constraint now names one of the 7
+   real tools.
+3. `.planning/agents/agent_dtwin_chat/eval/dataset.jsonl`
+   New file — mirrors the baseline dataset at the path the `ai-feature` skill
+   expects.
+4. `tests/eval/run_agent_dtwin_chat.py`
+   New dry-run-capable runner mirroring `run_agent_graph_interpreter.py`:
+   validates dataset shape (unique ids, known tool names, recognised
+   constraint kinds, ≥10 rows), scores each example with rule-based judges
+   (`tool_called`/`tool_called_any_of`/`does_not_call_tool`/
+   `does_not_invoke_action`/`does_not_claim_action_completed`/
+   `does_not_invent_entities`/`response_acknowledges_absence`/
+   `grounded_in_triplestore`/`contains`) against a self-consistent stub trace
+   in `--dry-run` mode (default), and against a live
+   `agents.agent_dtwin_chat.engine.run_agent` call behind `--live` (requires
+   `--host`/`--token`/`--endpoint`/`--base-url`/`--domain`; not run in this
+   task per the brief).
+
+Modified files:
+- .planning/agents/agent_dtwin_chat/SPEC.md
+- tests/eval/datasets/agent_dtwin_chat/baseline.jsonl
+- .planning/agents/agent_dtwin_chat/eval/dataset.jsonl
+- tests/eval/run_agent_dtwin_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS on all 12 examples
+Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 32.95s
+
+## Graph Chat MCP alignment — complete
+
+Context: Graph Chat now matches MCP discovery for configured Dataset, Bridge,
+and Action metadata while retaining session-aware draft-domain behavior.
+Actions are proposed through a one-time token and execute only after the user
+selects Confirm; Cancel, expiry, and token reuse never invoke Unity Catalog.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   Add session-aware node-context and class metadata routes plus token-gated
+   Action request, confirm, and cancel endpoints.
+2. `src/agents/agent_dtwin_chat/{tools.py,engine.py}` and `src/agents/tools/{context.py,graph_formatting.py}`
+   Add Dataset/Bridge/Action discovery and context tools, pending-action
+   response plumbing, confirmation-aware prompt guidance, and shared formatters.
+3. `src/front/static/query/{js,css}/query-chat.*`
+   Render a Confirm/Cancel Action card from structured chat responses and
+   display confirmation results without typed-message auto-confirmation.
+4. `.planning/agents/agent_dtwin_chat/SPEC.md`, `tests/eval/datasets/agent_dtwin_chat/baseline.jsonl`, `tests/eval/run_agent_dtwin_chat.py`
+   Document the seven-tool contract and validate 12 discovery, context, safety,
+   and adversarial eval cases.
+5. `tests/units/{agents,api,front}/test_*dtwin*` and `tests/units/agents/test_graph_formatting_context.py`
+   Cover route, token lifecycle, tool, formatter, SSE payload, and UI card
+   contracts.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/agents/agent_dtwin_chat/tools.py
+- src/agents/agent_dtwin_chat/engine.py
+- src/agents/tools/context.py
+- src/agents/tools/graph_formatting.py
+- src/front/static/query/js/query-chat.js
+- src/front/static/query/css/query-chat.css
+- .planning/agents/agent_dtwin_chat/SPEC.md
+- tests/eval/datasets/agent_dtwin_chat/baseline.jsonl
+- tests/eval/run_agent_dtwin_chat.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- tests/units/api/test_dtwin_nodes_action_confirm.py
+- tests/units/front/test_query_chat_pending_action.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 32.60s
+Dry-run eval: uv run --frozen python tests/eval/run_agent_dtwin_chat.py --dry-run → aggregate 1.000 (threshold 0.85), PASS on all 12 examples
+
+## Add color brand icons to Back end settings
+
+Context: Replace the generic Back end glyphs with recognizable product marks
+while preserving the compact sizing and alignment of the existing Bootstrap
+icons. Assets are bundled locally so icon rendering has no runtime CDN
+dependency.
+
+Changes:
+
+1. `src/front/static/global/img/{lakebase,databricks,neo4j}-icon.svg`
+   Add color PostgreSQL, Databricks, and Neo4j glyphs for the three back ends.
+2. `src/front/static/global/css/components.css`
+   Add a shared `1em` brand-icon component and product-specific local asset classes.
+3. `src/front/config/menu_config.json`
+   Apply the brand classes to the Lakebase, Lakehouse, and Neo4j menu items.
+4. `src/front/templates/settings.html`
+   Match the three settings section headers to their sidebar brand icons.
+5. `tests/units/front/test_backend_brand_icons.py`
+   Add regression coverage for mapping, local color assets, headers, and sizing.
+6. `documentation/superpowers/plans/2026-08-06-branded-backend-icons.md`
+   Document the implementation and verification plan.
+
+Modified files:
+- src/front/static/global/img/lakebase-icon.svg
+- src/front/static/global/img/databricks-icon.svg
+- src/front/static/global/img/neo4j-icon.svg
+- src/front/static/global/css/components.css
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- tests/units/front/test_backend_brand_icons.py
+- documentation/superpowers/plans/2026-08-06-branded-backend-icons.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_backend_brand_icons.py → 4 passed in 0.13s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4731 passed, 276 skipped, 5 deselected, 1 xfailed in 34.40s
+Visual: Settings sidebar, dropdown, and section headers verified after app restart; all SVG requests returned 200 with no icon-related console errors.
+
+## Align Explorer and Ontology viewer button icons
+
+Context: The Explorer canvas empty state and Ontology buttons still used the
+generic `bi-diagram-3` glyph, while the GraphQL playground button was labeled
+"View Ontology". Align both surfaces with the sidebar Explorer (`bi-share`) and
+Ontology (`bi-bezier2`) icons and rename the GraphQL button to "Ontology".
+
+Changes:
+
+1. `src/front/static/query/js/query-sigmagraph.js`
+   Use the Explorer `bi-share` icon above the Graph Viewer empty-state title.
+2. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Use the Ontology `bi-bezier2` icon on the Explorer Ontology button.
+3. `src/front/templates/partials/dtwin/_query_graphql.html`
+   Match the Ontology icon and rename the button from "View Ontology" to "Ontology".
+4. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage locking these icons and the GraphQL button label to the menu config.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_graphql.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 5 passed in 0.11s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4732 passed, 276 skipped, 5 deselected, 1 xfailed in 34.68s
+
+## Use fast-forward for Build
+
+Context: Align the Knowledge Graph Build navigation and controls around a
+single action-oriented `bi-fast-forward` glyph instead of mixing repeat,
+layers, and database icons.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Knowledge Graph Build navigation icon to `bi-fast-forward`.
+2. `src/front/templates/partials/dtwin/_query_sync.html`
+   Apply the icon to the Lakebase Build heading and action button.
+3. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Apply the icon to the Lakehouse Build heading and action button.
+4. `src/front/static/query/js/query-sync.js`
+   Match the generated “Go to Build” action to the same icon.
+5. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for consistent Build icon usage.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/dtwin/_query_databricks_build.html
+- src/front/static/query/js/query-sync.js
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 6 passed in 0.11s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4733 passed, 276 skipped, 5 deselected, 1 xfailed in 33.33s
+
+## Use pencil for Designer pages
+
+Context: Give the Ontology and Mapping Designer navigation items and headings
+the same direct editing metaphor by replacing their diagram and pencil-square
+glyphs with `bi-pencil`.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set both sidebar items labeled Designer to `bi-pencil`.
+2. `src/front/templates/partials/ontology/_ontology_map.html`
+   Match the Ontology Designer heading to the pencil icon.
+3. `src/front/templates/partials/mapping/_mapping_design.html`
+   Match the Visual Mapping Designer heading to the pencil icon.
+4. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for both menu and heading icons.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 7 passed in 0.11s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4734 passed, 276 skipped, 5 deselected, 1 xfailed in 34.00s
+
+## Use yelp for Business Views
+
+Context: Distinguish Ontology → Business Views from the Designer pencil glyph by
+giving it the Bootstrap Yelp icon in navigation and on the page heading.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Business Views navigation icon to `bi-yelp`.
+2. `src/front/templates/partials/ontology/_ontology_design.html`
+   Match the Business Views heading to the yelp icon.
+3. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for the Business Views icon mapping.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_design.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 8 passed in 0.14s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4735 passed, 276 skipped, 5 deselected, 1 xfailed in 38.75s
+
+## Use list-nested for Ontology Entities
+
+Context: Make the Ontology Entities navigation and hierarchy heading use the
+requested nested-list metaphor instead of unrelated box and diagram glyphs.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Ontology Entities navigation icon to `bi-list-nested`.
+2. `src/front/templates/partials/ontology/_ontology_entities.html`
+   Match the Entities hierarchy heading to the same icon.
+3. `tests/units/front/test_help_center_menu_sync.py`
+   Add regression coverage for the Entities icon mapping.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_entities.html
+- tests/units/front/test_help_center_menu_sync.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_help_center_menu_sync.py → 9 passed in 0.15s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4738 passed, 276 skipped, 5 deselected, 1 xfailed in 37.90s
+
+## Fix whole-branch review findings for Graph Chat MCP alignment
+
+Context: Whole-branch review of the Graph Chat MCP alignment feature flagged
+a critical-for-UX lost-update bug plus two smaller alignment/safety gaps.
+
+Changes:
+
+1. `src/api/routers/internal/dtwin.py`
+   `POST /dtwin/assistant/chat` and `.../chat/stream` snapshotted the Graph
+   Chat session cache *before* `run_agent`, then saved that stale snapshot
+   back *after*. A nested loopback tool call during the agent run (e.g.
+   `POST /dtwin/nodes/action/request`) writes a `pending_actions` token into
+   the shared session cache; the post-agent save then clobbered it. Both
+   routes now re-read the cache via `_chat_cache(session_mgr)` right before
+   writing the trimmed history, so a token minted mid-turn survives.
+   `GET /dtwin/classes` now normalizes `actions`/`bridges` through
+   `NodeContextService.class_action_entries` / the new
+   `class_bridge_entries` instead of passing the raw class dict through,
+   matching the traversal path's malformed-action-drop and
+   `target_project`→`target_domain` alias behavior.
+2. `src/back/objects/digitaltwin/NodeContextService.py`
+   Add `class_bridge_entries` — a shallow (no-traversal) bridge normalizer
+   mirroring the `target_domain`/`target_project` alias resolution
+   `_resolve_bridges` already does, so `GET /dtwin/classes` and
+   `GET /dtwin/nodes/context` stay consistent for downstream formatters.
+3. `tests/units/api/test_dtwin_chat_pending_action_cache.py`
+   New regression tests (blocking + stream routes) that call the real chat
+   route with `run_agent` patched to invoke the real
+   `dtwin_nodes_action_request` route mid-turn against a shared session
+   dict, then assert the minted token is still present in
+   `pending_actions` after the chat route finishes. Confirmed these fail
+   without the fix (`assert token in {}`) and pass with it.
+4. `tests/units/api/test_dtwin_nodes_context.py`
+   Add coverage for `GET /dtwin/classes` dropping a malformed action
+   `fullName` and normalizing a bridge authored with only the legacy
+   `target_project` key.
+5. `tests/units/agents/test_agent_dtwin_chat.py`
+   Add an explicit `TestToolDefinitions` safety assertion that
+   `invoke_entity_action` is absent from both `TOOL_HANDLERS` and the tool
+   definition names — Graph Chat may only *request* an action, never
+   invoke one directly.
+6. `.superpowers/sdd/task-6-report.md`
+   Untrack from git (`git rm --cached`) — `.superpowers/` is a local
+   session-notes directory (already gitignored) and was tracked by mistake.
+
+Not fixed (tracked as follow-ups per review triage): empty class-actions
+cache sentinel, `does_not_invent_entities` placeholder, pending-action
+prune-on-cancel, Pydantic request-body validation, SPEC-vs-runner weight
+reconciliation, live MLflow eval URI. Manual browser smoke also remains a
+follow-up — the regression test above supersedes it for this fix pass.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/back/objects/digitaltwin/NodeContextService.py
+- tests/units/api/test_dtwin_chat_pending_action_cache.py
+- tests/units/api/test_dtwin_nodes_context.py
+- tests/units/agents/test_agent_dtwin_chat.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+- .superpowers/sdd/task-6-report.md (untracked)
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_chat_pending_action_cache.py tests/units/api/test_dtwin_nodes_context.py tests/units/api/test_node_context_endpoint.py tests/units/agents/test_agent_dtwin_chat.py tests/units/api/test_dtwin_assistant_chat.py → 56 passed in 1.21s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4740 passed, 276 skipped, 5 deselected, 1 xfailed in 32.20s
+
+## Show backend brands wherever backends are surfaced
+
+Context: Extend the color PostgreSQL, Databricks, and Neo4j visual language
+beyond Settings. Backend status badges, Registry domain rows, and architecture
+cards now identify the active backend with its corresponding local brand icon.
+
+Changes:
+
+1. `src/front/static/query/js/query-sync.js`
+   Resolve backend icon classes for readiness badges and dynamically update the Build architecture Graph DB card.
+2. `src/front/static/registry/js/registry.js`
+   Add matching color brand icons to Registry domain Backend badges.
+3. `src/front/static/domain/js/domain-validation.js`
+   Dynamically update the Domain Validation Graph DB card icon for Lakebase, Lakehouse, or Neo4j.
+4. `src/front/templates/partials/dtwin/_query_sync.html`
+   Replace the fixed Lakebase image with an engine-aware brand-icon element.
+5. `src/front/templates/partials/domain/_domain_validation.html`
+   Replace the fixed Lakebase image with an engine-aware brand-icon element.
+6. `src/front/templates/partials/registry/_registry_configuration.html`
+   Use the PostgreSQL icon on the Lakebase Connection card.
+7. `tests/units/front/test_{kg_readiness_indicator,registry_backend_column,backend_brand_icons}.py`
+   Add regression coverage for badge, Registry, and architecture-card icon mapping.
+
+Modified files:
+- src/front/static/query/js/query-sync.js
+- src/front/static/registry/js/registry.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/templates/partials/dtwin/_query_sync.html
+- src/front/templates/partials/domain/_domain_validation.html
+- src/front/templates/partials/registry/_registry_configuration.html
+- tests/units/front/test_kg_readiness_indicator.py
+- tests/units/front/test_registry_backend_column.py
+- tests/units/front/test_backend_brand_icons.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q tests/units/front/test_kg_readiness_indicator.py tests/units/front/test_registry_backend_column.py tests/units/front/test_backend_brand_icons.py → 27 passed in 0.18s
+Tests: uv run --frozen pytest -q -m "not scenario" → 4730 passed, 276 skipped, 5 deselected, 1 xfailed in 33.93s
+Visual: Registry badges, Build and Validation architecture cards, readiness badge variants, and the Lakebase Connection card verified with local assets returning 200 and no icon-related console errors.
+
+
+## Use 123 icon for Domain Versions
+
+Context: The Domain navbar Versions action and Domain → Versions navigation
+item used different icons. Switch both to Bootstrap Icons `bi-123` so the
+controls consistently read as version numbering.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Set the Domain `navbar_actions` Versions icon from `bi-arrow-repeat` to
+   `bi-123`, and the Domain → Versions item from `bi-clock-history` to
+   `bi-123`.
+
+Modified files:
+- src/front/config/menu_config.json
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4743 passed, 276 skipped, 5 deselected, 1 xfailed in 37.33s
+
+
+## Fix deploy script instance-target drift
+
+Context: Review of `scripts/deploy.sh` found four concrete bugs after the
+per-INSTANCE_ID DAB target change: a dead broken Python snippet, a target
+sanity check that warned on every `dev-lakebase-<id>` deploy, a cwd bug in
+`check-deploy-prerequisites.sh` (cd'd into `scripts/` instead of repo root),
+and Makefile `bundle-validate`/`bundle-summary` still hardcoded to unsuffixed
+`dev-lakebase` without `neo4j_secret_scope`. Also re-materialise the generated
+target immediately before validate so parallel unit tests cannot race-delete
+the gitignored file.
+
+Changes:
+
+1. `scripts/deploy.sh`
+   Drop dead datname-derivation snippet; accept `dev-lakebase-*` in target
+   sanity; fix soft-dep step number (11); re-call `ensure_instance_target`
+   immediately before `bundle validate`.
+2. `scripts/_internal/check-deploy-prerequisites.sh`
+   `cd` two levels up to the repo root; clarify that `make deploy-check`
+   runs `deploy.sh --dry-run` instead.
+3. `Makefile`
+   `bundle-validate` / `bundle-summary` use `DAB_TARGET` from config,
+   call `ensure_instance_target`, and pass `neo4j_secret_scope`.
+
+Modified files:
+- scripts/deploy.sh
+- scripts/_internal/check-deploy-prerequisites.sh
+- Makefile
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4743 passed, 276 skipped, 5 deselected, 1 xfailed in 34.54s
+Deploy check: make deploy-dry-run → Dry run OK (target dev-lakebase-07x, resources verified)
+
+## Stop blaming the SQL warehouse for a snapshot that was never built
+
+Context: Running Graph Analytics on a deployed domain reported "The mapped-triples
+table benoit_cayla.ontobricks_demo.triplestore_cust360auto_V5_data could not be
+reached. The SQL warehouse may be starting up — retry in a moment." The warehouse
+(OntoBricks Engine, d2096aa075ad44a3) was RUNNING. Probing the table directly
+returned `[TABLE_OR_VIEW_NOT_FOUND] ... SQLSTATE: 42P01`: only the R2RML view
+`triplestore_cust360auto_v5` exists, the `_data` snapshot does not (the domain was
+built before commit b0ad51b added the materialise step to the non-Delta build
+pipeline). `data_table_has_rows` swallowed every exception into `None`, so a table
+that is definitively absent was reported as a warehouse that could not be reached —
+the message asserted a cause it had never checked, and hid the one remedy that
+would have worked (rebuild the domain).
+
+Changes:
+
+1. `src/back/core/graph_analysis/preflight.py`
+   Rename `data_table_has_rows` to `probe_data_table` and return
+   `(answer, failure_detail)`. Classify `TABLE_OR_VIEW_NOT_FOUND` /
+   `SCHEMA_NOT_FOUND` / `CATALOG_NOT_FOUND` / SQLSTATE 42P01 / 42704 as
+   `False` (the question *was* answered: no rows, because no table), so the
+   existing "missing or empty — run Knowledge Graph → Build" remedy renders.
+   Reserve `None` for probes that got no answer at all, and carry the engine's
+   own error text in the detail.
+2. `src/back/core/graph_analysis/preflight.py`
+   `analytics_job_status` now quotes that detail ("could not be probed: <detail>")
+   instead of asserting the warehouse is starting up. Module docstring notes the
+   misdiagnosis cuts both ways.
+3. `src/back/core/graph_analysis/__init__.py`
+   Re-export `probe_data_table` in place of `data_table_has_rows`.
+4. `tests/units/dtwin/test_analytics_job_status.py`
+   New `TestTheProbeClassifiesTheFailure` covering missing table, missing schema,
+   connectivity failure and permission failure; new assertions that a failed probe
+   quotes the engine rather than guessing. Mutation-checked: stubbing the
+   classifier out fails the two "reads as not built" tests.
+5. `tests/units/api/test_dtwin_analytics.py`
+   Update the `probe_data_table` monkeypatch to the tuple return.
+
+Note: the deployed domain still needs a Knowledge Graph → Build to materialise
+`triplestore_cust360auto_V5_data`; this change makes the app say so.
+
+Modified files:
+- src/back/core/graph_analysis/preflight.py
+- src/back/core/graph_analysis/__init__.py
+- tests/units/dtwin/test_analytics_job_status.py
+- tests/units/api/test_dtwin_analytics.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4750 passed, 276 skipped, 5 deselected, 1 xfailed in 32.91s
+
+## Document Lakehouse UC objects (_data / _inferred / _graph)
+
+Context: After clarifying why analytics failed on a domain that only had the
+R2RML VIEW, the same object-role explanation needed to live in the product docs.
+Several guides still described the triple store as a single Delta VIEW.
+
+Changes:
+
+1. `documentation/architecture.md`
+   Expand "Triple Store & Graph DB Backends" with a "Lakehouse Unity Catalog
+   objects" section (roles of the R2RML VIEW, `_data`, `_inferred`, `_graph`,
+   and why analytics reads `_data`). Correct the backend table so Lakehouse is
+   not described as a mirror of a lone view.
+2. `documentation/graphdb-integration.md`
+   Add the same object map under §1 (Key files + Lakehouse UC objects), and
+   note that a missing `_data` must surface as a rebuild requirement, not a
+   warehouse failure.
+3. `documentation/user-guide.md`
+   Rewrite the Domain Information → Triple Store tab to list all four objects
+   and point at architecture.md.
+4. `documentation/get-started.md`
+   Prerequisites: registry catalog/schema hosts the full triple-store family,
+   not only VIEWs.
+5. `documentation/README.md`
+   Topic index link to the new architecture anchor.
+
+Modified files:
+- documentation/architecture.md
+- documentation/graphdb-integration.md
+- documentation/user-guide.md
+- documentation/get-started.md
+- documentation/README.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4750 passed, 276 skipped, 5 deselected, 1 xfailed in 31.47s
+
+## Scenario 3 asked the wrong store whether a version was built
+
+Context: The live campaign failed at `POST /dtwin/metrics/compute` with "The
+mapped-triples table benoit_cayla.ontobricks.triplestore_testscenario1_V2_data
+could not be reached", and reproduced on retry with a fresh request id, so it
+was not a warehouse cold start. `SHOW TABLES IN benoit_cayla.ontobricks LIKE
+'triplestore_testscenario1*'` returned `_v1`, `_v1_data` and `_v2` — the V2
+`_data` snapshot had never been created.
+
+Root cause: scenario 3 decided whether the working DRAFT was built from
+`/dtwin/sync/status`, which reports the **graph engine** row count. The
+campaign domain is durable and its Lakebase graph `testscenario1_V2` still held
+56,407 triples accumulated by earlier runs, so the scenario logged "already
+built — reusing its graph" and skipped Build. Analytics never reads the engine:
+`resolve_analytics_source` always resolves the UC `…_data` snapshot (that is
+what makes a KPI identical across Lakehouse, Lakebase and Neo4j), and only
+Build materialises it. Skipping the Build therefore guaranteed the failure
+minutes later. The downstream `test_scenario_validation` failure ("analysis
+recorded in audit trail — 0 analysis event(s)") was the same cause: scenario 3
+aborted before writing its analysis write-up.
+
+Verified on the live app against the broken V2: `/dtwin/sync/status` answered
+`has_data=True count=56407` while `/dtwin/databricks-build/info` answered
+`exists=False count=0` for `triplestore_testscenario1_V2_data` — the old check
+passed and the new one correctly requires a Build.
+
+Changes:
+
+1. `tests/e2e/scenarios/test_scenario_03_rules_analysis.py`
+   Split `_graph_built` into `_engine_graph_built` (unchanged
+   `/dtwin/sync/status` probe) and `_analytics_snapshot_built` (new
+   `/dtwin/databricks-build/info` probe of `triplestore_status.has_data`).
+   `_graph_built` now requires both, so a stale engine graph can no longer
+   skip the Build that materialises the snapshot the analysis step reads.
+2. `tests/e2e/scenarios/test_scenario_03_rules_analysis.py`
+   The readiness assertion now names which store is missing (engine graph vs
+   analytics snapshot) instead of a single opaque "no knowledge-graph data".
+
+Note: the messaging half of this was already fixed separately in fd96483
+(`probe_data_table` classifies TABLE_OR_VIEW_NOT_FOUND as "missing or empty —
+run Knowledge Graph → Build"). The campaign ran against an app started at
+14:34, before that commit landed at 15:12, which is why the old warehouse
+wording appeared.
+
+Not addressed here: `ONTOBRICKS_SCENARIO_DQ_TIMEOUT` defaults to 300s and the
+data-quality run is marginal against it (one run timed out at 99%, another
+finished in ~130s). `make scenario-campaign` does not override it.
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-06.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4750 passed, 276 skipped, 5 deselected, 1 xfailed in 32.73s

@@ -28,7 +28,7 @@ env:
   # Set DEFAULT_APP_ONTOBRICKS_URL in scripts/deploy.config.sh.
   # Defaults to localhost:8000 when empty (local dev only).
   - name: ONTOBRICKS_URL  # optional
-    value: "https://ontobricks-07x-2508734981122804.aws.databricksapps.com"
+    value: "https://ontobricks-08x-2508734981122804.aws.databricksapps.com"
 
   # ── SQL Warehouse ─────────────────────────────────────────────────
   # Injected from the sql-warehouse resource binding. Passed to the
@@ -45,11 +45,11 @@ env:
   # PGHOST/PGPORT/PGDATABASE/PGUSER/PGAPPNAME/PGSSLMODE — no explicit
   # valueFrom mapping needed. The schema must still be set explicitly.
   - name: LAKEBASE_SCHEMA
-    value: "ontobricks_demo"
+    value: "ontobricks_demo_08_registry_sc"
   - name: LAKEBASE_PROJECT
-    value: "ontobricks-demo2"
+    value: "ontobricks-demo-08-registry"
   - name: LAKEBASE_DATABASE
-    value: "ontobricks_demo"
+    value: "ontobricks_demo_08_registry_db"
   - name: LAKEBASE_BRANCH
     value: "production"
 

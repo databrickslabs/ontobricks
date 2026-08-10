@@ -332,8 +332,12 @@ PGUSER=you@example.com                   # Your Databricks email locally; SP id 
 # MLflow — persist agent traces to your workspace (recommended)
 MLFLOW_TRACKING_URI=databricks
 
-# Neo4j (only for domains whose graph backend is "neo4j")
-# NEO4J_PASSWORD=<bolt-password>          # in Apps, provide via a secret resource
+# Neo4j (only for domains whose graph backend is "neo4j") — the password is
+# resolved live from a Databricks secret scope/key picked in Settings → Back
+# end → Neo4j (see documentation/pr47-neo4j-demo/secret-configuration.md);
+# NEO4J_PASSWORD below is only read for the legacy `auth_method: "basic"`
+# configs still bound to an Apps secret resource.
+# NEO4J_PASSWORD=<bolt-password>          # legacy — in Apps, via a secret resource
 ```
 
 > `PGPASSWORD` is intentionally **not** in this list. `LakebaseAuth`
@@ -346,16 +350,21 @@ The Graph DB engine is chosen **per domain** (`graph_backend`: `lakebase`,
 `databricks`, or `neo4j`) under **Domain → Information → Knowledge Graph**;
 connection knobs live under **Settings → Back end**. Lakebase and the Delta
 (`databricks`) engine need no extra credentials beyond the Databricks/Lakebase
-config above. The **Neo4j** engine (Aura or self-hosted, Bolt protocol)
-additionally needs its Bolt password:
+config above. The **Neo4j** engine (Aura or self-hosted, Bolt protocol) always
+asks for the Bolt **username** directly and resolves the **password live from
+a Databricks secret** — there is no plain-text password field, in local dev or
+in the deployed app:
 
-- **Local dev** — set `NEO4J_PASSWORD` in `.env`, or store the password in the
-  persisted `engine_config` via **Settings → Back end → Neo4j**.
-- **Databricks Apps** — provide `NEO4J_PASSWORD` through an app **secret
-  resource** (never the persisted `engine_config`). The deployed app refuses to
-  source the Bolt password from `engine_config` and requires the secret. Host,
-  port, database, and auth method are configured in **Settings → Back end →
-  Neo4j**.
+- Pick the **Secret scope** and **Secret name** from the dropdowns in
+  **Settings → Back end → Neo4j** (populated live via the Databricks Secrets
+  API).
+- The app's own identity (SP OAuth in Apps, PAT/CLI profile locally) needs
+  `READ` on that scope — see
+  `documentation/pr47-neo4j-demo/secret-configuration.md` for the one-time
+  `databricks secrets put-acl` setup.
+- Legacy configs still bound to the `neo4j-password` Apps secret resource
+  (`auth_method: "basic"` + `NEO4J_PASSWORD` env var) keep working, but that
+  path is no longer offered in the Settings UI — see the same doc to migrate.
 
 ### Run Locally
 
@@ -452,9 +461,10 @@ Edit the workspace-specific defaults in `scripts/deploy.config.sh`:
 | Variable | Maps to | Description |
 |----------|---------|-------------|
 | `DEFAULT_DATABRICKS_PROFILE` | `DATABRICKS_CONFIG_PROFILE` (CLI env) | Databricks CLI profile from `databricks auth profiles`. Empty = CLI default. |
-| `DEFAULT_APP_NAME` | `databricks.yml > var.app_name` and `DATABRICKS_APP_NAME` at runtime | Deployed name of the FastAPI app (e.g. `ontobricks-030`). |
+| `DEFAULT_INSTANCE_ID` | Derives `APP_NAME` / `MCP_APP_NAME` / `DAB_TARGET` | Single knob for a deploy instance (e.g. `07x` → `ontobricks-07x`, target `dev-lakebase-07x`). |
+| `DEFAULT_APP_NAME` | `databricks.yml > var.app_name` and `DATABRICKS_APP_NAME` at runtime | Usually derived as `ontobricks-${DEFAULT_INSTANCE_ID}`; override only if you must. |
 | `DEFAULT_MCP_APP_NAME` | `databricks.yml > var.mcp_app_name` | Deployed name of the MCP companion (must start with `mcp-`). |
-| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | `dev-lakebase` (default) or `dev` (volume-only fallback). |
+| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | Auto: `dev-lakebase-<INSTANCE_ID>`. Force `dev-lakebase` only when upgrading a **pre-INSTANCE_ID** (0.6.x) deploy in place — see Upgrade Notes in `releases/ReleaseNotes_V0.7.0.md` and `documentation/DEPLOY_CHECKLIST.md` §5. |
 | `DEFAULT_WAREHOUSE_ID` | `app.yaml > DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT` + the `sql-warehouse` bundle resource | **SQL Warehouses** → your warehouse → **Connection details**. |
 | `DEFAULT_REGISTRY_CATALOG` / `_SCHEMA` / `_VOLUME` | Bundle `volume` resource (`uc_securable: <cat>.<schema>.<volume>`) | UC namespace that hosts the binary-artefact volume + the triplestore VIEW. |
 | `DEFAULT_LAKEBASE_PROJECT` | `databricks.yml > var.lakebase_project` | Autoscaling **project id** (final segment of `projects/<id>`). |

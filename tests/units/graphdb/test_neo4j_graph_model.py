@@ -1,4 +1,4 @@
-"""Unit tests for the pure RDF→property-graph transform (Neo4jGraphModel).
+"""Unit tests for the pure RDF→property-graph transform (graph_model).
 
 No Neo4j driver needed — these exercise the classification/dedup/label logic
 that is the heart of the typed-node model. Uses the verified InsurBricks demo
@@ -8,7 +8,7 @@ shapes as fixtures.
 import pytest
 
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
-from back.core.graphdb.neo4j.Neo4jGraphModel import (
+from back.core.graphdb.neo4j.graph_model import (
     is_uri,
     label_from_class_uri,
     reltype_from_predicate,

@@ -1,0 +1,699 @@
+## Force Databricks-secret Neo4j password in the deployed app
+
+Context: In a deployed Databricks App the Settings UI let an admin pick
+`basic` or `databricks_secret` auth for Neo4j, but `basic` also silently
+required a secret behind the scenes (the UI could not accept a typed
+password there either), which was confusing and made it look like two
+auth paths existed when only one was actually usable. The user asked to
+always collect the Neo4j username directly, drop the password field
+entirely, and force the password to come from a Databricks secret picked
+via two live dropdowns (scope, then key) instead of free-typed strings.
+
+Changes:
+
+1. `src/back/core/databricks/constants.py`
+   Add `SECRETS_SCOPES_LIST_PATH`, `SECRETS_LIST_PATH`, `SECRETS_GET_PATH`
+   REST API paths for the Databricks Secrets API.
+2. `src/back/core/databricks/SecretsService.py` (new)
+   `list_scopes`, `list_keys`, `get_secret_value` wrapping the Secrets API,
+   mapping 403/404 responses to `InfrastructureError` with remediation text
+   (grant `READ` ACL / check the scope-key name).
+3. `src/back/core/databricks/DatabricksClient.py`
+   Wire up `self.secrets = SecretsService(...)` and add
+   `list_secret_scopes` / `list_secret_keys` / `get_secret` facade methods.
+4. `src/back/core/graphdb/neo4j/Neo4jConnection.py`
+   `DEFAULT_AUTH_METHOD` is now `"databricks_secret"`. `_resolve_auth`
+   always requires `username` regardless of method, and for
+   `databricks_secret` fetches the password via a new
+   `_fetch_databricks_secret` (uses `DatabricksAuth` + `SecretsService`),
+   cached per `(scope, key)` for 300s behind a `threading.Lock`
+   (`_secret_value_cache`) to avoid hammering the Secrets API on every
+   connection. `basic` auth (env var `NEO4J_PASSWORD` or local dev config
+   password) still works for backward compatibility but is no longer
+   exposed in the UI.
+5. `src/back/objects/domain/SettingsService.py`
+   `_neo4j_credentials_source` reports whether the password came from a
+   Databricks secret, `NEO4J_PASSWORD`, or local config.
+   `set_graph_engine_config_result` strips `password` from persisted
+   config whenever `auth_method` is `databricks_secret` or `NEO4J_PASSWORD`
+   is set, so no clear-text password is ever saved once a live source
+   exists. Add `graph_engine_neo4j_secret_scopes_result` /
+   `graph_engine_neo4j_secret_keys_result` to back the new dropdowns.
+6. `src/api/routers/internal/settings.py`
+   Add admin-gated `GET /graph-engine/neo4j-secret-scopes` and
+   `GET /graph-engine/neo4j-secret-keys/{scope}`.
+7. `src/front/templates/settings.html`
+   Drop the `Auth method` selector and the password input. Username is
+   now always visible/required. Add `neo4jSecretScope` /
+   `neo4jSecretKey` `<select>` dropdowns (each with a refresh button) and
+   help text on granting scope `READ` permissions, linking to the updated
+   docs.
+8. `src/front/static/config/js/settings.js`
+   Remove `applyNeo4jAuthMethodVisibility`. Add `loadNeo4jSecretScopes` /
+   `loadNeo4jSecretKeys` (populate the two dropdowns live from the new
+   endpoints, cascading scope → key). `mergeNeo4jPanelIntoConfigTextarea`
+   now always writes `auth_method: "databricks_secret"`, stores
+   `secret_scope` / `secret_key`, and deletes `password` outright.
+9. `src/front/routes/home.py`
+   Remove the now-unused `neo4j_password_from_secret` template variable.
+10. `documentation/pr47-neo4j-demo/secret-configuration.md`,
+   `documentation/deployment.md`
+   Document the secret-only flow: store the password as a Databricks
+   secret, grant the app's service principal `READ` on the scope, then
+   pick scope/key in Settings. `NEO4J_PASSWORD` / UI `basic` auth are
+   noted as deprecated for new configs.
+11. `tests/units/graphdb/test_neo4j_store.py`
+   `TestDatabricksSecretAuth`: fetches and caches the password via the
+   Secrets API, and raises `ValidationError` when `username`,
+   `secret_scope`, or `secret_key` is missing.
+12. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Updated for the new UI contract: hydration loads secret scopes and
+   never touches a password field; merge always forces
+   `auth_method=databricks_secret` and drops `password`; scope/key
+   dropdowns are populated live from the two new endpoints.
+
+Modified files:
+- src/back/core/databricks/constants.py
+- src/back/core/databricks/SecretsService.py (new)
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/graphdb/neo4j/Neo4jConnection.py
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/routes/home.py
+- documentation/pr47-neo4j-demo/secret-configuration.md
+- documentation/deployment.md
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/settings/test_neo4j_settings_persistence.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q tests/units/graphdb/test_neo4j_store.py tests/units/settings/test_neo4j_settings_persistence.py` → 49 passed in 1.31s
+
+Environment note (unrelated pre-existing issue, not caused by this change):
+the local `~/.databrickscfg` `DEFAULT` CLI profile's OAuth session is
+expired. Any code path that falls through to `WorkspaceClient()` default
+auth (e.g. `back.core.databricks.get_local_user_email`, `RegistryCfg.from_domain`,
+`DatabricksHelpers._resolve_registry_cfg`) now hits the SDK's slow
+OAuth-refresh retry/backoff instead of failing fast, and because
+`get_local_user_email` is `functools.lru_cache(maxsize=1)`-wrapped, the very
+first test in a session to touch it stalls every later test that needs the
+same cached call for minutes. This is environmental (fixed by
+`databricks auth login --profile fe-vm-bcayla-demos`, which requires
+interactive browser auth) and reproduces on a clean tree — it is not a
+regression from this change. Full-suite run for this session used
+`DATABRICKS_CONFIG_PROFILE=__nonexistent_profile_for_fast_fail__` (env-only,
+no code change) to force those paths to fail fast instead of retrying:
+`uv run --frozen pytest -q -m "not scenario"` → 4753 passed, 276 skipped,
+5 deselected, 1 xfailed in 39.25s, 3 failures — all 3 confirmed to be
+artifacts of that env override (they hang without it, and read
+CLI-profile-derived config the override intentionally blanks), not real
+regressions: `test_health.py::TestCheckDatabricksAuth::test_local_mode_with_cli_profile`,
+`test_graph_engine_config.py::TestSettingsServiceGraphEngineConfig::test_get_graph_engine_config_result{,_empty}`.
+
+Deploy: `make deploy` (target `dev-lakebase-07x`, profile `fe-vm-bcayla-demos`) →
+bundle deployed, both apps started and verified `RUNNING`
+(`ontobricks-07x`, `mcp-ontobricks-07x`); `/healthz` returned 200 on both at
+deploy time and again ~60s later (no post-start crash).
+
+## Add named Neo4j connection profiles
+
+Context: Settings stored a single flat Neo4j Bolt profile, and Domain → KG
+exposed an optional database override via SHOW DATABASES. Admins need
+multiple named connections (URI, database, username, Databricks secret) and
+must bind each Neo4j domain to one of them. Spec:
+`documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md`.
+
+Changes:
+
+1. `src/back/core/graphdb/engine_config.py`
+   Add `list_neo4j_connections` / `resolve_neo4j_connection`; finalize
+   `neo4j.connections[]`; no auto-migration from flat uri/username.
+2. `src/back/core/graphdb/GraphDBFactory.py`
+   Resolve `domain.info.neo4j_connection` to a named profile for Neo4jStore.
+3. `src/back/objects/session/DomainSession.py` / `Domain.py`
+   Persist required `neo4j_connection`; retire domain `neo4j_database` write.
+4. `src/back/objects/domain/SettingsService.py` / `src/api/routers/internal/settings.py`
+   List connections API; save `connections[]` with password strip +
+   referential delete/rename guard; Test/Objects/Health take `connection_name`.
+5. `src/back/objects/registry/store/base.py` / `lakebase/store.py`
+   Include `neo4j_connection` on domain metadata for referential scans.
+6. `src/front/templates/settings.html` / `src/front/static/config/js/settings.js`
+   Master–detail Connections UI (add/edit/delete); Objects/Health use selection.
+7. `src/front/templates/partials/domain/_domain_information.html` /
+   `domain-information.js` / `domain.js`
+   Required Neo4j Connection dropdown lists Settings connection names.
+8. Tests under `tests/units/graphdb/`, `tests/units/settings/`, `tests/units/domain/`
+   Updated for connections[] and neo4j_connection.
+9. `documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md`
+   / `documentation/superpowers/plans/2026-08-07-neo4j-named-connections.md`
+   Design + implementation plan.
+
+Modified files:
+- src/back/core/graphdb/engine_config.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/graphdb/test_neo4j_store.py
+- tests/units/domain/test_domain_session.py
+- tests/units/domain/test_domain_service.py
+- tests/units/settings/test_neo4j_settings_persistence.py
+- tests/units/settings/test_graph_engine_config.py
+- documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md
+- documentation/superpowers/plans/2026-08-07-neo4j-named-connections.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `DATABRICKS_CONFIG_PROFILE=__nonexistent_profile_for_fast_fail__ uv run --frozen pytest -q -m "not scenario"` → 4760 passed, 276 skipped, 5 deselected, 1 xfailed in 34.00s; 1 failure is the known env artifact `test_health.py::TestCheckDatabricksAuth::test_local_mode_with_cli_profile` (CLI profile override), not a regression from this change.
+
+--------------------------------------------------------------------------------
+
+## Fix: Neo4j connection secret scope/key lost on hydration
+
+Context:
+After adding named Neo4j connections, the Secret scope / Secret name dropdowns
+showed empty for saved connections and the persisted values were wiped from
+`graph_engine_config.neo4j.connections[]` on the next save. Two frontend causes,
+both in the master–detail hydration path (backend persistence was correct):
+
+1. `loadNeo4jSecretScopes()` early-returned on a module-level `loaded` flag, so
+   selecting another connection never re-applied that profile's scope, and the
+   key list never cascaded.
+2. `selectNeo4jConnection()` → `fillNeo4jDetailForm()` kicks off an *async*
+   dropdown populate, then synchronously ran `mergeNeo4jPanelIntoConfigTextarea()`.
+   `readNeo4jDetailForm()` read the still-empty `<select>` elements and
+   overwrote the in-memory profile's `secret_scope`/`secret_key` with `''`.
+
+Changes:
+1. `src/front/static/config/js/settings.js`
+   - Replaced the `neo4jSecretScopesLoaded` / `neo4jSecretKeysScope` guards with
+     option-list caches (`_neo4jScopeOptions`, `_neo4jKeyOptionsByScope`); the
+     selects are now always re-populated *and re-selected* from the currently
+     selected connection, while the Secrets API is still hit only once per list.
+   - Added a `_neo4jSecretHydrating` counter; `readNeo4jDetailForm()` falls back
+     to the stored profile's scope/key while a populate is in flight, so a merge
+     can no longer persist an empty secret reference.
+   - `fillNeo4jDetailForm()` re-syncs and re-merges after the dropdowns settle.
+   - Scope change now clears the stored `secret_key` before cascading (the old
+     key does not exist in the new scope); both refresh buttons re-sync the
+     textarea after reloading.
+2. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Regression coverage: scope/key dropdowns re-select per connection, and form
+   reads keep the stored secret while dropdowns hydrate.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_neo4j_settings_persistence.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4764 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 37.50s.
+
+--------------------------------------------------------------------------------
+
+## Improve Neo4j connection selection contrast
+
+Context:
+The selected named Neo4j connection used Bootstrap's strong blue active state,
+which reduced the connection-name readability and did not match the Settings
+sidebar navigation.
+
+Changes:
+1. `src/front/templates/settings.html`
+   Added a scoped class to the Neo4j connection list and moved its minimum
+   height out of inline styling.
+2. `src/front/static/global/css/config.css`
+   Applied the Settings menu's neutral grey hover/selection treatment with dark
+   primary and secondary text.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/global/css/config.css
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4764 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 35.69s.
+
+--------------------------------------------------------------------------------
+
+## Group Neo4j connection actions
+
+Context:
+“Test connection” acts on the selected named connection but was displayed in
+the page-level header, separate from the selected connection’s Delete action.
+
+Changes:
+1. `src/front/templates/settings.html`
+   Moved the small Test connection button beside Delete in the connection
+   detail header, leaving Save as the page-level action.
+2. `src/front/static/config/js/settings.js`
+   Disabled Test connection when no connection is selected and preserved that
+   state after a test request completes.
+3. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Added contracts for action placement and selection-dependent disabling.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_neo4j_settings_persistence.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4766 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 36.08s.
+
+--------------------------------------------------------------------------------
+
+## Objects connection picker; remove Neo4j Health tab
+
+Context:
+Objects still depended on the Connections-tab highlight. Admins need an
+explicit connection dropdown on Objects, and the Health tab is redundant with
+per-connection Test connection.
+
+Changes:
+1. `src/front/templates/settings.html`
+   Added Objects Connection select; removed Health tab/pane.
+2. `src/front/static/config/js/settings.js`
+   Sync/prefill Objects dropdown from Connections selection; Load/Drop use
+   that value; removed Health JS.
+3. `tests/units/settings/test_neo4j_settings_persistence.py`
+   Contracts for Objects dropdown and Health removal.
+4. `documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md`
+   Updated Objects/Health decisions.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_neo4j_settings_persistence.py
+- documentation/superpowers/specs/2026-08-07-neo4j-named-connections-design.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4768 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 39.45s.
+
+--------------------------------------------------------------------------------
+
+## Fix Domain Neo4j connection picker population and save
+
+Context:
+In Domain → Information the Neo4j Connection dropdown stayed empty until the
+user clicked the refresh button, so there was usually nothing to pick and the
+save either sent an empty name (rejected server-side) or appeared to not
+persist. Two causes: `loadNeo4jDatabases()` was only bound to the refresh
+button, and the option list captured the target selection *before* its fetch,
+so a list refresh could overwrite the value hydrated from `/domain/info`.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-information.js`
+   Added `syncNeo4jConnectionSection()` — reveals the selector and populates it
+   from `/settings/graph-engine/neo4j-connections`; wired to page init and to
+   the Graph Backend `change` event. `_loadNeo4jConnectionOptions()` now reads
+   the target selection after the fetch resolves, so a late `/domain/info`
+   hydration is preserved. Added an in-flight guard so a single reveal issues
+   one request; the refresh button forces a reload.
+2. `src/front/static/domain/js/domain.js`
+   Blocks the save with a warning when Graph Backend is Neo4j and no connection
+   is selected, and refreshes `data-saved-value` after a successful save so a
+   later list refresh re-selects the persisted name.
+3. `tests/units/domain/test_domain_neo4j_connection_picker.py`
+   New contracts: auto-population, repopulation on backend change, saved value
+   read after the fetch, request de-duplication, forced refresh, save guard and
+   saved-value baseline update.
+
+Modified files:
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4775 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 35.20s.
+
+--------------------------------------------------------------------------------
+
+## Fix Neo4j connection dropped by the UC-save payload (KG tab)
+
+Context:
+The Knowledge Graph tab's Neo4j Connection still did not stick. Root cause was a
+second, hand-rolled `/domain/info` payload: `saveDomainInfoBeforeSave()` in
+`navbar.js` (the auto-save that runs before every UC save) sent `graph_backend`
+but not `neo4j_connection`. Since `Domain.save_domain_info` falls back to the
+stored value for absent keys, the user's pick was silently discarded — and on a
+domain that had no connection yet the fallback was blank, so the server rejected
+the save. The Information form's Save button routes through `domainSave()`, so it
+hit this path and never reached the guard added to `saveDomainInfo()`.
+
+Changes:
+
+1. `src/front/static/global/js/navbar.js`
+   Extracted `buildDomainInfoPayload()` as the single source of truth for the
+   `/domain/info` payload (now including `neo4j_connection`, cleared when the
+   backend is not Neo4j) and made `saveDomainInfoBeforeSave()` use it. Added
+   `validateDomainInfoForm()` and called it at the top of `domainSave()` so the
+   "pick a connection" guard applies to the UC-save path too.
+2. `src/front/static/domain/js/domain.js`
+   `saveDomainInfo()` now builds its payload with the shared helper and defers to
+   the shared validator, removing the duplicated field list that drifted.
+3. `tests/units/domain/test_domain_neo4j_connection_picker.py`
+   New `TestDomainInfoPayloadSharing`: the shared builder carries
+   `neo4j_connection`, both save paths use it, no second field list remains in
+   the UC-save path, and `domainSave()` validates before posting.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain.js
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4780 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 37.35s.
+
+--------------------------------------------------------------------------------
+
+## Fix Neo4j connection picker race with the page's own info re-fetch
+
+Context:
+The previous fix made the Save payload correct, but the connection still did
+not stick for some users. Isolated the backend save→close→load-from-registry
+round trip with direct API calls (curl, real workspace) and it persisted
+correctly every time — so the loss was purely client-side. Reproduced with a
+browser agent using the full real journey (open existing domain → pick
+connection → Save → Close → reopen from the registry list): `#domainGraphBackend`
+and `#domainNeo4jDatabase` are rendered correctly by the server-side Jinja
+template on page load, but `domain-information.js`'s `DOMContentLoaded` handler
+also re-fetches `/domain/info` inside a `Promise.all` gated behind
+`loadLlmEndpoints()` — a real-workspace model-serving-endpoints call that can
+take several seconds. When that fetch resolved, it unconditionally overwrote
+both fields with the pre-page-load values. A user who picked a new backend or
+connection before the slow fetch resolved had the pick silently reverted with
+no warning; Save then reported success while persisting the stale value.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-information.js`
+   Both fields get a `dataset.userEdited = '1'` flag on their first `change`
+   event, wired up before the slow `Promise.all` starts. The late `/domain/info`
+   handler now skips overwriting a field once that flag is set, so a fresh user
+   edit always wins over the stale re-fetch.
+2. `tests/units/domain/test_domain_neo4j_connection_picker.py`
+   New `TestNeo4jFieldEditRaceGuard`: dirty flags are wired for both fields
+   before the `Promise.all`, and the late-fetch handler's overwrite is guarded
+   by `!<field>.dataset.userEdited` immediately before each assignment.
+
+Modified files:
+- src/front/static/domain/js/domain-information.js
+- tests/units/domain/test_domain_neo4j_connection_picker.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4785 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 38.95s.
+
+Verified in-browser (dedicated subagent, real workspace):
+- Backend round trip (save-to-uc → close → load-from-uc via direct API calls)
+  persisted `neo4j_connection` correctly on every attempt — confirms the loss
+  was purely client-side.
+- Reproduced the exact race with artificial network delay: picking a new
+  Graph Backend / Neo4j Connection immediately after page load survived the
+  later `/domain/info` + LLM-endpoints resolution (dropdowns kept the pick,
+  `dataset.userEdited` was `"1"` on both fields, and the Save payload carried
+  the picked connection, not the stale one). A subsequent fresh reload showed
+  the persisted value with no console errors.
+
+--------------------------------------------------------------------------------
+
+## Split Lakehouse and Databricks icons
+
+Context:
+Lakehouse backend surfaces used the official Databricks logo, while the
+Databricks configuration item used a generic database glyph. The application
+now uses the supplied orange Lakehouse artwork everywhere Lakehouse is shown
+and reserves the official Databricks logo for Databricks settings.
+
+Changes:
+
+1. `src/front/static/global/img/lakehouse-icon.png`
+   Added the supplied local orange Lakehouse asset.
+2. `src/front/static/global/css/components.css`
+   Added the semantic `ob-icon-lakehouse` modifier while retaining the
+   Databricks modifier for the official logo.
+3. `src/front/config/menu_config.json`
+   Split the Lakehouse backend and Databricks configuration icon mappings.
+4. `src/front/templates/settings.html`
+   Aligned the Databricks and Lakehouse section headers with their menu icons.
+5. `src/front/static/query/js/query-sync.js`
+   Mapped Lakehouse backend aliases to the Lakehouse icon.
+6. `src/front/static/domain/js/domain-validation.js`
+   Mapped Domain Validation Lakehouse aliases to the Lakehouse icon.
+7. `src/front/static/registry/js/registry.js`
+   Mapped Registry Lakehouse badges to the Lakehouse icon.
+8. `tests/units/front/test_backend_brand_icons.py`
+   Covered local PNG/SVG assets and the semantic settings and backend mappings.
+9. `tests/units/front/test_registry_backend_column.py`
+   Updated the Registry backend-column contract for the Lakehouse modifier.
+
+Modified files:
+- src/front/static/global/img/lakehouse-icon.png
+- src/front/static/global/css/components.css
+- src/front/config/menu_config.json
+- src/front/templates/settings.html
+- src/front/static/query/js/query-sync.js
+- src/front/static/domain/js/domain-validation.js
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_backend_brand_icons.py
+- tests/units/front/test_registry_backend_column.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_backend_brand_icons.py tests/units/front/test_registry_backend_column.py`
+→ 9 passed, 1 warning in 0.16s.
+`uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 34.03s.
+
+## Fix scenario 3 graph-analysis timeout; add Ontos Integration to the v0.8.0 roadmap
+
+Context:
+Full validation pass: the non-scenario suite was green, but the live scenario
+campaign failed on scenario 3 with `graph analysis did not finish within 300s`.
+Investigation showed the app was healthy: the graph-analysis step delegates to
+the `ontobricks-<instance>-graph-analytics` Lakeflow job, and Databricks run
+591217018872608 finished SUCCESS in 596s (setup 5s, execution 590s) on the
+52k-triple scenario graph. Scenario 3 was the only step budgeting an external
+Databricks job, yet it had the smallest allowance (300s) — smaller than the
+in-process build (420s), reasoning (420s) and rules (600s) steps, and 12x
+smaller than the app's own `analytics_job_timeout_s` (3600s). The test gave up
+while the job was still running normally. Separately, the August roadmap gained
+an Ontos Integration entry under v0.8.0.
+
+Changes:
+
+1. `tests/e2e/scenarios/test_scenario_03_rules_analysis.py`
+   Raised the `ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT` default from 300s to 900s
+   so the poll budget covers Lakeflow cluster start plus Spark centrality
+   compute, with a comment recording the measured ~600s run and the app-side
+   3600s allowance. Updated the module docstring's documented default.
+2. `releases/Roadmap_2026-08.md`
+   Added Ontos Integration to v0.8.0: executive-summary axis (five axes → six),
+   a Known-limitations bullet, new "Pillar 8 — Ontos Integration" (P1), a
+   Feature Matrix row, an updated v0.8.0 section title/theme, and Open Question
+   8 on the sync direction (import / bidirectional / publish-only).
+
+Modified files:
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- releases/Roadmap_2026-08.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests:
+`uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 40.51s (unchanged from the pre-change
+baseline).
+
+Live scenario campaign (`make scenario-campaign`, app started with
+`ONTOBRICKS_NO_RELOAD=1`):
+- scenario 1 (generate + auto-map + build) → PASSED (52 502 triples)
+- scenario 2 (comments, tasks, review, publish, branch V2) → PASSED
+- scenario 3 (SHACL, business rules, DQ, reasoning, analysis) → FAILED at 300s,
+  then PASSED in 14:33 after the fix (DQ 112 checks/102 passed, 1546 inferred
+  triples, analysis + interpretation recorded in the audit trail)
+- `test_scenario_validation` → PASSED — 13 passed, 0 failed, 2 info
+- `test_full_lifecycle` → SKIPPED (needs the int workspace credentials)
+
+--------------------------------------------------------------------------------
+
+## Code review: docs accuracy, find-route dedup, deploy skill, release notes
+
+Context: Full v0.7.0 review pass (rule compliance, duplication, dead code,
+session-data audit, deploy scripts, docs vs Aug 6–7 features). Release notes
+stopped at Aug 5; deploy skill documented non-existent Make targets; Neo4j /
+MCP product docs drifted from named connections and DAB deploy. Applied
+Extract Method for duplicated triples/find seed+BFS logic shared by the public
+API and Graph Chat routes.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Add `build_find_seed_where` + `find_triples_bfs` (shared seed SQL + BFS
+   neighbourhood walk).
+2. `src/api/routers/digitaltwin.py` / `src/api/routers/internal/dtwin.py`
+   Thin routes call `DigitalTwin.find_triples_bfs` (Extract Method / Pull Up).
+3. `.claude/skills/deploy/SKILL.md`
+   Align Make target table with `Makefile` + `documentation/deployment.md`
+   (remove fictional `deploy-all` / `deploy-mcp` / `deploy-prod`).
+4. `documentation/neo4j-requirements.md`
+   Named connections, Databricks-secret auth, Domain binding, Objects picker;
+   Health tab → Test connection.
+5. `documentation/mcp.md` / `documentation/architecture.md`
+   MCP deploy via DAB (`make deploy` + `bundle run`); correct `src/mcp-server`
+   path.
+6. `documentation/features.md`
+   Graph Chat confirmation-gated Actions; named Neo4j connections.
+7. `releases/ReleaseNotes_V0.7.0.md`
+   Aug 6–7 highlights (named Neo4j, Graph Chat MCP alignment, branding),
+   upgrade note for connections[], test count 4787.
+
+Modified files:
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/dtwin.py
+- .claude/skills/deploy/SKILL.md
+- documentation/neo4j-requirements.md
+- documentation/mcp.md
+- documentation/architecture.md
+- documentation/features.md
+- releases/ReleaseNotes_V0.7.0.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 39.64s.
+
+--------------------------------------------------------------------------------
+
+## Apply proposed review fixes: registry JS extraction, guards layering, model rename
+
+Context: Follow-up to the "Code review: docs accuracy, find-route dedup, deploy
+skill, release notes" pass. Applied the remaining proposed items (registry
+inline script, back/objects Request layering, Neo4jGraphModel filename/class
+mismatch) and re-verified the two flagged "possible violations" that turned
+out, on closer reading, to be intentional and already correct:
+`EditLockService`'s `success: False` on store-unavailable is documented
+graceful degradation consumed correctly by `edit-lock.js` (a transient blip is
+retried, not treated as lease-loss) — left unchanged. `src/api/service.py` and
+the `print()` in `jobs/graph_analytics_job.py` were re-confirmed as live code
+(mock-patch seam for API tests; justified driver-log-independent summary line)
+— no dead code removed.
+
+Changes:
+
+1. `src/front/templates/partials/registry/_registry_configuration.html`
+   Extract Method (JS) — moved the ~312-line inline `<script>` out to a new
+   static file; the partial is markup-only.
+2. `src/front/static/config/js/settings-registry-configuration.js`
+   New file — UC access-check + Lakebase permission-check/grant rendering,
+   identical behavior; `window._obRenderRegistryGrants` still exposed for
+   `registry.js`.
+3. `src/front/templates/settings.html`
+   Load the new script alongside the other admin-only Settings tab JS.
+4. `src/front/static/registry/js/registry.js`
+   Fix stale comment pointing at the removed inline script.
+5. `src/api/routers/internal/_guards.py` (new)
+   Move Function — `require()` FastAPI dependency factory relocated out of
+   `back/objects/registry/` (zero-`Request` layer) into the routes layer,
+   alongside sibling `_permissions.py`.
+6. `src/back/objects/registry/guards.py` (deleted)
+   Superseded by `api/routers/internal/_guards.py`.
+7. `src/back/objects/registry/__init__.py`
+   Drop the `require` re-export (no external consumers outside `api/`).
+8. `src/api/routers/internal/dtwin.py` / `src/api/routers/internal/settings.py`
+   Import `require` from the new location.
+9. `tests/units/auth/test_route_guards.py`
+   Updated import + docstring reference.
+10. `src/back/core/graphdb/neo4j/Neo4jGraphModel.py` → `graph_model.py`
+    Rename — snake_case multi-symbol module (3 `NamedTuple`s + functions, no
+    single matching class) per class-first filename rule.
+11. `src/back/core/graphdb/neo4j/Neo4jStore.py` / `Neo4jWriteOps.py` /
+    `Neo4jReadOps.py`
+    Update imports + docstring `:mod:` refs to `graph_model`.
+12. `tests/units/graphdb/test_neo4j_graph_model.py`
+    Update import + docstring reference.
+13. `releases/ReleaseNotes_V0.7.0.md`
+    Fix `Neo4jGraphModel.py` → `back/core/graphdb/neo4j/graph_model.py`.
+
+Modified files:
+- src/front/templates/partials/registry/_registry_configuration.html
+- src/front/static/config/js/settings-registry-configuration.js (new)
+- src/front/templates/settings.html
+- src/front/static/registry/js/registry.js
+- src/api/routers/internal/_guards.py (new)
+- src/back/objects/registry/guards.py (deleted)
+- src/back/objects/registry/__init__.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/settings.py
+- tests/units/auth/test_route_guards.py
+- src/back/core/graphdb/neo4j/graph_model.py (renamed from Neo4jGraphModel.py)
+- src/back/core/graphdb/neo4j/Neo4jStore.py
+- src/back/core/graphdb/neo4j/Neo4jWriteOps.py
+- src/back/core/graphdb/neo4j/Neo4jReadOps.py
+- tests/units/graphdb/test_neo4j_graph_model.py
+- releases/ReleaseNotes_V0.7.0.md
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 38.45s.
+
+## Full verification pass: routine suite + live scenario campaign
+
+Context: User asked to clear local dev caches, then "run all tests & scenarios
+(fix if needed)" as a final verification after the review/refactor pass above.
+No code changes were needed — every suite passed on the first clean run.
+
+Changes: none (verification only).
+
+1. Cleared local Python dev caches (`__pycache__`, `.pytest_cache`,
+   `.ruff_cache`) before re-running, per the prior "clear the cache" request.
+2. Routine suite: `uv run --frozen pytest -q -m "not scenario"` →
+   **4787 passed, 276 skipped, 5 deselected, 1 xfailed, 23 warnings in 35.73s**
+   — confirms the cache clear didn't mask anything and the refactor pass is
+   still green from a fresh interpreter state.
+3. Live scenario campaign (`make scenario-campaign`, `ONTOBRICKS_SCENARIO_LIVE=1`,
+   real warehouse + LLM against a local `--no-reload` app instance):
+   `test_full_lifecycle` **skipped** (needs `fevm-ontobricks-int` workspace —
+   expected/documented), `test_scenario_01_generate_live` **PASSED** (generate →
+   11 classes, Auto-Map → 11 entity + 9 relationship mappings, KG build → 52502
+   triples), `test_scenario_02_collab_lifecycle` **PASSED** (comments, tasks,
+   submit → reopen → resubmit → approve → publish, V1 PUBLISHED, V2 branched),
+   `test_scenario_03_rules_analysis` **PASSED** (98 SHACL shapes, 11 business
+   rules, data-quality run 96/107 passed, reasoning → 2646 inferred triples,
+   graph analysis → 5136 nodes / 4350 edges, interpretation + audit trail),
+   `test_scenario_validation` **PASSED** (13 passed, 0 failed, 2 info in the
+   roll-up report). Overall: **4 passed, 1 skipped, 1 warning in 1571s
+   (26m11s)**. Reports: `artifacts/scenarios/campaign.html` /
+   `campaign_report.md`.
+4. While bringing the app up for the campaign, found the previous dev-server
+   process had drifted into a state where `scripts/stop.sh` killed the tracked
+   pidfile PID but left the actual `run.py`/multiprocessing children holding
+   port 8000 as orphans — force-killed them before restarting. Not a code bug
+   (normal consequence of restarting the dev server across agent sessions);
+   no fix needed. `GET /health` itself is fine — it runs ~15 real
+   Databricks/Lakebase probes serially and legitimately takes ~10-11s end to
+   end, which just needs a longer client timeout than a quick smoke-check
+   `curl -m 5` allows.
+5. Restored the app to normal auto-reload dev mode afterwards (it only needs
+   `--no-reload` for the live campaign itself, per the Makefile's own
+   guidance, to avoid killing in-flight background tasks on a `src/` save).
+
+Modified files:
+- changelogs/v0.7.0/benoitcayladbx_2026-08-07.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4787 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 35.73s. `make scenario-campaign` → 4
+passed, 1 skipped, 1 warning in 1571.06s (26m11s); scenario validation report:
+13 passed, 0 failed, 2 info.

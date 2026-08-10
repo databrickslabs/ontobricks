@@ -161,13 +161,18 @@ class TestSaveDomainInfo:
 
     def test_save_graph_backend(self):
         domain = _mock_domain()
-        result = Domain(domain).save_domain_info({"graph_backend": "neo4j"})
+        result = Domain(domain).save_domain_info(
+            {"graph_backend": "neo4j", "neo4j_connection": "Aura Prod"}
+        )
         assert domain.info["graph_backend"] == "neo4j"
+        assert domain.info["neo4j_connection"] == "Aura Prod"
         assert result["graph_backend"] == "neo4j"
 
     def test_save_graph_backend_normalized(self):
         domain = _mock_domain()
-        Domain(domain).save_domain_info({"graph_backend": "  NEO4J "})
+        Domain(domain).save_domain_info(
+            {"graph_backend": "  NEO4J ", "neo4j_connection": "Aura Prod"}
+        )
         assert domain.info["graph_backend"] == "neo4j"
 
     def test_review_quorum_clamped_to_minimum_one(self):

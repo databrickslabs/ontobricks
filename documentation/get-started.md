@@ -17,7 +17,10 @@ Before you begin, ensure you have:
 - **Unity Catalog Volume** — reserved for binary artefacts (`documents/`
   uploads — domain-scoped attachments imported by the ontology designer).
   The same catalog/schema that hosts the volume is also used by
-  OntoBricks for the Delta triplestore VIEWs (`triplestore_<domain>_v<n>`).
+  OntoBricks for the Delta triple-store family
+  (`triplestore_<domain>_V<n>` VIEW plus `_data` / `_inferred` tables and
+  the `_graph` union VIEW — see
+  [Architecture → Lakehouse Unity Catalog objects](architecture.md#lakehouse-unity-catalog-objects)).
 - **`psql`** (libpq client) on `PATH` for the Lakebase permission
   bootstrap scripts. On macOS: `brew install libpq && brew link --force libpq`.
 

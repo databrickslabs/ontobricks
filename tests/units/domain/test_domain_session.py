@@ -394,24 +394,25 @@ class TestExportImport:
         assert loaded["actions"] == actions
         assert loaded["bridges"][0]["label"] == "Owns"
 
-    def test_export_includes_neo4j_database(self, domain_session):
-        """Per-domain Neo4j database must survive UC export alongside graph_backend."""
+    def test_export_includes_neo4j_connection(self, domain_session):
+        """Per-domain Neo4j connection name must survive UC export."""
         domain_session.info["graph_backend"] = "neo4j"
-        domain_session.info["neo4j_database"] = "insurbricks"
+        domain_session.info["neo4j_connection"] = "Aura Prod"
         export = domain_session.export_for_save()
-        assert export["info"]["neo4j_database"] == "insurbricks"
+        assert export["info"]["neo4j_connection"] == "Aura Prod"
+        assert "neo4j_database" not in export["info"]
 
-    def test_neo4j_database_round_trip(self, domain_session):
+    def test_neo4j_connection_round_trip(self, domain_session):
         domain_session.info["name"] = "RoundTrip"
         domain_session.info["graph_backend"] = "neo4j"
-        domain_session.info["neo4j_database"] = "insurbricks"
+        domain_session.info["neo4j_connection"] = "Aura Prod"
         export = domain_session.export_for_save()
         domain_session.reset()
         domain_session.import_from_file(export)
-        assert domain_session.info["neo4j_database"] == "insurbricks"
+        assert domain_session.info["neo4j_connection"] == "Aura Prod"
 
-    def test_neo4j_database_defaults_empty_on_import(self, domain_session):
-        """A legacy export without neo4j_database imports as empty (no crash)."""
+    def test_neo4j_connection_defaults_empty_on_import(self, domain_session):
+        """A legacy export without neo4j_connection imports as empty (no crash)."""
         domain_data = {
             "info": {"name": "Legacy", "graph_backend": "neo4j"},
             "versions": {
@@ -427,8 +428,10 @@ class TestExportImport:
             },
         }
         domain_session.import_from_file(domain_data)
-        assert domain_session.info["neo4j_database"] == ""
-
+        assert domain_session.info.get("neo4j_connection", "") == ""
+        assert "neo4j_database" not in domain_session.info or not domain_session.info.get(
+            "neo4j_database"
+        )
     def test_import_from_file(self, domain_session):
         domain_data = {
             "info": {"name": "Imported", "description": "Test import"},

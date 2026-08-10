@@ -61,8 +61,35 @@ get_graphdb(domain, settings)          # engine=None → auto-resolve
 | `src/back/core/graphdb/GraphDBFactory.py` | Factory — engine resolution + maps engine names to constructor methods. |
 | `src/back/core/graphdb/constants.py` | Shared RDF constants (`RDF_TYPE`, `RDFS_LABEL`). |
 | `src/back/core/graphdb/delta/DeltaFlatStore.py` | Unity Catalog Delta engine (also the raw `view` store). |
+| `src/back/core/graphdb/delta/_table_naming.py` | FQN helpers for the R2RML VIEW, `_data`, `_inferred`, `_graph`. |
+| `src/back/core/graphdb/delta/materialize.py` | CTAS / companion / union-VIEW SQL used by Build. |
 | `src/back/core/graphdb/__init__.py` | Package exports (`get_graphdb`, `GRAPHDB_AVAILABLE`). |
 | `src/back/objects/session/GlobalConfigService.py` | Persists the engine *connection* config (`graph_engine_config`) in `.global_config.json`. The backend *selection* lives per-domain in `DomainSession.info['graph_backend']`. |
+
+### Lakehouse (Delta) Unity Catalog objects
+
+Regardless of which Graph DB engine the domain uses, **Knowledge Graph → Build** always materialises a small family of Unity Catalog objects in the registry `catalog.schema`. They share the base name `triplestore_<safe_domain>_V<version>`:
+
+| Suffix / name | Kind | Created by | Consumed by |
+|---------------|------|------------|-------------|
+| *(no suffix)* `triplestore_<domain>_V<n>` | VIEW | Build — `CREATE OR REPLACE VIEW` from the R2RML SQL | Source for the `_data` CTAS; governance / lineage of the mapping |
+| `_data` | Delta TABLE | Build — `CREATE OR REPLACE TABLE … AS SELECT … FROM <view>`, `CLUSTER BY (predicate, subject)` | Graph Analytics (Lakeflow job); bulk half of `_graph`; Lakehouse engine reads |
+| `_inferred` | Delta TABLE | Build — `CREATE TABLE IF NOT EXISTS` (same SPO shape); truncated on full rebuild | Reasoning / cohort / app writes |
+| `_graph` | VIEW | Build — `_data UNION ALL _inferred` | Explorer, filters, stats, GraphQL when inferred triples are included |
+
+```text
+source tables
+    → R2RML VIEW          (live mapping)
+    → _data TABLE         (mapped snapshot)
+         ↘
+           _graph VIEW    (interactive graph reads)
+         ↗
+      _inferred TABLE     (app-written triples)
+```
+
+The mapped snapshot (`_data`) is what makes KPIs identical across backends: Lakebase and Neo4j mirror those triples into their own stores, but analytics always scores `_data`, never the engine-local copy and never `_inferred`. If `_data` is missing (typical for domains last built before the materialise step was unconditional), analytics refuses the run and tells the user to rebuild — it must not be reported as a warehouse connectivity failure.
+
+Canonical prose also lives in [`architecture.md` § Lakehouse Unity Catalog objects](architecture.md#lakehouse-unity-catalog-objects).
 
 ---
 

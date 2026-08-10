@@ -209,31 +209,29 @@
                             </div>
                         </div>
 
-                        <!-- Neo4j database selector (shown only when backend = neo4j) -->
+                        <!-- Neo4j connection selector (shown only when backend = neo4j) -->
                         <div class="mb-4 {% if domain.graph_backend != 'neo4j' %}d-none{% endif %}" id="neo4jDatabaseSection">
                             <label for="domainNeo4jDatabase" class="form-label fw-semibold">
-                                <i class="bi bi-database me-1"></i> Neo4j Database
-                                <span class="badge bg-secondary-subtle text-secondary-emphasis border ms-1" style="font-weight:500;">Optional override</span>
+                                <i class="bi bi-database me-1"></i> Neo4j Connection <span class="text-danger">*</span>
                             </label>
                             <div class="input-group">
                                 <select class="form-select domain-editable" id="domainNeo4jDatabase"
-                                        data-saved-value="{{ domain.neo4j_database or '' }}">
-                                    {% if domain.neo4j_database %}
-                                    <option value="{{ domain.neo4j_database }}" selected>{{ domain.neo4j_database }}</option>
+                                        data-saved-value="{{ domain.neo4j_connection or '' }}" required>
+                                    {% if domain.neo4j_connection %}
+                                    <option value="{{ domain.neo4j_connection }}" selected>{{ domain.neo4j_connection }}</option>
                                     {% else %}
-                                    <option value="" selected>— use global default (Settings → Neo4j) —</option>
+                                    <option value="" selected disabled>— Select a Neo4j connection —</option>
                                     {% endif %}
                                 </select>
                                 <button class="btn btn-outline-secondary" type="button" id="btnRefreshNeo4jDatabases"
-                                        title="List databases on the Neo4j server">
+                                        title="Refresh Settings → Neo4j connections">
                                     <i class="bi bi-arrow-clockwise"></i>
                                 </button>
                             </div>
                             <small class="text-muted">
-                                <i class="bi bi-info-circle me-1"></i>The Neo4j <strong>connection and default database</strong>
-                                are configured globally in <a href="/settings?section=neo4j">Settings → Neo4j</a>. Leave this blank to
-                                use that default. Set it only to route <em>this</em> domain's graph to a different database
-                                (requires a multi-database Neo4j flavor — Enterprise or Aura; Community has a single database).
+                                <i class="bi bi-info-circle me-1"></i>Named connections are managed in
+                                <a href="/settings?section=neo4j">Settings → Neo4j</a>. Each connection
+                                includes URI, database, username, and Databricks secret.
                             </small>
                             <div id="neo4jDatabaseHelp" class="small mt-1"></div>
                         </div>

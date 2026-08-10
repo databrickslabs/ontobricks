@@ -51,7 +51,7 @@ Override the target / timeouts via env:
     ONTOBRICKS_SCENARIO_RULES_TIMEOUT     max seconds for business-rule generation (default 600)
     ONTOBRICKS_SCENARIO_DQ_TIMEOUT        max seconds for the data-quality run (default 300)
     ONTOBRICKS_SCENARIO_REASONING_TIMEOUT max seconds for the reasoning run (default 420)
-    ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT  max seconds for compute+interpret (default 300)
+    ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT  max seconds for compute+interpret (default 900)
 """
 
 from __future__ import annotations
@@ -86,7 +86,12 @@ _BUILD_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_BUILD_TIMEOUT", "420"
 _RULES_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_RULES_TIMEOUT", "600"))
 _DQ_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_DQ_TIMEOUT", "300"))
 _REASONING_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_REASONING_TIMEOUT", "420"))
-_ANALYSIS_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT", "300"))
+# Graph analysis is the only step that delegates to a Databricks Lakeflow job
+# (`ontobricks-<instance>-graph-analytics`), so its budget must cover cluster
+# start plus Spark centrality compute — measured ~600s on the 52k-triple
+# scenario graph. The app itself allows the run `analytics_job_timeout_s`
+# (3600s default), so a short test budget fails while the job is still healthy.
+_ANALYSIS_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_ANALYSIS_TIMEOUT", "900"))
 _ANALYSIS_TIMEOUT_MS = _ANALYSIS_TIMEOUT_S * 1000
 
 
@@ -162,10 +167,27 @@ class TestScenario3RulesAnalysis:
             assert resp.status == 200, resp.text()
             assert _json(resp).get("success") is True, resp.text()
 
-        def _graph_built() -> bool:
-            """True when the loaded version's graph table currently holds data."""
+        def _engine_graph_built() -> bool:
+            """True when the loaded version's graph engine currently holds data."""
             status = _json(page.request.get(f"{base}/dtwin/sync/status"))
             return bool(status.get("has_data")) and int(status.get("count", 0) or 0) > 0
+
+        def _analytics_snapshot_built() -> bool:
+            """True when the Unity Catalog ``…_data`` snapshot holds triples.
+
+            The analysis step reads that snapshot rather than the graph engine,
+            and only Build materialises it. The domain is durable, so an engine
+            graph surviving from an earlier campaign run would otherwise pass
+            for "built" on a version whose snapshot was never created — and the
+            scenario would skip the Build that creates it, then fail minutes
+            later at ``/dtwin/metrics/compute``.
+            """
+            info = _json(page.request.get(f"{base}/dtwin/databricks-build/info"))
+            return bool((info.get("triplestore_status") or {}).get("has_data"))
+
+        def _graph_built() -> bool:
+            """True when both stores this scenario reads are populated."""
+            return _engine_graph_built() and _analytics_snapshot_built()
 
         def _version_status(version: str) -> str:
             detail = _json(page.request.get(f"{base}/review/{_DOMAIN_NAME}/{version}"))
@@ -207,9 +229,11 @@ class TestScenario3RulesAnalysis:
 
         # Reuse the graph if this DRAFT was already built on a previous run;
         # otherwise build it (a freshly branched version has no graph yet).
+        # "Built" means both stores: the engine graph the quality and reasoning
+        # steps read, and the UC snapshot the analysis step reads.
         build_required = not _graph_built()
         if build_required:
-            _step(f"selected DRAFT V{work_version}: no graph yet — will build it (slow)")
+            _step(f"selected DRAFT V{work_version}: not fully built — will build it (slow)")
         else:
             _step(f"selected DRAFT V{work_version}: already built — reusing its graph")
         _step(f"working version: V{work_version}")
@@ -246,7 +270,10 @@ class TestScenario3RulesAnalysis:
             _step(f"KG build completed: {build_task.get('message', 'done')}")
 
         assert _graph_built(), (
-            f"V{work_version} has no knowledge-graph data to analyse — build it first."
+            f"V{work_version} has no knowledge-graph data to analyse — build it "
+            f"first (engine graph: "
+            f"{'ok' if _engine_graph_built() else 'missing'}, analytics snapshot: "
+            f"{'ok' if _analytics_snapshot_built() else 'missing'})."
         )
         _step(f"knowledge graph ready for V{work_version}")
 

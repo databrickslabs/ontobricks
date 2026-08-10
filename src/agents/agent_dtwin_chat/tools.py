@@ -14,11 +14,21 @@ session and have never been published to the registry (the public
 404 with ``not_found: No versions found for domain "<name>"``).
 
 Tools:
-    * ``list_entity_types``   -- GET  /dtwin/sync/stats
-    * ``describe_entity``     -- GET  /dtwin/triples/find
-    * ``get_status``          -- GET  /dtwin/sync/status
-    * ``get_graphql_schema``  -- GET  /dtwin/graphql/schema
-    * ``query_graphql``       -- POST /dtwin/graphql/execute
+    * ``list_entity_types``     -- GET  /dtwin/sync/stats
+    * ``describe_entity``       -- GET  /dtwin/triples/find
+    * ``get_status``            -- GET  /dtwin/sync/status
+    * ``get_graphql_schema``    -- GET  /dtwin/graphql/schema
+    * ``query_graphql``         -- POST /dtwin/graphql/execute
+    * ``get_entity_context``    -- GET  /dtwin/nodes/context
+    * ``request_entity_action`` -- POST /dtwin/nodes/action/request
+
+``list_entity_types`` and ``describe_entity`` are enriched with per-class
+Actions metadata (linked dataset, invocable Unity Catalog functions) fetched
+once per session from GET /dtwin/classes and cached on
+``ToolContext.dtwin_class_actions``. ``request_entity_action`` only mints a
+*pending* action (stored on ``ToolContext.pending_action``); the UI renders
+a confirmation card and a separate ``/dtwin/nodes/action/confirm`` call
+(outside the LLM tool loop) actually invokes the Unity Catalog function.
 
 Note: ``run_sparql`` (POST /dtwin/execute) is implemented but excluded from
 the active tool set — it queries the warehouse Delta view and cannot see
@@ -39,6 +49,7 @@ from agents.tools.loopback_http import loopback_client, loopback_registry_params
 from agents.tools.graph_formatting import (
     format_find_response,
     format_graphql_response,
+    format_node_context_response,
     format_sparql_rows,
     local_name,
     pretty_predicate,
@@ -53,6 +64,11 @@ _MAX_DEPTH = 1
 _SPARQL_DANGEROUS = re.compile(
     r"\b(DROP|DELETE|INSERT|CREATE|CLEAR|LOAD|COPY|MOVE|ADD)\b",
     re.IGNORECASE,
+)
+
+_ACTION_HINT = (
+    "call request_entity_action(entity_uri, action) to propose one "
+    "(UI confirmation required)"
 )
 
 
@@ -124,6 +140,39 @@ def _get_ontology_labels(ctx: ToolContext) -> dict:
     return ctx.dtwin_ontology_labels
 
 
+def _get_class_actions(ctx: ToolContext) -> dict:
+    """Return (and lazily populate) the class URI→Actions-metadata map on the context.
+
+    Actions metadata (linked dataset, cross-domain bridges, invocable Unity
+    Catalog functions) is authored per ontology class and used to enrich
+    ``list_entity_types`` / ``describe_entity`` output and to power
+    ``get_entity_context`` / ``request_entity_action``.
+    """
+    if ctx.dtwin_class_actions:
+        return ctx.dtwin_class_actions
+    try:
+        with _client(ctx) as c:
+            resp = c.get("/dtwin/classes")
+            if resp.status_code != 200:
+                return {}
+            data = resp.json()
+        out = {}
+        for item in data.get("classes") or []:
+            uri = item.get("uri") or ""
+            if not uri:
+                continue
+            out[uri] = {
+                "name": item.get("name", ""),
+                "dataset": item.get("dataset"),
+                "bridges": item.get("bridges") or [],
+                "actions": item.get("actions") or [],
+            }
+        ctx.dtwin_class_actions = out
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not load class actions: %s", exc)
+    return ctx.dtwin_class_actions
+
+
 # =====================================================
 # Tool handlers
 # =====================================================
@@ -166,6 +215,7 @@ def tool_list_entity_types(ctx: ToolContext, **_kwargs) -> str:
     lines.append("")
 
     onto_labels = _get_ontology_labels(ctx)
+    class_actions = _get_class_actions(ctx)
 
     entity_types = data.get("entity_types", [])
     if entity_types:
@@ -178,6 +228,17 @@ def tool_list_entity_types(ctx: ToolContext, **_kwargs) -> str:
             name = onto_labels.get(uri) or onto_labels.get(key) or local_name(uri)
             lines.append(f"  - {name}  ({count:,} instances)")
             lines.append(f"    URI: {uri}")
+            actions = class_actions.get(uri) or {}
+            dataset = actions.get("dataset") or {}
+            if dataset.get("fullName"):
+                lines.append(f"    Dataset: {dataset['fullName']}")
+                desc = (dataset.get("description") or "").strip()
+                if desc:
+                    lines.append(f"    Description: {desc}")
+            for fn_action in actions.get("actions") or []:
+                fn_desc = (fn_action.get("description") or "").strip()
+                suffix = f" — {fn_desc}" if fn_desc else ""
+                lines.append(f"    Action: {fn_action.get('fullName', '')}{suffix}")
         lines.append("")
 
     top_predicates = data.get("top_predicates", [])
@@ -229,7 +290,12 @@ def tool_describe_entity(
     except Exception as exc:
         return _error(f"triples/find error: {exc}")
 
-    return format_find_response(data, ontology_labels=_get_ontology_labels(ctx))
+    return format_find_response(
+        data,
+        ontology_labels=_get_ontology_labels(ctx),
+        class_actions=_get_class_actions(ctx),
+        action_invoke_hint=_ACTION_HINT,
+    )
 
 
 def tool_get_status(ctx: ToolContext, **_kwargs) -> str:
@@ -337,6 +403,86 @@ def tool_query_graphql(
         return _error(f"GraphQL query error: {exc}")
 
     return format_graphql_response(data, domain)
+
+
+def tool_get_entity_context(
+    ctx: ToolContext,
+    *,
+    entity_uri: str,
+    fetch_dataset_rows: bool = False,
+    dataset_row_limit: int = 5,
+    follow_bridges: bool = False,
+    **_kwargs,
+) -> str:
+    """Return linked dataset rows and/or cross-domain bridge entities for a node."""
+    if not entity_uri:
+        return _error("Missing required 'entity_uri' argument.")
+
+    params: dict = {
+        "entity_uri": entity_uri,
+        "fetch_dataset_rows": str(bool(fetch_dataset_rows)).lower(),
+        "dataset_row_limit": min(max(int(dataset_row_limit or 5), 1), 20),
+        "follow_bridges": str(bool(follow_bridges)).lower(),
+    }
+
+    try:
+        with _client(ctx) as c:
+            resp = c.get("/dtwin/nodes/context", params=params)
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as exc:
+        return _error(
+            f"node context request failed ({exc.response.status_code}): "
+            f"{exc.response.text[:300]}"
+        )
+    except Exception as exc:
+        return _error(f"node context request error: {exc}")
+
+    return format_node_context_response(data, action_invoke_hint=_ACTION_HINT)
+
+
+def tool_request_entity_action(
+    ctx: ToolContext,
+    *,
+    entity_uri: str,
+    action: str,
+    **_kwargs,
+) -> str:
+    """Mint a one-time pending-action token for a UC function on an entity.
+
+    Does *not* invoke the function — the UI renders a confirmation card from
+    ``ctx.pending_action`` and a separate, out-of-band call confirms it.
+    """
+    if not entity_uri or not action:
+        return _error("Missing required 'entity_uri' and/or 'action' argument.")
+
+    body = {"entity_uri": entity_uri, "action_full_name": action}
+
+    try:
+        with _client(ctx) as c:
+            resp = c.post("/dtwin/nodes/action/request", json=body)
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as exc:
+        return _error(
+            f"action request failed ({exc.response.status_code}): "
+            f"{exc.response.text[:300]}"
+        )
+    except Exception as exc:
+        return _error(f"action request error: {exc}")
+
+    if not data.get("success"):
+        return data.get("message") or "Could not request this action."
+
+    pending = data.get("pending_action") or {}
+    ctx.pending_action = pending
+    entity_label = pending.get("entity_label", "")
+    action_name = pending.get("action", action)
+    return (
+        f"Action proposed: {action_name} on {entity_label}. "
+        f"A confirmation card will appear in the UI — the user must confirm "
+        f"before the function runs."
+    )
 
 
 def tool_run_sparql(
@@ -493,12 +639,78 @@ _QUERY_GRAPHQL_DEF = {
     },
 }
 
+_GET_ENTITY_CONTEXT_DEF = {
+    "type": "function",
+    "function": {
+        "name": "get_entity_context",
+        "description": (
+            "Return complete context for an entity node: linked dataset rows "
+            "and/or cross-domain bridge entities. The class must have "
+            "dataset / bridges configured in the ontology. Use the entity "
+            "URI from describe_entity output."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "entity_uri": {
+                    "type": "string",
+                    "description": "Full URI of the entity (e.g. from describe_entity).",
+                },
+                "fetch_dataset_rows": {
+                    "type": "boolean",
+                    "description": "If true, query the linked UC table/view for rows.",
+                },
+                "dataset_row_limit": {
+                    "type": "integer",
+                    "description": "Max rows to return (1-20, default 5).",
+                },
+                "follow_bridges": {
+                    "type": "boolean",
+                    "description": "If true, load entities from bridge target domains.",
+                },
+            },
+            "required": ["entity_uri"],
+        },
+    },
+}
+
+_REQUEST_ENTITY_ACTION_DEF = {
+    "type": "function",
+    "function": {
+        "name": "request_entity_action",
+        "description": (
+            "Propose running a Unity Catalog function action configured on "
+            "an entity's class. This only validates the entity/action and "
+            "stages a confirmation card in the UI — it never invokes the "
+            "function directly. The user must confirm before it runs. "
+            "Discover available actions with describe_entity or "
+            "get_entity_context."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "entity_uri": {
+                    "type": "string",
+                    "description": "Full URI of the entity (e.g. from describe_entity).",
+                },
+                "action": {
+                    "type": "string",
+                    "description": "Fully qualified function name (catalog.schema.function).",
+                },
+            },
+            "required": ["entity_uri", "action"],
+        },
+    },
+}
+
 TOOL_DEFINITIONS: List[dict] = [
     _LIST_ENTITY_TYPES_DEF,
     _DESCRIBE_ENTITY_DEF,
     _GET_STATUS_DEF,
     _GET_GRAPHQL_SCHEMA_DEF,
     _QUERY_GRAPHQL_DEF,
+    _GET_ENTITY_CONTEXT_DEF,
+    _REQUEST_ENTITY_ACTION_DEF,
 ]
 
 TOOL_HANDLERS: Dict[str, Callable] = {
@@ -507,4 +719,6 @@ TOOL_HANDLERS: Dict[str, Callable] = {
     "get_status": tool_get_status,
     "get_graphql_schema": tool_get_graphql_schema,
     "query_graphql": tool_query_graphql,
+    "get_entity_context": tool_get_entity_context,
+    "request_entity_action": tool_request_entity_action,
 }

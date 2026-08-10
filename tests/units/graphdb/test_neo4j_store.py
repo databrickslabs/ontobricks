@@ -50,6 +50,27 @@ def _basic_config(**overrides: Any) -> Dict[str, Any]:
     return cfg
 
 
+def _connections_config(
+    name: str = "Aura Prod", **profile_overrides: Any
+) -> Dict[str, Any]:
+    profile = _basic_config(**profile_overrides)
+    profile["name"] = name
+    return {"connections": [profile]}
+
+
+def _secret_config(**overrides: Any) -> Dict[str, Any]:
+    cfg = {
+        "uri": "neo4j+s://b4810af7.databases.neo4j.io",
+        "database": "neo4j",
+        "auth_method": "databricks_secret",
+        "username": "neo4j",
+        "secret_scope": "ontobricks-secrets",
+        "secret_key": "neo4j-password",
+    }
+    cfg.update(overrides)
+    return cfg
+
+
 def _store(**overrides: Any):
     """Construct a Neo4jStore with the underlying connection's `run` mocked.
 
@@ -267,10 +288,13 @@ class TestFactoryDispatch:
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom"}
+        domain.info = {"name": "dom", "neo4j_connection": "Aura Prod"}
         domain.current_version = "1"
         store = factory.create(
-            domain, settings=None, engine="neo4j", engine_config=_basic_config()
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(),
         )
         assert store is not None
         assert store.__class__.__name__ == "Neo4jStore"
@@ -281,12 +305,13 @@ class TestFactoryDispatch:
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom"}
+        domain.info = {"name": "dom", "neo4j_connection": "Aura Prod"}
         domain.current_version = "1"
-        bad_cfg = _basic_config()
-        bad_cfg["uri"] = ""
         store = factory.create(
-            domain, settings=None, engine="neo4j", engine_config=bad_cfg
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(uri=""),
         )
         assert store is None  # ValueError caught, logged, returns None
 
@@ -295,34 +320,51 @@ class TestFactoryDispatch:
 
         assert GraphDBFactory.NEO4J_AVAILABLE is True
 
-    def test_domain_neo4j_database_overrides_config(self):
-        # Per-domain info.neo4j_database wins over the global config database (P4).
+    def test_factory_uses_named_connection_database(self):
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom", "neo4j_database": "insurbricks"}
+        domain.info = {"name": "dom", "neo4j_connection": "Lab"}
         domain.current_version = "1"
         store = factory.create(
-            domain, settings=None, engine="neo4j",
-            engine_config=_basic_config(database="neo4j"),
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(name="Lab", database="insurbricks"),
         )
         assert store is not None
         assert store._database == "insurbricks"
 
-    def test_empty_domain_database_keeps_configured_default(self):
+    def test_factory_returns_none_without_connection_name(self):
         from back.core.graphdb.GraphDBFactory import GraphDBFactory
 
         factory = GraphDBFactory()
         domain = MagicMock()
-        domain.info = {"name": "dom", "neo4j_database": ""}
+        domain.info = {"name": "dom", "neo4j_connection": ""}
         domain.current_version = "1"
         store = factory.create(
-            domain, settings=None, engine="neo4j",
-            engine_config=_basic_config(database="neo4j"),
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(),
         )
-        assert store is not None
-        assert store._database == "neo4j"
+        assert store is None
+
+    def test_factory_returns_none_when_connection_missing(self):
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+        factory = GraphDBFactory()
+        domain = MagicMock()
+        domain.info = {"name": "dom", "neo4j_connection": "Ghost"}
+        domain.current_version = "1"
+        store = factory.create(
+            domain,
+            settings=None,
+            engine="neo4j",
+            engine_config=_connections_config(name="Aura Prod"),
+        )
+        assert store is None
 
 
 # ---------------------------------------------------------------------------
@@ -411,6 +453,75 @@ class TestPasswordSourcing:
 
         monkeypatch.setenv("NEO4J_PASSWORD", "from-secret")
         s = _store(username="")
+        with pytest.raises(ValidationError, match="username"):
+            s._resolve_auth()
+
+
+# ---------------------------------------------------------------------------
+#  Password sourcing — Databricks secret (scope/key resolved live via the
+#  Secrets API), the default and only method the Settings UI offers.
+# ---------------------------------------------------------------------------
+
+class TestDatabricksSecretAuth:
+    def setup_method(self, _method):
+        from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
+
+        # The value cache is class-level (shared across Neo4jConnection
+        # instances) — clear it so tests don't leak cached secrets.
+        Neo4jConnection._secret_value_cache.clear()
+
+    def _secret_store(self, **overrides: Any):
+        from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+
+        return Neo4jStore(db_name="testset", engine_config=_secret_config(**overrides))
+
+    def test_resolve_auth_fetches_from_secrets_api(self):
+        with patch("back.core.databricks.DatabricksAuth.DatabricksAuth") as MockAuth, \
+             patch(
+                 "back.core.databricks.SecretsService.SecretsService.get_secret_value",
+                 return_value="s3cr3t",
+             ) as mock_get:
+            MockAuth.return_value.host = "https://example.databricks.com"
+            s = self._secret_store()
+            user, pwd = s._resolve_auth()
+
+        assert user == "neo4j"
+        assert pwd == "s3cr3t"
+        mock_get.assert_called_once_with("ontobricks-secrets", "neo4j-password")
+
+    def test_resolve_auth_caches_secret_value(self):
+        with patch("back.core.databricks.DatabricksAuth.DatabricksAuth") as MockAuth, \
+             patch(
+                 "back.core.databricks.SecretsService.SecretsService.get_secret_value",
+                 return_value="s3cr3t",
+             ) as mock_get:
+            MockAuth.return_value.host = "https://example.databricks.com"
+            s = self._secret_store()
+            s._resolve_auth()
+            s._resolve_auth()
+
+        # Second call is served from the in-process TTL cache — no second
+        # Secrets API round trip.
+        mock_get.assert_called_once_with("ontobricks-secrets", "neo4j-password")
+
+    def test_resolve_auth_raises_when_scope_missing(self):
+        from back.core.errors import ValidationError
+
+        s = self._secret_store(secret_scope="")
+        with pytest.raises(ValidationError, match="secret_scope"):
+            s._resolve_auth()
+
+    def test_resolve_auth_raises_when_key_missing(self):
+        from back.core.errors import ValidationError
+
+        s = self._secret_store(secret_key="")
+        with pytest.raises(ValidationError, match="secret_key"):
+            s._resolve_auth()
+
+    def test_resolve_auth_raises_when_username_missing(self):
+        from back.core.errors import ValidationError
+
+        s = self._secret_store(username="")
         with pytest.raises(ValidationError, match="username"):
             s._resolve_auth()
 

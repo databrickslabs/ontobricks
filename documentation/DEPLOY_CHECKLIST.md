@@ -83,8 +83,9 @@ make bootstrap-lakebase
 | **psql on PATH** | Connects with a minted Lakebase JWT |
 | **CLI authenticated as schema owner** (or GRANT OPTION) | Applies GRANTs + idempotent DDL migrations |
 | **Active Postgres endpoint** | Project/branch must expose a host via `/api/2.0/postgres/.../endpoints` |
-| **Registry schema exists** | After **Settings → Registry → Initialize** — CAN_USE is granted even before init, but schema GRANTs need the schema |
+| **Registry schema exists** | After **Settings → Registry → Initialize** — CAN_USE + `pgcrypto` are applied even before init, but schema GRANTs need the schema |
 | **Apps deployed** | Service principal ids are resolved from existing apps (warn-only on first deploy) |
+| **`pgcrypto` in `public`** | Companion `__app` tables need `digest(..., 'sha256')`. Step 1b installs it **in `public`** and relocates a stranded copy — an extension sitting in a graph schema is invisible once that schema changes. Applies **per database**, so the graph DB needs it too |
 
 Preflight (read-only):
 
@@ -94,35 +95,63 @@ scripts/_internal/check-deploy-prerequisites.sh --lakebase
 
 ---
 
-## 5. Registry DB upgrades (0.4 → 0.5 → 0.6)
+## 5. In-place app upgrade (0.6.x → 0.7.0)
 
-For **in-place upgrades** of an existing Lakebase registry, schema DDL must be applied **as the schema owner**. OntoBricks applies the same objects in three ways (pick one):
+v0.7.0 derives app name + DAB target from `DEFAULT_INSTANCE_ID`
+(`ontobricks-<id>`, `dev-lakebase-<id>`). Changing the app name under the **same**
+Terraform state is a destroy-then-create (Databricks app names are immutable).
+Deploy preflight blocks that unless you confirm.
 
-1. **`make bootstrap-lakebase`** / `scripts/bootstrap/lakebase-perms.sh` (recommended — idempotent Step 2b)
+| Goal | What to set | Result |
+|------|-------------|--------|
+| **Refresh the live 0.6.x app** | `DEFAULT_INSTANCE_ID=<suffix of live app>` (e.g. `060` for `ontobricks-060`) **and** `DAB_TARGET=dev-lakebase` (or `DEFAULT_DAB_TARGET="dev-lakebase"` in `deploy.config.sh`) | Same app URL; existing unsuffixed state updated |
+| **New parallel instance** | New `DEFAULT_INSTANCE_ID` only (default `07x`) | New app + new `dev-lakebase-<id>` state; old app left running |
+| **Rename under same target** | Different app name, same `DAB_TARGET` | **Destroys** the old app — confirm via preflight / `ALLOW_APP_RENAME=1` |
+
+In-place example:
+
+```bash
+DEFAULT_INSTANCE_ID=060 DAB_TARGET=dev-lakebase make deploy
+```
+
+Keep Lakebase / UC variables pointed at the same registry. Then apply registry
+DDL (§6) if you have not already via `make bootstrap-lakebase`.
+
+Full narrative: `releases/ReleaseNotes_V0.7.0.md` → Upgrade Notes → *Keep the
+existing Databricks app*.
+
+---
+
+## 6. Registry DB upgrades (0.4 → 0.5 → 0.6 → 0.7)
+
+For **in-place upgrades** of an existing Lakebase registry, schema DDL must be applied **as the schema owner**. OntoBricks applies the same objects in four ways (pick one):
+
+1. **`make bootstrap-lakebase`** / `scripts/bootstrap/lakebase-perms.sh` (recommended — idempotent Step 2b; runs automatically from `make deploy`)
 2. **`scripts/migrations/upgrade_0.4_to_0.5.sql`** — adds `domain_versions.status` + backfill from `mcp_enabled`
 3. **`scripts/migrations/upgrade_0.5_to_0.6.sql`** — collaborative tables, graph analytics, edit locks, change events
+4. **`scripts/migrations/upgrade_0.6_to_0.7.sql`** — generic scheduled-task columns on `schedules` / `schedule_runs` + unique-constraint swap
 
 Preflight reports **pending** or **stale** migration objects before deploy:
 
 ```bash
-python3 scripts/_lakebase_preflight.py \
+python3 scripts/_internal/_lakebase_preflight.py \
   --project "$LAKEBASE_PROJECT" \
   --branch "$LAKEBASE_BRANCH" \
   --database "$LAKEBASE_DATABASE" \
   --schema "$LAKEBASE_SCHEMA"
 ```
 
-Manual upgrade example:
+Manual upgrade example (0.6 → 0.7):
 
 ```bash
 psql "host=<endpoint> dbname=<datname> sslmode=require user=<you>" \
   -v reg_schema=<schema> \
-  -f scripts/migrations/upgrade_0.5_to_0.6.sql
+  -f scripts/migrations/upgrade_0.6_to_0.7.sql
 ```
 
 ---
 
-## 6. App permission bootstrap (`bootstrap-app-permissions.sh`)
+## 7. App permission bootstrap (`bootstrap-app-permissions.sh`)
 
 Run automatically after deploy, or manually:
 
@@ -139,10 +168,11 @@ make bootstrap-perms
 
 ---
 
-## 7. Deploy workflow (happy path)
+## 8. Deploy workflow (happy path)
 
 ```text
-[ ] Edit scripts/deploy.config.sh (DEFAULT_APP_NAME, Lakebase coords, warehouse, UC)
+[ ] Edit scripts/deploy.config.sh (DEFAULT_INSTANCE_ID, Lakebase coords, warehouse, UC;
+    for a pre-0.7 in-place upgrade also set DEFAULT_DAB_TARGET=dev-lakebase — see §5)
 [ ] scripts/_internal/check-deploy-prerequisites.sh          # or make deploy-check
 [ ] make deploy-dry-run                            # read-only full orchestrator check
 [ ] make deploy                                    # deploy + bootstrap
@@ -154,7 +184,7 @@ make bootstrap-perms
 
 ---
 
-## 8. Optional / mode-specific
+## 9. Optional / mode-specific
 
 | Item | When needed |
 |------|-------------|
@@ -176,3 +206,4 @@ make bootstrap-perms
 | `scripts/bootstrap/app-permissions.sh` | App SP self-perms + MCP CAN_USE + UC schema grants |
 | `scripts/migrations/upgrade_0.4_to_0.5.sql` | Explicit 0.4→0.5 lifecycle migration |
 | `scripts/migrations/upgrade_0.5_to_0.6.sql` | Explicit 0.5→0.6 collaborative / analytics migration |
+| `scripts/migrations/upgrade_0.6_to_0.7.sql` | Explicit 0.6→0.7 generic scheduled-task migration |

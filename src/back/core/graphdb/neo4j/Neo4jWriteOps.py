@@ -9,7 +9,7 @@ relationships ``(s)-[:reltype]->(o)``.
 Every node also carries a reserved **marker label** — the sanitised graph/table
 name — so a whole domain graph is one ``MATCH (n:<graph_label>)`` away for
 counting, dropping, and isolation. The forward transform is pure
-(:mod:`Neo4jGraphModel`); the reverse maps needed to reconstruct exact SPO
+(:mod:`back.core.graphdb.neo4j.graph_model`); the reverse maps needed to reconstruct exact SPO
 triples on read are persisted by :class:`Neo4jSchemaMap`.
 
 Public method signatures are unchanged from the flat-triple version so the
@@ -19,7 +19,7 @@ Public method signatures are unchanged from the flat-triple version so the
 from typing import Any, Callable, Dict, List, Optional
 
 from back.core.graphdb.neo4j.Neo4jConnection import Neo4jConnection
-from back.core.graphdb.neo4j.Neo4jGraphModel import plan_writes
+from back.core.graphdb.neo4j.graph_model import plan_writes
 from back.core.graphdb.neo4j.Neo4jSchemaMap import Neo4jSchemaMap
 from back.core.logging import get_logger
 
@@ -203,7 +203,7 @@ class Neo4jWriteOps:
         if not triples:
             return 0
         label = sanitise_label(table_name)
-        from back.core.graphdb.neo4j.Neo4jGraphModel import (
+        from back.core.graphdb.neo4j.graph_model import (
             is_uri,
             reltype_from_predicate,
             label_from_class_uri,

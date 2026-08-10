@@ -1,0 +1,133 @@
+## Fix Switch modal on published domains (issue #97)
+
+Context: On an IN-REVIEW or PUBLISHED domain, the L2 **Switch** popup kept the version
+dropdown disabled and offered "Save my changes before switching" even though read-only
+versions cannot be saved. The read-only CSS gate did not exempt `#switchVersionSelect`, and
+the modal never adapted to lifecycle status.
+
+Changes:
+
+1. src/front/static/global/css/permissions.css
+   Exempt `#switchVersionSelect` from the read-only select disable rule (navigation, not
+   design editing).
+2. src/front/static/global/js/navbar.js
+   Added `isSwitchSaveAllowed()`, `configureSwitchSaveOption()`, and confirm-handler guard
+   so save-before-switch is disabled on non-DRAFT versions.
+3. tests/units/front/test_switch_domain_modal.py
+   Regression tests for the CSS exemption and navbar.js save gating.
+4. docs/user-guide.md
+   Document read-only Switch behaviour (version picker available, save option disabled).
+
+Modified files:
+- src/front/static/global/css/permissions.css
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_switch_domain_modal.py
+- docs/user-guide.md
+
+Tests: uv run pytest -q -m "not scenario" → 2987 passed, 275 skipped, 5 deselected in 26.89s
+
+## Add Databricks CLI profile to deploy.config.sh
+
+Context: Deploy and bootstrap scripts call the Databricks CLI without a way to
+pin a non-default profile from the single source of truth. Users with multiple
+profiles had to export DATABRICKS_CONFIG_PROFILE manually before every make target.
+
+Changes:
+
+1. scripts/deploy.config.sh
+   Added DEFAULT_DATABRICKS_PROFILE (exported as DATABRICKS_CONFIG_PROFILE when set).
+2. scripts/deploy.sh
+   Show the active profile in the deploy summary; auth hints mention --profile when configured.
+3. docs/deployment.md
+   Document DEFAULT_DATABRICKS_PROFILE in the deploy.config.sh variable table.
+4. README.md
+   Mention CLI profile in the deploy.config.sh edit step.
+
+Tests: uv run pytest -q -m "not scenario" → 2987 passed, 275 skipped, 5 deselected in 26.89s
+
+## Lakebase connection diagnostics in deploy scripts
+
+Context: Lakebase misconfiguration errors (wrong project/branch, stale db-… id,
+missing database) were terse. Operators had to guess which CLI commands to run to
+inspect the live Lakebase project.
+
+Changes:
+
+1. scripts/_lakebase-diag.sh (new)
+   Shared helper printing common causes and ready-to-run databricks postgres
+   list-databases / endpoints commands (with --profile when configured).
+2. scripts/deploy.sh
+   Call diagnostics on db-… resolution failure, resource checks, dry-run abort,
+   bootstrap failure, and Lakebase step ERR-trap hints.
+3. scripts/bootstrap-lakebase-perms.sh
+   Call diagnostics on endpoint/credentials/psql connection failures; distinguish
+   psql connection errors from missing schema.
+
+Modified files:
+- scripts/_lakebase-diag.sh
+- scripts/deploy.sh
+- scripts/bootstrap-lakebase-perms.sh
+
+Tests: uv run pytest -q -m "not scenario" → 2987 passed, 275 skipped, 5 deselected in 20.35s
+
+## Lakebase underscore vs hyphen naming (deploy resolver)
+
+Context: Lakebase exposes two names per database — status.postgres_database (PG
+datname, underscores) vs the resource-path database_id (RFC-1123, hyphens only).
+Operators saw ontobricks_demo become ontobricks-demo in list-databases and deploy
+failed on exact string match.
+
+Changes:
+
+1. scripts/_lakebase-resolve-db.py (new)
+   Resolve db segment + datname with underscore/hyphen slug tolerance.
+2. scripts/deploy.sh
+   Use the shared resolver; auto-correct LAKEBASE_DATABASE when slug-matched.
+3. scripts/_lakebase-diag.sh
+   Document the two-name model in failure hints.
+4. scripts/deploy.config.sh
+   Comment that DEFAULT_LAKEBASE_DATABASE must come from postgres_database, not
+   the hyphenated resource id.
+5. tests/units/scripts/test_lakebase_resolve_db.py
+   Regression tests for slug matching.
+
+Modified files:
+- scripts/_lakebase-resolve-db.py
+- scripts/deploy.sh
+- scripts/_lakebase-diag.sh
+- scripts/deploy.config.sh
+- tests/units/scripts/test_lakebase_resolve_db.py
+
+Tests: uv run pytest -q -m "not scenario" → 2990 passed, 275 skipped, 5 deselected in 20.32s
+
+## Backport mapping SQL column deduplication fix (PR #98)
+
+Context: The Auto-Map agent's prompt instructs repeating a source column under its
+original name alongside an "AS ID"/"AS Label" alias for attribute mapping. When that
+original name is itself "id"/"label" (case-insensitive) — e.g. a table with an actual
+column named `label` — Databricks/Spark resolves both as the same output column, causing
+`AMBIGUOUS_REFERENCE` when the digital-twin build creates the triple-store VIEW.
+`SQLWizardService._deduplicate_select_columns` already handled this in the manual
+SQL-wizard flow but not in the Auto-Map submission tools. Cherry-picked from PR #98
+(epoilvet) onto the 0.6.1 release branch.
+
+Changes:
+
+1. src/agents/tools/mapping.py
+   Call `SQLWizardService._deduplicate_select_columns` after LIMIT stripping in
+   `tool_submit_entity_mapping` and `tool_submit_relationship_mapping`.
+2. src/back/core/sqlwizard/SQLWizardService.py
+   Make `_deduplicate_select_columns` a `@staticmethod` so agents can reuse it
+   without constructing a full `SQLWizardService`.
+3. tests/units/agents/test_mapping_tools.py
+   Regression tests for label-column self-collision and non-colliding passthrough.
+4. CONTRIBUTORS.md
+   Add Eric Poilvet ([@epoilvet](https://github.com/epoilvet)) to the contributor list.
+
+Modified files:
+- src/agents/tools/mapping.py
+- src/back/core/sqlwizard/SQLWizardService.py
+- tests/units/agents/test_mapping_tools.py
+- CONTRIBUTORS.md
+
+Tests: uv run pytest -q -m "not scenario" → 2982 passed, 286 skipped, 5 deselected in 38.16s

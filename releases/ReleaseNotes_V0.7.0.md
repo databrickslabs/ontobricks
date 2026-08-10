@@ -1,13 +1,15 @@
 # OntoBricks — Release Notes V0.7.0
 
 **Release window:** July – August, 2026
-**Test status:** all changes shipped with the suite green (4688 passed, 276 skipped, 5 deselected, 1 xfailed).
+**Test status:** all changes shipped with the suite green (4787 passed, 276 skipped, 5 deselected, 1 xfailed).
 
 ---
 
 ## Highlights
 
-- **Neo4j graph backend (GA)**: Neo4j (Community, Enterprise, AuraDB) joins Delta Lake and Lakebase as a full **typed property-graph** engine — nodes/relationships instead of flat triples, a per-domain database selector, Settings → Neo4j (Connection / Objects / Health tabs with a live Bolt + Cypher **Test connection** probe), and `documentation/neo4j-requirements.md` for flavor compatibility.
+- **Neo4j graph backend (GA)**: Neo4j (Community, Enterprise, AuraDB) joins Delta Lake and Lakebase as a full **typed property-graph** engine — nodes/relationships instead of flat triples, **named connection profiles** in Settings → Neo4j (master–detail Connections + Objects, live Bolt + Cypher **Test connection**), per-domain binding via Domain → Knowledge Graph, and `documentation/neo4j-requirements.md` for flavor compatibility.
+- **Graph Chat confirmation-gated Class Actions**: Graph Chat reaches MCP parity for Datasets / Bridges / Actions (`get_entity_context`, `request_entity_action`) with an explicit Confirm/Cancel card before any UC function runs — Graph Chat never exposes direct `invoke_entity_action`.
+- **Branded backend icons**: dedicated Lakehouse glyph in Domain / Registry chrome; Databricks branding reserved for Settings / workspace identity controls.
 - **Graph backend selection moved per-domain**: choosing Lakebase / Lakehouse (Delta) / Neo4j is now a mandatory per-domain setting on Domain → Information → Knowledge Graph (large selectable cards), not a workspace-wide Settings toggle; the old Settings → Back End page is gone.
 - **Knowledge Graph Analytics rebuilt on a Lakeflow job**: PageRank, connected components, clustering, and (pivot-sampled, clearly labelled) betweenness/closeness are now computed by a serverless Databricks job reading the same `_data` snapshot every graph engine's Build now materialises — one compute path, identical numbers on Lakebase, Lakehouse, and Neo4j, no more silent "0.0000" for uncomputed metrics. A new three-tab **Analytics dashboard** (Dashboard / Data Model Health / AI Insights) replaces the old seven-tab layout, with global metric distributions and a scope-picker dialog.
 - **Run history reorganized**: per-domain Build + Analytics run history now lives on Knowledge Graph → Management → **Runs** (two tabs, no version filter — always spans every version), and a new admin-only **Settings → Automation → Runs** page shows the same history across every domain with server-side pagination.
@@ -23,12 +25,24 @@
 
 ## Neo4j Graph Backend
 
-- **Typed property graph** (not flat triples): `rdf:type` → node label, `rdfs:label` → `name` property, literal predicates → node properties, URI-object predicates → relationships (`Neo4jGraphModel.py`). Reads reconstruct the exact original `{subject, predicate, object}` triples via a per-graph reverse-map (`:__GraphSchema` node), so the Knowledge Graph view, GraphQL, and reasoning behave identically across Delta / Lakebase / Neo4j.
+- **Typed property graph** (not flat triples): `rdf:type` → node label, `rdfs:label` → `name` property, literal predicates → node properties, URI-object predicates → relationships (`back/core/graphdb/neo4j/graph_model.py`). Reads reconstruct the exact original `{subject, predicate, object}` triples via a per-graph reverse-map (`:__GraphSchema` node), so the Knowledge Graph view, GraphQL, and reasoning behave identically across Delta / Lakebase / Neo4j.
 - Neo4j 5.x server required (4.x unsupported); **no APOC required** — the write path inlines sanitised labels and batches with `UNWIND` so it runs on Aura Free / Community with zero plugins.
-- Per-domain **Neo4j database selector** (parity with Lakebase's picker), with graceful degradation on Community (single-database) servers via `SHOW DATABASES`.
-- Settings → Neo4j: Connection / **Objects** (list + drop every OntoBricks graph in the connected database, with counts) / **Health** (Bolt handshake) tabs; **Test connection** button runs a real handshake plus a `RETURN 1` Cypher probe and reports latency + credential source.
+- **Named connection profiles** (Settings → Neo4j): master–detail UI for multiple Bolt profiles (`connections[]` — URI, database, username, Databricks secret scope/key). Domain → Information → Knowledge Graph requires picking one connection when the backend is Neo4j (no blank default; the old per-domain `neo4j_database` override is retired — the database lives on the profile). Deleting/renaming a connection still referenced by domains is rejected with the affected domain list.
+- **Databricks-secret auth enforced** in the deployed app UI: every connection must set secret scope + key; clear-text passwords are stripped on save. **Test connection** and **Objects** operate on the selected profile (the dedicated Health tab was removed; Test connection covers the same Bolt + `RETURN 1` probe).
 - Nested per-backend connection config (`{lakebase: {}, neo4j: {}, lakehouse: {}}`) so Neo4j and Lakebase can never collide on shared keys (e.g. `database`).
-- `documentation/neo4j-requirements.md` documents server requirements, flavor compatibility (Aura / Enterprise / Community), the per-domain database selector, and the breaking storage-format change from earlier pre-release flat-graph builds (old flat graphs must be rebuilt).
+- `documentation/neo4j-requirements.md` documents server requirements, flavor compatibility (Aura / Enterprise / Community), named connections, and the breaking storage-format change from earlier pre-release flat-graph builds (old flat graphs must be rebuilt).
+
+## Graph Chat & MCP Alignment
+
+- Session-aware Graph Chat routes (`/dtwin/nodes/*`, `/dtwin/classes`, pending-action confirm/cancel) so unpublished DRAFT domains work the same way as published MCP targets.
+- Shared formatters for Datasets / Bridges / Actions; Graph Chat tools call `get_entity_context` and **`request_entity_action` only** — execution requires an explicit Confirm/Cancel card with a one-time pending token.
+- Pending-action token preserved across all `run_agent` exit paths; cancel removes the card first with neutral button styling.
+- `agent_dtwin_chat` SPEC + eval dataset expanded; MCP verification recorded for the alignment.
+
+## Branding & Navigation (Aug hardening)
+
+- Dedicated **Lakehouse** icon in Domain / Registry chrome; Databricks branding reserved for Settings / workspace identity.
+- Domain Versions controls use the `123` glyph; backend cards on Domain → Knowledge Graph use branded glyphs.
 
 ## Knowledge Graph Analytics
 
@@ -112,6 +126,8 @@
 - **"Unmap all"** renamed and added to the Mapping Designer toolbar (previously only on Mapping Information), wired via a reliable `addEventListener` confirm instead of an inline `onclick`.
 - Fixed the Switch-domain modal offering "Save my changes before switching" on read-only (IN-REVIEW/PUBLISHED) versions, which cannot be saved.
 - Fixed an unreachable graph engine (e.g. a slow Neo4j Aura probe) being reported as "Graph not built" instead of "Status unavailable" — a transient connectivity failure is no longer cached and presented as a confirmed absent graph.
+- **Deploy instance-target drift**: `DEFAULT_INSTANCE_ID` now keeps the DAB target and app names aligned so a renamed app cannot destroy the running deployment as a Terraform "rename".
+- Domain Neo4j connection picker races (UC-save dropping `neo4j_connection`, secret scope/key wiped on hydration) fixed; Objects connection picker and Domain KG tab persistence hardened.
 
 ---
 
@@ -123,7 +139,44 @@ No special action beyond the standard `make bootstrap-lakebase` (which now also 
 
 ### Upgrading from v0.6.x
 
+#### Keep the existing Databricks app (do not destroy it)
+
+v0.7.0 introduces `DEFAULT_INSTANCE_ID`, which derives both the app name
+(`ontobricks-<id>`) and the DAB target (`dev-lakebase-<id>`). A Databricks app
+name cannot be renamed in place — Terraform **destroys then creates**. Preflight
+blocks accidental renames unless you confirm (`ALLOW_APP_RENAME=1` or typing the
+old name).
+
+**In-place upgrade of a live 0.6.x app** (same URL, same Terraform state under
+the unsuffixed `dev-lakebase` target):
+
+1. Note the live app name (e.g. `ontobricks-060`) and set the matching id:
+   `DEFAULT_INSTANCE_ID=060` in `scripts/deploy.config.sh` (or pass it on the
+   command line).
+2. Force the **legacy** DAB target so you keep managing the existing state:
+   uncomment / set `DEFAULT_DAB_TARGET="dev-lakebase"`, or run
+   `DAB_TARGET=dev-lakebase make deploy`.
+3. Keep Lakebase / UC coords pointing at the same registry as before.
+4. Run `make bootstrap-lakebase` (or let `make deploy` do it) so the 0.6→0.7
+   scheduler columns land, then `make deploy`.
+
+Example:
+
+```bash
+DEFAULT_INSTANCE_ID=060 DAB_TARGET=dev-lakebase make deploy
+```
+
+**What a naive default deploy does:** stock `DEFAULT_INSTANCE_ID=07x` deploys
+`ontobricks-07x` under a **new** target `dev-lakebase-07x`. That does **not**
+kill the old app — it leaves it running and orphaned from the new scripts. Use
+the in-place recipe above if you want to refresh the existing app.
+
+**New parallel instance (leave 0.6.x untouched):** change only
+`DEFAULT_INSTANCE_ID` (e.g. `07x`) and deploy; each id gets its own app + state.
+See also `documentation/DEPLOY_CHECKLIST.md` §5.
+
 - **Neo4j is a breaking storage change for pre-release testers only**: any Neo4j graph written by an earlier v0.7 pre-release build (flat triple nodes, no relationships) is **not** migrated automatically. Drop the old graph via Settings → Neo4j → Objects and rebuild the domain. Domains that have never used Neo4j are unaffected.
+- **Named Neo4j connections (breaking for early Neo4j adopters)**: flat workspace `uri`/`username` Neo4j config is **not** auto-migrated into `connections[]`. Re-enter profiles in Settings → Neo4j, then set each Neo4j domain's required **Neo4j connection** on Domain → Information → Knowledge Graph. The old per-domain `neo4j_database` field is no longer written.
 - **Graph backend selection moved**: the workspace-global Settings → Back End page is gone. Every domain must have a `graph_backend` (Lakebase / Lakehouse / Neo4j) set on Domain → Information → Knowledge Graph; existing domains default to Lakebase.
 - **Analytics compute path changed**: domains built before this version have no `…_data` snapshot for the Lakeflow analytics job to read. Analytics hard-fails on those domains with a "Run Build" remedy — rebuild the domain once to pick up the snapshot. The old in-memory and SQL-pushdown compute paths (and the `analytics_pushdown_enabled` setting) are removed; the job is opt-in via Settings → Global (admin) and requires `make deploy` to have shipped the job bundle.
 - **Scheduler schema migration**: `schedules` / `schedule_runs` gain `task_type`, `target_key`, `config` (jsonb), and (for runs) `detail` (jsonb); the unique key widens from `(registry_id, domain_name)` to `(registry_id, task_type, domain_name, target_key)`. Applied lazily and idempotently by the app (`_ensure_schedule_task_columns`), or eagerly via `make bootstrap-lakebase`. Legacy cohort schedules stored in the `global_config` JSONB blob are migrated into the real tables automatically, once.

@@ -775,22 +775,34 @@ The **Global** tab in the Domain Information section contains the main domain se
 
 | Field | Description |
 |-------|-------------|
-| **Backend** | Select the materialization target: **Delta view** (always created), and the active **Graph DB engine** (currently Lakebase Postgres). |
-| **Triple-Store** | Read-only. The Delta VIEW is always created in the domain's registry `catalog.schema`, and its name is derived as `triplestore_<domain>_V<version>`. |
+| **Backend** | Select the Graph DB engine for this domain (`lakebase`, `databricks` / Lakehouse, or `neo4j`). Build always also creates the Unity Catalog triple-store family below. |
+| **Triple-Store** | Read-only. Base name in the domain's registry `catalog.schema`: `triplestore_<domain>_V<version>`. Build creates four related objects from that base (see below). |
 | **Graph DB table** | Read-only. For Lakebase, the flat triple table name is derived as `g_<domain>_v<version>` in the configured Postgres schema (default `ontobricks_graph`). |
 
 When you **commit** the domain name (blur the field or trigger `change`) or change the **Version**, the Triple Store FQN and Graph DB table name are **recomputed** so they match the naming rules the server will use on save — without waiting for a round-trip.
+
+**Lakehouse objects created by Build** (always, in the registry `catalog.schema`):
+
+| Object | Kind | What it is for |
+|--------|------|----------------|
+| `triplestore_<domain>_V<n>` | VIEW | Live R2RML mapping over your source tables |
+| `…_data` | Delta TABLE | Materialised mapped triples — what **Analytics** reads; also the bulk half of the graph |
+| `…_inferred` | Delta TABLE | Reasoning / cohort / app-written triples |
+| `…_graph` | VIEW | `_data ∪ _inferred` — what Explorer and most graph reads use |
+
+Full detail: [Architecture → Lakehouse Unity Catalog objects](architecture.md#lakehouse-unity-catalog-objects).
 
 **Backend details:**
 
 | Backend | Storage | Sync | Best for |
 |---------|---------|------|----------|
-| **Delta view** | Databricks Delta view via SQL Warehouse | Immediate (SQL `CREATE OR REPLACE VIEW`) | Unity Catalog governance, governance-controlled queries, lineage |
+| **Lakehouse (Delta)** | The UC objects above (SQL Warehouse) | Build CTAS + companion tables | Unity Catalog governance, analytics on the mapped snapshot, no separate graph DB |
 | **Lakebase Postgres** | Flat `(subject, predicate, object)` table on the App-bound Lakebase instance | App-managed (`COPY FROM STDIN`) or managed-synced (Lakeflow) | Low-latency reads from the FastAPI process, reasoning, BFS / cohort builds |
+| **Neo4j** | Bolt-connected property graph | Build `MERGE` of mapped triples | Cypher traversal workloads |
 
 **Performance:**
-- **Delta** views are backed by R2RML SQL that runs on the SQL Warehouse with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`) for the persisted snapshot, co-locating rows by predicate and subject for faster query filtering. After each build, an `OPTIMIZE` command is automatically executed to compact data files and apply the clustering layout.
-- **Lakebase** stores triples in Postgres flat tables. Two modes are available: `app_managed` (the app streams batches via `COPY FROM STDIN`, idempotent on `(subject, predicate, object)`) and `managed_synced` (Databricks Lakeflow keeps a synced table in lock-step with the Delta view, while a writable companion table absorbs reasoning/cohort writes — the read view UNIONs both).
+- **Delta** materialises the R2RML VIEW into `_data` with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW.
+- **Lakebase** stores triples in Postgres flat tables. Two modes are available: `app_managed` (the app streams batches via `COPY FROM STDIN`, idempotent on `(subject, predicate, object)`) and `managed_synced` (Databricks Lakeflow keeps a synced table in lock-step with the mapped Delta snapshot, while a writable companion table absorbs reasoning/cohort writes — the read view UNIONs both).
 
 ### Saving Domains
 

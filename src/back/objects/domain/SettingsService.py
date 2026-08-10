@@ -1813,23 +1813,76 @@ class SettingsService:
         _, host, token, registry_cfg = SettingsService._resolve_context(
             session_mgr, settings
         )
-        from back.core.graphdb.engine_config import normalize_graph_engine_config
+        from back.core.graphdb.engine_config import (
+            list_neo4j_connections,
+            normalize_graph_engine_config,
+        )
 
         if not isinstance(config, dict):
             raise ValidationError("graph_engine_config must be a JSON object")
         config = normalize_graph_engine_config(config)
-        if is_neo4j_password_from_secret():
-            neo = dict(config.get("neo4j") or {})
-            if neo.get("password"):
-                # Never persist a clear-text password when the Apps secret is
-                # in place — the env var wins at runtime and this would only
-                # leak a redundant credential into global_config.
-                logger.info(
-                    "Stripping neo4j['password'] before persist — "
-                    "NEO4J_PASSWORD env var is the source of truth"
+        neo = dict(config.get("neo4j") or {})
+
+        # Strip clear-text passwords from every named connection and from any
+        # leftover flat profile keys.
+        previous = global_config_service.get_graph_engine_config(
+            host, token, registry_cfg
+        )
+        SettingsService._assert_neo4j_connection_refs_safe(
+            previous, config, session_mgr, settings
+        )
+
+        conns = list_neo4j_connections({"neo4j": neo})
+        cleaned_conns = []
+        seen_names: set[str] = set()
+        for entry in conns:
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                continue
+            if name in seen_names:
+                raise ValidationError(
+                    f"Duplicate Neo4j connection name {name!r} — names must be unique."
                 )
-                neo.pop("password", None)
-                config = {**config, "neo4j": neo}
+            seen_names.add(name)
+            uri = str(entry.get("uri") or "").strip()
+            user = str(entry.get("username") or "").strip()
+            scope = str(entry.get("secret_scope") or "").strip()
+            key = str(entry.get("secret_key") or "").strip()
+            if not uri:
+                raise ValidationError(
+                    f"Neo4j connection {name!r} is missing a Bolt URI."
+                )
+            if not user:
+                raise ValidationError(
+                    f"Neo4j connection {name!r} is missing a username."
+                )
+            if not scope or not key:
+                raise ValidationError(
+                    f"Neo4j connection {name!r} must set secret scope and secret name."
+                )
+            profile = dict(entry)
+            profile["name"] = name
+            profile["uri"] = uri
+            profile["username"] = user
+            profile["secret_scope"] = scope
+            profile["secret_key"] = key
+            profile["auth_method"] = (
+                str(profile.get("auth_method") or "databricks_secret").strip()
+                or "databricks_secret"
+            )
+            if (
+                profile.get("password")
+                and (
+                    profile.get("auth_method") == "databricks_secret"
+                    or is_neo4j_password_from_secret()
+                )
+            ):
+                profile.pop("password", None)
+            cleaned_conns.append(profile)
+
+        neo = {"connections": cleaned_conns}
+        config = {**config, "neo4j": neo}
+
         ok, msg = global_config_service.set_graph_engine_config(
             host, token, registry_cfg, config
         )
@@ -1842,6 +1895,106 @@ class SettingsService:
             session_mgr, config=persisted_cfg
         )
         return {"success": True, "graph_engine_config": persisted_cfg}
+
+    @staticmethod
+    def _assert_neo4j_connection_refs_safe(
+        previous: Dict[str, Any],
+        new_config: Dict[str, Any],
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> None:
+        """Reject deletes/renames of Neo4j connections still referenced by domains."""
+        from back.core.graphdb.engine_config import list_neo4j_connections
+
+        old_names = {
+            str(c.get("name") or "").strip()
+            for c in list_neo4j_connections(previous)
+            if str(c.get("name") or "").strip()
+        }
+        new_names = {
+            str(c.get("name") or "").strip()
+            for c in list_neo4j_connections(new_config)
+            if str(c.get("name") or "").strip()
+        }
+        removed = sorted(old_names - new_names)
+        if not removed:
+            return
+        refs = SettingsService._domains_referencing_neo4j_connections(
+            session_mgr, settings, removed
+        )
+        if not refs:
+            return
+        parts = [
+            f"{name!r} used by: {', '.join(domains)}"
+            for name, domains in sorted(refs.items())
+        ]
+        raise ValidationError(
+            "Cannot delete or rename Neo4j connection(s) still referenced by "
+            "domains — re-point those domains first. " + "; ".join(parts)
+        )
+
+    @staticmethod
+    def _domains_referencing_neo4j_connections(
+        session_mgr: SessionManager,
+        settings: Settings,
+        connection_names: List[str],
+    ) -> Dict[str, List[str]]:
+        """Map connection name → domain folders that reference it."""
+        wanted = {str(n).strip() for n in connection_names if str(n).strip()}
+        if not wanted:
+            return {}
+        try:
+            from back.objects.registry.RegistryService import RegistryService
+
+            domain_obj, _, _, _ = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            svc = RegistryService.from_context(domain_obj, settings)
+            ok, details, _msg = svc.list_domain_details()
+            if not ok:
+                return {}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not scan domains for Neo4j connection refs: %s", exc)
+            return {}
+
+        refs: Dict[str, List[str]] = {}
+        for row in details or []:
+            if not isinstance(row, dict):
+                continue
+            folder = str(row.get("name") or "").strip()
+            conn = str(row.get("neo4j_connection") or "").strip()
+            if folder and conn in wanted:
+                refs.setdefault(conn, []).append(folder)
+        return refs
+
+    @staticmethod
+    def graph_engine_neo4j_connections_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List named Neo4j connection profiles (no passwords)."""
+        from back.core.graphdb.engine_config import list_neo4j_connections
+
+        try:
+            _, host, token, registry_cfg = SettingsService._resolve_context(
+                session_mgr, settings
+            )
+            global_config_service.load(host, token, registry_cfg, force=True)
+            gcfg = global_config_service.get_graph_engine_config(
+                host, token, registry_cfg
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("graph_engine_neo4j_connections context failed: %s", exc)
+            raise InfrastructureError(
+                "Could not load graph engine config", detail=str(exc)
+            ) from exc
+
+        connections = []
+        for entry in list_neo4j_connections(gcfg):
+            safe = dict(entry)
+            safe.pop("password", None)
+            connections.append(safe)
+        return {"success": True, "connections": connections}
 
     @staticmethod
     def graph_engine_lakebase_health_result(
@@ -2004,58 +2157,66 @@ class SettingsService:
     def graph_engine_neo4j_test_result(
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        connection_name: str = "",
+        draft: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Probe Neo4j Bolt connectivity using the persisted ``engine_config``.
+        """Probe Neo4j Bolt connectivity for a named connection (or draft fields).
 
-        Wires the previously-placeholder "Test connection" button on Settings →
-        Triple store → Neo4j. Reads the persisted config, instantiates
-        :class:`Neo4jConnection` (this resolves auth — env var first, then
-        engine_config fallback), and calls the official driver's
-        ``verify_connectivity()`` (a lightweight Bolt handshake — no Cypher
-        is executed, no data is touched).
-
-        Returns one of::
-
-            {"success": True, "ok": True, "uri": ..., "database": ...,
-             "latency_ms": ..., "credentials_source": "env var" | "engine_config"}
-
-            {"success": True, "ok": False, "error": ..., "category": ...}
-
-        The second form covers clean error states (auth failure, DNS
-        unresolvable, bad config) — it surfaces a friendly UI message without
-        5xx-ing the route.
+        Prefers *draft* (unsaved form values), then the named profile from
+        Settings, then fails with a config error.
         """
         import time as _time
 
-        from back.core.graphdb.engine_config import neo4j_section
+        from back.core.graphdb.engine_config import (
+            list_neo4j_connections,
+            resolve_neo4j_connection,
+        )
         from back.core.graphdb.neo4j.Neo4jConnection import (
-            NEO4J_PASSWORD_ENV,
             Neo4jConnection,
-            is_neo4j_password_from_secret,
             resolve_neo4j_database,
         )
 
-        try:
-            _, host, token, registry_cfg = SettingsService._resolve_context(
-                session_mgr, settings
-            )
-            global_config_service.load(host, token, registry_cfg, force=True)
-            gcfg = neo4j_section(
-                global_config_service.get_graph_engine_config(
+        gcfg: Dict[str, Any] = {}
+        if isinstance(draft, dict) and str(draft.get("uri") or "").strip():
+            gcfg = dict(draft)
+        else:
+            try:
+                _, host, token, registry_cfg = SettingsService._resolve_context(
+                    session_mgr, settings
+                )
+                global_config_service.load(host, token, registry_cfg, force=True)
+                root = global_config_service.get_graph_engine_config(
                     host, token, registry_cfg
                 )
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("graph_engine_neo4j_test context failed: %s", exc)
-            raise InfrastructureError(
-                "Could not load graph engine config", detail=str(exc)
-            ) from exc
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("graph_engine_neo4j_test context failed: %s", exc)
+                raise InfrastructureError(
+                    "Could not load graph engine config", detail=str(exc)
+                ) from exc
+
+            name = str(connection_name or "").strip()
+            if not name and list_neo4j_connections(root):
+                return {
+                    "success": True,
+                    "ok": False,
+                    "error": "Select a Neo4j connection to test.",
+                    "category": "config",
+                }
+            gcfg = resolve_neo4j_connection(root, name) if name else {}
+            if name and not gcfg:
+                return {
+                    "success": True,
+                    "ok": False,
+                    "error": f"Neo4j connection {name!r} not found in Settings.",
+                    "category": "config",
+                }
 
         if not isinstance(gcfg, dict) or not gcfg:
             return {
                 "success": True,
                 "ok": False,
-                "error": "engine_config is empty — fill in URI/Username and Save first.",
+                "error": "No Neo4j connection configured — add one under Settings → Neo4j.",
                 "category": "config",
             }
 
@@ -2064,7 +2225,7 @@ class SettingsService:
             return {
                 "success": True,
                 "ok": False,
-                "error": "engine_config['uri'] is missing — set the Bolt URI in Settings → Neo4j.",
+                "error": "Bolt URI is missing on this connection.",
                 "category": "config",
             }
 
@@ -2072,7 +2233,8 @@ class SettingsService:
             conn = Neo4jConnection(
                 uri=uri,
                 database=resolve_neo4j_database(gcfg),
-                auth_method=str(gcfg.get("auth_method") or "basic").strip() or "basic",
+                auth_method=str(gcfg.get("auth_method") or "databricks_secret").strip()
+                or "databricks_secret",
                 engine_config=gcfg,
                 encrypted=bool(gcfg.get("encrypted", True)),
             )
@@ -2091,9 +2253,6 @@ class SettingsService:
         try:
             driver = conn.get_driver()
             driver.verify_connectivity()
-            # Round-trip a trivial Cypher through the same ``_run`` path the
-            # real query stack uses — exercises session creation, Cypher
-            # execution, and the INFO log line (Benoit's PR #47 review #2).
             cypher_rows = conn.run("RETURN 1 AS probe")
         except InfrastructureError as exc:
             return {
@@ -2109,7 +2268,7 @@ class SettingsService:
                 "error": str(exc),
                 "category": "config",
             }
-        except Exception as exc:  # noqa: BLE001 — bolt errors don't share a base class
+        except Exception as exc:  # noqa: BLE001
             return {
                 "success": True,
                 "ok": False,
@@ -2128,27 +2287,80 @@ class SettingsService:
             "ok": True,
             "uri": uri,
             "database": conn.database,
+            "connection_name": str(gcfg.get("name") or connection_name or "").strip(),
             "latency_ms": latency_ms,
             "cypher_probe": (
                 {"rows": len(cypher_rows or []), "echo": (cypher_rows[0] if cypher_rows else None)}
                 if cypher_rows is not None
                 else None
             ),
-            "credentials_source": (
-                "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
-                if is_neo4j_password_from_secret()
-                else "engine_config (local-dev fallback)"
-            ),
+            "credentials_source": SettingsService._neo4j_credentials_source(gcfg),
         }
 
     @staticmethod
-    def _neo4j_connection_from_config(session_mgr, settings):
-        """Build a :class:`Neo4jConnection` from the persisted Neo4j engine config.
+    def _neo4j_credentials_source(gcfg: Dict[str, Any]) -> str:
+        """Human-readable description of where the Neo4j password came from."""
+        from back.core.graphdb.neo4j.Neo4jConnection import NEO4J_PASSWORD_ENV
 
-        Shared by the Neo4j admin endpoints (databases list, objects list,
-        health, drop). Returns ``(conn, gcfg)`` or raises the mapped error.
+        auth_method = str(gcfg.get("auth_method") or "basic").strip() or "basic"
+        if auth_method == "databricks_secret":
+            scope = str(gcfg.get("secret_scope") or "").strip()
+            key = str(gcfg.get("secret_key") or "").strip()
+            return "Databricks secret (%s/%s)" % (scope, key)
+        if is_neo4j_password_from_secret():
+            return "env var (%s — Databricks Apps secret)" % NEO4J_PASSWORD_ENV
+        return "engine_config (local-dev fallback)"
+
+    @staticmethod
+    def graph_engine_neo4j_secret_scopes_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List Databricks secret scopes for the Neo4j "Databricks secret" dropdown.
+
+        Uses the app's own identity (SP OAuth in the deployed app, PAT/CLI
+        profile in local dev) — the same identity every other Databricks
+        REST call in this codebase uses. A scope only shows up here if that
+        identity has at least READ access to it.
         """
-        from back.core.graphdb.engine_config import neo4j_section
+        from back.core.databricks.DatabricksClient import DatabricksClient
+
+        _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
+        client = DatabricksClient(host=host, token=token)
+        return {"success": True, "scopes": client.list_secret_scopes()}
+
+    @staticmethod
+    def graph_engine_neo4j_secret_keys_result(
+        scope: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """List secret keys within *scope* for the Neo4j "Secret key" dropdown."""
+        from back.core.databricks.DatabricksClient import DatabricksClient
+
+        scope = (scope or "").strip()
+        if not scope:
+            return {"success": True, "keys": []}
+        _, host, token, _ = SettingsService._resolve_context(session_mgr, settings)
+        client = DatabricksClient(host=host, token=token)
+        return {"success": True, "keys": client.list_secret_keys(scope)}
+
+    @staticmethod
+    def _neo4j_connection_from_config(
+        session_mgr,
+        settings,
+        *,
+        connection_name: str = "",
+    ):
+        """Build a :class:`Neo4jConnection` from a named Settings profile.
+
+        Shared by the Neo4j admin endpoints (objects list, health, drop).
+        Returns ``(conn, profile)`` or raises the mapped error.
+        """
+        from back.core.graphdb.engine_config import (
+            list_neo4j_connections,
+            resolve_neo4j_connection,
+        )
         from back.core.graphdb.neo4j.Neo4jConnection import (
             Neo4jConnection,
             resolve_neo4j_database,
@@ -2158,17 +2370,26 @@ class SettingsService:
             session_mgr, settings
         )
         global_config_service.load(host, token, registry_cfg, force=True)
-        gcfg = neo4j_section(
-            global_config_service.get_graph_engine_config(host, token, registry_cfg)
-        )
-        if not isinstance(gcfg, dict) or not gcfg.get("uri"):
+        root = global_config_service.get_graph_engine_config(host, token, registry_cfg)
+        name = str(connection_name or "").strip()
+        if not name:
+            conns = list_neo4j_connections(root)
+            if len(conns) == 1:
+                name = str(conns[0].get("name") or "").strip()
+            else:
+                raise ValidationError(
+                    "Select a Neo4j connection first (Settings → Neo4j list)."
+                )
+        gcfg = resolve_neo4j_connection(root, name)
+        if not gcfg or not gcfg.get("uri"):
             raise ValidationError(
-                "Neo4j engine_config is empty — set the Bolt URI/Username and Save first."
+                f"Neo4j connection {name!r} is missing or has no Bolt URI."
             )
         conn = Neo4jConnection(
             uri=str(gcfg["uri"]).strip(),
             database=resolve_neo4j_database(gcfg),
-            auth_method=str(gcfg.get("auth_method") or "basic").strip() or "basic",
+            auth_method=str(gcfg.get("auth_method") or "databricks_secret").strip()
+            or "databricks_secret",
             engine_config=gcfg,
             encrypted=bool(gcfg.get("encrypted", True)),
         )
@@ -2178,11 +2399,15 @@ class SettingsService:
     def graph_engine_neo4j_databases_result(
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        connection_name: str = "",
     ) -> Dict[str, Any]:
-        """List Neo4j databases on the server for the Domain Info DB selector (P4)."""
+        """List Neo4j databases on the server for a named connection (admin)."""
         from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
 
-        conn, gcfg = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        conn, gcfg = SettingsService._neo4j_connection_from_config(
+            session_mgr, settings, connection_name=connection_name
+        )
         try:
             names = Neo4jReadOps(conn).list_databases()
         finally:
@@ -2190,21 +2415,29 @@ class SettingsService:
                 conn.close()
             except Exception:  # noqa: BLE001
                 pass
-        # Always include the configured database so the selector is never empty.
         configured = conn.database
         if configured and configured not in names:
             names = [configured] + names
-        return {"success": True, "databases": names, "configured": configured}
+        return {
+            "success": True,
+            "databases": names,
+            "configured": configured,
+            "connection_name": str(gcfg.get("name") or connection_name or "").strip(),
+        }
 
     @staticmethod
     def graph_engine_neo4j_labels_result(
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        connection_name: str = "",
     ) -> Dict[str, Any]:
-        """List materialised Neo4j graphs (marker labels) + counts for the admin Objects tab (P5)."""
+        """List materialised Neo4j graphs (marker labels) + counts for the admin Objects tab."""
         from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
 
-        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        conn, gcfg = SettingsService._neo4j_connection_from_config(
+            session_mgr, settings, connection_name=connection_name
+        )
         try:
             labels = Neo4jReadOps(conn).list_labels()
         finally:
@@ -2212,17 +2445,26 @@ class SettingsService:
                 conn.close()
             except Exception:  # noqa: BLE001
                 pass
-        return {"success": True, "graphs": labels, "database": conn.database}
+        return {
+            "success": True,
+            "graphs": labels,
+            "database": conn.database,
+            "connection_name": str(gcfg.get("name") or connection_name or "").strip(),
+        }
 
     @staticmethod
     def graph_engine_neo4j_health_result(
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        connection_name: str = "",
     ) -> Dict[str, Any]:
-        """Bolt health probe for the Neo4j admin Health tab (P5)."""
+        """Bolt health probe for the Neo4j admin Health tab."""
         import time as _time
 
-        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        conn, gcfg = SettingsService._neo4j_connection_from_config(
+            session_mgr, settings, connection_name=connection_name
+        )
         t0 = _time.monotonic()
         try:
             conn.get_driver().verify_connectivity()
@@ -2241,6 +2483,7 @@ class SettingsService:
             "error": err,
             "uri": conn.uri,
             "database": conn.database,
+            "connection_name": str(gcfg.get("name") or connection_name or "").strip(),
             "latency_ms": round((_time.monotonic() - t0) * 1000.0, 1),
         }
 
@@ -2249,17 +2492,19 @@ class SettingsService:
         label: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        connection_name: str = "",
     ) -> Dict[str, Any]:
-        """Drop one Neo4j graph (marker label): its nodes, rels, constraint, schema map (P5)."""
+        """Drop one Neo4j graph (marker label): its nodes, rels, constraint, schema map."""
         from back.core.graphdb.neo4j.Neo4jWriteOps import Neo4jWriteOps, sanitise_label
 
         clean = (label or "").strip()
         if not clean:
             raise ValidationError("No graph label provided to drop.")
-        conn, _ = SettingsService._neo4j_connection_from_config(session_mgr, settings)
+        conn, _ = SettingsService._neo4j_connection_from_config(
+            session_mgr, settings, connection_name=connection_name
+        )
         try:
-            # drop_table sanitises internally; pass the label through unchanged
-            # (it already equals the sanitised marker as listed by list_labels).
             Neo4jWriteOps(conn).drop_table(clean)
         finally:
             try:

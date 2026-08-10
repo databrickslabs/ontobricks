@@ -2896,6 +2896,105 @@ class DigitalTwin:
         return expanded
 
     @staticmethod
+    def build_find_seed_where(
+        table: str,
+        *,
+        entity_type: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> str:
+        """Build the SQL ``WHERE`` clause that seeds a triples/find BFS.
+
+        Shared by the public ``/api/v1/digitaltwin/triples/find`` route and the
+        session-aware ``/dtwin/triples/find`` Graph Chat route so the two
+        surfaces cannot drift on seed semantics.
+        """
+        seed_conditions: List[str] = []
+        if entity_type:
+            esc = escape_sql_value(entity_type).lower()
+            seed_conditions.append(
+                f"subject IN (SELECT subject FROM {table} "
+                f"WHERE predicate = '{RDF_TYPE}' AND "
+                f"(LOWER(object) LIKE '%#{esc}' OR LOWER(object) LIKE '%/{esc}'))"
+            )
+        if search:
+            esc = escape_sql_value(search).lower()
+            seed_conditions.append(
+                f"(subject IN (SELECT subject FROM {table} "
+                f"WHERE (predicate = '{RDFS_LABEL}' "
+                f"OR predicate LIKE '%#label' OR predicate LIKE '%/label' "
+                f"OR predicate LIKE '%#name' OR predicate LIKE '%/name') "
+                f"AND LOWER(object) LIKE '%{esc}%') "
+                f"OR LOWER(subject) LIKE '%/{esc}%' "
+                f"OR LOWER(subject) LIKE '%#{esc}%')"
+            )
+        return " WHERE " + " AND ".join(seed_conditions)
+
+    @staticmethod
+    def find_triples_bfs(
+        store: Any,
+        table: str,
+        *,
+        entity_type: Optional[str] = None,
+        search: Optional[str] = None,
+        depth: int = 1,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Seed + BFS neighbourhood walk used by both find endpoints.
+
+        Returns a normalized payload dict (``seed_count``, ``triples``,
+        pagination fields). An empty match yields ``message`` and empty lists.
+        """
+        seed_where = DigitalTwin.build_find_seed_where(
+            table, entity_type=entity_type, search=search
+        )
+        bfs_rows = store.bfs_traversal(
+            table,
+            seed_where,
+            depth,
+            search=search or "",
+            entity_type=entity_type or "",
+        )
+        if not bfs_rows:
+            return {
+                "seed_count": 0,
+                "depth": depth,
+                "message": "No matching entities found",
+                "triples": [],
+                "count": 0,
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+                "entity_count": 0,
+            }
+
+        all_entities = {r["entity"] for r in bfs_rows}
+        seed_count = sum(1 for r in bfs_rows if int(r.get("min_lvl", 0)) == 0)
+        all_entities = DigitalTwin.expand_uri_aliases(store, table, all_entities)
+
+        all_rows = store.get_triples_for_subjects(table, list(all_entities))
+        seen: Set = set()
+        all_triples: List = []
+        for r in all_rows:
+            key = (r["subject"], r["predicate"], r["object"])
+            if key not in seen:
+                seen.add(key)
+                all_triples.append(r)
+
+        total = len(all_triples)
+        page = all_triples[offset : offset + limit]
+        return {
+            "seed_count": seed_count,
+            "depth": depth,
+            "triples": page,
+            "count": len(page),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "entity_count": len(all_entities),
+        }
+
+    @staticmethod
     def is_owlrl_available() -> bool:
         """Check whether the ``owlrl`` reasoning library is importable."""
         try:

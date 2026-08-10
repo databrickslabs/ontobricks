@@ -24,8 +24,10 @@ set -euo pipefail
 #      registry schema (a redeploy rebinds postgres and can drop grants)
 #      and apply the idempotent registry-schema migrations (status,
 #      review_quorum, build_runs, domain_review_events, domain_comments,
-#      domain_tasks). This is the "SQL if necessary" step; it is a no-op
-#      when everything is already present.
+#      domain_tasks, domain_edit_locks, domain_change_events, and the
+#      v0.7 schedules/schedule_runs generic-task columns). This is the
+#      "SQL if necessary" step; it is a no-op when everything is already
+#      present.
 #
 # The ONLY arguments are the two app names.
 #

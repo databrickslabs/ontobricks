@@ -713,7 +713,7 @@ class Neo4jReadOps:
             if uri == class_uri:
                 return sanitised
         # Fallback: derive from the URI's local name (schema map may lag).
-        from back.core.graphdb.neo4j.Neo4jGraphModel import label_from_class_uri
+        from back.core.graphdb.neo4j.graph_model import label_from_class_uri
 
         return label_from_class_uri(class_uri)
 
@@ -722,6 +722,6 @@ class Neo4jReadOps:
         for sanitised, uri in reltype_map.items():
             if uri == predicate_uri:
                 return sanitised
-        from back.core.graphdb.neo4j.Neo4jGraphModel import reltype_from_predicate
+        from back.core.graphdb.neo4j.graph_model import reltype_from_predicate
 
         return reltype_from_predicate(predicate_uri)

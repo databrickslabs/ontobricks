@@ -21,10 +21,19 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 # Registry objects provisioned by bootstrap-lakebase-perms.sh Step 2b and the
-# upgrade_lakebase_0.4_To_0.5.sql / upgrade_lakebase_0.5_To_0.6.sql scripts.
+# upgrade_0.4_to_0.5.sql / upgrade_0.5_to_0.6.sql / upgrade_0.6_to_0.7.sql
+# scripts.
 EXPECTED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("domain_versions", "status"),
     ("domains", "review_quorum"),
+    # v0.7 generic scheduled-task shape (see upgrade_0.6_to_0.7.sql).
+    ("schedules", "task_type"),
+    ("schedules", "target_key"),
+    ("schedules", "config"),
+    ("schedules", "last_count"),
+    ("schedule_runs", "task_type"),
+    ("schedule_runs", "target_key"),
+    ("schedule_runs", "detail"),
 )
 EXPECTED_TABLES: tuple[str, ...] = (
     "build_runs",
@@ -212,6 +221,31 @@ def inspect_migrations(conn_env: dict[str, str], schema: str) -> tuple[list[str]
     except RuntimeError as exc:
         errors.append(str(exc))
 
+    try:
+        has_sched_uq = psql_query(
+            conn_env,
+            "SELECT 1 FROM pg_constraint c "
+            "JOIN pg_namespace n ON n.oid = c.connamespace "
+            "JOIN pg_class r ON r.oid = c.conrelid "
+            f"WHERE n.nspname = '{schema}' AND r.relname = 'schedules' "
+            "AND c.conname = 'schedules_type_domain_target_key'",
+        )
+        if has_sched_uq != "1":
+            # Only flag when schedules exists (pre-Initialize registries skip
+            # the whole block via the domain_versions gate above, but a
+            # partially-migrated schema could still lack this constraint).
+            has_schedules = psql_query(
+                conn_env,
+                "SELECT 1 FROM information_schema.tables "
+                f"WHERE table_schema='{schema}' AND table_name='schedules'",
+            )
+            if has_schedules == "1":
+                pending.append(
+                    f"constraint {schema}.schedules_type_domain_target_key"
+                )
+    except RuntimeError as exc:
+        errors.append(str(exc))
+
     return pending, stale, errors
 
 
@@ -312,6 +346,45 @@ def run_preflight(
     except RuntimeError as exc:
         report.checks.append(CheckResult("psql_connect", "fail", str(exc)))
         return report
+
+    # Companion tables need digest() from pgcrypto, and it must live in ``public``:
+    # pooled connections use ``search_path = "<graph_schema>", public``, so an
+    # extension stranded in another schema is invisible (lakebase-perms Step 1b).
+    try:
+        ext_schema = psql_query(
+            conn_env,
+            "SELECT n.nspname FROM pg_extension e "
+            "JOIN pg_namespace n ON n.oid = e.extnamespace "
+            "WHERE e.extname = 'pgcrypto'",
+        )
+    except RuntimeError as exc:
+        report.checks.append(CheckResult("pgcrypto", "fail", str(exc)))
+        return report
+    if ext_schema == "public":
+        report.checks.append(
+            CheckResult("pgcrypto", "ok", "installed in public (digest available for companion tables)")
+        )
+    elif ext_schema:
+        report.checks.append(
+            CheckResult(
+                "pgcrypto",
+                "warn",
+                f"pgcrypto is installed in schema '{ext_schema}', not public — it is only "
+                "visible to connections whose search_path includes that schema. Companion "
+                "Builds relocate it automatically; if they fail with "
+                "`function digest(text, unknown) does not exist`, run "
+                "`ALTER EXTENSION pgcrypto SET SCHEMA public` as its owner.",
+            )
+        )
+    else:
+        report.checks.append(
+            CheckResult(
+                "pgcrypto",
+                "warn",
+                "extension pgcrypto is not installed — the app installs it on first Build. "
+                "Run `make bootstrap-lakebase` as a workspace admin if that fails.",
+            )
+        )
 
     try:
         schema_exists = psql_query(

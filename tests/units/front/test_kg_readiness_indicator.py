@@ -50,6 +50,19 @@ def test_backend_label_covers_lakehouse_neo4j_lakebase():
     assert "return 'Lakebase'" in js
 
 
+def test_backend_badges_include_matching_brand_icons():
+    js = SYNC_JS.read_text(encoding="utf-8")
+    assert "function _backendBrandIconClass(" in js
+    assert "ob-icon-postgresql" in js
+    assert "ob-icon-databricks" in js
+    assert "ob-icon-neo4j" in js
+    assert "function _kgBackendIconMarkup()" in js
+    ready = js[js.index("Graph ready") : js.index("} else if (tripleStoreStatusUnknown)")]
+    assert "_kgBackendIconMarkup()" in ready
+    unknown = js[js.index("Status unavailable") : js.index("} else {", js.index("Status unavailable"))]
+    assert "_kgBackendIconMarkup()" in unknown
+
+
 def test_go_to_build_delegated_click_handler_present():
     js = SYNC_JS.read_text(encoding="utf-8")
     assert "kg-go-build-btn" in js

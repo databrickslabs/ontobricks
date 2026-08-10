@@ -18,7 +18,8 @@ from back.core.errors import ValidationError
 from back.objects.session import SessionManager, get_session_manager
 from back.core.helpers import resolve_default_base_uri, resolve_default_emoji, run_blocking
 from back.objects.session import get_domain
-from back.objects.registry import ROLE_ADMIN, require
+from api.routers.internal._guards import require
+from back.objects.registry import ROLE_ADMIN
 
 from api.routers.internal._permissions import filter_visible_domains
 from api.routers.internal._helpers import map_route_errors
@@ -982,48 +983,113 @@ async def get_graph_engine_lakebase_health(
 
 @router.post("/graph-engine/neo4j-test")
 async def post_graph_engine_neo4j_test(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Probe Neo4j Bolt connectivity via ``driver.verify_connectivity()``.
+    """Probe Neo4j Bolt connectivity for a named connection or draft fields.
 
-    Wires the Settings → Back end → Neo4j "Test connection" button.
-    Uses the persisted ``engine_config`` (URI + username + encrypted) and the
-    ``NEO4J_PASSWORD`` env var injected by the bound Apps secret resource.
-    No Cypher is run — this is a Bolt protocol handshake only.
+    Body (optional JSON)::
+
+        {
+          "connection_name": "Aura Prod",
+          "draft": { "name": "...", "uri": "...", "username": "...", ... }
+        }
     """
     with map_route_errors("graph engine Neo4j connection test", logger):
-        return config_service.graph_engine_neo4j_test_result(session_mgr, settings)
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        draft = data.get("draft") if isinstance(data.get("draft"), dict) else None
+        return config_service.graph_engine_neo4j_test_result(
+            session_mgr,
+            settings,
+            connection_name=str(data.get("connection_name") or "").strip(),
+            draft=draft,
+        )
+
+
+@router.get(
+    "/graph-engine/neo4j-secret-scopes",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_graph_engine_neo4j_secret_scopes(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List Databricks secret scopes for the Neo4j password "Secret scope" dropdown."""
+    with map_route_errors("graph engine Neo4j secret scopes", logger):
+        return config_service.graph_engine_neo4j_secret_scopes_result(session_mgr, settings)
+
+
+@router.get(
+    "/graph-engine/neo4j-secret-keys",
+    dependencies=[Depends(require(ROLE_ADMIN))],
+)
+async def get_graph_engine_neo4j_secret_keys(
+    scope: str = "",
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List secret keys within ``scope`` for the Neo4j password "Secret key" dropdown."""
+    with map_route_errors("graph engine Neo4j secret keys", logger):
+        return config_service.graph_engine_neo4j_secret_keys_result(
+            scope, session_mgr, settings
+        )
+
+
+@router.get("/graph-engine/neo4j-connections")
+async def get_graph_engine_neo4j_connections(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """List named Neo4j connection profiles from Settings (no passwords)."""
+    with map_route_errors("graph engine Neo4j connections", logger):
+        return config_service.graph_engine_neo4j_connections_result(
+            session_mgr, settings
+        )
 
 
 @router.get("/graph-engine/neo4j-databases")
 async def get_graph_engine_neo4j_databases(
+    connection_name: str = "",
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List Neo4j databases on the server for the Domain Info DB selector (P4)."""
+    """List Neo4j databases on the server for a named connection (admin)."""
     with map_route_errors("graph engine Neo4j databases", logger):
-        return config_service.graph_engine_neo4j_databases_result(session_mgr, settings)
+        return config_service.graph_engine_neo4j_databases_result(
+            session_mgr, settings, connection_name=connection_name
+        )
 
 
 @router.get("/graph-engine/neo4j-labels")
 async def get_graph_engine_neo4j_labels(
+    connection_name: str = "",
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List materialised Neo4j graphs (marker labels) with node/edge counts (admin Objects tab, P5)."""
+    """List materialised Neo4j graphs (marker labels) with node/edge counts."""
     with map_route_errors("graph engine Neo4j labels", logger):
-        return config_service.graph_engine_neo4j_labels_result(session_mgr, settings)
+        return config_service.graph_engine_neo4j_labels_result(
+            session_mgr, settings, connection_name=connection_name
+        )
 
 
 @router.get("/graph-engine/neo4j-health")
 async def get_graph_engine_neo4j_health(
+    connection_name: str = "",
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Bolt health probe for the Neo4j admin Health tab (P5)."""
+    """Bolt health probe for the Neo4j admin Health tab."""
     with map_route_errors("graph engine Neo4j health", logger):
-        return config_service.graph_engine_neo4j_health_result(session_mgr, settings)
+        return config_service.graph_engine_neo4j_health_result(
+            session_mgr, settings, connection_name=connection_name
+        )
 
 
 @router.post("/graph-engine/neo4j-drop-label")
@@ -1032,14 +1098,17 @@ async def post_graph_engine_neo4j_drop_label(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Drop one Neo4j graph (marker label) and its schema map (admin, P5).
+    """Drop one Neo4j graph (marker label) and its schema map (admin).
 
-    Body: ``{ "label": "<marker label>" }``
+    Body: ``{ "label": "<marker label>", "connection_name": "..." }``
     """
     with map_route_errors("graph engine Neo4j drop label", logger):
         data = await request.json()
         return config_service.graph_engine_neo4j_drop_label_result(
-            (data.get("label") or "").strip(), session_mgr, settings
+            (data.get("label") or "").strip(),
+            session_mgr,
+            settings,
+            connection_name=str(data.get("connection_name") or "").strip(),
         )
 
 

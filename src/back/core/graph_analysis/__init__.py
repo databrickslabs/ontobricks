@@ -8,7 +8,7 @@ from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
 from back.core.graph_analysis.preflight import (
     analytics_job_configured,
     analytics_job_status,
-    data_table_has_rows,
+    probe_data_table,
 )
 from back.core.graph_analysis.models import (
     MODE_JOB,
@@ -109,7 +109,7 @@ __all__ = [
     "resolve_analytics_source",
     "analytics_job_configured",
     "analytics_job_status",
-    "data_table_has_rows",
+    "probe_data_table",
     "EntityTypeProfile",
     "MetricsRequest",
     "NodeMetrics",

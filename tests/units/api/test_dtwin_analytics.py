@@ -41,7 +41,7 @@ def test_preflight_requires_a_non_empty_data_table(monkeypatch):
     monkeypatch.setattr(
         preflight, "resolve_analytics_source", lambda d, s: ("cat.sch.t_data", "")
     )
-    monkeypatch.setattr(preflight, "data_table_has_rows", lambda d, s, t: False)
+    monkeypatch.setattr(preflight, "probe_data_table", lambda d, s, t: (False, ""))
 
     ok, reason = preflight.analytics_job_status(object(), object())
     assert ok is False

@@ -108,12 +108,16 @@ for arg in "$@"; do
     case $arg in
         --background|-b) BACKGROUND=true ;;
         --restart|-r)    RESTART=true ;;
+        --no-reload)     export ONTOBRICKS_NO_RELOAD=1 ;;
         --help|-h)
             echo "Usage: scripts/start.sh [options]"
             echo ""
             echo "Options:"
             echo "  --background, -b    Run in background"
             echo "  --restart, -r       Restart if already running"
+            echo "  --no-reload         Disable auto-reload (use for long live runs"
+            echo "                      like 'make scenario-campaign', where a src/"
+            echo "                      edit would kill in-flight background tasks)"
             echo "  --help, -h          Show this help message"
             exit 0
             ;;

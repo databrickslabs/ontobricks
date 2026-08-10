@@ -54,14 +54,18 @@ Neo4j **4.x will not work** and is not supported.
 and groups rows with `UNWIND` rather than calling `apoc.create.*`, so the
 backend runs on Aura Free and Community with no plugins installed.
 
-**Connection / auth.** The Bolt URI, database, username, and encryption flag are
-configured in Settings → Neo4j. In a deployed Databricks App the password comes
-from the `NEO4J_PASSWORD` env var (bound via an Apps secret resource); the
-persisted config password is a local-dev fallback only and is stripped at
-save-time in production. `auth_method=databricks_secret` is reserved for a
-future release (currently raises `NotImplementedError`). Self-hosted servers may
-use `bolt://` / `neo4j://` (unencrypted) or `neo4j+s://` / `bolt+s://` (TLS
-embedded).
+**Named connection profiles.** Settings → Neo4j stores one or more **named
+connections** (`graph_engine_config.neo4j.connections[]`), each with its own
+Bolt URI, database, username, encryption flag, and Databricks secret
+scope/key. There is no auto-migration from the older flat single-profile keys —
+admins re-enter connections in the master–detail UI.
+
+**Auth.** Every connection must use a Databricks secret (`auth_method:
+databricks_secret`). Clear-text passwords are stripped on save. In a deployed
+Databricks App the runtime still accepts a bound `NEO4J_PASSWORD` env var as a
+legacy fallback for older configs, but the Settings UI only exposes the
+secret-scope path. Self-hosted servers may use `bolt://` / `neo4j://`
+(unencrypted) or `neo4j+s://` / `bolt+s://` (TLS embedded).
 
 ---
 
@@ -70,47 +74,39 @@ embedded).
 OntoBricks is developed and tested against **Neo4j Aura** (managed, v5). Other
 flavors work with the caveats below.
 
-| Flavor | Typed graph write/read | Multi-database (DB selector) | Notes |
+| Flavor | Typed graph write/read | Multi-database (per connection) | Notes |
 |---|---|---|---|
 | **Aura** (managed) | ✅ | ✅ (paid tiers) | Primary dev/test target. Aura Free is single-DB. |
-| **Enterprise** (self-hosted) | ✅ | ✅ | Full support incl. per-domain database routing. |
-| **Community** (self-hosted) | ✅ | ❌ single `neo4j` DB only | Typed graph works; DB selector degrades gracefully (see §4). |
+| **Enterprise** (self-hosted) | ✅ | ✅ | Full support; put the target DB name on the connection profile. |
+| **Community** (self-hosted) | ✅ | ❌ single `neo4j` DB only | Typed graph works; leave the connection's database at the Community default. |
 | **AuraDS / Neo4j 4.x** | ❌ (4.x) / ⚠️ (AuraDS = v5, works) | — | 4.x unsupported; AuraDS follows the v5 rules above. |
 
 ---
 
-## 4. The per-domain database selector (multi-database)
+## 4. Domain binding — named connection (required)
 
-Domain → Information → Knowledge Graph exposes a **Neo4j database** selector
-(parity with Lakebase's database picker). This lets one OntoBricks deployment
-target a different Neo4j *database* per domain.
+When a domain's Graph Backend is **Neo4j**, Domain → Information → Knowledge
+Graph requires a **Neo4j connection** dropdown value (`domain.info.neo4j_connection`).
+That name resolves to one Settings profile at build / query time. There is no
+blank “use default” and no per-domain database override — the database lives on
+the connection profile.
 
-**Multi-database is an Enterprise / Aura feature.** Neo4j **Community Edition is
-single-database** — it only has the `neo4j` database and cannot create or route
-to others. On flavors where `SHOW DATABASES` is unavailable or restricted, the
-selector **degrades gracefully**: the backend catches the error, returns an
-empty list, and the connection falls back to the configured default database.
-So the *feature* is only useful on Enterprise / Aura, but selecting Neo4j as a
-backend never fails on Community because of it.
+> **If the profile points at a database that does not exist on the server**,
+> queries fail when the driver opens a session. Prefer **Test connection** on
+> the selected profile in Settings → Neo4j before binding domains to it.
 
-> **If you pick a database that does not exist on your server**, queries will
-> fail at runtime when the driver opens a session against it. Only choose a
-> database the server actually has (use the selector's *Refresh* button, which
-> lists real databases via `SHOW DATABASES`).
-
-The per-domain choice is stored in `DomainSession.info['neo4j_database']`, is
-versioned and survives UC export/import, and overrides the workspace-global
-`graph_engine_config.neo4j.database` at build time (empty → keep the global
-default).
+Deleting or renaming a connection that domains still reference is rejected with
+the list of affected domains.
 
 ---
 
 ## 5. OntoBricks assumes it owns the connected database
 
 The admin **Objects** tab (Settings → Neo4j → Objects) lists **every OntoBricks
-graph** in the connected Neo4j database — that is, every node label backed by a
-`node_<label>_uri` uniqueness constraint — with node and relationship counts,
-and lets an admin **drop** any of them.
+graph** in the **selected** connection's Neo4j database — that is, every node
+label backed by a `node_<label>_uri` uniqueness constraint — with node and
+relationship counts, and lets an admin **drop** any of them. Pick the
+connection in the Objects picker first.
 
 Because this operates on the whole connected database:
 
@@ -132,6 +128,10 @@ automatically and must be **rebuilt**. Old flat nodes and new typed nodes cannot
 coexist meaningfully under the same marker label — drop the old graph (Objects
 tab) and rebuild the domain.
 
+Domains that still have a flat workspace Neo4j config (no `connections[]`) must
+be reconfigured: add named connection(s) in Settings → Neo4j, then set each
+Neo4j domain's **Neo4j connection** on Domain → Information → Knowledge Graph.
+
 ---
 
 ## 7. Operational notes
@@ -141,6 +141,7 @@ tab) and rebuild the domain.
   2000 triples.
 - **No raw Cypher entry point.** All writes go through the build pipeline after
   ontology validation (the C2 safeguard); there is no user-facing Cypher console.
-- **Health tab.** Settings → Neo4j → Health runs a Bolt handshake + trivial
-  `RETURN 1` against the saved connection so you can confirm reachability
-  without running a build.
+- **Test connection.** Settings → Neo4j → **Test connection** (per selected
+  profile) runs a Bolt handshake plus a trivial `RETURN 1` so you can confirm
+  reachability without running a build. The former dedicated Health tab was
+  removed; Test connection covers the same probe.

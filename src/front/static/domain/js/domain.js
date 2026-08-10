@@ -288,19 +288,27 @@ async function saveDomainInfo() {
         return;
     }
 
-    const domainInfoPayload = {
-        name: domainName,
-        version: versionEl ? versionEl.value : '1',
-        description: descEl.value.trim(),
-        author: authorEl.value.trim(),
-        base_uri: baseUriEl ? baseUriEl.value.trim() : '',
-        base_uri_auto: _baseUriAutoMode,
-        llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
-        review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
-        graph_backend: graphBackendEl ? graphBackendEl.value : 'lakebase',
-        neo4j_database: (graphBackendEl && graphBackendEl.value === 'neo4j' && neo4jDbEl)
-            ? neo4jDbEl.value : '',
-    };
+    if (typeof validateDomainInfoForm === 'function' && !validateDomainInfoForm()) {
+        return;
+    }
+
+    // Shared with the pre-UC-save auto-save in navbar.js so both paths always
+    // send the same field set.
+    const domainInfoPayload = typeof buildDomainInfoPayload === 'function'
+        ? buildDomainInfoPayload()
+        : {
+            name: domainName,
+            version: versionEl ? versionEl.value : '1',
+            description: descEl.value.trim(),
+            author: authorEl.value.trim(),
+            base_uri: baseUriEl ? baseUriEl.value.trim() : '',
+            base_uri_auto: _baseUriAutoMode,
+            llm_endpoint: llmEndpointEl ? llmEndpointEl.value : '',
+            review_quorum: quorumEl ? Math.max(1, parseInt(quorumEl.value, 10) || 1) : 1,
+            graph_backend: graphBackendEl ? graphBackendEl.value : 'lakebase',
+            neo4j_connection: (graphBackendEl && graphBackendEl.value === 'neo4j' && neo4jDbEl)
+                ? neo4jDbEl.value : '',
+        };
     
     try {
         showNotification('Saving domain info...', 'info', 1000);
@@ -316,6 +324,11 @@ async function saveDomainInfo() {
         
         if (data.success) {
             showNotification('Domain info saved successfully!', 'success');
+            // Keep the selector's baseline in step so a later refresh of the
+            // Settings connection list re-selects what was just persisted.
+            if (neo4jDbEl) {
+                neo4jDbEl.dataset.savedValue = domainInfoPayload.neo4j_connection;
+            }
             // ``refreshNavbarIndicators`` invalidates ``/navbar/state``
             // and ``/domain/info`` then re-fetches — no separate
             // ``invalidateDomainCaches`` call (would double-invalidate).

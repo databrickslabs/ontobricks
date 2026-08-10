@@ -2405,7 +2405,7 @@ var SigmaGraph = (function () {
                 placeholder.className = 'position-absolute top-50 start-50 translate-middle text-center';
                 placeholder.innerHTML =
                     '<div class="text-muted">' +
-                    '<i class="bi bi-diagram-3 " style="font-size:2.5rem;"></i>' +
+                    '<i class="bi bi-share" style="font-size:2.5rem;"></i>' +
                     '<p class="mt-2 mb-1 fw-semibold">Graph Viewer</p>' +
                     '<p class="small">Use the filter panel to search and explore entities.</p>' +
                     '</div>';

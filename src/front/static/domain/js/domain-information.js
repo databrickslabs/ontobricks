@@ -5,7 +5,7 @@
 
 let currentDomainFolder = null;
 
-// Show the Neo4j database selector only when the backend is Neo4j.
+// Show the Neo4j connection selector only when the backend is Neo4j.
 function toggleNeo4jDatabaseSection() {
     const backend = (document.getElementById('domainGraphBackend') || {}).value;
     const section = document.getElementById('neo4jDatabaseSection');
@@ -13,32 +13,58 @@ function toggleNeo4jDatabaseSection() {
     section.classList.toggle('d-none', backend !== 'neo4j');
 }
 
-// Populate the Neo4j database dropdown from the server (SHOW DATABASES).
-async function loadNeo4jDatabases() {
+/** Reveal the selector and fill it from Settings when the backend is Neo4j. */
+function syncNeo4jConnectionSection() {
+    toggleNeo4jDatabaseSection();
+    const backend = (document.getElementById('domainGraphBackend') || {}).value;
+    if (backend === 'neo4j') loadNeo4jDatabases();
+}
+
+// Populate the Neo4j connection dropdown from Settings named connections.
+// In-flight guard: the section toggle fires on init and on every backend
+// change, so without it a single reveal would issue several identical fetches.
+let _neo4jConnectionsLoading = null;
+
+async function loadNeo4jDatabases(forceRefresh) {
+    if (_neo4jConnectionsLoading && !forceRefresh) return _neo4jConnectionsLoading;
+    _neo4jConnectionsLoading = _loadNeo4jConnectionOptions();
+    try {
+        return await _neo4jConnectionsLoading;
+    } finally {
+        _neo4jConnectionsLoading = null;
+    }
+}
+
+async function _loadNeo4jConnectionOptions() {
     const select = document.getElementById('domainNeo4jDatabase');
     const help = document.getElementById('neo4jDatabaseHelp');
     if (!select) return;
-    const saved = select.dataset.savedValue || select.value || '';
-    if (help) help.innerHTML = '<span class="text-muted">Loading databases…</span>';
+    if (help) help.innerHTML = '<span class="text-muted">Loading connections…</span>';
     try {
-        const resp = await fetch('/settings/graph-engine/neo4j-databases', { credentials: 'same-origin' });
+        const resp = await fetch('/settings/graph-engine/neo4j-connections', { credentials: 'same-origin' });
         const data = await resp.json();
         if (!data || !data.success) throw new Error((data && data.error) || 'request failed');
-        const names = data.databases || [];
+        const connections = data.connections || [];
+        const names = connections.map(c => (c && c.name) ? String(c.name) : '').filter(Boolean);
+        // Read the target selection only now: /domain/info may have supplied
+        // the persisted name while this request was in flight. A pick the user
+        // just made outranks the last persisted value.
+        const saved = select.value || select.dataset.savedValue || '';
         select.innerHTML = '';
-        select.add(new Option('— use configured default —', ''));
+        select.add(new Option('— Select a Neo4j connection —', '', true, !saved));
+        select.options[0].disabled = true;
         names.forEach(n => select.add(new Option(n, n)));
         if (saved && names.indexOf(saved) === -1) {
-            select.add(new Option(saved + ' (saved)', saved));
+            select.add(new Option(saved + ' (missing in Settings)', saved));
         }
-        select.value = saved;
+        if (saved) select.value = saved;
         if (help) {
             help.innerHTML = names.length
-                ? '<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + names.length + ' database(s) on ' + (data.configured || 'server') + '</span>'
-                : '<span class="text-muted">Server did not expose a database list; using configured default (' + (data.configured || 'neo4j') + ').</span>';
+                ? '<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + names.length + ' connection(s) in Settings → Neo4j</span>'
+                : '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>No Neo4j connections yet — add one under Settings → Neo4j.</span>';
         }
     } catch (e) {
-        if (help) help.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>' + (e.message || 'Could not list databases') + '</span>';
+        if (help) help.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>' + (e.message || 'Could not list connections') + '</span>';
     }
 }
 
@@ -350,15 +376,32 @@ document.addEventListener('DOMContentLoaded', async function() {
             versionEl.addEventListener('change', refreshDtNamesFromForm);
         }
         const graphBackendEl = document.getElementById('domainGraphBackend');
+        const neo4jDbElInit = document.getElementById('domainNeo4jDatabase');
+        // The template already renders the persisted Graph Backend / Neo4j
+        // Connection server-side (Jinja), so these two fields are correct the
+        // instant the page paints. The redundant `/domain/info` re-fetch below
+        // is gated behind the (often multi-second, real-workspace) LLM
+        // endpoints call in the same Promise.all — a fast user can pick a new
+        // value before it resolves, and it would otherwise silently revert
+        // the pick back to the stale one it fetched. Mark the field dirty on
+        // the first user interaction so that late resolution never clobbers
+        // an edit made in the meantime.
         if (graphBackendEl) {
             graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
-            graphBackendEl.addEventListener('change', toggleNeo4jDatabaseSection);
+            graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
+            graphBackendEl.addEventListener('change', () => {
+                graphBackendEl.dataset.userEdited = '1';
+            });
         }
-        // Neo4j database selector: toggle visibility + lazy-load on demand.
-        toggleNeo4jDatabaseSection();
+        if (neo4jDbElInit) {
+            neo4jDbElInit.addEventListener('change', () => {
+                neo4jDbElInit.dataset.userEdited = '1';
+            });
+        }
+        syncNeo4jConnectionSection();
         const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
         if (refreshDbBtn) {
-            refreshDbBtn.addEventListener('click', loadNeo4jDatabases);
+            refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
         }
 
         // Load LLM endpoints and version status in parallel
@@ -389,19 +432,30 @@ document.addEventListener('DOMContentLoaded', async function() {
                 setSelectedLlmEndpoint(infoData.info.llm_endpoint);
             }
             const graphBackendEl = document.getElementById('domainGraphBackend');
-            if (graphBackendEl && infoData.info && infoData.info.graph_backend) {
+            // Skip once the user has touched the field: this fetch reflects
+            // whatever was persisted *before* the page loaded, so applying it
+            // after an edit would silently revert the user's pick (see the
+            // dirty-flag wiring above).
+            if (graphBackendEl && !graphBackendEl.dataset.userEdited
+                    && infoData.info && infoData.info.graph_backend) {
                 graphBackendEl.value = infoData.info.graph_backend;
             }
             const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
-            if (neo4jDbEl && infoData.info && infoData.info.neo4j_database) {
-                const saved = infoData.info.neo4j_database;
+            if (neo4jDbEl && !neo4jDbEl.dataset.userEdited
+                    && infoData.info && infoData.info.neo4j_connection) {
+                const saved = infoData.info.neo4j_connection;
                 if (![...neo4jDbEl.options].some(o => o.value === saved)) {
                     neo4jDbEl.add(new Option(saved, saved, true, true));
                 }
                 neo4jDbEl.value = saved;
                 neo4jDbEl.dataset.savedValue = saved;
             }
-            toggleNeo4jDatabaseSection();
+            // Runs after the saved value is known, so the freshly fetched
+            // option list keeps it selected. Safe even when the user already
+            // edited the field: it reads the select's *current* value first
+            // (see `_loadNeo4jConnectionOptions`) and only falls back to
+            // `dataset.savedValue` when the select has nothing of its own.
+            syncNeo4jConnectionSection();
         }
 
         // The DT panel reads catalog/schema from the dropdown rendering of

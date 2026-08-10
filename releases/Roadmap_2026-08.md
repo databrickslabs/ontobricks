@@ -1,7 +1,7 @@
 # OntoBricks — Product Roadmap
 
 > **Version:** 0.7.x → beyond  
-> **Last updated:** 2026-08-05  
+> **Last updated:** 2026-08-07  
 > **Status:** Living document — updated after each release
 
 > **Disclaimer:** This roadmap represents the current product direction and planned investments as of the date above. It is provided for informational purposes only and is subject to change at any time without notice. The features, timelines, and priorities described here are aspirational and do not constitute a commitment, promise, or legal obligation to deliver any specific functionality by any specific date. Actual releases may differ materially from what is described here.
@@ -12,12 +12,14 @@
 
 OntoBricks is the only Databricks-native knowledge graph builder that combines ontology design, LLM-powered automation, formal reasoning, and interactive graph exploration in a single deployable App. Versions 0.4.0 (Lakebase as primary triple store), 0.5.0 (UX, workflow & governance), 0.6.0 (collaborative comments & AI agents, graph analytics, mapping depth), and 0.7.0 (Neo4j connector) have shipped; **v0.7.0 is the current stable line**.
 
-The next phase of the roadmap focuses on four strategic axes:
+The next phase of the roadmap focuses on six strategic axes:
 
 1. **Data & mapping integrity hardening** — close two gaps surfaced by real usage: deleting a data source still referenced by a mapping today produces a silent, dangling reference (broken R2RML at build time, no warning at delete time), and metadata refresh applies column changes without a preview (**v0.8.0**).
 2. **External surface expansion** — a GraphRAG-inspired retrieval layer for the MCP Server, embedded-dashboard/action/dataset endpoints published on the external API, and a first design pass on exposing draft domains and agentic modeling externally (**v0.8.0**).
 3. **Workflow completeness** — close the remaining v0.6.0-deferred UX and automation items (ontology version diff, mapping multi-select & orphan validation, scheduled reasoning, temporal & recursive Datalog) folded into the **v0.8.0** release.
-4. **Enterprise hardening** — fine-grained RBAC, multi-workspace federation, audit log, large-graph pagination, and one-command deployment (**v0.9.0**).
+4. **Domain storage isolation** — isolate each domain's Lakebase and Lakehouse artifacts behind a dedicated schema so multi-domain deployments no longer share a flat namespace (**v0.8.0**).
+5. **Ontos integration** — connect OntoBricks domains with Databricks Ontos so ontology and mapping work can interoperate with the platform ontology layer (**v0.8.0**).
+6. **Enterprise hardening** — fine-grained RBAC, multi-workspace federation, audit log, large-graph pagination, and one-command deployment (**v0.9.0**).
 
 ---
 
@@ -82,7 +84,9 @@ OntoBricks can be positioned as the **semantic layer for the Databricks Lakehous
 
 - A few v0.6.0 workflow items not yet delivered (ontology version diff/iteration, mapping multi-select & orphan validation, scheduled reasoning, temporal & recursive Datalog) — **targeted for v0.8.0**
 - Deleting a data source still referenced by a mapping is not blocked or flagged, and metadata refresh applies column changes without a preview — **targeted for v0.8.0**
+- Lakebase and Lakehouse graph/registry objects are not isolated per domain (shared schema / flat namespace) — **targeted for v0.8.0**
 - MCP Server exposes typed lookups and BFS-style traversal but no semantic/GraphRAG-style retrieval; embedded dashboards, actions, and datasets are not published on the external API; the external API has no concept of draft domains or agentic operations — **targeted for v0.8.0**
+- No integration with Databricks Ontos (import/export or sync of ontology assets between OntoBricks and the platform ontology layer) — **targeted for v0.8.0**
 - No native, end-to-end unstructured data ingestion pipeline (document → entity extraction → deduplication → knowledge graph); v0.5.0 shipped document-to-markdown conversion feeding the ontology/business-rules agents, but full extraction-to-graph is **unscheduled** pending user feedback in Discussions
 - No i18n / localization layer — all UI strings are hardcoded English; **unscheduled**, pending a decision on target languages and scaffolding approach
 - No SPARQL federation across multiple domain graphs
@@ -200,9 +204,9 @@ Also delivered (beyond the original plan):
 
 ---
 
-### v0.8.0 — Data Integrity, External Surface & Workflow Completeness (October 2026)
+### v0.8.0 — Data Integrity, External Surface, Domain Isolation, Workflow Completeness & Ontos Integration (October 2026)
 
-**Theme:** three pillars shipped together. First, **data & mapping integrity hardening** — closing gaps in the data-source/mapping lifecycle surfaced by real usage. Second, **external surface expansion** — a GraphRAG-inspired MCP retrieval layer, published dashboard/action/dataset endpoints, and a first design pass on exposing draft domains and agentic modeling externally. Third, **closure of all workflow items deferred from v0.6.0** (ontology version diff, mapping multi-select, orphan detection, scheduled reasoning, temporal & recursive Datalog).
+**Theme:** five tracks shipped together. First, **data & mapping integrity hardening** — closing gaps in the data-source/mapping lifecycle surfaced by real usage. Second, **external surface expansion** — a GraphRAG-inspired MCP retrieval layer, published dashboard/action/dataset endpoints, and a first design pass on exposing draft domains and agentic modeling externally. Third, **domain storage isolation** — each domain gets a dedicated Lakebase and Lakehouse schema so graph and registry artifacts no longer share a flat namespace. Fourth, **closure of all workflow items deferred from v0.6.0** (ontology version diff, mapping multi-select, orphan detection, scheduled reasoning, temporal & recursive Datalog). Fifth, **Ontos integration** — bridge OntoBricks domains with Databricks Ontos so customers can reuse and align ontology assets across the platform ontology layer and OntoBricks design/mapping/reasoning.
 
 #### Pillar 1 — Data Source & Mapping Integrity
 
@@ -239,7 +243,16 @@ Also delivered (beyond the original plan):
 | **Enumeration attribute type**            | Add a first-class "Enumeration" data type to the ontology attribute editor (today enum-like behavior only exists as a SHACL `sh:in` validation constraint), wired through OWL generation and SHACL shape emission | P2       |
 | **SPARQL editor — Knowledge Graph menu**  | A SPARQL editor and backend already exist (`query-execute.js`, `DomainQueryService`); confirm scope with the requester — surface the existing editor under the Knowledge Graph menu (navigation fix), or upgrade it (syntax highlighting/autocomplete) | P2       |
 
-#### Pillar 5 — Platform UX & Localization
+#### Pillar 5 — Domain Storage Isolation
+
+
+| Capability                                         | Description                                                                                                                                                                                                                                                                                                                                 | Priority |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| **Lakebase — per-domain schema**                   | Provision and bind each domain to a dedicated Postgres schema in Lakebase (instead of a shared flat namespace), so triples, indexes, and app-managed objects are isolated per domain; migrations cover existing multi-domain deployments                                                                                                      | P1       |
+| **Lakehouse — per-domain schema**                  | Mirror the same isolation model for Delta/UC Lakehouse artifacts: each domain owns a dedicated Unity Catalog schema for its graph tables, build outputs, and related objects, with create/migrate paths that keep lineage and grants scoped to that schema                                                                                    | P1       |
+| **Domain schema lifecycle**                        | Create, rename-safe binding, and drop (or soft-retire) the domain schema as part of domain create/delete/version flows; document the naming convention and UC/Lakebase grant expectations so ops can audit isolation                                                                                                                         | P2       |
+
+#### Pillar 6 — Platform UX & Localization
 
 
 | Capability                                    | Description                                                                                                                                                                        | Priority |
@@ -247,7 +260,7 @@ Also delivered (beyond the original plan):
 | **Unsaved-changes guard beyond the Designer** | Generalize the Ontology Designer's dirty-flag + beacon-save-on-unload pattern to Mapping, Metadata/Data Sources, and Business Rules, which today only guard in-app navigation via confirm dialogs | P2       |
 | **Language package foundations**             | No i18n infrastructure exists today; scope as either a translation-key scaffolding pass or a first concrete target language, pending a product decision on which languages/markets to target | P3       |
 
-#### Pillar 6 — Deferred Workflow Items (carried from v0.6.0)
+#### Pillar 7 — Deferred Workflow Items (carried from v0.6.0)
 
 
 | Capability                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Priority |
@@ -257,6 +270,13 @@ Also delivered (beyond the original plan):
 | **Mapping — orphan detection**                      | Validation pass that flags mapped entities with no relationships (isolated nodes), surfaced as advisory warnings in the Mapping designer and the Cockpit readiness checks                                                                                                                                                                                                                                                                                                                                                                                                                                      | P2       |
 | **Scheduler — inference & materialization**         | Extend the scheduler so OWL 2 RL inference and SWRL materialization can run as scheduled tasks alongside the existing build job, with results recorded in the build-run trace                                                                                                                                                                                                                                                                                                                                                                                                                                  | P2       |
 | **Advanced reasoning — temporal & recursive rules** | Extend the multi-phase reasoning engine with two new symbolic families: **(1) Temporal reasoning** — Allen's 13 interval relations (before, meets, overlaps, during, …) inferred from entity start/end datatype properties; **(2) recursive Datalog** — stratified, semi-naïve fixpoint rules reusing the SWRL atom syntax for true recursion (e.g. conditional reachability/ancestry) beyond the fixed transitive closure. Shipped as a phased roadmap (temporal first, Datalog second)                                                                                                                     | P2       |
+
+#### Pillar 8 — Ontos Integration
+
+
+| Capability                              | Description                                                                                                                                                                                                                                                                                                                                 | Priority |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| **Ontos Integration**                   | Integrate OntoBricks with **Databricks Ontos**: import/align ontology assets from Ontos into OntoBricks domains, export or publish OntoBricks OWL/mappings back for platform reuse, and document the supported sync/auth model so design, mapping, and reasoning stay complementary to the Databricks ontology layer rather than a silo | P1       |
 
 ---
 
@@ -309,6 +329,7 @@ Also delivered (beyond the original plan):
 | **Append-mode OWL/RDFS/SKOS import**             | —    | —    | ✅    | ✅    | ✅    | ✅    | ✅    |
 | **Neo4j connector**                              | —    | —    | —    | ✅    | ✅    | ✅    | ✅    |
 | **Data source / mapping integrity guards**       | —    | —    | —    | —    | ✅    | ✅    | ✅    |
+| **Domain isolation (Lakebase + Lakehouse schema)** | —  | —    | —    | —    | ✅    | ✅    | ✅    |
 | **External API — dashboards, actions, datasets** | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | **MCP GraphRAG-style retrieval**                 | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | **Enumeration attribute type**                   | —    | —    | —    | —    | ✅    | ✅    | ✅    |
@@ -317,6 +338,7 @@ Also delivered (beyond the original plan):
 | **Mapping multi-select & orphan check**          | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | **Scheduled inference / materialization**        | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | **Temporal & recursive Datalog reasoning**       | —    | —    | —    | —    | ✅    | ✅    | ✅    |
+| **Ontos Integration**                            | —    | —    | —    | —    | ✅    | ✅    | ✅    |
 | Fine-grained RBAC                                | —    | —    | —    | —    | —    | ✅    | ✅    |
 | Multi-workspace federation                       | —    | —    | —    | —    | —    | ✅    | ✅    |
 | API key authentication                           | —    | —    | —    | —    | —    | ✅    | ✅    |
@@ -347,11 +369,13 @@ Also delivered (beyond the original plan):
 ## Open Questions
 
 1. **Data source deletion guard — block vs. warn** — should removing a mapped data source be a hard block, or a confirmation dialog that lists the affected entities/relationships and lets the user proceed? Leaning toward confirm-with-detail, consistent with how other destructive actions (Unmap all, Clear metadata) already behave in the app.
-2. **MCP GraphRAG scope** — structured retrieval over the existing ontology graph (extending `describe_entity`/BFS traversal with ranking) vs. classic GraphRAG (unstructured text chunks + embeddings + community summaries). These are materially different builds; needs a SPEC.md before implementation per the AI-feature lifecycle gate.
-3. **External API — agentic write operations** — if draft domains and agentic modeling are exposed externally, what's the auth model (scoped API keys land in v0.9.0 — should this pillar wait for that, or ship with a narrower, session-bound external scope first)?
-4. **Language package approach** — scaffold a general translation-key pipeline now (higher upfront cost, no immediate payoff) or wait for a concrete target-language requirement and localize incrementally? No committed direction yet.
-5. **Lakebase SPARQL subset scope** — BGP + FILTER covers 80% of use cases; OPTIONAL and UNION add another 15%. Aggregates and property paths are deferred to a later patch.
-6. **Auto quality rules confidence** — the v0.5.0 business-rules generator is advisory (suggest + review/accept). How aggressively should auto-suggested rules be applied? Auto-apply with confidence thresholds is deferred pending feedback.
+2. **Domain schema naming & migration** — fixed convention (e.g. `ob_<domain_id>`) vs. operator-chosen schema name; and whether existing multi-domain Lakebase/Lakehouse deployments migrate in place or require a one-shot cutover tool.
+3. **MCP GraphRAG scope** — structured retrieval over the existing ontology graph (extending `describe_entity`/BFS traversal with ranking) vs. classic GraphRAG (unstructured text chunks + embeddings + community summaries). These are materially different builds; needs a SPEC.md before implementation per the AI-feature lifecycle gate.
+4. **External API — agentic write operations** — if draft domains and agentic modeling are exposed externally, what's the auth model (scoped API keys land in v0.9.0 — should this pillar wait for that, or ship with a narrower, session-bound external scope first)?
+5. **Language package approach** — scaffold a general translation-key pipeline now (higher upfront cost, no immediate payoff) or wait for a concrete target-language requirement and localize incrementally? No committed direction yet.
+6. **Lakebase SPARQL subset scope** — BGP + FILTER covers 80% of use cases; OPTIONAL and UNION add another 15%. Aggregates and property paths are deferred to a later patch.
+7. **Auto quality rules confidence** — the v0.5.0 business-rules generator is advisory (suggest + review/accept). How aggressively should auto-suggested rules be applied? Auto-apply with confidence thresholds is deferred pending feedback.
+8. **Ontos Integration direction** — one-way import from Ontos, bidirectional sync, or publish-from-OntoBricks-only? Needs a short design pass on asset granularity (classes/properties vs full domain package), conflict resolution, and auth against the Ontos API before implementation.
 
 ---
 

@@ -1,7 +1,7 @@
 # OntoBricks — Product Roadmap
 
 > **Version:** 0.6.x → beyond  
-> **Last updated:** 2026-07-01  
+> **Last updated:** 2026-07-06  
 > **Status:** Living document — updated after each release
 
 > **Disclaimer:** This roadmap represents the current product direction and planned investments as of the date above. It is provided for informational purposes only and is subject to change at any time without notice. The features, timelines, and priorities described here are aspirational and do not constitute a commitment, promise, or legal obligation to deliver any specific functionality by any specific date. Actual releases may differ materially from what is described here.
@@ -10,11 +10,11 @@
 
 ## Executive Summary
 
-OntoBricks is the only Databricks-native knowledge graph builder that combines ontology design, LLM-powered automation, formal reasoning, and interactive graph exploration in a single deployable App. Versions 0.4.0 (Lakebase as primary triple store), 0.5.0 (UX, workflow & governance), and 0.6.0 (collaborative comments & AI agents, graph analytics, mapping depth) have shipped; **v0.6.0 is the current stable line**.
+OntoBricks is the only Databricks-native knowledge graph builder that combines ontology design, LLM-powered automation, formal reasoning, and interactive graph exploration in a single deployable App. Versions 0.4.0 (Lakebase as primary triple store), 0.5.0 (UX, workflow & governance), 0.6.0 (collaborative comments & AI agents, graph analytics, mapping depth), and 0.6.1 (deploy hardening + read-only Switch fix) have shipped; **v0.6.1 is the current stable line**.
 
 The next phases of the roadmap focus on four strategic axes:
 
-1. **Graph engine expansion** — add Neo4j (Community, Enterprise, AuraDB) as a graph engine alongside Delta Lake and Lakebase, opening OntoBricks to hybrid Lakehouse + graph deployments (**v0.7.0**).
+1. **Graph engine expansion** — add **Delta Lake** as a first-class Graph DB engine (Spark SQL traversal directly on UC Delta tables, no Lakebase mirror required) and **Neo4j** (Community, Enterprise, AuraDB) as a property-graph engine, opening OntoBricks to pure-Lakehouse and hybrid Lakehouse + graph deployments (**v0.7.0**).
 2. **Unstructured data ingestion** — turn raw documents, PDFs, emails, and transcripts into trustworthy, ontology-governed graph entities through a native extraction and mapping pipeline built on Databricks AI Functions, Vector Search, and Unity Catalog (**v0.8.0**).
 3. **Workflow completeness** — close the remaining v0.6.0-deferred UX and automation items (ontology version diff, mapping multi-select & orphan validation, scheduled reasoning, temporal & recursive Datalog) folded into the **v0.8.0** release alongside unstructured ingestion.
 4. **Enterprise hardening** — fine-grained RBAC, multi-workspace federation, audit log, large-graph pagination, and one-command deployment (**v0.9.0**).
@@ -52,13 +52,15 @@ OntoBricks can be positioned as the **semantic layer for the Databricks Lakehous
 
 ## Current State — v0.6.x (July 2026)
 
-### Triple-store backends
+### Storage layers
 
 
-| Backend                        | Status | Use case                                          |
-| ------------------------------ | ------ | ------------------------------------------------- |
-| **Delta Lake (SQL Warehouse)** | GA     | Default; governed, UC-lineage, liquid clustering  |
-| **Lakebase (Postgres)**        | GA     | Databricks-native, app-managed or Lakeflow-synced |
+| Layer | Backend | Status | Use case |
+| ----- | ------- | ------ | -------- |
+| **Triple store** (governance) | **Delta Lake** (SQL Warehouse) | GA | Default; governed, UC-lineage, liquid clustering |
+| **Graph DB engine** (queries) | **Lakebase (Postgres)** | GA | Databricks-native, app-managed or Lakeflow-synced |
+| **Graph DB engine** (queries) | **Delta Lake** | Planned v0.7.0 | Spark SQL traversal directly on the UC Delta triple table — no Lakebase mirror |
+| **Graph DB engine** (queries) | **Neo4j** | Planned v0.7.0 | Property-graph export for existing Neo4j estates |
 
 
 ### Core capabilities
@@ -79,7 +81,7 @@ OntoBricks can be positioned as the **semantic layer for the Databricks Lakehous
 ### Known limitations (targeted in next releases)
 
 - A few v0.6.0 workflow items not yet delivered (ontology version diff/iteration, mapping multi-select & orphan validation, scheduled reasoning, temporal & recursive Datalog) — **targeted for v0.8.0**
-- Single graph-DB family (Delta Lake / Lakebase Postgres) — no Neo4j / property-graph export yet — **targeted for v0.7.0**
+- Graph DB engine is Lakebase-only today — Delta is the governance triple store but not yet selectable as the runtime Graph DB engine; no Neo4j / property-graph export yet — **targeted for v0.7.0**
 - No native unstructured data ingestion pipeline (document → entity extraction → knowledge graph) — **targeted for v0.8.0**
 - No SPARQL federation across multiple domain graphs
 - No cross-workspace domain federation
@@ -151,20 +153,58 @@ Also delivered (beyond the original plan):
 
 ---
 
-### v0.7.0 — Neo4j Connector (August 2026)
+### v0.6.1 — Patch Release (July 2026) — ✅ Delivered
 
-**Theme:** add Neo4j (Community, Enterprise, AuraDB) as a graph engine alongside Delta Lake and Lakebase, enabling customers with existing Neo4j infrastructure to use OntoBricks as their semantic design and mapping front-end.
+**Theme:** deploy hardening and read-only workflow fixes on top of v0.6.0.
 
-#### Why this matters
+
+| Capability | Status | Notes |
+| ---------- | ------ | ----- |
+| **Switch modal on published domains** | ✅ Delivered | Version picker enabled on IN-REVIEW/PUBLISHED; save-before-switch disabled ([#97](https://github.com/databrickslabs/ontobricks/issues/97)) |
+| **Auto-Map SQL deduplication** | ✅ Delivered | Prevents `AMBIGUOUS_REFERENCE` when `id`/`label` columns collide (PR #98 backport) |
+| **Databricks CLI profile in deploy** | ✅ Delivered | `DEFAULT_DATABRICKS_PROFILE` in `deploy.config.sh` |
+| **Lakebase deploy diagnostics** | ✅ Delivered | `_lakebase-diag.sh` with actionable CLI hints |
+| **Lakebase underscore/hyphen resolver** | ✅ Delivered | `_lakebase-resolve-db.py` tolerates `datname` vs resource-path slug mismatch |
+
+---
+
+### v0.7.0 — Graph Engine Expansion: Delta & Neo4j (August 2026)
+
+**Theme:** expand the pluggable `GraphDBFactory` with two new engines — **Delta Lake** as a native Graph DB backend (Spark SQL on UC triple tables, zero Lakebase dependency) and **Neo4j** (Community, Enterprise, AuraDB) for customers with existing property-graph infrastructure.
+
+#### Pillar 1 — Delta Lake Graph DB engine
+
+Today, every domain materializes a Delta view (governance) **and** mirrors triples into Lakebase Postgres (runtime Graph DB). Many deployments only need the Lakehouse layer. A first-class Delta Graph DB engine removes the Lakebase mirror requirement and lets the Knowledge Graph, reasoning, BFS, and analytics run directly against the UC Delta triple table via the SQL Warehouse.
+
+##### Why this matters
+
+- **Pure Lakehouse deployments** — Volume + SQL Warehouse only; no Postgres / Lakebase Autoscaling instance required for graph queries
+- **Single source of truth** — triples live in one governed Delta table; no sync drift between governance and query layers
+- **Full UC lineage** — every graph read and write stays inside Unity Catalog permissions and lineage
+- **Liquid clustering** — large graphs benefit from Delta's native clustering on `(subject, predicate, object)`
+- **Lower operational cost** — one fewer managed database for greenfield installs
+
+##### Key capabilities
+
+- Register `delta` in `GraphDBFactory` and `ALLOWED_GRAPH_ENGINES`; Settings → Graph DB card for catalog / schema / table selection
+- `DeltaGraphStore` implementing `GraphDBBackend` — delegates to `DeltaTripleStore` for `bulk_insert_iter`, BFS, transitive closure, and symmetric expansion via Spark SQL recursive CTEs
+- SPARQL → Spark SQL translation reused from the existing `SparqlTranslator` path (`query_dialect = "spark"`)
+- SWRL / OWL 2 RL reasoning compiled to Spark SQL on the Delta view (same path as today's triple-store layer)
+- Knowledge Graph Explorer, Graph Analytics, and Graph Chat query the Warehouse directly when Delta is selected
+- Build pipeline skips Lakebase `COPY FROM STDIN` / Lakeflow sync when Delta is the active engine
+- Health-check and connection status in Settings UI (warehouse reachability + table existence probe)
+- Optional — zero impact on Lakebase-first deployments (Lakebase remains the default)
+
+#### Pillar 2 — Neo4j connector
 
 Neo4j is the dominant graph database with 40%+ market share. Customers in finance, healthcare, and telco often have existing Neo4j deployments. A native connector means:
 
-- **No data duplication** — triples are materialized directly into Neo4j as nodes and relationships; no intermediate Delta table needed
+- **Property-graph export** — triples materialized directly into Neo4j as nodes and relationships
 - **Native graph queries** — Cypher traversal, shortest path, and graph algorithms run on Neo4j; OntoBricks handles ontology design and mapping
 - **Hybrid Lakehouse + graph** — raw data stays in Delta/UC; the knowledge graph lives in Neo4j; OntoBricks bridges both worlds
 - **Removes the last objection** for prospects evaluating OntoBricks against a pure graph-DB-plus-ETL approach
 
-#### OWL → Property Graph mapping
+##### OWL → Property Graph mapping
 
 
 | OWL concept                | Neo4j representation                                    |
@@ -177,7 +217,7 @@ Neo4j is the dominant graph database with 40%+ market share. Customers in financ
 | Named graph                | Neo4j database (Enterprise) or label prefix (Community) |
 
 
-#### Key capabilities
+##### Key capabilities
 
 - Batch node and relationship upsert from the OntoBricks build pipeline
 - Typed node label promotion from `rdf:type` triples
@@ -185,7 +225,7 @@ Neo4j is the dominant graph database with 40%+ market share. Customers in financ
 - Knowledge Graph visualization sourced from Neo4j via Bolt
 - Health-check and connection status in the Settings UI
 - AuraDB support with automatic connection string detection
-- Optional install — zero impact on Volume-only deployments
+- Optional install — zero impact on Volume-only / Delta-only deployments
 
 ---
 
@@ -261,8 +301,9 @@ The design leans on existing Databricks platform capabilities rather than reinve
 
 | Feature                                          | v0.4 | v0.5 | v0.6 | v0.7 | v0.8 | v0.9 | v1.0 |
 | ------------------------------------------------ | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
-| Delta Lake triple store                          | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    |
-| **Lakebase named-graph triple store**            | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    |
+| Delta Lake triple store (governance)             | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    |
+| **Lakebase Graph DB engine**                     | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    |
+| **Delta Lake Graph DB engine**                   | —    | —    | —    | ✅    | ✅    | ✅    | ✅    |
 | **UX & workflow improvements**                   | —    | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    |
 | **Version lifecycle & review**                   | —    | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    |
 | **Auto quality rules**                           | —    | ✅    | ✅    | ✅    | ✅    | ✅    | ✅    |
@@ -289,17 +330,17 @@ The design leans on existing Databricks platform capabilities rather than reinve
 ## Graph Engine Comparison (v0.4+)
 
 
-| Capability                  | Delta Lake                | Lakebase (v0.4)                 | Neo4j (v0.7)                  |
+| Capability                  | Delta (Graph DB, v0.7)    | Lakebase (v0.4)                 | Neo4j (v0.7)                  |
 | --------------------------- | ------------------------- | ------------------------------- | ----------------------------- |
 | **Storage**                 | Delta table in UC         | Postgres (Lakebase Autoscaling) | Neo4j database or AuraDB      |
 | **Query language**          | Spark SQL                 | Postgres SQL + SPARQL subset    | Cypher                        |
 | **SPARQL support**          | Via Spark SQL translation | Native                          | Via OntoBricks adapter        |
 | **Named graphs**            | Per-domain Delta table    | ✅                               | ✅                             |
-| **Transactional reasoning** | Append only               | ✅                               | ✅                             |
+| **Transactional reasoning** | Append via Warehouse      | ✅                               | ✅                             |
 | **Multi-hop traversal**     | Recursive CTE (Spark)     | Optimized indexes + CTE         | Native Cypher (best-in-class) |
 | **Governance / lineage**    | Full UC lineage           | UC synced table                 | External                      |
-| **Deployment**              | Built-in                  | Optional extra                  | Optional extra                |
-| **Best for**                | Production, governed data | Databricks-native + SPARQL      | Customers with existing Neo4j |
+| **Deployment**              | SQL Warehouse only        | Optional extra                  | Optional extra                |
+| **Best for**                | Pure Lakehouse, governed  | Databricks-native + SPARQL      | Customers with existing Neo4j |
 
 
 ---
@@ -310,7 +351,8 @@ The design leans on existing Databricks platform capabilities rather than reinve
 2. **Entity resolution strategy** — semantic Vector Search matching is fast but approximate; exact string deduplication is cheaper. The right mix is use-case dependent. We plan to ship both and make the strategy configurable per domain.
 3. **Lakebase SPARQL subset scope** — BGP + FILTER covers 80% of use cases; OPTIONAL and UNION add another 15%. Aggregates and property paths are deferred to a later patch.
 4. **Neo4j Community vs Enterprise** — named graphs as separate databases require Neo4j Enterprise. Community edition support will use label prefixing as a documented workaround.
-5. **Auto quality rules confidence** — the v0.5.0 business-rules generator is advisory (suggest + review/accept). How aggressively should auto-suggested rules be applied? Auto-apply with confidence thresholds is deferred pending feedback.
+5. **Delta Graph DB vs dual-layer** — when Delta is the active Graph DB engine, the build pipeline can skip the Lakebase mirror entirely. Domains that need both UC lineage *and* low-latency Postgres reads can keep Lakebase as the engine. Migration UX is deferred to v0.9.0.
+6. **Auto quality rules confidence** — the v0.5.0 business-rules generator is advisory (suggest + review/accept). How aggressively should auto-suggested rules be applied? Auto-apply with confidence thresholds is deferred pending feedback.
 
 ---
 

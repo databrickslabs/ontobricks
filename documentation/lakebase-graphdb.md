@@ -378,6 +378,25 @@ values longer than ~2704 bytes. OntoBricks therefore stores the full `object`
 literal for reads/deletes but keys uniqueness on a generated `object_hash`
 column (`digest(object, 'sha256')` via the `pgcrypto` extension).
 
+**`pgcrypto` must live in `public`.** Pooled connections run
+`SET search_path TO "<graph_schema>", public`, and a bare `CREATE EXTENSION`
+installs into the *first* search_path entry — i.e. the graph schema. Since
+`IF NOT EXISTS` is then a permanent no-op, changing the graph schema strands
+`digest()` out of reach and every Build fails with
+`function digest(text, unknown) does not exist`.
+
+Two places keep this correct, both idempotent:
+
+- `ensure_pgcrypto` (app) installs into `public` and **relocates** a stranded
+  extension via `ALTER EXTENSION pgcrypto SET SCHEMA public`. The app owns any
+  extension it created, so it can self-heal.
+- `make bootstrap-lakebase` **Step 1b** does the same as the admin, and warns
+  (without aborting) when the extension is app-owned and cannot be relocated.
+
+The extension is **per database** — the graph database is often a different
+Lakebase project/database from the registry (`graph_engine_config.database`),
+so fixing one does not fix the other.
+
 - **`app_managed`**: `*_sync` and `*__app` tables are created with
   `PRIMARY KEY (subject, predicate, object_hash)`.
 - **`managed_synced`**: the Delta warehouse VIEW exposes `object_hash`
@@ -443,6 +462,7 @@ project.
 
 | Grant | Level | Purpose |
 |-------|-------|---------|
+| `CREATE EXTENSION pgcrypto WITH SCHEMA public` | Database | Installs / relocates `digest()` for companion `object_hash` (Step 1b) |
 | `CAN_USE` (control-plane) | Lakebase instance | Allows the SP to call Lakebase APIs (e.g. `synced_tables`) |
 | `CAN_USE` (autoscaling API) | Lakebase project | Belt-and-suspenders for autoscaling path |
 | `USAGE` + `CREATE` | Postgres schema | Let the SP create tables/views in the schema |

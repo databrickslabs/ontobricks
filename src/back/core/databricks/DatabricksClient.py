@@ -13,6 +13,7 @@ from .SQLWarehouse import SQLWarehouse
 from .uc import UnityCatalog, VolumeFileService
 from .WorkspaceService import WorkspaceService
 from .DashboardService import DashboardService
+from .SecretsService import SecretsService
 
 
 class DatabricksClient:
@@ -46,6 +47,7 @@ class DatabricksClient:
         self.volumes = VolumeFileService(auth=self.auth)
         self.workspace = WorkspaceService(self.auth)
         self.dashboards = DashboardService(self.auth)
+        self.secrets = SecretsService(self.auth)
 
     @property
     def host(self) -> str:
@@ -154,6 +156,15 @@ class DatabricksClient:
 
     def list_app_principals(self, app_name):
         return self.workspace.list_app_principals(app_name)
+
+    def list_secret_scopes(self):
+        return self.secrets.list_scopes()
+
+    def list_secret_keys(self, scope):
+        return self.secrets.list_keys(scope)
+
+    def get_secret(self, scope, key):
+        return self.secrets.get_secret_value(scope, key)
 
     @property
     def last_app_permissions_status(self) -> int:

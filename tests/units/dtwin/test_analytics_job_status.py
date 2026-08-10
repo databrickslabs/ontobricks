@@ -22,6 +22,7 @@ import pytest
 from back.core.graph_analysis.preflight import (
     analytics_job_configured,
     analytics_job_status,
+    probe_data_table,
 )
 
 MODULE = "back.core.graph_analysis.preflight"
@@ -38,11 +39,12 @@ def _status(
     job_name="some-job",
     spark=("cat.sch.tbl", ""),
     has_rows=True,
+    probe_detail="",
 ):
     with patch(f"{MODULE}.resolve_analytics_job_enabled", return_value=enabled), patch(
         f"{MODULE}.resolve_analytics_job_name", return_value=job_name
     ), patch(f"{MODULE}.resolve_analytics_source", return_value=spark), patch(
-        f"{MODULE}.data_table_has_rows", return_value=has_rows
+        f"{MODULE}.probe_data_table", return_value=(has_rows, probe_detail)
     ):
         return analytics_job_status(object(), _Settings())
 
@@ -100,10 +102,23 @@ class TestEachCauseIsNamed:
 
     def test_an_unreachable_warehouse_does_not_blame_the_build(self):
         """Rebuilding a domain does not wake a sleeping warehouse."""
+        available, reason = _status(has_rows=None, probe_detail="connection refused")
+        assert available is False
+        assert "Build" not in reason
+
+    def test_a_failed_probe_quotes_the_engine_instead_of_guessing(self):
+        """The old wording asserted a sleeping warehouse it had not checked."""
+        available, reason = _status(
+            has_rows=None, probe_detail="INSUFFICIENT_PERMISSIONS: no SELECT"
+        )
+        assert available is False
+        assert "INSUFFICIENT_PERMISSIONS: no SELECT" in reason
+        assert "warehouse may be starting up" not in reason
+
+    def test_a_detailless_failure_still_says_something(self):
         available, reason = _status(has_rows=None)
         assert available is False
-        assert "retry" in reason.lower()
-        assert "Build" not in reason
+        assert reason.strip()
 
     @pytest.mark.parametrize(
         "kwargs",
@@ -120,6 +135,69 @@ class TestEachCauseIsNamed:
         assert reason != ""
 
 
+class TestTheProbeClassifiesTheFailure:
+    """A query that fails *because the table is not there* has answered.
+
+    Treating ``TABLE_OR_VIEW_NOT_FOUND`` as "could not reach the warehouse"
+    told users to wait for a warehouse that was running, and hid the one
+    thing they had to do: build the domain.
+    """
+
+    def _probe(self, exc):
+        with patch(
+            "back.core.helpers.get_databricks_host_and_token",
+            return_value=("https://h", "t"),
+        ), patch(
+            "back.core.helpers.resolve_delta_warehouse_id", return_value="w"
+        ), patch(
+            "back.core.databricks.DatabricksClient.DatabricksClient"
+        ) as client:
+            client.return_value.execute_query.side_effect = exc
+            return probe_data_table(object(), _Settings(), "cat.sch.t_data")
+
+    def test_a_missing_table_reads_as_not_built(self):
+        answer, detail = self._probe(
+            Exception(
+                "[TABLE_OR_VIEW_NOT_FOUND] The table or view "
+                "`cat`.`sch`.`t_data` cannot be found. SQLSTATE: 42P01"
+            )
+        )
+        assert answer is False
+        assert detail == ""
+
+    def test_a_missing_schema_reads_as_not_built(self):
+        answer, _detail = self._probe(Exception("[SCHEMA_NOT_FOUND] nope"))
+        assert answer is False
+
+    def test_a_connectivity_failure_stays_unanswered(self):
+        answer, detail = self._probe(OSError("connection reset by peer"))
+        assert answer is None
+        assert "connection reset by peer" in detail
+
+    def test_a_permission_failure_stays_unanswered(self):
+        """Granting SELECT, not rebuilding, is the remedy — do not conflate them."""
+        answer, detail = self._probe(
+            Exception("[INSUFFICIENT_PERMISSIONS] User does not have SELECT")
+        )
+        assert answer is None
+        assert "INSUFFICIENT_PERMISSIONS" in detail
+
+    def test_rows_answer_true(self):
+        with patch(
+            "back.core.helpers.get_databricks_host_and_token",
+            return_value=("https://h", "t"),
+        ), patch(
+            "back.core.helpers.resolve_delta_warehouse_id", return_value="w"
+        ), patch(
+            "back.core.databricks.DatabricksClient.DatabricksClient"
+        ) as client:
+            client.return_value.execute_query.return_value = [{"ok": 1}]
+            assert probe_data_table(object(), _Settings(), "cat.sch.t_data") == (
+                True,
+                "",
+            )
+
+
 class TestTheCheapCheckStaysCheap:
     """The stats payload renders on every page; it must not hit the warehouse."""
 
@@ -131,7 +209,7 @@ class TestTheCheapCheckStaysCheap:
         ), patch(
             f"{MODULE}.resolve_analytics_source", return_value=("cat.sch.tbl", "")
         ), patch(
-            f"{MODULE}.data_table_has_rows"
+            f"{MODULE}.probe_data_table"
         ) as probe:
             assert analytics_job_configured(object(), _Settings()) == (True, "")
         probe.assert_not_called()

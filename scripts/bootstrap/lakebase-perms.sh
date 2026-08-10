@@ -250,21 +250,70 @@ print(d.get("service_principal_client_id") or "")' 2>/dev/null || true)"
     fi
 done
 
+# ── Step 1b: pgcrypto (DB-level; required for companion object_hash) ──────────
+# Graph companion / sync tables use a generated ``object_hash`` column via
+# ``digest(..., 'sha256')``.
+#
+# The extension MUST live in ``public``: app connections run
+# ``SET search_path TO "<graph_schema>", public``, and a bare
+# ``CREATE EXTENSION`` installs into the *first* search_path entry — i.e. a
+# graph schema. ``IF NOT EXISTS`` then becomes a permanent no-op, so renaming
+# the graph schema strands digest() out of reach. Pin it to public and
+# relocate a stranded install.
+if ! psql "$PGCONN" -tAc "SELECT 1" >/dev/null 2>&1; then
+    echo "ERROR: Cannot connect to Lakebase Postgres (host=${PGHOST}, dbname=${DATABASE})." >&2
+    _lakebase_print_diag_hints \
+        "psql connection failed — wrong datname or endpoint" \
+        "${INSTANCE}" "${BRANCH}" "${DATABASE}"
+    exit 1
+fi
+echo "  Ensuring pgcrypto extension in public (digest for companion object_hash)..."
+# Relocation of an app-owned extension fails for a non-owner admin; the app
+# self-heals in that case (it owns the extension), so warn rather than abort.
+psql "$PGCONN" -q <<'SQL' 2>&1 | grep -vE '^(NOTICE|CREATE EXTENSION|DO)' || true
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+DO $$
+DECLARE ext_schema text;
+BEGIN
+    SELECT n.nspname INTO ext_schema
+    FROM pg_extension e
+    JOIN pg_namespace n ON n.oid = e.extnamespace
+    WHERE e.extname = 'pgcrypto';
+    IF ext_schema IS NOT NULL AND ext_schema <> 'public' THEN
+        RAISE NOTICE 'Relocating pgcrypto from % to public', ext_schema;
+        BEGIN
+            EXECUTE 'ALTER EXTENSION pgcrypto SET SCHEMA public';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE WARNING 'Could not relocate pgcrypto to public: %', SQLERRM;
+        END;
+    END IF;
+END $$;
+SQL
+
+_PGCRYPTO_SCHEMA="$(psql "$PGCONN" -tAc \
+    "SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname='pgcrypto'" \
+    2>/dev/null | tr -d '[:space:]')"
+if [[ "$_PGCRYPTO_SCHEMA" == "public" ]]; then
+    echo "  ✓ pgcrypto ready in public (digest available)"
+elif [[ -n "$_PGCRYPTO_SCHEMA" ]]; then
+    echo "  ⚠ pgcrypto lives in schema '${_PGCRYPTO_SCHEMA}', not public." >&2
+    echo "    It is only visible to connections whose search_path includes that" >&2
+    echo "    schema. The app relocates it automatically on the next Build (it owns" >&2
+    echo "    the extension). To fix manually, run as its owner:" >&2
+    echo "      ALTER EXTENSION pgcrypto SET SCHEMA public;" >&2
+else
+    echo "  ⚠ pgcrypto is not installed on '${DATABASE}' — the app installs it on" >&2
+    echo "    first Build; re-run this script as an admin if that fails." >&2
+fi
+
 # ── Step 2: Postgres schema grants (requires the schema to exist) ────────────
 # Ensure the target schema actually exists. If not, the operator
 # probably ran the script before initialising the registry.
 if ! psql "$PGCONN" -tAc "SELECT 1 FROM information_schema.schemata WHERE schema_name='${SCHEMA}'" \
         2>/dev/null | grep -q 1; then
-    if ! psql "$PGCONN" -tAc "SELECT 1" >/dev/null 2>&1; then
-        echo "ERROR: Cannot connect to Lakebase Postgres (host=${PGHOST}, dbname=${DATABASE})." >&2
-        _lakebase_print_diag_hints \
-            "psql connection failed — wrong datname or endpoint" \
-            "${INSTANCE}" "${BRANCH}" "${DATABASE}"
-        exit 1
-    fi
     echo "ERROR: Schema '${SCHEMA}' does not exist in database '${DATABASE}'." >&2
     echo "       Initialise the registry from the OntoBricks Settings UI first." >&2
-    echo "       CAN_USE grants above were applied — re-run after initialisation" >&2
+    echo "       CAN_USE + pgcrypto above were applied — re-run after initialisation" >&2
     echo "       to apply the Postgres schema grants." >&2
     exit 1
 fi
@@ -457,9 +506,74 @@ CREATE TABLE IF NOT EXISTS "${SCHEMA}".domain_change_events (
 );
 CREATE INDEX IF NOT EXISTS idx_change_events_domain_version
     ON "${SCHEMA}".domain_change_events(domain_id, version, occurred_at);
+
+-- schedules / schedule_runs generic task registry (v0.7 — mirrors
+-- schema.sql + LakebaseRegistryStore._ensure_schedule_task_columns).
+-- Widens the build-only scheduler to (task_type, domain, target_key) so
+-- Analytics / Inference / Cohort share the same tables. Applied here as
+-- the schema owner because the unique-constraint swap needs ownership;
+-- without this, make deploy alone leaves an in-place 0.6→0.7 registry
+-- on the legacy UNIQUE (registry_id, domain_name) shape.
+ALTER TABLE "${SCHEMA}".schedules
+    ADD COLUMN IF NOT EXISTS task_type text NOT NULL DEFAULT 'build',
+    ADD COLUMN IF NOT EXISTS target_key text NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS config jsonb NOT NULL DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS last_count bigint NOT NULL DEFAULT 0;
+ALTER TABLE "${SCHEMA}".schedule_runs
+    ADD COLUMN IF NOT EXISTS task_type text NOT NULL DEFAULT 'build',
+    ADD COLUMN IF NOT EXISTS target_key text NOT NULL DEFAULT '',
+    ADD COLUMN IF NOT EXISTS detail jsonb NOT NULL DEFAULT '{}'::jsonb;
+-- Fold the legacy build-only column into config (idempotent: only rows
+-- still holding the empty default).
+UPDATE "${SCHEMA}".schedules
+SET config = jsonb_build_object('drop_existing', COALESCE(drop_existing, true))
+WHERE config = '{}'::jsonb AND task_type = 'build';
+DO \$sched\$
+DECLARE
+    cname text;
+BEGIN
+    FOR cname IN
+        SELECT con.conname
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+        WHERE ns.nspname = '${SCHEMA}'
+          AND rel.relname = 'schedules'
+          AND con.contype = 'u'
+          AND pg_get_constraintdef(con.oid)
+              = 'UNIQUE (registry_id, domain_name)'
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE %I.schedules DROP CONSTRAINT IF EXISTS %I',
+            '${SCHEMA}', cname
+        );
+    END LOOP;
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace ns ON ns.oid = rel.relnamespace
+        WHERE ns.nspname = '${SCHEMA}'
+          AND rel.relname = 'schedules'
+          AND con.conname = 'schedules_type_domain_target_key'
+    ) THEN
+        EXECUTE format(
+            'ALTER TABLE %I.schedules
+                ADD CONSTRAINT schedules_type_domain_target_key
+                UNIQUE (registry_id, task_type, domain_name, target_key)',
+            '${SCHEMA}'
+        );
+    END IF;
+END
+\$sched\$;
+DROP INDEX IF EXISTS "${SCHEMA}".idx_schedule_runs_domain;
+CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
+    ON "${SCHEMA}".schedule_runs(
+        registry_id, task_type, domain_name, target_key, run_ts DESC
+    );
 SQL
     then
-        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events)"
+        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
     else
         echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
     fi
