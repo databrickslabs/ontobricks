@@ -46,9 +46,25 @@ Open the OntoBricks app: **Settings → Back end → Neo4j**.
 
 Local dev goes through the exact same path as the deployed app — no plain-text fallback. Your local Databricks auth (`DATABRICKS_TOKEN`, or a `databricks auth login` CLI profile) is used to call the Secrets API, so make sure that identity has `READ` on the chosen scope (step 2 above).
 
+## Deploy does **not** bind Neo4j secrets
+
+`./scripts/deploy.sh` / DAB do **not** attach a workspace secret to the app.
+Neo4j is optional; requiring `ontobricks-secrets` / `neo4j-password` at
+`terraform apply` blocked first-time deploys that never use Neo4j (see
+[GH #136](https://github.com/databrickslabs/ontobricks/issues/136)).
+Create the secret only when you enable Neo4j (steps above), then pick
+scope/key in Settings after the app is running.
+
 ## Legacy: `NEO4J_PASSWORD` env var / Apps secret resource
 
-Deployments that already bind the `neo4j-password` Apps secret resource (`app.yaml` `valueFrom`) keep working unmodified — the backend still supports `auth_method: "basic"` and prioritizes the `NEO4J_PASSWORD` env var when it's set. This path is **not exposed in the Settings UI anymore**; it only remains for existing configs that haven't been migrated. To migrate, open Settings → Neo4j and Save once with a scope/key picked — this overwrites `auth_method` to `"databricks_secret"`.
+`app.yaml` still declares an **unbound** `neo4j-password` Apps secret resource
+and `NEO4J_PASSWORD` env var. Deployments that already bind that resource in
+the Apps UI keep working unmodified — the backend still supports
+`auth_method: "basic"` and prioritizes the `NEO4J_PASSWORD` env var when it's
+set. This path is **not exposed in the Settings UI anymore**; it only remains
+for existing configs that haven't been migrated. To migrate, open Settings →
+Neo4j and Save once with a scope/key picked — this overwrites `auth_method` to
+`"databricks_secret"`.
 
 ## Troubleshooting
 

@@ -357,7 +357,7 @@ in the deployed app:
 
 - Pick the **Secret scope** and **Secret name** from the dropdowns in
   **Settings → Back end → Neo4j** (populated live via the Databricks Secrets
-  API).
+  API). Deploy does **not** create or bind that secret (Neo4j is optional).
 - The app's own identity (SP OAuth in Apps, PAT/CLI profile locally) needs
   `READ` on that scope — see
   `documentation/pr47-neo4j-demo/secret-configuration.md` for the one-time
