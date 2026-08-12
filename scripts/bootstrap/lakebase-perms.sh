@@ -63,7 +63,8 @@ set -euo pipefail
 #   - You own the schema (or otherwise have GRANT OPTION on it).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR/.."
+# scripts/bootstrap/ → scripts/ → repo root (#133).
+cd "$SCRIPT_DIR/../.."
 
 # _lakebase-diag.sh lives in scripts/_internal/ (moved there by the scripts/
 # reorg, commit 2c6ef76); this script is in scripts/bootstrap/, so reference

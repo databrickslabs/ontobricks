@@ -23,7 +23,8 @@ set -euo pipefail
 #   - The apps already exist (run `make deploy` first)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR/.."
+# scripts/bootstrap/ → scripts/ → repo root (needed for scripts/deploy.config.sh — #133).
+cd "$SCRIPT_DIR/../.."
 
 # Default sandbox app pair. Override via env (e.g.
 # `APP_NAME=ontobricks-040 scripts/bootstrap/app-permissions.sh`) to

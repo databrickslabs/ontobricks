@@ -18,7 +18,7 @@
 #   which calls the NEW API) to provision your Lakebase project.
 #
 # Usage:
-#   ./scripts/setup-lakebase.sh [OPTIONS]
+#   ./scripts/bootstrap/setup-lakebase.sh [OPTIONS]
 #
 # Options:
 #   --name      NAME       Project name (default: ontobricks-demo)
@@ -31,8 +31,9 @@
 #   --dry-run              Print what would be done without doing it
 #
 # After this script succeeds:
-#   1. Update DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT in
-#      scripts/deploy.config.sh with the printed db-... id.
+#   1. Update DEFAULT_LAKEBASE_PROJECT / DEFAULT_LAKEBASE_DATABASE in
+#      scripts/deploy.config.sh (datname). deploy.sh resolves the db-…
+#      segment automatically; optional override: LAKEBASE_DATABASE_RESOURCE_SEGMENT.
 #   2. Rebind the postgres resource in the Databricks Apps UI if needed.
 #   3. Run: make deploy
 #   4. Run: make bootstrap-lakebase
@@ -40,7 +41,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR/.."
+# scripts/bootstrap/ → scripts/ → repo root (one level was wrong after the reorg — #133).
+cd "$SCRIPT_DIR/../.."
 
 # Preflight CLI auth + tooling before any API calls.
 chmod +x scripts/_internal/check-deploy-prerequisites.sh
@@ -269,7 +271,8 @@ echo "║  NEXT STEPS:                                                 ║"
 echo "║                                                              ║"
 echo "║  1. Update scripts/deploy.config.sh:                        ║"
 echo "║     DEFAULT_LAKEBASE_PROJECT=\"$NAME\""
-echo "║     DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT=\"${DB_SEGMENT:-<db-segment>}\""
+echo "║     DEFAULT_LAKEBASE_DATABASE=\"$DATABASE\""
+echo "║     # optional: LAKEBASE_DATABASE_RESOURCE_SEGMENT=\"${DB_SEGMENT:-db-…}\""
 echo "║                                                              ║"
 echo "║  2. In Databricks Apps UI: rebind the postgres resource      ║"
 echo "║     to the new project endpoint (if the host changed).       ║"
@@ -281,7 +284,9 @@ echo "╚═══════════════════════�
 echo ""
 
 if [[ -n "$DB_SEGMENT" ]]; then
-  echo "Copy-paste for deploy.config.sh:"
-  echo "  DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT=\"$DB_SEGMENT\""
+  echo "Copy-paste for deploy.config.sh (datname + optional segment override):"
+  echo "  DEFAULT_LAKEBASE_PROJECT=\"$NAME\""
+  echo "  DEFAULT_LAKEBASE_DATABASE=\"$DATABASE\""
+  echo "  # LAKEBASE_DATABASE_RESOURCE_SEGMENT=\"$DB_SEGMENT\"  # optional; deploy.sh auto-resolves"
   echo ""
 fi

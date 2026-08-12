@@ -209,6 +209,12 @@ resources:
       name: "${var.app_name}"
       description: "OntoBricks (development sandbox app)"
       source_code_path: .
+      # App ACL (not top-level bundle permissions — those reject CAN_USE; see #134).
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_USE
+          group_name: users
       resources:
         - name: sql-warehouse
           description: "SQL Warehouse for executing queries and metadata operations"
@@ -233,6 +239,12 @@ resources:
       name: "${var.mcp_app_name}"
       description: "OntoBricks MCP companion server (FastMCP)"
       source_code_path: ./src/mcp-server
+      # App ACL (not top-level bundle permissions — those reject CAN_USE; see #134).
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_USE
+          group_name: users
       resources:
         - name: sql-warehouse
           description: "SQL Warehouse for executing queries and metadata operations"

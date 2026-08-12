@@ -1,0 +1,38 @@
+## Fix deploy onboarding bugs #133 #134 #135
+
+Context: External reporter (iduarteandeco) hit three first-time deploy
+blockers on 0.7.0: setup-lakebase path after the scripts/bootstrap reorg,
+vague DAB app permissions docs that put CAN_USE at bundle top-level, and
+stale DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT docs after the segment
+became auto-resolved. Fixes applied on branch 0.7.1 (and develop).
+
+Changes:
+
+1. scripts/bootstrap/setup-lakebase.sh
+   cd to repo root (../..) and document DEFAULT_LAKEBASE_DATABASE + optional
+   LAKEBASE_DATABASE_RESOURCE_SEGMENT instead of removed DEFAULT_* segment.
+2. scripts/bootstrap/app-permissions.sh
+   Same repo-root cd so scripts/deploy.config.sh resolves (#133).
+3. scripts/bootstrap/lakebase-perms.sh
+   Same repo-root cd (#133).
+4. databricks.yml
+   Nest CAN_MANAGE / CAN_USE under resources.apps.* for both apps (#134).
+5. documentation/deployment.md
+   Clarify app-level permissions nesting; replace stale DEFAULT_LAKEBASE_*
+   names with DEFAULT_LAKEBASE_DATABASE / _SCHEMA + optional segment override.
+6. documentation/lakebase-graphdb.md
+   Same variable/docs alignment as deployment.md (#135).
+7. tests/units/settings/test_bundle_job_resource.py
+   Regression guards for bootstrap repo-root climb and app permissions nesting.
+
+Modified files:
+- scripts/bootstrap/setup-lakebase.sh
+- scripts/bootstrap/app-permissions.sh
+- scripts/bootstrap/lakebase-perms.sh
+- databricks.yml
+- documentation/deployment.md
+- documentation/lakebase-graphdb.md
+- tests/units/settings/test_bundle_job_resource.py
+- changelogs/v0.7.0/benoitcayladbx_2026-08-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4793 passed, 276 skipped, 5 deselected, 1 xfailed in 41.08s

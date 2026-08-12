@@ -169,10 +169,14 @@ On success the chosen project/branch/database/schema are written into
 
 ### 3.2 — After the script
 
-Copy the printed `db-…` segment into `scripts/deploy.config.sh`:
+Set the project + Postgres datname in `scripts/deploy.config.sh`
+(`deploy.sh` resolves the `db-…` segment automatically):
 
 ```bash
-DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT="db-xxxx-xxxxxxxxxx"
+DEFAULT_LAKEBASE_PROJECT="<project-name>"
+DEFAULT_LAKEBASE_DATABASE="<postgres-datname>"
+# Optional override:
+# LAKEBASE_DATABASE_RESOURCE_SEGMENT="db-xxxx-xxxxxxxxxx"
 ```
 
 You can also look it up at any time:
@@ -264,9 +268,9 @@ These drive the DAB deployment (edit before `make deploy`):
 |----------|-------------|
 | `DEFAULT_LAKEBASE_PROJECT` | Lakebase project name (final segment of `projects/<id>`) |
 | `DEFAULT_LAKEBASE_BRANCH` | Branch (e.g. `production`) |
-| `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT` | `db-…` resource id from `list-databases` |
-| `DEFAULT_LAKEBASE_REGISTRY_DATABASE` | Postgres datname the registry schema lives in |
-| `DEFAULT_LAKEBASE_REGISTRY_SCHEMA` | Postgres schema for the registry (mirrors `LAKEBASE_SCHEMA` in `app.yaml`) |
+| `DEFAULT_LAKEBASE_DATABASE` | Postgres datname the registry schema lives in |
+| `LAKEBASE_DATABASE_RESOURCE_SEGMENT` | Optional env override for the `db-…` id; when unset, `deploy.sh` resolves it from `DEFAULT_LAKEBASE_DATABASE` |
+| `DEFAULT_LAKEBASE_SCHEMA` | Postgres schema for the registry (mirrors `LAKEBASE_SCHEMA` in `app.yaml`) |
 
 > `deploy.config.sh` is **registry-scoped**. The graph DB schema/database
 > are configured in-app (`Settings → Graph DB` → `graph_engine_config`)
@@ -406,7 +410,7 @@ Provisions a Lakebase project via `POST /api/2.0/database/instances` (synced-tab
 ./scripts/bootstrap/setup-lakebase.sh --name my-project --profile prod-workspace
 ```
 
-**Outputs:** prints the `db-…` resource id that goes into `deploy.config.sh > DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT`.
+**Outputs:** prints the `db-…` resource id (informational). Set `DEFAULT_LAKEBASE_PROJECT` / `DEFAULT_LAKEBASE_DATABASE` in `deploy.config.sh`; optional override `LAKEBASE_DATABASE_RESOURCE_SEGMENT`.
 
 ### `scripts/bootstrap/lakebase-perms.sh`
 
@@ -551,7 +555,7 @@ The Synced Tables API only accepts provisioned instance names.
 **Fix:**
 1. Delete the old project from the UI.
 2. Re-create it with `scripts/bootstrap/setup-lakebase.sh`.
-3. Update `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT` in `deploy.config.sh`.
+3. Update `DEFAULT_LAKEBASE_PROJECT` / `DEFAULT_LAKEBASE_DATABASE` in `deploy.config.sh` (optional: `LAKEBASE_DATABASE_RESOURCE_SEGMENT`).
 4. `make deploy`.
 
 If the name is reserved (`Instance name is not unique`), choose a different name —
@@ -655,9 +659,9 @@ and the project+branch pair. This means `lakebase_project` or
 `lakebase_database_resource_segment` is empty in `deploy.config.sh`.
 
 **Fix:**
-1. Run `databricks postgres list-databases "projects/<project>/branches/<branch>" -o json`.
-2. Copy the `name` field (looks like `db-xxxx-xxxxxxxxxx`) into
-   `DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT` in `deploy.config.sh`.
+1. Confirm `DEFAULT_LAKEBASE_PROJECT` / `DEFAULT_LAKEBASE_DATABASE` in `deploy.config.sh`.
+2. If auto-resolve fails, set `LAKEBASE_DATABASE_RESOURCE_SEGMENT=db-xxxx-xxxxxxxxxx`
+   (from `databricks postgres list-databases "projects/<project>/branches/<branch>" -o json`).
 3. `make deploy`.
 
 ---
@@ -710,9 +714,9 @@ instead of `window.confirm()`. If you see this on an older deployment,
 ```
 [ ] 1. Create Lakebase project:
         ./scripts/bootstrap/setup-lakebase.sh --name <name> --capacity CU_2
-[ ] 2. Copy the printed db-… id into deploy.config.sh:
-        DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT="db-xxxx-xxxxxxxxxx"
-[ ] 3. Set DEFAULT_LAKEBASE_PROJECT and DEFAULT_LAKEBASE_BRANCH in deploy.config.sh
+[ ] 2. Set DEFAULT_LAKEBASE_PROJECT / DEFAULT_LAKEBASE_DATABASE in deploy.config.sh
+        (optional override: LAKEBASE_DATABASE_RESOURCE_SEGMENT="db-xxxx-xxxxxxxxxx")
+[ ] 3. Set DEFAULT_LAKEBASE_BRANCH (and DEFAULT_LAKEBASE_SCHEMA if needed) in deploy.config.sh
 [ ] 4. make deploy
 [ ] 5. Bind resources in Databricks Apps UI (sql-warehouse, volume, postgres)
 [ ] 6. Open app → Settings → Registry → Initialize
