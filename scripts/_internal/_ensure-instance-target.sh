@@ -52,12 +52,8 @@ targets:
                 branch: projects/\${var.lakebase_project}/branches/\${var.lakebase_branch}
                 database: projects/\${var.lakebase_project}/branches/\${var.lakebase_branch}/databases/\${var.lakebase_database_resource_segment}
                 permission: "CAN_CONNECT_AND_CREATE"
-            - name: neo4j-password
-              description: "Databricks Apps secret holding the Neo4j Bolt password"
-              secret:
-                scope: \${var.neo4j_secret_scope}
-                key: neo4j-password
-                permission: READ
+            # Neo4j secrets are NOT bound at deploy time (optional engine;
+            # configure in Settings post-deploy). See GH #136.
         mcp_ontobricks_app:
           resources:
             - name: postgres

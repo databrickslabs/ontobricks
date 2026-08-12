@@ -163,7 +163,6 @@ _dab_var_overrides=(
     "--var=registry_catalog=${REGISTRY_CATALOG}"
     "--var=registry_schema=${REGISTRY_SCHEMA}"
     "--var=registry_volume=${REGISTRY_VOLUME}"
-    "--var=neo4j_secret_scope=${NEO4J_SECRET_SCOPE}"
     "--var=lakebase_project=${LAKEBASE_PROJECT}"
     "--var=lakebase_branch=${LAKEBASE_BRANCH}"
     "--var=lakebase_database_resource_segment=${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
@@ -391,24 +390,8 @@ else
         || die "aborted before any change was made — nothing was destroyed."
 fi
 
-# Only the target that actually binds the secret should be held to it.
-_target_binds_neo4j_secret() {
-    awk -v want="  ${TARGET}:" '
-        $0 == want { inblock = 1; next }
-        inblock && /^  [a-zA-Z]/ { inblock = 0 }
-        inblock && /key: neo4j-password/ { found = 1 }
-        END { exit found ? 0 : 1 }
-    ' databricks.yml
-}
-if _target_binds_neo4j_secret; then
-    if ! _preflight_check_secret_scope "${NEO4J_SECRET_SCOPE:-}" "neo4j-password"; then
-        if $DRY_RUN; then
-            warn "secret binding preflight failed — the app resource would fail to deploy."
-        else
-            die "the app binds a secret that cannot be read — fix it above, or remove the neo4j-password overlay from the '${TARGET}' target in databricks.yml."
-        fi
-    fi
-fi
+# Neo4j Apps secret is no longer bound by DAB (optional engine; Settings
+# resolves the password via the Secrets API). No secret-scope preflight.
 
 # ── 3. Render app.yaml from template ────────────────────────────────
 begin_step "Render app.yaml"
