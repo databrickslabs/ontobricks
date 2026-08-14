@@ -628,30 +628,39 @@ or a manual `bootstrap-lakebase-perms.sh` run.
 
 The script grants:
 
-1. `CAN_USE` on the Lakebase database instance (control-plane).
-2. `USAGE + CREATE` on the Postgres schema.
-3. `SELECT / INSERT / UPDATE / DELETE` on every existing table.
-4. `USAGE / SELECT / UPDATE` on every existing sequence (bigserial PKs).
-5. The same set via `ALTER DEFAULT PRIVILEGES` so future tables inherit.
+1. `CAN_USE` on the Lakebase database project (control-plane).
+2. `ALL PRIVILEGES` on the UC catalog when `-c/--catalog` is passed
+   (also control-plane — applied **before** the schema exists so a
+   first deploy still grants it; `deploy.sh` passes `-c $REGISTRY_CATALOG`).
+3. `USAGE + CREATE` on the Postgres schema.
+4. `SELECT / INSERT / UPDATE / DELETE` on every existing table.
+5. `USAGE / SELECT / UPDATE` on every existing sequence (bigserial PKs).
+6. The same set via `ALTER DEFAULT PRIVILEGES` so future tables inherit.
+
+> **Naming:** pass the real MCP app name (`mcp-${APP_NAME}`, e.g.
+> `mcp-ontobricks-07x`), not the bare `mcp-ontobricks` string. Instance
+> deploys derive both names from `DEFAULT_INSTANCE_ID` in
+> `scripts/deploy.config.sh`.
 
 Manual invocation:
 
 ```bash
-# Registry schema
+# Registry schema (use your APP_NAME / MCP_APP_NAME from deploy.config.sh)
 scripts/bootstrap/lakebase-perms.sh \
   -i "<lakebase_project>" \
   -b "<lakebase_branch>" \
   -d ontobricks_registry \
   -s ontobricks_registry \
+  -c "<registry_catalog>" \
   -a ontobricks-XXX \
-  -a mcp-ontobricks
+  -a mcp-ontobricks-XXX
 
 # Graph schema (run after first Build — use the graph DB's own
 # project/branch/database, which MAY differ from the registry)
 scripts/bootstrap/lakebase-perms.sh \
   -i "<graph_project>" -b "<graph_branch>" \
   -d "<graph_database>" -s ontobricks_graph \
-  -a ontobricks-XXX -a mcp-ontobricks
+  -a ontobricks-XXX -a mcp-ontobricks-XXX
 ```
 
 The registry grant uses `LAKEBASE_PROJECT` / `LAKEBASE_BRANCH` /
@@ -697,10 +706,16 @@ If the volume is empty (first deployment):
 1. Open the app URL
 2. Go to **Settings > Registry**
 3. Click **Initialize** to bootstrap the registry — on the Lakebase
-   backend this also self-applies the schema/project/UC grants the app +
+   backend this also self-applies the **Postgres schema** grants the app +
    MCP service principals need (results shown under **Permission Grants**).
+   Control-plane re-grants (`CAN_USE` on the Lakebase project, UC
+   `ALL_PRIVILEGES` on the catalog) are best-effort: the app SP usually
+   lacks `CAN_MANAGE` / catalog `MANAGE`, so those lines may warn even
+   when deploy already applied them. If UC privileges are actually
+   missing, re-run `scripts/bootstrap/lakebase-perms.sh` with `-c` as a
+   workspace admin (do **not** need to elevate the app SP to `CAN_MANAGE`).
    Use **Repair permissions** on the Lakebase Connection panel to re-apply
-   them later (e.g. after a rebind).
+   schema grants later (e.g. after a rebind).
 
 ### Step 9 — Verify
 
@@ -893,6 +908,21 @@ GRANT ALL PRIVILEGES ON SCHEMA  `<registry_catalog>`.`<registry_schema>` TO `<ap
 ```
 
 Prefer the explicit list above for a production workspace because `ALL PRIVILEGES` also implies `MANAGE`, which is broader than what the app needs day to day.
+
+> **Lakebase / Initialize note (issue #137):** the in-app *Initialize* /
+> *Repair permissions* flow also tries to grant catalog-level
+> `ALL_PRIVILEGES` to the app SP so synced tables are readable. That call
+> runs **as the app SP**, which cannot succeed unless the SP already has
+> catalog `MANAGE`. Prefer granting `ALL PRIVILEGES` **to** the SP from a
+> human/admin principal via `scripts/bootstrap/lakebase-perms.sh -c
+> <catalog>` (or the SQL below) — do **not** elevate the app SP to
+> `CAN_MANAGE` / catalog `MANAGE` just to silence the Initialize warning.
+>
+> ```sql
+> GRANT ALL PRIVILEGES ON CATALOG `<registry_catalog>` TO `<app-sp>`;
+> -- repeat for the MCP app SP
+> GRANT ALL PRIVILEGES ON CATALOG `<registry_catalog>` TO `<mcp-sp>`;
+> ```
 
 ### 3.3 — Source data grants (customer tables/views)
 
