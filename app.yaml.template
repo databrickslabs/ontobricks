@@ -77,6 +77,12 @@ env:
   # alias chain on ONTOBRICKS_APP_NAME -> DATABRICKS_APP_NAME, so the
   # same app.yaml powers every deployment without per-app duplication.
   # Set ONTOBRICKS_APP_NAME explicitly in .env only for local dev.
+  #
+  # MCP companion app name — must match the deployed MCP Databricks App
+  # (``mcp-${APP_NAME}`` from deploy.config.sh). Injected so registry /
+  # graph permission grants resolve the right service principal (#137).
+  - name: MCP_APP_NAME
+    value: "${MCP_APP_NAME}"
   # ── Lakebase (optional) ───────────────────────────────────────
   # When the bundle is deployed to a *-lakebase target the DAB binds
   # a `database` resource to this app. Databricks Apps then

@@ -11,6 +11,7 @@ from back.core.databricks.lakebase.grants import (  # noqa: F401
     grant_schema_privileges,
     grant_uc_catalog,
     resolve_app_service_principals,
+    resolve_mcp_app_name,
 )
 from back.core.databricks.lakebase.LakebaseAuth import (  # noqa: F401
     BranchLakebaseAuth,
@@ -38,6 +39,7 @@ __all__ = [
     "get_lakebase_auth",
     # grants
     "resolve_app_service_principals",
+    "resolve_mcp_app_name",
     "grant_can_use_on_project",
     "grant_schema_privileges",
     "grant_uc_catalog",

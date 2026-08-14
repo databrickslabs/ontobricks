@@ -17,6 +17,7 @@ from back.core.errors import (
 from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
+from back.core.databricks.lakebase.grants import resolve_mcp_app_name
 from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
     get_databricks_client,
@@ -888,14 +889,12 @@ class SettingsService:
     def _registry_grant_app_names(settings: Settings) -> List[str]:
         """Apps whose service principals receive the registry grants.
 
-        The running app first, then the MCP companion (``MCP_APP_NAME`` env
-        → ``mcp-ontobricks`` default) — same resolution as the graph-DB
-        provisioning flow.
+        The running app first, then the MCP companion
+        (``resolve_mcp_app_name`` — same derivation as
+        ``scripts/deploy.config.sh`` / the graph-DB provisioning flow).
         """
         app_name = (getattr(settings, "ontobricks_app_name", "") or "").strip()
-        mcp_app_name = (
-            os.environ.get("MCP_APP_NAME", "").strip() or "mcp-ontobricks"
-        )
+        mcp_app_name = resolve_mcp_app_name(app_name)
         names: List[str] = []
         for candidate in (app_name, mcp_app_name):
             if candidate and candidate not in names:
@@ -2723,12 +2722,11 @@ class SettingsService:
             )
 
         # Apps whose service principals receive the grants: the running app
-        # first, then the MCP app (UI override -> MCP_APP_NAME env -> default).
+        # first, then the MCP app (UI override -> MCP_APP_NAME env ->
+        # mcp-{app_name} derived from the main app — matches deploy.config.sh).
         app_name = (settings.ontobricks_app_name or "").strip()
-        mcp_app_name = (
-            (params.get("mcp_app_name") or "").strip()
-            or os.environ.get("MCP_APP_NAME", "").strip()
-            or "mcp-ontobricks"
+        mcp_app_name = resolve_mcp_app_name(
+            app_name, explicit=(params.get("mcp_app_name") or "").strip()
         )
         app_names: List[str] = []
         for candidate in (app_name, mcp_app_name):
