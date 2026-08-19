@@ -13,8 +13,6 @@
   <img src="https://img.shields.io/badge/fastapi-0.109+-green.svg" alt="FastAPI">
 </p>
 
-**Website:** [https://databrickslabs.github.io/ontobricks/](https://databrickslabs.github.io/ontobricks/)
-
 ## Project Description
 
 OntoBricks is a web application that transforms Databricks tables into a materialized graph viewer. It lets you design ontologies (OWL), map them to Unity Catalog tables via R2RML, materialize triples into a Delta-backed triple store and a Lakebase Postgres graph engine, reason over the graph (OWL 2 RL, SWRL, SHACL), and query it through an auto-generated GraphQL API. The entire pipeline — from metadata import to a queryable graph viewer — can run in four clicks using LLM-powered automation.
