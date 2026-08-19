@@ -54,18 +54,12 @@ class TestTemporalDetection:
     def test_a_purely_structural_predicate_set_is_not_temporal(self):
         assert has_temporal_predicates([f"{NS}ownedBy"]) is False
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Known false positive: the keywords are matched as bare substrings, "
-            "so the short ones fire inside unrelated words — 'dt' inside "
-            "'assignedto', 'at' inside 'locatedIn'. Matching on token "
-            "boundaries would fix it, but that changes what the UI reports for "
-            "existing domains, so it is a decision rather than a cleanup."
-        ),
-    )
     def test_short_keywords_should_not_match_inside_unrelated_words(self):
+        # Keywords like "dt" / "at" must be whole tokens (camelCase / snake_case
+        # segments), not bare substrings of unrelated predicates.
         assert has_temporal_predicates([f"{NS}assignedTo"]) is False
+        assert has_temporal_predicates([f"{NS}locatedIn"]) is False
+        assert has_temporal_predicates([f"{NS}status"]) is False
 
     def test_no_predicates_is_not_temporal(self):
         assert has_temporal_predicates([]) is False

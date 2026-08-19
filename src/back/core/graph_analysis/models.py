@@ -165,7 +165,8 @@ class EntityTypeProfile:
     avg_clustering: float            # mean clustering coefficient
     avg_betweenness: float           # mean betweenness centrality
     distinct_predicates: int         # distinct non-excluded predicate URIs used by instances
-    has_temporal_predicates: bool    # any predicate local-name contains date/time/ts/at/created
+    has_temporal_predicates: bool    # any camelCase/snake_case token is a temporal keyword
+
     is_flat: bool                    # heuristic: True when this type looks like a flat dataset
     flat_reasons: List[str] = field(default_factory=list)  # human-readable flags (empty if not flat)
 

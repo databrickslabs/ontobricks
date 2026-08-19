@@ -77,6 +77,12 @@ env:
   # alias chain on ONTOBRICKS_APP_NAME -> DATABRICKS_APP_NAME, so the
   # same app.yaml powers every deployment without per-app duplication.
   # Set ONTOBRICKS_APP_NAME explicitly in .env only for local dev.
+  #
+  # MCP companion app name — must match the deployed MCP Databricks App
+  # (``mcp-${APP_NAME}`` from deploy.config.sh). Injected so registry /
+  # graph permission grants resolve the right service principal (#137).
+  - name: MCP_APP_NAME
+    value: "${MCP_APP_NAME}"
   # ── Lakebase (optional) ───────────────────────────────────────
   # When the bundle is deployed to a *-lakebase target the DAB binds
   # a `database` resource to this app. Databricks Apps then
@@ -162,15 +168,15 @@ env:
   # or above the node count makes them exact instead of estimated.
   - name: ONTOBRICKS_ANALYTICS_JOB_PIVOTS
     value: "64"
-  # ── Neo4j (optional) ──────────────────────────────────────────
-  # Password sourced from a Databricks Apps secret resource (see
+  # ── Neo4j (optional, legacy Apps secret path) ─────────────────
+  # Password may be sourced from a Databricks Apps secret resource (see
   # `resources:` below). The `neo4j-password` resource is unbound by
-  # default; the admin binds it to a workspace secret (scope/key) in
-  # the Apps UI before selecting the Neo4j engine. When the resource
-  # is unbound, NEO4J_PASSWORD stays unset and the deployed app refuses
-  # to instantiate Neo4jStore with a clear instruction in the logs.
-  # Local dev keeps the legacy fallback to engine_config['password'].
-  # See docs/v0.6-neo4j-demo/secret-configuration.md.
+  # default — DAB does **not** bind it at deploy time (Neo4j is optional;
+  # a missing workspace secret would fail terraform apply — GH #136).
+  # Preferred path: Settings → Neo4j picks a secret scope/key at runtime
+  # (`auth_method: databricks_secret`). Bind this resource in the Apps UI
+  # only for legacy `auth_method: basic` + `NEO4J_PASSWORD` configs.
+  # See documentation/pr47-neo4j-demo/secret-configuration.md.
   - name: NEO4J_PASSWORD
     valueFrom: neo4j-password
 
@@ -200,6 +206,6 @@ resources:
     volume:
       permission: CAN_READ_WRITE
   - name: neo4j-password
-    description: "Databricks Apps secret holding the Neo4j Bolt password. Unbound by default; bind it to a workspace secret (scope/key) in the Apps UI before activating the Neo4j engine. See docs/v0.6-neo4j-demo/secret-configuration.md."
+    description: "Legacy Databricks Apps secret for NEO4J_PASSWORD. Unbound by default — DAB does not bind it (GH #136). Prefer Settings → Neo4j (secret scope/key). Bind in the Apps UI only for legacy auth_method basic. See documentation/pr47-neo4j-demo/secret-configuration.md."
     secret:
       permission: READ

@@ -60,12 +60,6 @@ DEFAULT_REGISTRY_CATALOG="benoit_cayla"
 DEFAULT_REGISTRY_SCHEMA="ontobricks_demo"
 DEFAULT_REGISTRY_VOLUME="registry"
 
-# Workspace secret scope holding ``neo4j-password``, bound to the app on deploy.
-# Must be an existing scope (`databricks secrets list-scopes`) — a missing scope
-# fails `terraform apply` on the app resource, and because an app rename is a
-# destroy-then-create, that failure can leave you with no app at all.
-DEFAULT_NEO4J_SECRET_SCOPE="ontobricks-secrets"
-
 # Lakebase Autoscaling project + branch
 DEFAULT_LAKEBASE_PROJECT="ontobricks-demo2"
 DEFAULT_LAKEBASE_BRANCH="production"
@@ -129,7 +123,6 @@ export REGISTRY_CATALOG="${REGISTRY_CATALOG:-$DEFAULT_REGISTRY_CATALOG}"
 # the routine deploy still always uses DEFAULT_REGISTRY_SCHEMA.
 export REGISTRY_SCHEMA="${REGISTRY_SCHEMA:-$DEFAULT_REGISTRY_SCHEMA}"
 export REGISTRY_VOLUME="${REGISTRY_VOLUME:-$DEFAULT_REGISTRY_VOLUME}"
-export NEO4J_SECRET_SCOPE="${NEO4J_SECRET_SCOPE:-$DEFAULT_NEO4J_SECRET_SCOPE}"
 
 # Lakebase project / branch.
 export LAKEBASE_PROJECT="${LAKEBASE_PROJECT:-$DEFAULT_LAKEBASE_PROJECT}"

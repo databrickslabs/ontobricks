@@ -5,7 +5,7 @@ Covers:
 - All six top-level routes load with the correct <title>.
 - Navbar brand navigates back to home.
 - Settings nav-link works.
-- Home page hero, domain panel, workflow cards, stat counters.
+- Home page hero, All Domains gateway, New Domain CTA.
 - About page content.
 """
 
@@ -71,18 +71,13 @@ class TestHomePage:
         assert page.locator("#domainGateway").count() >= 1
         assert page.locator("a.quick-link-sm").count() == 0
 
-    def test_workflow_cards_present(self, page, live_server):
+    def test_new_domain_cta_present(self, page, live_server):
+        # Replaces the old 3× `.workflow-card` strip and `#classCount` KPI
+        # band — Home is now the All Domains gateway + New Domain CTA.
         page.goto(live_server)
         page.wait_for_load_state("domcontentloaded")
-        cards = page.locator(".workflow-card")
-        assert cards.count() == 3
-
-    def test_stat_items_present(self, page, live_server):
-        page.goto(live_server)
-        page.wait_for_load_state("domcontentloaded")
-        assert page.locator("#classCount").is_visible()
-        assert page.locator("#propCount").is_visible()
-        assert page.locator("#mappingCount").is_visible()
+        assert page.locator("#domainGateway").is_visible()
+        assert page.get_by_role("button", name="New Domain").is_visible()
 
 
 class TestAboutPage:

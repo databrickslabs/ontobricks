@@ -9,13 +9,22 @@ the app rather than in the job's SQL — keeping one copy means the wording of
 
 from __future__ import annotations
 
+import re
 from typing import Iterable, List, Set
 
-# Predicate local-name fragments that suggest time-series / temporal data.
+# Predicate local-name *tokens* that suggest time-series / temporal data.
+# Matched as whole camelCase / snake_case segments (not bare substrings), so
+# short keywords like ``dt`` / ``at`` do not fire inside ``assignedTo`` /
+# ``locatedIn``.
 TEMPORAL_KEYWORDS: Set[str] = {
     "time", "date", "timestamp", "ts", "at", "created", "modified", "dt",
     "start", "end", "recorded", "occurred", "measured",
 }
+
+# Split camelCase / PascalCase / snake_case / kebab-case into tokens.
+_TOKEN_SPLIT = re.compile(
+    r"[_\-\s]+|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])"
+)
 
 
 def local_name(uri: str) -> str:
@@ -23,10 +32,20 @@ def local_name(uri: str) -> str:
     return (uri or "").rstrip("/").split("/")[-1].split("#")[-1].lower()
 
 
+def _local_tokens(uri: str) -> List[str]:
+    """Lower-cased camelCase / snake_case tokens of a predicate local name."""
+    raw = (uri or "").rstrip("/").split("/")[-1].split("#")[-1]
+    if not raw:
+        return []
+    return [part.lower() for part in _TOKEN_SPLIT.split(raw) if part]
+
+
 def has_temporal_predicates(predicates: Iterable[str]) -> bool:
-    """Whether any predicate's local name hints at temporal data."""
+    """Whether any predicate's local-name token hints at temporal data."""
     return any(
-        kw in local_name(p) for p in predicates for kw in TEMPORAL_KEYWORDS
+        token in TEMPORAL_KEYWORDS
+        for predicate in predicates
+        for token in _local_tokens(predicate)
     )
 
 

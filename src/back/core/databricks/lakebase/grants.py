@@ -25,11 +25,50 @@ human-readable strings the caller aggregates into its task/route result.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+import os
+from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def resolve_mcp_app_name(
+    app_name: str = "",
+    *,
+    explicit: str = "",
+    env: Optional[Dict[str, str]] = None,
+) -> str:
+    """Resolve the MCP companion Databricks App name.
+
+    Mirrors ``scripts/deploy.config.sh``::
+
+        DEFAULT_MCP_APP_NAME="mcp-${DEFAULT_APP_NAME}"
+
+    Precedence:
+
+    1. ``explicit`` (UI / caller override)
+    2. ``MCP_APP_NAME`` env (injected into ``app.yaml`` at deploy time)
+    3. ``mcp-{app_name}`` derived from the running main app
+    4. bare ``mcp-ontobricks`` only when no main app name is known
+
+    Without (3), instance-suffixed deploys (``ontobricks-07x`` →
+    ``mcp-ontobricks-07x``) look up the wrong app and skip MCP grants
+    (GitHub #137).
+    """
+    override = (explicit or "").strip()
+    if override:
+        return override
+    environ = env if env is not None else os.environ
+    from_env = (environ.get("MCP_APP_NAME") or "").strip()
+    if from_env:
+        return from_env
+    main = (app_name or "").strip()
+    if not main:
+        return "mcp-ontobricks"
+    if main.startswith("mcp-"):
+        return main
+    return f"mcp-{main}"
 
 
 def resolve_app_service_principals(
@@ -70,6 +109,12 @@ def grant_can_use_on_project(
     Tries both the Autoscaling (``database-projects``) and Provisioned
     (``database-instances``) permission securables; success on either is
     enough. Best-effort — a failure on both becomes a warning.
+
+    The app SP typically only holds ``CAN_USE`` (granted at deploy time by
+    a human principal), not ``CAN_MANAGE``, so an in-app re-grant often
+    fails even when the privilege is already present. The warning text
+    points operators at the bootstrap script rather than implying the
+    privilege is missing.
     """
     granted: List[str] = []
     warnings: List[str] = []
@@ -101,8 +146,11 @@ def grant_can_use_on_project(
             granted.append(f"{app_name}: CAN_USE on project")
         else:
             warnings.append(
-                f"{app_name}: could not grant CAN_USE on project (need "
-                f"manage permission on the Lakebase project)"
+                f"{app_name}: could not re-grant CAN_USE on project "
+                f"(app SP needs CAN_MANAGE to grant; usually already "
+                f"applied by scripts/bootstrap/lakebase-perms.sh at "
+                f"deploy — re-run that script as a workspace admin if "
+                f"the SP still lacks CAN_USE)"
             )
     return granted, warnings
 
@@ -177,6 +225,10 @@ def grant_uc_catalog(
             logger.warning("UC catalog grant for %s failed: %s", app_name, exc)
             warnings.append(
                 f"{app_name}: UC catalog grant on {uc_catalog} failed "
-                f"({exc}). You may lack MANAGE on the catalog."
+                f"({exc}). The app SP needs MANAGE on the catalog to "
+                f"grant ALL_PRIVILEGES to itself — prefer re-running "
+                f"scripts/bootstrap/lakebase-perms.sh -c {uc_catalog} "
+                f"as a workspace admin (deploy applies this before the "
+                f"registry schema exists)."
             )
     return granted, warnings
