@@ -637,7 +637,7 @@ After an analysis, a **Data Model Health** card shows entity types that may not 
 | **Entity Type** | Class URI local name |
 | **Instances** | Count of instances in the graph |
 | **Rel. Predicates** | Distinct entity-to-entity relationship predicates (excludes `rdf:type`, `rdfs:label`, and literal attributes; counts both incoming and outgoing relationships) |
-| **Temporal** | Whether any predicate name contains a temporal keyword (e.g. `date`, `timestamp`) |
+| **Temporal** | Whether any camelCase/snake_case token of a predicate name is a temporal keyword (e.g. `date`, `timestamp`, `at`) |
 
 An entity type is flagged as **flat / time-series** when:
 
