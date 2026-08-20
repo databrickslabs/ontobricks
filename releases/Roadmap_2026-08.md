@@ -1,8 +1,9 @@
 # OntoBricks — Product Roadmap
 
 > **Version:** 0.7.x → beyond  
-> **Last updated:** 2026-08-07  
-> **Status:** Living document — updated after each release
+> **Last updated:** 2026-08-19  
+> **Status:** Living document — updated after each release  
+> **Effort model:** 1 FTE, ~4 focused person-days/week, two independent tracks when possible. Estimates live on Asana (`OntoBricks-Product`).
 
 > **Disclaimer:** This roadmap represents the current product direction and planned investments as of the date above. It is provided for informational purposes only and is subject to change at any time without notice. The features, timelines, and priorities described here are aspirational and do not constitute a commitment, promise, or legal obligation to deliver any specific functionality by any specific date. Actual releases may differ materially from what is described here.
 
@@ -15,11 +16,11 @@ OntoBricks is the only Databricks-native knowledge graph builder that combines o
 The next phase of the roadmap focuses on six strategic axes:
 
 1. **Data & mapping integrity hardening** — close two gaps surfaced by real usage: deleting a data source still referenced by a mapping today produces a silent, dangling reference (broken R2RML at build time, no warning at delete time), and metadata refresh applies column changes without a preview (**v0.8.0**).
-2. **External surface expansion** — a GraphRAG-inspired retrieval layer for the MCP Server, embedded-dashboard/action/dataset endpoints published on the external API, and a first design pass on exposing draft domains and agentic modeling externally (**v0.8.0**).
-3. **Workflow completeness** — close the remaining v0.6.0-deferred UX and automation items (ontology version diff, mapping multi-select & orphan validation, scheduled reasoning, temporal & recursive Datalog) folded into the **v0.8.0** release.
+2. **External surface expansion** — dashboard/action/dataset endpoints on the external API in **v0.8.0**; GraphRAG-style MCP retrieval stretches to **v0.8.1** (SPEC + eval gate).
+3. **Workflow completeness** — ontology version diff, mapping multi-select & orphan validation, scheduled reasoning in **v0.8.0**; temporal & recursive Datalog in **v0.8.1**.
 4. **Domain storage isolation** — isolate each domain's Lakebase and Lakehouse artifacts behind a dedicated schema so multi-domain deployments no longer share a flat namespace (**v0.8.0**).
-5. **Ontos integration** — connect OntoBricks domains with Databricks Ontos so ontology and mapping work can interoperate with the platform ontology layer (**v0.8.0**).
-6. **Enterprise hardening** — fine-grained RBAC, multi-workspace federation, audit log, large-graph pagination, and one-command deployment (**v0.9.0**).
+5. **Ontos integration** — connect OntoBricks domains with Databricks Ontos (**v0.8.1** stretch — P1 but XL / low confidence until the Ontos API is scoped).
+6. **Enterprise hardening** — fine-grained RBAC, multi-workspace federation, audit log, large-graph pagination, and one-command deployment (**v0.9.0**, Q2–Q3 2027).
 
 ---
 
@@ -204,112 +205,117 @@ Also delivered (beyond the original plan):
 
 ---
 
-### v0.8.0 — Data Integrity, External Surface, Domain Isolation, Workflow Completeness & Ontos Integration (October 2026)
+### v0.8.0 — Data Integrity, Isolation, Workflow Completeness (freeze 4 Dec 2026) + v0.8.1 stretch (Q1 2027)
 
-**Theme:** five tracks shipped together. First, **data & mapping integrity hardening** — closing gaps in the data-source/mapping lifecycle surfaced by real usage. Second, **external surface expansion** — a GraphRAG-inspired MCP retrieval layer, published dashboard/action/dataset endpoints, and a first design pass on exposing draft domains and agentic modeling externally. Third, **domain storage isolation** — each domain gets a dedicated Lakebase and Lakehouse schema so graph and registry artifacts no longer share a flat namespace. Fourth, **closure of all workflow items deferred from v0.6.0** (ontology version diff, mapping multi-select, orphan detection, scheduled reasoning, temporal & recursive Datalog). Fifth, **Ontos integration** — bridge OntoBricks domains with Databricks Ontos so customers can reuse and align ontology assets across the platform ontology layer and OntoBricks design/mapping/reasoning.
+**Capacity check (2026-08-19):** shipping every v0.8.0 row in October is ~230 focused person-days (~14 calendar months sequential, ~7 months at two tracks). That does not fit Q4 2026. Split:
+
+| Wave | Calendar | Scope | ~pd |
+| ---- | -------- | ----- | --- |
+| **v0.8.0 freeze** | 24 Aug → 4 Dec 2026 | All P1 except Ontos; P2 integrity/mapping/scheduler/live-trace/SPARQL/enum/unsaved-guard; dashboards API | ~117 |
+| **v0.8.1 stretch** | Dec 2026 → Mar 2027 | Ontos, GraphRAG, Datalog, parallel auto-map/explorer, i18n, Marketplace/deploy packaging | ~115 |
+
+**Theme:** **v0.8.0** closes data-source/mapping integrity, publishes dashboard/action/dataset API routes, isolates Lakebase/Lakehouse per domain, and finishes the v0.6.0-deferred UX items that are not XL. **v0.8.1** takes XL / low-confidence items (Ontos, GraphRAG, temporal+Datalog) plus P3 performance and i18n.
 
 #### Pillar 1 — Data Source & Mapping Integrity
 
 
-| Capability                              | Description                                                                                                                                                                                                                        | Priority |
+| Capability                              | Description                                                                                                                                                                                                                        | Priority · effort · window |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
-| **Data source deletion guard**          | Before removing a metadata table from a domain, cross-check it against every entity/relationship mapping in `assignment`; block or require explicit confirmation (listing the affected entities/relationships) instead of today's silent removal that only surfaces as a broken R2RML/Spark SQL build later | P1       |
-| **Metadata refresh — diff preview**     | Surface the column-level diff already computed on "Update Metadata" (columns added/removed/unchanged) as a review-and-confirm step before the merge is applied, instead of applying silently                                        | P1       |
-| **Mapping impact warning on source edit** | When a mapped data source's schema changes (columns dropped/renamed), warn in the Mapping designer which entities/attributes are affected, reusing the diff from the item above                                                    | P2       |
+| **Data source deletion guard**          | Before removing a metadata table from a domain, cross-check it against every entity/relationship mapping in `assignment`; block or require explicit confirmation (listing the affected entities/relationships) instead of today's silent removal that only surfaces as a broken R2RML/Spark SQL build later | P1 · 4d · 24 Aug–2 Sep |
+| **Metadata refresh — diff preview**     | Surface the column-level diff already computed on "Update Metadata" (columns added/removed/unchanged) as a review-and-confirm step before the merge is applied, instead of applying silently                                        | P1 · 5d · 3–11 Sep |
+| **Mapping impact warning on source edit** | When a mapped data source's schema changes (columns dropped/renamed), warn in the Mapping designer which entities/attributes are affected, reusing the diff from the item above                                                    | P2 · 3d · 14–16 Sep |
 
 #### Pillar 2 — External Surface Expansion
 
 
-| Capability                                              | Description                                                                                                                                                                                                                     | Priority |
+| Capability                                              | Description                                                                                                                                                                                                                     | Priority · effort · window |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Dashboards, actions & datasets on the external API**  | Publish the existing `DashboardService` (embed URLs, parameters, linked datasets) and class-level dataset/action metadata as new routes on `/api/v1`, so external and MCP consumers can retrieve them without a session          | P1       |
-| **MCP GraphRAG-style retrieval**                        | Extend the MCP Server beyond typed lookups and BFS traversal with a semantic retrieval layer (embeddings / vector search over graph entities), inspired by the Lakebase Cookbook GraphRAG example — ships through the AI-feature lifecycle gate (SPEC.md + eval dataset) | P2       |
-| **External API — draft domains & agentic modeling**     | Design pass on extending the external API beyond published, read-only domains to cover DRAFT-stage domains and agentic operations (auto-map, ontology assistant); requires an auth, rate-limit, and write-safety design before implementation | P3       |
+| **Dashboards, actions & datasets on the external API**  | Publish the existing `DashboardService` (embed URLs, parameters, linked datasets) and class-level dataset/action metadata as new routes on `/api/v1`, so external and MCP consumers can retrieve them without a session          | P1 · 8d · 24 Aug–4 Sep |
+| **MCP GraphRAG-style retrieval**                        | Extend the MCP Server beyond typed lookups and BFS traversal with a semantic retrieval layer (embeddings / vector search over graph entities), inspired by the Lakebase Cookbook GraphRAG example — ships through the AI-feature lifecycle gate (SPEC.md + eval dataset) | P2 · 20d · **v0.8.1** 4 Jan–12 Feb 2027 |
+| **External API — draft domains & agentic modeling**     | Design pass on extending the external API beyond published, read-only domains to cover DRAFT-stage domains and agentic operations (auto-map, ontology assistant); requires an auth, rate-limit, and write-safety design before implementation | P3 · 5d · 1–11 Dec (design only) |
 
 #### Pillar 3 — Automation & Exploration Performance
 
 
-| Capability                                | Description                                                                                                                                                                                       | Priority |
+| Capability                                | Description                                                                                                                                                                                       | Priority · effort · window |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Auto Mapping — live agent trace**       | Stream the auto-mapping agent's existing step-by-step progress over SSE (reusing the Graph Chat streaming pattern), with MLflow tracing, so users see per-entity/relationship reasoning as it happens | P2       |
-| **Auto Mapping — parallel execution**     | Investigate safe concurrency for independent entity/relationship mapping sub-tasks (today one serial agentic loop); needs a concurrency-safety design given shared assignment state and LLM rate limits | P3       |
-| **Graph Explorer — parallel querying**    | Profile the current synchronous store round-trip to find the actual hot paths (e.g. batched neighbor expansion across multiple nodes) and parallelize those specifically, rather than a blanket rewrite | P3       |
+| **Auto Mapping — live agent trace**       | Stream the auto-mapping agent's existing step-by-step progress over SSE (reusing the Graph Chat streaming pattern), with MLflow tracing, so users see per-entity/relationship reasoning as it happens | P2 · 8d · 7–16 Sep |
+| **Auto Mapping — parallel execution**     | Investigate safe concurrency for independent entity/relationship mapping sub-tasks (today one serial agentic loop); needs a concurrency-safety design given shared assignment state and LLM rate limits | P3 · 10d · **v0.8.1** 11–22 Jan 2027 |
+| **Graph Explorer — parallel querying**    | Profile the current synchronous store round-trip to find the actual hot paths (e.g. batched neighbor expansion across multiple nodes) and parallelize those specifically, rather than a blanket rewrite | P3 · 8d · **v0.8.1** 19–30 Jan 2027 |
 
 #### Pillar 4 — Ontology & Knowledge Graph Modeling
 
 
-| Capability                                | Description                                                                                                                                                                                    | Priority |
+| Capability                                | Description                                                                                                                                                                                    | Priority · effort · window |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Enumeration attribute type**            | Add a first-class "Enumeration" data type to the ontology attribute editor (today enum-like behavior only exists as a SHACL `sh:in` validation constraint), wired through OWL generation and SHACL shape emission | P2       |
-| **SPARQL editor — Knowledge Graph menu**  | A SPARQL editor and backend already exist (`query-execute.js`, `DomainQueryService`); confirm scope with the requester — surface the existing editor under the Knowledge Graph menu (navigation fix), or upgrade it (syntax highlighting/autocomplete) | P2       |
+| **Enumeration attribute type**            | Add a first-class "Enumeration" data type to the ontology attribute editor (today enum-like behavior only exists as a SHACL `sh:in` validation constraint), wired through OWL generation and SHACL shape emission | P2 · 6d · 7–14 Oct |
+| **SPARQL editor — Knowledge Graph menu**  | A SPARQL editor and backend already exist (`query-execute.js`, `DomainQueryService`); confirm scope with the requester — surface the existing editor under the Knowledge Graph menu (navigation fix), or upgrade it (syntax highlighting/autocomplete) | P2 · 4d · 17–22 Sep |
 
 #### Pillar 5 — Domain Storage Isolation
 
 
-| Capability                                         | Description                                                                                                                                                                                                                                                                                                                                 | Priority |
+| Capability                                         | Description                                                                                                                                                                                                                                                                                                                                 | Priority · effort · window |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Lakebase — per-domain schema**                   | Provision and bind each domain to a dedicated Postgres schema in Lakebase (instead of a shared flat namespace), so triples, indexes, and app-managed objects are isolated per domain; migrations cover existing multi-domain deployments                                                                                                      | P1       |
-| **Lakehouse — per-domain schema**                  | Mirror the same isolation model for Delta/UC Lakehouse artifacts: each domain owns a dedicated Unity Catalog schema for its graph tables, build outputs, and related objects, with create/migrate paths that keep lineage and grants scoped to that schema                                                                                    | P1       |
-| **Domain schema lifecycle**                        | Create, rename-safe binding, and drop (or soft-retire) the domain schema as part of domain create/delete/version flows; document the naming convention and UC/Lakebase grant expectations so ops can audit isolation                                                                                                                         | P2       |
+| **Lakebase — per-domain schema**                   | Provision and bind each domain to a dedicated Postgres schema in Lakebase (instead of a shared flat namespace), so triples, indexes, and app-managed objects are isolated per domain; migrations cover existing multi-domain deployments                                                                                                      | P1 · 15d · 17 Sep–14 Oct |
+| **Lakehouse — per-domain schema**                  | Mirror the same isolation model for Delta/UC Lakehouse artifacts: each domain owns a dedicated Unity Catalog schema for its graph tables, build outputs, and related objects, with create/migrate paths that keep lineage and grants scoped to that schema                                                                                    | P1 · 15d · 15 Oct–11 Nov |
+| **Domain schema lifecycle**                        | Create, rename-safe binding, and drop (or soft-retire) the domain schema as part of domain create/delete/version flows; document the naming convention and UC/Lakebase grant expectations so ops can audit isolation                                                                                                                         | P2 · 8d · 12–23 Nov |
 
 #### Pillar 6 — Platform UX & Localization
 
 
-| Capability                                    | Description                                                                                                                                                                        | Priority |
+| Capability                                    | Description                                                                                                                                                                        | Priority · effort · window |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Unsaved-changes guard beyond the Designer** | Generalize the Ontology Designer's dirty-flag + beacon-save-on-unload pattern to Mapping, Metadata/Data Sources, and Business Rules, which today only guard in-app navigation via confirm dialogs | P2       |
-| **Language package foundations**             | No i18n infrastructure exists today; scope as either a translation-key scaffolding pass or a first concrete target language, pending a product decision on which languages/markets to target | P3       |
+| **Unsaved-changes guard beyond the Designer** | Generalize the Ontology Designer's dirty-flag + beacon-save-on-unload pattern to Mapping, Metadata/Data Sources, and Business Rules, which today only guard in-app navigation via confirm dialogs | P2 · 5d · 23–29 Sep |
+| **Language package foundations**             | No i18n infrastructure exists today; scope as either a translation-key scaffolding pass or a first concrete target language, pending a product decision on which languages/markets to target | P3 · 12d · **v0.8.1** 15–31 Mar 2027 |
 
 #### Pillar 7 — Deferred Workflow Items (carried from v0.6.0)
 
 
-| Capability                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Priority |
+| Capability                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Priority · effort · window |
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Ontology iteration UX**                           | Manage and iterate over generated ontology versions — side-by-side compare, structural diff (added/removed classes, properties, relationships, mappings), promote, and rollback — wired into the `DRAFT → IN-REVIEW → PUBLISHED` lifecycle, with the diff optionally exported to Delta as an audit record on save                                                                                                                                                                                                                                                                                            | P1       |
-| **Mapping — multi-select**                          | Multi-select of entities and relationships in the Mapping canvas (shift/ctrl + marquee) so bulk actions (map, exclude, clear) apply to a selection                                                                                                                                                                                                                                                                                                                                                                                                                                                             | P2       |
-| **Mapping — orphan detection**                      | Validation pass that flags mapped entities with no relationships (isolated nodes), surfaced as advisory warnings in the Mapping designer and the Cockpit readiness checks                                                                                                                                                                                                                                                                                                                                                                                                                                      | P2       |
-| **Scheduler — inference & materialization**         | Extend the scheduler so OWL 2 RL inference and SWRL materialization can run as scheduled tasks alongside the existing build job, with results recorded in the build-run trace                                                                                                                                                                                                                                                                                                                                                                                                                                  | P2       |
-| **Advanced reasoning — temporal & recursive rules** | Extend the multi-phase reasoning engine with two new symbolic families: **(1) Temporal reasoning** — Allen's 13 interval relations (before, meets, overlaps, during, …) inferred from entity start/end datatype properties; **(2) recursive Datalog** — stratified, semi-naïve fixpoint rules reusing the SWRL atom syntax for true recursion (e.g. conditional reachability/ancestry) beyond the fixed transitive closure. Shipped as a phased roadmap (temporal first, Datalog second)                                                                                                                     | P2       |
+| **Ontology iteration UX**                           | Manage and iterate over generated ontology versions — side-by-side compare, structural diff (added/removed classes, properties, relationships, mappings), promote, and rollback — wired into the `DRAFT → IN-REVIEW → PUBLISHED` lifecycle, with the diff optionally exported to Delta as an audit record on save                                                                                                                                                                                                                                                                                            | P1 · 15d · 27 Oct–20 Nov |
+| **Mapping — multi-select**                          | Multi-select of entities and relationships in the Mapping canvas (shift/ctrl + marquee) so bulk actions (map, exclude, clear) apply to a selection                                                                                                                                                                                                                                                                                                                                                                                                                                                             | P2 · 8d · 15–26 Oct |
+| **Mapping — orphan detection**                      | Validation pass that flags mapped entities with no relationships (isolated nodes), surfaced as advisory warnings in the Mapping designer and the Cockpit readiness checks                                                                                                                                                                                                                                                                                                                                                                                                                                      | P2 · 5d · 30 Sep–6 Oct |
+| **Scheduler — inference & materialization**         | Extend the scheduler so OWL 2 RL inference and SWRL materialization can run as scheduled tasks alongside the existing build job, with results recorded in the build-run trace                                                                                                                                                                                                                                                                                                                                                                                                                                  | P2 · 8d · 23 Nov–4 Dec |
+| **Advanced reasoning — temporal & recursive rules** | Extend the multi-phase reasoning engine with two new symbolic families: **(1) Temporal reasoning** — Allen's 13 interval relations (before, meets, overlaps, during, …) inferred from entity start/end datatype properties; **(2) recursive Datalog** — stratified, semi-naïve fixpoint rules reusing the SWRL atom syntax for true recursion (e.g. conditional reachability/ancestry) beyond the fixed transitive closure. Shipped as a phased roadmap (temporal first, Datalog second)                                                                                                                     | P2 · 22d · **v0.8.1** 15 Feb–19 Mar 2027 |
 
 #### Pillar 8 — Ontos Integration
 
 
-| Capability                              | Description                                                                                                                                                                                                                                                                                                                                 | Priority |
+| Capability                              | Description                                                                                                                                                                                                                                                                                                                                 | Priority · effort · window |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **Ontos Integration**                   | Integrate OntoBricks with **Databricks Ontos**: import/align ontology assets from Ontos into OntoBricks domains, export or publish OntoBricks OWL/mappings back for platform reuse, and document the supported sync/auth model so design, mapping, and reasoning stay complementary to the Databricks ontology layer rather than a silo | P1       |
+| **Ontos Integration**                   | Integrate OntoBricks with **Databricks Ontos**: import/align ontology assets from Ontos into OntoBricks domains, export or publish OntoBricks OWL/mappings back for platform reuse, and document the supported sync/auth model so design, mapping, and reasoning stay complementary to the Databricks ontology layer rather than a silo | P1 · 20d · **v0.8.1** 7 Dec 2026–29 Jan 2027 |
 
 ---
 
-### v0.9.0 — Enterprise Hardening (Q4 2026)
+### v0.9.0 — Enterprise Hardening (Q2–Q3 2027)
 
-**Theme:** prepare OntoBricks for large enterprise deployments with strict governance, performance, and multi-tenancy requirements.
+**Theme:** prepare OntoBricks for large enterprise deployments with strict governance, performance, and multi-tenancy requirements. Slipped from original Q4 2026 because the v0.8.0 freeze lands in December 2026.
 
-
-| Feature                        | Description                                                                                |
-| ------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Fine-grained RBAC**          | Per-domain, per-version read/write/admin roles via Unity Catalog grants                    |
-| **Multi-workspace federation** | Cross-workspace domain registry sync — read a domain built in workspace A from workspace B |
-| **Audit log**                  | Every build, reasoning run, and mutation emits a structured event to a Delta audit table   |
-| **Large-graph pagination**     | Server-side cursor pagination for 10k+ node knowledge graphs                               |
-| **API key authentication**     | Scoped API keys for external REST and GraphQL consumers                                    |
-| **One-command deployment**     | Single DAB deploy installs OntoBricks + MCP server + registry together                     |
-| **Triple store migration UX**  | Guided migration assistant when switching engine (e.g. Delta → Neo4j or Lakebase)         |
+| Feature                        | Description                                                                                | Effort · window |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- | --- |
+| **API key authentication**     | Scoped API keys for external REST and GraphQL consumers                                    | 8d · 1–14 Apr 2027 |
+| **Audit log**                  | Every build, reasoning run, and mutation emits a structured event to a Delta audit table   | 10d · 15–28 Apr 2027 |
+| **Large-graph pagination**     | Server-side cursor pagination for 10k+ node knowledge graphs                               | 12d · 29 Apr–18 May 2027 |
+| **Fine-grained RBAC**          | Per-domain, per-version read/write/admin roles via Unity Catalog grants                    | 15d · 19 May–11 Jun 2027 |
+| **One-command deployment**     | Single DAB deploy installs OntoBricks + MCP server + registry together                     | 10d · 12–25 Jun 2027 |
+| **Triple store migration UX**  | Guided migration assistant when switching engine (e.g. Delta → Neo4j or Lakebase)         | 12d · 28 Jun–15 Jul 2027 |
+| **Multi-workspace federation** | Cross-workspace domain registry sync — read a domain built in workspace A from workspace B | 20d · 19 Jul–13 Aug 2027 |
 
 ---
 
-### v1.0.0 — General Availability (Q1 2027)
+### v1.0.0 — General Availability (Q3–Q4 2027)
 
-**Theme:** stable API contract, enterprise SLA documentation, and ecosystem integrations.
+**Theme:** stable API contract, enterprise SLA documentation, and ecosystem integrations. Slipped from original Q1 2027. **OntoBricks Hub is post-GA** (Q1 2028) and does not gate 1.0.
 
-
-| Item                          | Description                                                         |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| **Stable REST API v1**        | SemVer enforced; deprecation policy documented; no breaking changes |
-| **Amazon Neptune connector**  | RDF/SPARQL 1.1 over HTTPS                                           |
-| **Azure Cosmos DB connector** | Gremlin API; property graph mapping                                 |
-| **OntoBricks Hub**            | Public registry of community ontologies and mapping templates       |
-| **Databricks Marketplace**    | One-click install from the Databricks Marketplace                   |
-| **SSO / SCIM provisioning**   | Enterprise identity integration                                     |
+| Item                          | Description                                                         | Effort · window |
+| ------------------------------ | ----------------------------------------------------------------------- | --- |
+| **Stable REST API v1**        | SemVer enforced; deprecation policy documented; no breaking changes | 15d · 16 Aug–10 Sep 2027 |
+| **Amazon Neptune connector**  | RDF/SPARQL 1.1 over HTTPS                                           | 20d · 13 Sep–15 Oct 2027 |
+| **Azure Cosmos DB connector** | Gremlin API; property graph mapping                                 | 20d · 18 Oct–19 Nov 2027 |
+| **Databricks Marketplace**    | One-click install from the Databricks Marketplace                   | 8d · 22 Nov–3 Dec 2027 |
+| **SSO / SCIM provisioning**   | Enterprise identity integration                                     | 15d · 6–31 Dec 2027 |
+| **OntoBricks Hub**            | Public registry of community ontologies and mapping templates       | 25d · **post-GA** 3 Jan–11 Feb 2028 |
 
 ---
 
