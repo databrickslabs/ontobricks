@@ -102,3 +102,257 @@ Modified files:
 Tests: uv run --frozen pytest -q tests/units/core/test_unity_catalog.py → 34 passed in 12.05s.
 Full ``not scenario`` suite hung on TestClient /health (Lakebase probe) in the isolated develop worktree; 0.7.2 counterpart of this change passed 4820 in 40.26s.
 
+## Pillar 1 — Data Source & Mapping Integrity
+
+Context: Asana rollup "Pillar 1 · Data Source & Mapping Integrity" (v0.8.0,
+3 subtasks). Closes the data-source/mapping lifecycle gaps surfaced by real
+usage: removing a metadata table silently orphaned the mappings that read from
+it, "Update from UC" overwrote the stored schema with no preview and no undo,
+and a column renamed or dropped upstream stayed invisible until a build failed.
+
+Two findings from the code changed the shape of the work versus the roadmap.
+First, the roadmap's claim that the metadata-refresh column diff was "already
+computed" is wrong — `merge_table_metadata` had both column lists in scope and
+discarded the comparison, so the diff is net-new (small and pure, so the
+estimate held). Second, the deletion guard was cheaper than estimated:
+`Mapping._collect_source_tables()` already returned `{table: [referrer]}`
+covering explicit triples, relationship source/target tables, and FQNs parsed
+out of freeform SQL — the hard half was done. Decisions taken with the
+requester: the guard is confirm-with-detail (not a hard block), and the drift
+warning ships on both Diagnostics and the designer canvas.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   New pure `compute_column_diff(old_columns, new_columns)` returning
+   `added`/`removed`/`type_changed`/`unchanged`, plus `has_column_changes`.
+   Shared by the refresh preview and (indirectly) the drift work. A rename is
+   reported as remove+add — `DESCRIBE` gives no identity to correlate the two,
+   and guessing would produce confident-but-wrong previews. Extracted
+   `_column_name` / `_column_type` to handle the `col_name`/`name` and
+   `data_type`/`type` key split in one place; `merge_table_metadata` now uses
+   the former instead of repeating the fallback inline.
+2. src/back/objects/mapping/Mapping.py
+   New `find_mappings_referencing(tables)` wrapping `_collect_source_tables()`,
+   matching on the full triple or (when the UI supplies a short name) on the
+   table segment alone, case-insensitively. Returns only tables that are still
+   in use, so an empty result means the removal is safe.
+3. src/back/objects/mapping/Mapping.py
+   Extracted `_entity_source_triples` / `_relationship_source_triples` and
+   rewrote `_collect_source_tables` on top of them, removing the duplicated
+   triple-extraction logic now that the drift checks need the same per-mapping
+   view. The relationship helper tags each triple with its side
+   (source/target/sql) so both the diagnostics labels and the side-specific
+   drift check can reuse it.
+4. src/api/routers/internal/domain.py
+   New `POST /domain/metadata/removal-impact` — read-only pre-flight returning
+   the referrer map so the UI can list what a removal would break.
+5. src/back/objects/domain/Domain.py
+   `get_removal_impact` (route delegate) and `_invalidate_on_removal`.
+   `save_metadata_tables` / `clear_metadata` now compute which tables actually
+   disappeared and, when any were still referenced, call
+   `clear_generated_content()` + `record_change()` before saving — matching what
+   every mapping mutator already did, and which these two were alone in
+   skipping. Stale R2RML must not outlive the table it describes. Both return
+   the impact map so callers can report it.
+6. src/front/static/global/js/utils.js
+   `showConfirmDialog` gained optional `detailHtml` (scrollable bordered panel
+   under the message), `size`, and `headerClass`. One generalization serves both
+   new dialogs instead of two bespoke modals; existing callers are unaffected.
+7. src/front/static/domain/js/domain-metadata.js
+   `fetchRemovalImpact` / `buildRemovalImpactHtml` / `confirmRemovalWithImpact`,
+   wired into `removeSelectedTables()` and `clearMetadata()`. With no impact the
+   dialog is unchanged from today; with impact it becomes a danger-header
+   modal listing each doomed table and its referrers. A failed pre-flight
+   degrades to the plain confirm rather than blocking the removal.
+8. src/back/objects/domain/_metadata_tasks.py
+   `run_metadata_update_task` snapshots `old_table["columns"]` and computes the
+   diff *before* calling `merge_table_metadata`, which replaces the list in
+   place and makes the previous schema unrecoverable. The per-table diff (only
+   tables that actually changed) is returned as a new `diff` key alongside the
+   existing result keys.
+9. src/back/objects/domain/Domain.py
+   Same snapshot-then-diff in the synchronous `update_metadata_tables`, so both
+   paths agree even though the UI only drives the async one.
+10. src/front/static/domain/js/domain-metadata.js
+    `buildColumnDiffHtml` / `confirmMetadataDiff`, and `monitorMetadataTask` now
+    gates the previously automatic `/domain/metadata/save` behind the review
+    dialog whenever the diff is non-empty. Declining discards the in-memory
+    result — the correct rollback given `DomainSession.save()` is a full-blob
+    overwrite with no undo. A no-op refresh still applies straight through.
+11. src/back/objects/mapping/Mapping.py
+    `_fetch_live_columns` (one `DESCRIBE` per distinct source table, not per
+    attribute), `_drift_check`, `_entity_drift_checks`,
+    `_relationship_drift_checks`. Drift is `warning`, not `error`: the mapping
+    is well-formed, the upstream table moved. Tables the client cannot read
+    return `[]` and are skipped rather than reported as fully dropped.
+12. src/back/objects/mapping/Mapping.py
+    `run_diagnostics` appends drift checks to each entity/relationship result,
+    but only when `available_columns is None` — a parseable `SELECT` list is
+    already validated against its own projection, whose aliases legitimately
+    differ from the table's column names, so checking those against the live
+    schema would be a false positive. `SELECT *` parses to `None` and therefore
+    does get drift, which is the desired case. `_diagnose_relationship` now
+    returns `available_columns` for symmetry with `_diagnose_entity`.
+13. src/back/objects/mapping/Mapping.py
+    `get_schema_drift(client)` — a cheap subset of `run_diagnostics` (no SELECT
+    probes, no row counts) keyed by class/property URI, so the designer can flag
+    drift on load without paying for a full diagnostics run.
+14. src/api/routers/internal/mapping.py
+    New `GET /mapping/schema-drift`.
+15. src/front/static/mapping/js/mapping-diagnostics.js
+    `_isDrift` / `_driftBadge`; drift rows get their own icon and a
+    "(schema drift)" suffix, and affected items carry an "N drifted" badge in
+    the collapsed header so it is visible without expanding.
+16. src/front/static/mapping/js/mapping-design.js
+    `MappingDriftState` + `loadSchemaDrift`, fetched in parallel with the map
+    layout on designer init (advisory — a failure just means no markers). A ⚠
+    glyph and tooltip on affected canvas nodes, a warning banner at the top of
+    the entity and relationship panels listing the missing columns, and a badge
+    on the bound column header when the column is still in the query output.
+17. src/front/static/mapping/css/mapping-design.css
+    `.mapping-map-node-drift` styling for the canvas marker.
+18. documentation/user-guide.md
+    New "Refreshing metadata (Update from UC)" and "Removing data sources"
+    subsections under Import Table Metadata, and a "Source Schema Drift" section
+    under Mapping covering the three surfaces and why aliased SQL is exempt.
+19. documentation/data-access.md
+    Three new rows in the Domain and Mapping feature/endpoint tables.
+20. README.md
+    New "Data source & mapping integrity (0.8.0)" section.
+21. pyproject.toml
+    Version 0.7.2 → 0.8.0 (the release this pillar targets, per the Asana Git
+    Branch field).
+22. tests/units/domain/test_column_diff.py
+    New — 14 cases for `compute_column_diff` / `has_column_changes`: add,
+    remove, rename-as-remove-plus-add, type change, comment-only change,
+    empty/None sides, both key conventions, blank DESCRIBE separator rows.
+23. tests/units/mapping/test_removal_impact.py
+    New — 11 cases for the referrer lookup: explicit triple, sql_query-only,
+    relationship source/target, multiple referrers, excluded mappings skipped,
+    no-match, bare and back-ticked names, case-insensitivity, empty input.
+24. tests/units/domain/test_metadata_removal_guard.py
+    New — 11 cases covering `get_removal_impact` (including that it is
+    read-only) and the invalidation behaviour of `save_metadata_tables` /
+    `clear_metadata`: fires only when a *referenced* table is dropped, still
+    persists the reduced set, and records a summarising change event.
+25. tests/units/domain/test_metadata_refresh_diff.py
+    New — 7 cases driving `run_metadata_update_task` with a fake client:
+    added/removed columns, type changes, unchanged tables absent from the diff,
+    the snapshot-before-merge ordering, multi-table, and result-key stability.
+26. tests/units/mapping/test_schema_drift.py
+    New — 18 cases: dropped id/label/attribute columns, no false positive on a
+    matching schema, advisory severity, unreadable tables skipped, aliased SQL
+    exempt but `SELECT *` covered, one fetch per table, excluded entities
+    skipped, per-side relationship resolution, and `get_schema_drift` shape
+    including the no-client and DESCRIBE-failure paths.
+27. tests/e2e/domain/test_domain_api_flows.py
+    Contract tests for `POST /domain/metadata/removal-impact`.
+28. tests/e2e/mapping/test_mapping_api_flows.py
+    Contract tests for `GET /mapping/schema-drift`.
+
+Behaviour note: the deletion guard informs, it does not block — a user can still
+remove a mapped data source, which is deliberate and consistent with the other
+destructive metadata actions. The cost is that the generated R2RML/SQL is
+cleared on such a removal, so the next build regenerates rather than shipping a
+mapping that points at a table the domain no longer knows about.
+
+Modified files:
+- pyproject.toml
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/mapping.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/_metadata_tasks.py
+- src/back/objects/mapping/Mapping.py
+- src/front/static/domain/js/domain-metadata.js
+- src/front/static/global/js/utils.js
+- src/front/static/mapping/css/mapping-design.css
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-diagnostics.js
+- documentation/user-guide.md
+- documentation/data-access.md
+- README.md
+- tests/e2e/domain/test_domain_api_flows.py
+- tests/e2e/mapping/test_mapping_api_flows.py
+- tests/units/domain/test_column_diff.py
+- tests/units/domain/test_metadata_refresh_diff.py
+- tests/units/domain/test_metadata_removal_guard.py
+- tests/units/mapping/test_removal_impact.py
+- tests/units/mapping/test_schema_drift.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4881 passed, 280 skipped,
+5 deselected, 23 warnings in 42.24s
+
+## Pillar 1 — extend test coverage to the UI and the sync refresh path
+
+Context: follow-up to the section above. The first pass covered the backend well
+but left three gaps: the frontend had no coverage at all (both confirmation
+dialogs and all three drift surfaces), the synchronous
+`Domain.update_metadata_tables` diff was written but never exercised, and the
+two new routes were only reached by e2e tests running against an empty session,
+where every interesting assertion is vacuously true. No production code changed.
+
+The frontend tests follow the existing repo convention (`tests/units/front/`):
+Python contract tests that parse the JS source and assert on structure, since
+there is no JS test runner. They were mutation-checked — inverting the save gate
+in `monitorMetadataTask` and flipping the drift badge from `bg-warning` to
+`bg-danger` each failed the expected tests, then were reverted.
+
+Changes:
+
+1. tests/units/front/test_metadata_guard_ui.py
+   New — 31 cases. Deletion guard: the pre-flight hits
+   `/domain/metadata/removal-impact`, skips the round-trip for an empty
+   selection, and degrades to the plain confirm on error rather than making the
+   removal impossible; the escalated dialog carries the danger header, the
+   dedup'd mapping count and the R2RML warning; both call sites pass the right
+   identifiers, honour cancel, and confirm *before* issuing the destructive
+   request. Diff preview: every change kind renders, removals are listed first,
+   unchanged columns are summarised not enumerated, and both builders escape
+   table/column names. The save gate gets its own class asserting an empty diff
+   saves without prompting, declining breaks out before the save call and
+   reloads the stored state, and confirming still persists. Also covers the new
+   `detailHtml`/`size`/`headerClass` options on `showConfirmDialog`, including
+   that their defaults leave existing callers' markup unchanged.
+2. tests/units/front/test_schema_drift_ui.py
+   New — 28 cases. The fetch uses the cheap `/mapping/schema-drift` route (not
+   `/diagnostics`), runs in parallel with the map layout, and cannot throw. The
+   canvas marker only renders on affected nodes, does not replace the mapping
+   status ring, and names the missing columns in the tooltip. Both panel banners
+   use `alert-warning` rather than `alert-danger` — drift is advisory — and the
+   column-header badge appends to rather than overwrites the existing ID/Label/
+   attribute badge. Diagnostics: drift rows get their own icon and a stripped,
+   annotated label; the header badge counts them, hides when clean, appears on
+   entities and relationships alike, and reads as a warning.
+3. tests/units/api/test_integrity_endpoints.py
+   New — 9 cases hitting both routes through `TestClient`. Covers what the e2e
+   suite structurally cannot: a session that actually has mappings (patched at
+   the service layer), the dedup'd `affected_mapping_count`, a missing
+   `table_names` key, that the impact route mutates nothing, and that
+   `/mapping/schema-drift` never falls through to `run_diagnostics`.
+4. tests/units/domain/test_metadata_refresh_diff.py
+   New `TestSyncUpdateDiff` (4 cases) covering the previously untested
+   synchronous `Domain.update_metadata_tables`: added/removed columns, type
+   changes, a clean refresh producing an empty diff, and that — unlike the async
+   task — this path does persist, since there is no browser round-trip after it
+   to gate. Note for future readers: `back.objects.domain.Domain` resolves to
+   the re-exported *class*, so the module-level names have to be patched via
+   `sys.modules`. Also added a case asserting one table failing its `DESCRIBE`
+   does not discard the diffs computed for its siblings.
+5. tests/units/domain/test_metadata_removal_guard.py
+   New `TestTablesWithoutFullName` (4 cases) — legacy metadata rows carry only
+   `name`, and the guard must still match them on both the save and clear paths
+   — and `TestSqlOnlyReferenceIsGuarded` (1 case) asserting a table referenced
+   only from a mapping's freeform SQL still triggers invalidation.
+
+Modified files:
+- tests/units/api/test_integrity_endpoints.py
+- tests/units/domain/test_metadata_refresh_diff.py
+- tests/units/domain/test_metadata_removal_guard.py
+- tests/units/front/test_metadata_guard_ui.py
+- tests/units/front/test_schema_drift_ui.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4959 passed, 280 skipped,
+5 deselected, 23 warnings in 36.01s (+78 versus the previous section)

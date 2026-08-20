@@ -493,6 +493,89 @@ async function importSelectedTables() {
 }
 
 /**
+ * Render the per-table column diff returned by a metadata refresh.
+ * @param {Object} diff - table name -> {added, removed, type_changed, unchanged}
+ * @returns {string} HTML
+ */
+function buildColumnDiffHtml(diff) {
+    const row = (badge, name, detail) => `
+        <tr>
+            <td>${badge}</td>
+            <td><code>${escapeHtml(name)}</code></td>
+            <td class="text-muted small">${detail}</td>
+        </tr>
+    `;
+
+    return Object.entries(diff).map(([table, tableDiff]) => {
+        const added = (tableDiff.added || []).map(c => row(
+            '<span class="badge bg-success">Added</span>',
+            c.name,
+            escapeHtml(c.type || '')
+        ));
+        const removed = (tableDiff.removed || []).map(c => row(
+            '<span class="badge bg-danger">Removed</span>',
+            c.name,
+            escapeHtml(c.type || '')
+        ));
+        const typeChanged = (tableDiff.type_changed || []).map(c => row(
+            '<span class="badge bg-warning text-dark">Type changed</span>',
+            c.name,
+            `${escapeHtml(c.old_type || '')} &rarr; ${escapeHtml(c.new_type || '')}`
+        ));
+        const unchangedCount = (tableDiff.unchanged || []).length;
+
+        return `
+            <div class="mb-3">
+                <h6 class="mb-2"><i class="bi bi-table me-1"></i><code>${escapeHtml(table)}</code></h6>
+                <table class="table table-sm table-borderless mb-1">
+                    <tbody>${[...removed, ...typeChanged, ...added].join('')}</tbody>
+                </table>
+                <div class="small text-muted ms-1">${unchangedCount} column(s) unchanged</div>
+            </div>
+        `;
+    }).join('');
+}
+
+/**
+ * Ask the user to review a metadata refresh before it is persisted.
+ * The refresh result lives only in the browser until /domain/metadata/save is
+ * called, so declining simply discards it and leaves stored metadata intact.
+ * @param {Object} diff - table name -> column diff
+ * @returns {Promise<boolean>}
+ */
+function confirmMetadataDiff(diff) {
+    const tableCount = Object.keys(diff).length;
+    const changeCount = Object.values(diff).reduce((total, d) => total
+        + (d.added || []).length
+        + (d.removed || []).length
+        + (d.type_changed || []).length, 0);
+    const droppedCount = Object.values(diff).reduce(
+        (total, d) => total + (d.removed || []).length, 0
+    );
+
+    return showConfirmDialog({
+        title: 'Review Metadata Changes',
+        size: 'modal-lg',
+        icon: 'arrow-repeat',
+        message: `
+            Unity Catalog reports ${changeCount} column change(s) across
+            ${tableCount} table(s).
+            ${droppedCount > 0 ? `
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    ${droppedCount} column(s) no longer exist upstream. Any mapping
+                    bound to them will break — run Mapping diagnostics after applying.
+                </div>
+            ` : ''}
+        `,
+        detailHtml: buildColumnDiffHtml(diff),
+        confirmText: 'Apply Changes',
+        confirmClass: 'btn-primary',
+        cancelText: 'Discard'
+    });
+}
+
+/**
  * Monitor a metadata async task until completion
  */
 async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpan) {
@@ -522,7 +605,17 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
                 if (progressDiv) progressDiv.classList.add('d-none');
                 if (btn) btn.disabled = false;
                 
-                // Auto-save the updated metadata to the session
+                // A refresh that changed columns must be reviewed before it is
+                // persisted — the merge is a full overwrite with no undo.
+                const diff = task.result?.diff || {};
+                if (Object.keys(diff).length && !await confirmMetadataDiff(diff)) {
+                    showNotification('Metadata changes discarded', 'info');
+                    await loadMetadataStatus();
+                    if (typeof refreshTasks === 'function') refreshTasks();
+                    break;
+                }
+                
+                // Save the updated metadata to the session
                 if (task.result && task.result.metadata) {
                     try {
                         const tables = task.result.metadata.tables || [];
@@ -534,10 +627,10 @@ async function monitorMetadataTask(taskId, taskType, btn, progressDiv, statusSpa
                         });
                         const saveData = await saveResp.json();
                         if (!saveData.success) {
-                            console.warn('[Metadata] Auto-save warning:', saveData.message);
+                            console.warn('[Metadata] Save warning:', saveData.message);
                         }
                     } catch (saveErr) {
-                        console.error('[Metadata] Auto-save error:', saveErr);
+                        console.error('[Metadata] Save error:', saveErr);
                     }
                 }
                 
@@ -729,6 +822,84 @@ function updateSelectAllCheckbox() {
     }
 }
 
+/**
+ * Ask the backend which entity/relationship mappings still reference the tables
+ * about to be removed. Returns {} when nothing is affected, or the removal check
+ * itself fails — a failed pre-flight must not block the removal.
+ * @param {string[]} identifiers - full_name (or name) of each table being removed
+ * @returns {Promise<Object<string, string[]>>} table identifier -> referrer labels
+ */
+async function fetchRemovalImpact(identifiers) {
+    if (!identifiers.length) return {};
+    try {
+        const response = await fetch('/domain/metadata/removal-impact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ table_names: identifiers }),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        return data.success ? (data.impact || {}) : {};
+    } catch (error) {
+        console.warn('Removal impact check failed, proceeding without detail', error);
+        return {};
+    }
+}
+
+/**
+ * Build the affected-mappings detail block for the deletion-guard dialog.
+ * @param {Object<string, string[]>} impact - from fetchRemovalImpact()
+ * @returns {string} HTML
+ */
+function buildRemovalImpactHtml(impact) {
+    return Object.entries(impact).map(([table, referrers]) => `
+        <div class="mb-3">
+            <h6 class="text-danger mb-1">
+                <i class="bi bi-database-x me-1"></i><code>${escapeHtml(table)}</code>
+            </h6>
+            <ul class="list-unstyled ms-3 small mb-0">
+                ${referrers.map(r => `
+                    <li><i class="bi bi-exclamation-circle text-warning me-1"></i>${escapeHtml(r)}</li>
+                `).join('')}
+            </ul>
+        </div>
+    `).join('');
+}
+
+/**
+ * Confirm a data-source removal, listing the mappings it would orphan.
+ * Falls back to a plain confirm when nothing references the removed tables.
+ * @param {string[]} identifiers - full_name (or name) of each table being removed
+ * @param {Object} plain - showConfirmDialog options used when there is no impact
+ * @returns {Promise<boolean>}
+ */
+async function confirmRemovalWithImpact(identifiers, plain) {
+    const impact = await fetchRemovalImpact(identifiers);
+    const affectedTables = Object.keys(impact).length;
+    if (!affectedTables) return showConfirmDialog(plain);
+
+    const mappingCount = new Set(Object.values(impact).flat()).size;
+    return showConfirmDialog({
+        ...plain,
+        title: 'Data Sources Still In Use',
+        size: 'modal-lg',
+        headerClass: 'bg-danger text-white',
+        icon: 'exclamation-triangle',
+        message: `
+            ${plain.message}
+            <div class="alert alert-danger mt-3 mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Warning:</strong> ${affectedTables} of these data source(s)
+                are still mapped by ${mappingCount} entity/relationship mapping(s).
+                Removing them leaves those mappings pointing at a missing table,
+                which will fail at build time. Generated R2RML/SQL will be cleared.
+            </div>
+        `,
+        detailHtml: buildRemovalImpactHtml(impact),
+        confirmText: 'Remove Anyway'
+    });
+}
+
 async function removeSelectedTables() {
     if (!metadataCache) {
         showNotification('No data sources loaded', 'warning');
@@ -749,17 +920,21 @@ async function removeSelectedTables() {
         return;
     }
     
-    // Confirm removal - special message if removing all
+    // Confirm removal - special message if removing all, with an affected-mappings
+    // guard when the doomed tables are still referenced by the assignment.
     const isRemovingAll = tablesToKeep.length === 0;
-    const confirmed = await showConfirmDialog({
-        title: isRemovingAll ? 'Clear All Data Sources' : 'Remove Tables',
-        message: isRemovingAll 
-            ? 'Are you sure you want to remove all tables? This will clear the data sources.'
-            : `Are you sure you want to remove ${toRemoveCount} table${toRemoveCount !== 1 ? 's' : ''} from the data sources?`,
-        confirmText: isRemovingAll ? 'Clear All' : 'Remove',
-        confirmClass: 'btn-danger',
-        icon: 'trash'
-    });
+    const confirmed = await confirmRemovalWithImpact(
+        tablesToRemove.map(t => t.full_name || t.name),
+        {
+            title: isRemovingAll ? 'Clear All Data Sources' : 'Remove Tables',
+            message: isRemovingAll
+                ? 'Are you sure you want to remove all tables? This will clear the data sources.'
+                : `Are you sure you want to remove ${toRemoveCount} table${toRemoveCount !== 1 ? 's' : ''} from the data sources?`,
+            confirmText: isRemovingAll ? 'Clear All' : 'Remove',
+            confirmClass: 'btn-danger',
+            icon: 'trash'
+        }
+    );
     
     if (!confirmed) return;
     
@@ -927,7 +1102,8 @@ async function saveTableDetails() {
 }
 
 async function clearMetadata() {
-    const confirmed = await showConfirmDialog({
+    const allTables = (metadataCache?.tables || []).map(t => t.full_name || t.name);
+    const confirmed = await confirmRemovalWithImpact(allTables, {
         title: 'Clear Data Sources',
         message: 'Are you sure you want to clear the loaded data sources?',
         confirmText: 'Clear',

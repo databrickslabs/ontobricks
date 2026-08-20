@@ -77,7 +77,12 @@ def run_metadata_update_task(
         tm.advance_step(task_id, f"Updating 0/{len(tables_to_update)} tables...")
         updated_count = 0
         errors: List[str] = []
-        from back.objects.domain.Domain import merge_table_metadata
+        diff: Dict[str, Any] = {}
+        from back.objects.domain.Domain import (
+            compute_column_diff,
+            has_column_changes,
+            merge_table_metadata,
+        )
 
         for i, table_name in enumerate(tables_to_update):
             try:
@@ -87,6 +92,14 @@ def run_metadata_update_task(
                 select_probe = client.check_table_select_permission(
                     catalog, schema, table_name
                 )
+                # Snapshot before the merge — merge_table_metadata replaces
+                # old_table["columns"] in place, so the previous schema is
+                # unrecoverable afterwards.
+                table_diff = compute_column_diff(
+                    old_table.get("columns", []), new_columns
+                )
+                if has_column_changes(table_diff):
+                    diff[table_name] = table_diff
                 merge_table_metadata(
                     old_table,
                     new_columns,
@@ -117,6 +130,7 @@ def run_metadata_update_task(
                 "total_count": len(tables_to_update),
                 "errors": errors,
                 "metadata": existing_metadata,
+                "diff": diff,
             },
             message=message,
         )

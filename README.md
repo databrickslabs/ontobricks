@@ -165,6 +165,12 @@ git push origin main --tags
 | **3** | **Auto-Map** (Mapping > Auto-Map) | LLM generates SQL mappings for every entity and relationship |
 | **4** | **Synchronize** (Knowledge Graph > Status) | Executes mappings and populates the triple store |
 
+### Data source & mapping integrity (0.8.0)
+
+- **Data source deletion guard** — removing a table from **Domain → Metadata** (or clearing all of them) is first cross-checked against every entity and relationship mapping, including tables referenced only from a mapping's custom SQL. When something still reads from it, a dialog lists the affected mappings before you confirm. The removal is not blocked — consistent with *Unmap all* / *Clear metadata* — but proceeding clears the generated R2RML/SQL, which would otherwise describe a table the domain no longer has.
+- **Metadata refresh diff preview** — **Update from UC** no longer overwrites the stored schema silently. The added, removed, and type-changed columns are shown per table for review; **Discard** leaves the stored metadata untouched. A refresh with no column changes still applies straight through.
+- **Mapping impact warning** — the Mapping designer compares each bound column against the live source schema on load and flags upstream renames/drops as advisory warnings: a marker on the canvas node, a banner in the entity/relationship panel, and a `schema drift` row in **Diagnostics**.
+
 ### Domain & registry (0.1.2 UX)
 
 - **Ontology Designer** — the main ontology graph view lives under **Ontology → Designer** (visual canvas + AI Assistant).

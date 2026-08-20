@@ -65,6 +65,76 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _column_name(col: Dict[str, Any]) -> str:
+    """Read a column's name, tolerating the ``col_name``/``name`` split.
+
+    Unity Catalog fetches produce ``name``; some stored metadata (and
+    ``DESCRIBE`` output) uses ``col_name``.
+    """
+    return col.get("col_name") or col.get("name", "")
+
+
+def _column_type(col: Dict[str, Any]) -> str:
+    """Read a column's data type, tolerating the ``data_type``/``type`` split."""
+    return col.get("data_type") or col.get("type", "")
+
+
+def compute_column_diff(
+    old_columns: Optional[List[Dict[str, Any]]],
+    new_columns: Optional[List[Dict[str, Any]]],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Compare two column lists and classify every column by what changed.
+
+    Returns ``{"added": [...], "removed": [...], "type_changed": [...],
+    "unchanged": [...]}``.  Each entry carries at least a ``name``; the
+    ``type_changed`` entries also carry ``old_type`` and ``new_type``.
+
+    A rename is reported as a removal plus an addition — the underlying
+    ``DESCRIBE`` output gives us no identity to correlate the two, and
+    guessing would produce confident-but-wrong previews.
+
+    Pure function: no I/O, no session access.  Shared by the metadata
+    refresh preview and the mapping schema-drift diagnostics.
+    """
+    old_by_name = {
+        name: col for col in (old_columns or []) if (name := _column_name(col))
+    }
+    new_by_name = {
+        name: col for col in (new_columns or []) if (name := _column_name(col))
+    }
+
+    diff: Dict[str, List[Dict[str, Any]]] = {
+        "added": [],
+        "removed": [],
+        "type_changed": [],
+        "unchanged": [],
+    }
+
+    for name, col in new_by_name.items():
+        if name not in old_by_name:
+            diff["added"].append({"name": name, "type": _column_type(col)})
+            continue
+        old_type = _column_type(old_by_name[name])
+        new_type = _column_type(col)
+        if old_type != new_type:
+            diff["type_changed"].append(
+                {"name": name, "old_type": old_type, "new_type": new_type}
+            )
+        else:
+            diff["unchanged"].append({"name": name, "type": new_type})
+
+    for name, col in old_by_name.items():
+        if name not in new_by_name:
+            diff["removed"].append({"name": name, "type": _column_type(col)})
+
+    return diff
+
+
+def has_column_changes(diff: Dict[str, List[Dict[str, Any]]]) -> bool:
+    """True when *diff* contains anything worth showing the user."""
+    return any(diff.get(key) for key in ("added", "removed", "type_changed"))
+
+
 def merge_table_metadata(
     old_table: dict,
     new_columns: list,
@@ -96,11 +166,11 @@ def merge_table_metadata(
     if new_columns:
         old_column_comments: Dict[str, str] = {}
         for col in old_table.get("columns", []):
-            col_name = col.get("col_name") or col.get("name", "")
+            col_name = _column_name(col)
             if col.get("comment"):
                 old_column_comments[col_name] = col["comment"]
         for col in new_columns:
-            col_name = col.get("col_name") or col.get("name", "")
+            col_name = _column_name(col)
             if col_name in old_column_comments and not col.get("comment"):
                 col["comment"] = old_column_comments[col_name]
         old_table["columns"] = new_columns
@@ -1659,6 +1729,59 @@ class Domain:
                 "Initialize metadata failed", detail=str(e)
             ) from e
 
+    def _table_identifiers(self, tables: List[Dict[str, Any]]) -> List[str]:
+        """Best available identifier per metadata table (``full_name``, else name)."""
+        return [t.get("full_name") or t.get("name", "") for t in tables if t]
+
+    def get_removal_impact(self, table_names: List[str]) -> Dict[str, Any]:
+        """Report which mappings would be orphaned by removing *table_names*.
+
+        Returns ``{"success": True, "impact": {table: [referrer, ...]},
+        "affected_table_count": n, "affected_mapping_count": m}``.  An empty
+        ``impact`` means the removal breaks nothing.
+
+        Read-only — this only informs the confirmation dialog; the removal
+        itself still goes through :meth:`save_metadata_tables` /
+        :meth:`clear_metadata`.
+        """
+        from back.objects.mapping import Mapping
+
+        impact = Mapping(self._s).find_mappings_referencing(table_names or [])
+        return {
+            "success": True,
+            "impact": impact,
+            "affected_table_count": len(impact),
+            "affected_mapping_count": len(
+                {ref for refs in impact.values() for ref in refs}
+            ),
+        }
+
+    def _invalidate_on_removal(self, removed: List[str]) -> Dict[str, List[str]]:
+        """Drop generated artefacts when a removal orphaned live mappings.
+
+        Removing a data source that mappings still point at leaves the cached
+        R2RML/SQL describing tables the domain no longer knows about, so it
+        must not survive the removal.  Returns the impact map so callers can
+        report it.  No-op when nothing referenced the removed tables.
+        """
+        if not removed:
+            return {}
+        impact = self.get_removal_impact(removed)["impact"]
+        if not impact:
+            return {}
+        self._s.clear_generated_content()
+        self._s.record_change(
+            "metadata_table_removed",
+            entity_type="metadata_table",
+            entity_ref=", ".join(sorted(impact)),
+            summary=(
+                f"Removed {len(impact)} data source(s) still referenced by "
+                f"{len({r for refs in impact.values() for r in refs})} mapping(s)"
+            ),
+            meta={"impact": impact},
+        )
+        return impact
+
     def save_metadata_tables(self, tables: List[Dict[str, Any]]) -> Dict[str, Any]:
         try:
             existing_metadata = self._s.catalog_metadata
@@ -1677,12 +1800,22 @@ class Domain:
             is_valid, error_msg = validate_metadata(metadata)
             if not is_valid:
                 raise ValidationError(error_msg)
+            kept = set(self._table_identifiers(tables))
+            removed = [
+                ident
+                for ident in self._table_identifiers(
+                    existing_metadata.get("tables", [])
+                )
+                if ident and ident not in kept
+            ]
             self._s._data["domain"]["metadata"] = metadata
+            impact = self._invalidate_on_removal(removed)
             self._s.save()
             return {
                 "success": True,
                 "message": f"Saved metadata with {len(tables)} tables",
                 "metadata": metadata,
+                "impact": impact,
             }
         except OntoBricksError:
             raise
@@ -1691,9 +1824,13 @@ class Domain:
             raise InfrastructureError("Save metadata failed", detail=str(e)) from e
 
     def clear_metadata(self) -> Dict[str, Any]:
+        removed = self._table_identifiers(
+            self._s.catalog_metadata.get("tables", [])
+        )
         self._s._data["domain"]["metadata"] = {}
+        impact = self._invalidate_on_removal(removed)
         self._s.save()
-        return {"success": True, "message": "Metadata cleared"}
+        return {"success": True, "message": "Metadata cleared", "impact": impact}
 
     def update_table_data_source(
         self,
@@ -2012,6 +2149,7 @@ class Domain:
                 raise ValidationError("No tables found to update")
             updated_count = 0
             errors: List[str] = []
+            diff: Dict[str, Any] = {}
             for table_name in tables_to_update:
                 try:
                     logger.debug("Metadata update: updating table: %s", table_name)
@@ -2031,6 +2169,13 @@ class Domain:
                     select_probe = client.check_table_select_permission(
                         catalog, schema, table_name
                     )
+                    # Snapshot before the merge — merge_table_metadata replaces
+                    # old_table["columns"] in place.
+                    table_diff = compute_column_diff(
+                        old_table.get("columns", []), new_columns
+                    )
+                    if has_column_changes(table_diff):
+                        diff[table_name] = table_diff
                     merge_table_metadata(
                         old_table,
                         new_columns,
@@ -2061,6 +2206,7 @@ class Domain:
                 "total_count": len(tables_to_update),
                 "errors": errors,
                 "metadata": existing_metadata,
+                "diff": diff,
             }
         except OntoBricksError:
             raise

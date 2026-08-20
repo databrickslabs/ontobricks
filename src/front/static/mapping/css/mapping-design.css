@@ -53,6 +53,16 @@
     cursor: inherit;
 }
 
+/* Advisory marker: a bound column vanished from the source table. The
+   mapping itself is still valid, so this sits alongside the status ring
+   rather than replacing it. */
+.mapping-map-node-drift {
+    font-size: 16px;
+    text-anchor: middle;
+    pointer-events: none;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
 /* Mapped entity node - green */
 .mapping-map-node.mapped .mapping-map-node-hitarea {
     fill: rgba(25, 135, 84, 0.15);

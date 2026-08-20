@@ -15,6 +15,42 @@ let mappingMapZoom = null;
 let mappingMapNodes = [];
 
 /**
+ * Bound columns that no longer exist in their source table, keyed by entity
+ * class URI / relationship property URI. Populated from /mapping/schema-drift
+ * so the designer can flag upstream schema changes without the user having to
+ * run full diagnostics.
+ */
+const MappingDriftState = {
+    entities: {},
+    relationships: {}
+};
+
+/**
+ * Refresh MappingDriftState. Advisory only — a failure (no warehouse, no
+ * permissions) leaves the designer working with no drift markers.
+ */
+async function loadSchemaDrift() {
+    try {
+        const response = await fetch('/mapping/schema-drift', { credentials: 'same-origin' });
+        const data = await response.json();
+        MappingDriftState.entities = (data.success && data.entities) || {};
+        MappingDriftState.relationships = (data.success && data.relationships) || {};
+    } catch (error) {
+        console.log('[MappingDrift] Schema drift check unavailable:', error);
+        MappingDriftState.entities = {};
+        MappingDriftState.relationships = {};
+    }
+}
+
+/**
+ * Columns of the currently open entity that have drifted, as a Set for
+ * cheap per-column lookup while rendering the results grid.
+ */
+function driftedColumnsForEntity(classUri) {
+    return new Set(MappingDriftState.entities[classUri]?.columns || []);
+}
+
+/**
  * Show/hide loading overlay for mapping designer
  */
 function showMappingDesignerLoading(show) {
@@ -128,8 +164,9 @@ async function initMappingDesigner() {
             return;
         }
         
-        // Load saved layout from Ontology Designer
-        const savedLayout = await loadMapLayout();
+        // Load saved layout from Ontology Designer, and check the mapped
+        // sources for upstream column changes (both are advisory reads).
+        const [savedLayout] = await Promise.all([loadMapLayout(), loadSchemaDrift()]);
         
         // Get mapping status (only count entries that have a SQL query as truly assigned)
         const mappedClassUris = new Set(
@@ -188,6 +225,7 @@ async function initMappingDesigner() {
                 mapped: isMapped,
                 excluded: isExcluded,
                 mappingStatus: mappingStatus,
+                driftedColumns: MappingDriftState.entities[cls.uri]?.columns || [],
                 x: x,
                 y: y,
                 // Fix positions - no animation
@@ -560,10 +598,24 @@ async function initMappingDesigner() {
             .attr('dy', 35)
             .text(d => d.name);
         
+        // Passive schema-drift marker — the mapping is intact, the source
+        // table lost a column it is bound to.
+        nodeElements.filter(d => d.driftedColumns.length > 0)
+            .append('text')
+            .attr('class', 'mapping-map-node-drift')
+            .attr('dx', 16)
+            .attr('dy', -14)
+            .text('⚠');
+        
         // Tooltip
         const statusLabels = { mapped: 'Mapped', unmapped: 'Not Mapped', partial: 'Attributes Missing', excluded: 'Excluded' };
         nodeElements.append('title')
-            .text(d => `${d.name} (${statusLabels[d.mappingStatus] || 'Not Mapped'})`);
+            .text(d => {
+                const status = `${d.name} (${statusLabels[d.mappingStatus] || 'Not Mapped'})`;
+                return d.driftedColumns.length
+                    ? `${status}\nSchema drift — missing in source: ${d.driftedColumns.join(', ')}`
+                    : status;
+            });
         
         // Click to open mapping panel
         nodeElements.on('click', function(event, d) {
@@ -1056,8 +1108,20 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
         </tr>`;
     }).join('');
 
+    const epDrift = MappingDriftState.entities[classUri]?.columns || [];
+
     panelBody.innerHTML = `
         <input type="hidden" id="panelEntityClass" value="${classUri}" />
+        
+        ${epDrift.length ? `
+            <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.78rem;">
+                <i class="bi bi-database-exclamation me-1"></i>
+                <strong>Source schema changed.</strong>
+                ${epDrift.length} mapped column(s) no longer exist upstream:
+                ${epDrift.map(c => `<code>${c}</code>`).join(', ')}.
+                Remap them or restore the column in the source table.
+            </div>
+        ` : ''}
         
         <ul class="nav nav-tabs ob-tabs" id="entityPanelTabs" role="tablist">
             <li class="nav-item" role="presentation">
@@ -1273,8 +1337,19 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
         </tr>`;
     }).join('');
 
+    const rpDrift = MappingDriftState.relationships[ontologyProperty.uri]?.columns || [];
+
     panelBody.innerHTML = `
         <input type="hidden" id="panelPropertyUri" value="${ontologyProperty.uri}" />
+        
+        ${rpDrift.length ? `
+            <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.78rem;">
+                <i class="bi bi-database-exclamation me-1"></i>
+                <strong>Source schema changed.</strong>
+                ${rpDrift.length} mapped column(s) no longer exist upstream:
+                ${rpDrift.map(c => `<code>${c}</code>`).join(', ')}.
+            </div>
+        ` : ''}
         
         <div class="d-flex align-items-center justify-content-center gap-2 py-2 mb-2 bg-light rounded">
             <span class="badge bg-primary small">${sourceName}</span>
@@ -1431,6 +1506,7 @@ const EntityPanelState = {
     attributeMappings: {},
     attributes: [],
     excludedAttributes: [],
+    driftedColumns: new Set(),
     _generation: 0,
     _autoLoadTimer: null
 };
@@ -1455,6 +1531,7 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
         .map(k => ({ name: k }));
     EntityPanelState.attributes = [..._epOntAttrs, ..._epMappedOnly];
     EntityPanelState.excludedAttributes = existingMapping?.excluded_attributes ? [...existingMapping.excluded_attributes] : [];
+    EntityPanelState.driftedColumns = driftedColumnsForEntity(classUri);
     
     updateEntityPanelSaveBtn();
     
@@ -1596,6 +1673,11 @@ function renderEntityPanelGrid() {
             const attr = Object.entries(EntityPanelState.attributeMappings).find(([a, c]) => c === col);
             if (attr) badge = `<span class="badge bg-secondary">${attr[0]}</span>`;
             else badge = '<span class="badge bg-light text-muted border">Map</span>';
+        }
+        if (EntityPanelState.driftedColumns.has(col)) {
+            badge += ' <span class="badge bg-warning text-dark" ' +
+                'title="This column no longer exists in the source table">' +
+                '<i class="bi bi-database-exclamation"></i></span>';
         }
         return `<th data-col="${col}" style="cursor:pointer;">${col}<br>${badge}</th>`;
     }).join('');

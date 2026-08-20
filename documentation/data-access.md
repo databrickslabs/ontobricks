@@ -101,6 +101,8 @@ and the engine that ultimately runs (column **Engine**).
 | Schedule (background actions) | `settings` (Automation → Scheduler) | `/settings/schedules`, `/settings/cohort-schedules` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
 | Cockpit / readiness | `domain-validation` | `GET /api/v1/domain/design-status` | REST | Python aggregator over OWL / R2RML / metadata |
 | Data Sources (UC tables preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables (sample queries) |
+| Data source deletion guard | `domain-metadata` | `POST /domain/metadata/removal-impact` | REST | `Mapping.find_mappings_referencing` over the session `assignment` (no warehouse call) |
+| Metadata refresh diff preview | `domain-metadata` | `POST /domain/metadata/update-async` → `GET /tasks/{id}` | REST → Spark SQL | `compute_column_diff` over the pre-merge snapshot; applied only after the user confirms |
 | Versions | `domain-versions` | `/api/v1/domain/versions` | REST | UC Volume listing |
 
 ### 4.2 Ontology Designer
@@ -122,6 +124,7 @@ and the engine that ultimately runs (column **Engine**).
 | Mapping designer / manual mapping | `mapping-design.js`, `mapping-manual.js` | `/mapping/...` | REST | `R2RMLGenerator` |
 | Auto-Map (LLM) | `mapping-autoassign.js`, agent `AutoAssignment` | `/agents/auto-assignment/run` | REST → LLM | Databricks FM API; agent samples UC tables via Spark SQL through `databricks-sql-connector` |
 | Diagnostics | `mapping-diagnostics.js` | `/mapping/diagnostics/*` | REST | Python validator |
+| Source schema drift | `mapping-design.js`, `mapping-diagnostics.js` | `GET /mapping/schema-drift` | REST | One `DESCRIBE` per distinct source table via `UnityCatalog.get_table_columns` |
 | **R2RML** view | `mapping-r2rml.js` | `/mapping/r2rml/raw` | REST | rdflib serializer |
 | **Spark SQL** preview | `mapping-sparksql.js` | `POST /dtwin/translate` | REST → SPARQL **translation only** | `SparqlTranslator` (no execution; shows the generated SQL) |
 

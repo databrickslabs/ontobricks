@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 import time
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
 import requests
 
@@ -1479,6 +1479,39 @@ class Mapping:
             return None
         return (parts[0], parts[1], parts[2])
 
+    @classmethod
+    def _entity_source_triples(
+        cls, ent: Dict[str, Any]
+    ) -> List[Tuple[str, str, str]]:
+        """Every ``catalog.schema.table`` an entity mapping reads from."""
+        triples: List[Tuple[str, str, str]] = []
+        cat = (ent.get("catalog") or "").strip()
+        sch = (ent.get("schema") or "").strip()
+        tbl = (ent.get("table") or "").strip()
+        if cat and sch and tbl:
+            triples.append((cat, sch, tbl))
+        triples.extend(cls._extract_fqn_from_sql(ent.get("sql_query") or ""))
+        return triples
+
+    @classmethod
+    def _relationship_source_triples(
+        cls, rel: Dict[str, Any]
+    ) -> List[Tuple[Tuple[str, str, str], str]]:
+        """Every table a relationship mapping reads from, tagged with the side.
+
+        The side is ``"source"``, ``"target"``, or ``"sql"`` so callers can
+        both label diagnostics and check a side's ID column against the right
+        table.
+        """
+        out: List[Tuple[Tuple[str, str, str], str]] = []
+        for side in ("source_table", "target_table"):
+            triple = cls._split_table_ref(rel.get(side, ""))
+            if triple:
+                out.append((triple, side.split("_")[0]))
+        for triple in cls._extract_fqn_from_sql(rel.get("sql_query") or ""):
+            out.append((triple, "sql"))
+        return out
+
     def _collect_source_tables(self) -> Dict[Tuple[str, str, str], List[str]]:
         """Aggregate every distinct 3-part source table referenced by the
         current mapping, with the entities/relationships that reference it.
@@ -1512,14 +1545,7 @@ class Mapping:
                 ent.get("ontology_class", "")
             ) or "?"
             referrer = f"Entity: {label}"
-            cat, sch, tbl = (
-                (ent.get("catalog") or "").strip(),
-                (ent.get("schema") or "").strip(),
-                (ent.get("table") or "").strip(),
-            )
-            if cat and sch and tbl:
-                _add((cat, sch, tbl), referrer)
-            for triple in self._extract_fqn_from_sql(ent.get("sql_query") or ""):
+            for triple in self._entity_source_triples(ent):
                 _add(triple, referrer)
 
         for rel in assignment.get("relationships", []):
@@ -1528,13 +1554,51 @@ class Mapping:
             prop = rel.get("property_label") or uri_local_name(
                 rel.get("property", "")
             ) or "?"
-            for side in ("source_table", "target_table"):
-                referrer = f"Rel: {prop} ({side.split('_')[0]})"
-                _add(self._split_table_ref(rel.get(side, "")), referrer)
-            for triple in self._extract_fqn_from_sql(rel.get("sql_query") or ""):
-                _add(triple, f"Rel: {prop} (sql)")
+            for triple, side in self._relationship_source_triples(rel):
+                _add(triple, f"Rel: {prop} ({side})")
 
         return result
+
+    def find_mappings_referencing(
+        self, tables: List[str]
+    ) -> Dict[str, List[str]]:
+        """Return which mappings still reference each of *tables*.
+
+        *tables* holds ``catalog.schema.table`` strings (bare table names are
+        matched on the table segment alone, since the Data Sources UI works
+        with short names within a single catalog/schema).  The result maps
+        each supplied identifier that is still in use to the list of
+        referring entities/relationships, e.g.::
+
+            {"cat.sch.customers": ["Entity: Customer", "Rel: buys (source)"]}
+
+        Tables with no referrers are omitted, so an empty result means the
+        removal is safe.  Used by the data-source deletion guard to show the
+        user what a removal would break before it happens.
+        """
+        referrers_by_triple = self._collect_source_tables()
+        impact: Dict[str, List[str]] = {}
+
+        for requested in tables:
+            if not requested:
+                continue
+            triple = self._split_table_ref(requested)
+            if triple:
+                matched = referrers_by_triple.get(triple, [])
+            else:
+                # Bare (or two-part) name — match on the table segment.
+                short = requested.replace("`", "").strip().split(".")[-1].lower()
+                matched = [
+                    referrer
+                    for (_cat, _sch, tbl), refs in referrers_by_triple.items()
+                    if tbl.lower() == short
+                    for referrer in refs
+                ]
+                matched = list(dict.fromkeys(matched))
+            if matched:
+                impact[requested] = matched
+
+        return impact
 
     @staticmethod
     def _classify_sql_error(exc: Exception) -> Tuple[str, str]:
@@ -1642,6 +1706,193 @@ class Mapping:
                 "warnings": warnings,
                 "errors": errors,
             },
+        }
+
+    def _fetch_live_columns(
+        self, client: Any
+    ) -> Dict[Tuple[str, str, str], Set[str]]:
+        """Read the current column names of every distinct source table.
+
+        One ``get_table_columns`` round-trip per table, not per attribute.
+        Tables that cannot be read (missing, no privilege — the client
+        returns an empty list rather than raising) are omitted, so callers
+        treat them as "unknown" and skip drift reporting instead of
+        flagging every column as dropped.
+        """
+        live: Dict[Tuple[str, str, str], Set[str]] = {}
+        for cat, sch, tbl in self._collect_source_tables():
+            try:
+                columns = client.get_table_columns(cat, sch, tbl) or []
+            except Exception as exc:  # noqa: BLE001 — vendor SDK error surface
+                logger.info(
+                    "Mapping diagnostics — schema fetch failed for %s.%s.%s: %s",
+                    cat,
+                    sch,
+                    tbl,
+                    exc,
+                )
+                continue
+            names = {
+                (c.get("col_name") or c.get("name") or "").strip() for c in columns
+            }
+            names.discard("")
+            if names:
+                live[(cat, sch, tbl)] = names
+        return live
+
+    @staticmethod
+    def _drift_check(
+        check_name: str, column: str, live_cols: Set[str], table_label: str
+    ) -> Optional[Dict[str, str]]:
+        """Warn when *column* is no longer present in the live table schema.
+
+        Advisory (``warning``) rather than ``error``: the stored mapping is
+        still well-formed, it is the upstream table that moved. Returns
+        ``None`` when the column is still there.
+        """
+        if not column or column in live_cols:
+            return None
+        return {
+            "check": f"schema_drift:{check_name}",
+            "status": "warning",
+            "detail": (
+                f"Column '{column}' no longer exists in {table_label}. "
+                "The source schema changed — remap or restore the column."
+            ),
+        }
+
+    def _entity_drift_checks(
+        self,
+        ent: Dict[str, Any],
+        live_columns: Dict[Tuple[str, str, str], Set[str]],
+    ) -> List[Dict[str, str]]:
+        """Schema-drift warnings for one entity mapping's bound columns."""
+        triples = [t for t in self._entity_source_triples(ent) if t in live_columns]
+        if not triples:
+            return []
+        available: Set[str] = set()
+        for triple in triples:
+            available |= live_columns[triple]
+        label = ", ".join(".".join(t) for t in triples)
+
+        bound = [
+            ("id_column", ent.get("id_column", "")),
+            ("label_column", ent.get("label_column", "")),
+        ]
+        bound += [
+            (f"attribute:{attr}", col)
+            for attr, col in (ent.get("attribute_mappings") or {}).items()
+        ]
+        return [
+            check
+            for name, col in bound
+            if (check := self._drift_check(name, col, available, label))
+        ]
+
+    def _relationship_drift_checks(
+        self,
+        rel: Dict[str, Any],
+        live_columns: Dict[Tuple[str, str, str], Set[str]],
+    ) -> List[Dict[str, str]]:
+        """Schema-drift warnings for one relationship mapping's ID columns.
+
+        Each side is checked against its own table when that table resolves;
+        otherwise against the union of the relationship's tables, which is
+        the conservative choice (fewer false positives).
+        """
+        by_side: Dict[str, List[Tuple[str, str, str]]] = {}
+        for triple, side in self._relationship_source_triples(rel):
+            if triple in live_columns:
+                by_side.setdefault(side, []).append(triple)
+        if not by_side:
+            return []
+        every = [t for triples in by_side.values() for t in triples]
+
+        def _columns_for(side: str) -> Tuple[Set[str], str]:
+            triples = by_side.get(side) or every
+            available: Set[str] = set()
+            for triple in triples:
+                available |= live_columns[triple]
+            return available, ", ".join(".".join(t) for t in triples)
+
+        checks: List[Dict[str, str]] = []
+        for side, key, legacy in (
+            ("source", "source_id_column", "source_column"),
+            ("target", "target_id_column", "target_column"),
+        ):
+            column = rel.get(key) or rel.get(legacy, "")
+            available, label = _columns_for(side)
+            if check := self._drift_check(key, column, available, label):
+                checks.append(check)
+        return checks
+
+    def get_schema_drift(self, client: Any) -> Dict[str, Any]:
+        """Report bound columns that no longer exist in their source tables.
+
+        A cheap subset of :meth:`run_diagnostics` — one ``DESCRIBE`` per
+        distinct source table, no SELECT probes or row counts — so the
+        Mapping designer can flag drift passively on load.
+
+        Returns per-entity and per-relationship entries keyed by URI::
+
+            {"entities": {"http://…/Customer": {
+                "label": "Customer",
+                "columns": ["email"],
+                "checks": [{"check": "schema_drift:attribute:email", …}]}},
+             "relationships": {…},
+             "tables_checked": 3}
+        """
+        if client is None:
+            return {
+                "success": True,
+                "entities": {},
+                "relationships": {},
+                "tables_checked": 0,
+            }
+
+        assignment = self._domain.assignment or {}
+        live_columns = self._fetch_live_columns(client)
+
+        def _columns(checks: List[Dict[str, str]]) -> List[str]:
+            """Pull the offending column names back out of the check details."""
+            found = []
+            for check in checks:
+                match = re.search(r"Column '([^']+)'", check.get("detail", ""))
+                if match:
+                    found.append(match.group(1))
+            return found
+
+        entities: Dict[str, Any] = {}
+        for ent in assignment.get("entities", []):
+            if ent.get("excluded"):
+                continue
+            checks = self._entity_drift_checks(ent, live_columns)
+            if checks:
+                entities[ent.get("ontology_class", "")] = {
+                    "label": ent.get("ontology_class_label")
+                    or uri_local_name(ent.get("ontology_class", "")),
+                    "columns": _columns(checks),
+                    "checks": checks,
+                }
+
+        relationships: Dict[str, Any] = {}
+        for rel in assignment.get("relationships", []):
+            if rel.get("excluded"):
+                continue
+            checks = self._relationship_drift_checks(rel, live_columns)
+            if checks:
+                relationships[rel.get("property", "")] = {
+                    "label": rel.get("property_label")
+                    or uri_local_name(rel.get("property", "")),
+                    "columns": _columns(checks),
+                    "checks": checks,
+                }
+
+        return {
+            "success": True,
+            "entities": entities,
+            "relationships": relationships,
+            "tables_checked": len(live_columns),
         }
 
     @classmethod
@@ -1778,15 +2029,25 @@ class Mapping:
         ]
 
         # When a warehouse client is available, probe each SQL query for row
-        # presence and count, surfacing both in the per-item result.
+        # presence and count, and compare bound columns against the live
+        # source schema to catch upstream drift.
         if client is not None:
+            live_columns = self._fetch_live_columns(client)
+
             for ent, result in zip(active_entities, entity_results):
                 sql = (ent.get("sql_query") or "").strip()
                 if sql:
                     data_check, count = self._probe_query_rows(sql, client)
                     result["checks"].append(data_check)
                     result["row_count"] = count
-                    result["status"] = self._aggregate_status(result["checks"])
+                # Only when the SELECT clause yielded nothing usable — a
+                # parseable projection is already validated above, and its
+                # aliases/expressions would not match the table's schema.
+                if result["available_columns"] is None:
+                    result["checks"].extend(
+                        self._entity_drift_checks(ent, live_columns)
+                    )
+                result["status"] = self._aggregate_status(result["checks"])
 
             for rel, result in zip(active_rels, rel_results):
                 sql = (rel.get("sql_query") or "").strip()
@@ -1794,7 +2055,11 @@ class Mapping:
                     data_check, count = self._probe_query_rows(sql, client)
                     result["checks"].append(data_check)
                     result["row_count"] = count
-                    result["status"] = self._aggregate_status(result["checks"])
+                if result["available_columns"] is None:
+                    result["checks"].extend(
+                        self._relationship_drift_checks(rel, live_columns)
+                    )
+                result["status"] = self._aggregate_status(result["checks"])
 
         permission_section = self._run_permission_checks(client)
         perm_checks = permission_section["checks"]
@@ -2201,6 +2466,9 @@ class Mapping:
             "source_class": src_label or src_class,
             "target_class": tgt_label or tgt_class,
             "status": cls._aggregate_status(checks),
+            "available_columns": (
+                sorted(available_cols) if available_cols else None
+            ),
             "row_count": None,
             "checks": checks,
         }

@@ -795,6 +795,21 @@ async def save_metadata(
     return Domain(get_domain(session_mgr)).save_metadata_tables(tables)
 
 
+@router.post("/metadata/removal-impact")
+async def metadata_removal_impact(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
+    """Report which entity/relationship mappings reference the given tables.
+
+    Read-only pre-flight for the data-source deletion guard: the UI calls
+    this before confirming a removal so it can list what would break.
+    ``table_names`` accepts ``catalog.schema.table`` or bare table names.
+    """
+    data = await request.json()
+    table_names = data.get("table_names", [])
+    return Domain(get_domain(session_mgr)).get_removal_impact(table_names)
+
+
 @router.post("/metadata/clear")
 async def clear_metadata(session_mgr: SessionManager = Depends(get_session_manager)):
     """Clear stored Unity Catalog metadata from session."""
