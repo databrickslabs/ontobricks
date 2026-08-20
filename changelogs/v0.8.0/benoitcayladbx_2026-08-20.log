@@ -1,0 +1,78 @@
+## Add Databricks group support to permission resolution
+
+Context: Granting a Databricks group CAN_MANAGE or CAN_USE on the App was
+silently ignored. Group rows were already stored and rendered end to end (App
+ACL parser, Teams matrix, `domain_permissions`), but nothing resolved them at
+request time, so a user who only had access through a group hit the
+access-denied page. Three defects: `is_admin` compared ACL principals to the
+caller's e-mail only, so a `group_name` could never match; `_get_user_groups`
+searched SCIM `/Users` with the app service-principal token, which normally
+lacks the workspace-admin rights that endpoint requires, so it 403'd and
+returned no groups; and `_resolve_domain_entry_role` returned the first
+matching entry rather than the most privileged one. Backend-only fix — no UI
+or behaviour change anywhere.
+
+Changes:
+
+1. src/back/core/databricks/WorkspaceService.py
+   New `get_current_user_groups()` reading SCIM `/Me`, which any user may call
+   for themselves, unlike the `/Users` search.
+2. src/back/core/databricks/DatabricksClient.py
+   Passthrough for `get_current_user_groups()`.
+3. src/back/objects/registry/PermissionService.py
+   `_get_user_groups` now takes `user_token` and prefers SCIM `/Me` with the
+   caller's own forwarded token, falling back to the SP `/Users` query for
+   contexts with no forwarded token. Split into `_groups_via_scim_me` /
+   `_groups_via_scim_users`, which return `None` on failure so a transient 403
+   is no longer cached as "no groups" for the whole 5-minute window.
+4. src/back/objects/registry/PermissionService.py
+   `_check_admin_sdk` / `_check_admin_rest` replaced by
+   `_can_manage_principals_sdk` / `_can_manage_principals_rest`, returning the
+   CAN_MANAGE principal list instead of a bool. Matching moved into one
+   `_matches_principal` helper that tests the e-mail *and* every group the
+   caller belongs to, removing the logic previously duplicated across both
+   checks. Shared `_extract_can_manage` parses the ACL payload once.
+5. src/back/objects/registry/PermissionService.py
+   `_resolve_domain_entry_role` collects the direct user entry plus every
+   matching group entry and returns the highest via `role_level`. SCIM is only
+   consulted when the domain actually has group rows.
+6. src/back/objects/domain/SettingsService.py
+   `build_permissions_diag` reuses `_extract_can_manage` (dropping a third
+   copy of the ACL walk) and reports `user_groups` and `group_is_manager`, so
+   the diagnostic no longer says `email_is_manager: false` for someone who is
+   an admin through a group.
+7. documentation/deployment.md
+   New "Users and Groups" subsection in section 4 plus an updated admin-
+   detection description: group grants are inherited by members, the most
+   privileged match wins, membership comes from the user's own token, and
+   nested groups are not expanded.
+8. tests/units/auth/test_permissions.py
+   `TestIsAdmin` migrated to the new helpers and extended with group-admin,
+   non-member, case-insensitivity, user-token precedence and all-paths-fail
+   cases. New `TestExtractCanManage` and `TestGetUserGroups` classes. New
+   max-role cases in `TestResolveDomainEntryRole`.
+9. tests/units/core/test_workspace_service.py
+   New `TestGetCurrentUserGroups` covering success, no groups, 403 and no auth.
+
+Behaviour note: workspace administrators hold CAN_MANAGE on the app through
+the built-in `admins` group, so they now resolve as OntoBricks Admins. This is
+deliberate and consistent with how the user-level check already treats
+inherited ACL entries. Nested (group-in-group) membership is not expanded;
+only groups SCIM reports directly on the user account count.
+
+Modified files:
+- src/back/core/databricks/WorkspaceService.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/objects/registry/PermissionService.py
+- src/back/objects/domain/SettingsService.py
+- documentation/deployment.md
+- tests/units/auth/test_permissions.py
+- tests/units/core/test_workspace_service.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4824 passed, 276 skipped,
+5 deselected, 1 xfailed, 23 warnings in 34.98s
+
+Note: originally implemented on the 0.7.2 branch (commit 151f9be) and
+cherry-picked here; the changelog entry was refiled under v0.8.0 to match this
+branch's version.

@@ -1004,13 +1004,24 @@ OntoBricks includes a built-in permission system that controls who can access th
 
 When no permissions are configured yet, only users with **CAN_MANAGE** on the Databricks App have access. Everyone else is blocked until an admin adds them via the Permissions tab.
 
+### Users and Groups
+
+Every grant works the same whether it targets a user or a Databricks **group** — a group grant is inherited by each of its members exactly as an individual grant would be:
+
+- A group with **CAN_MANAGE** on the App makes every member an OntoBricks **Admin**. Because workspace administrators hold `CAN_MANAGE` through the built-in `admins` group, they are Admins in OntoBricks too.
+- A group with **CAN_USE** on the App lets every member into the app. The role assigned to that group in **Settings > Admin > Teams** (Viewer / Editor / Builder) is the role each member gets on that domain. A group with no row on a domain gives its members no access to it.
+- When several grants match one person — a direct entry plus a group, or two groups with different roles — the **most privileged** role wins.
+
+Group membership is read from SCIM `/Me` using the caller's **own** forwarded OAuth token, since the app's service principal normally cannot search the SCIM directory. Nested groups (a group inside a group) are **not** expanded: only the groups Databricks reports directly on the user account are considered.
+
 ### How Admin Detection Works
 
-At runtime, the app checks whether the logged-in user has `CAN_MANAGE` on the Databricks App by calling the Permissions API. The check uses the **user's own OAuth token** (forwarded by the Databricks Apps proxy via `x-forwarded-access-token`). This means:
+At runtime, the app reads the `CAN_MANAGE` principals of the Databricks App from the Permissions API and matches the logged-in user against them, both by e-mail and by group membership. The check uses the **user's own OAuth token** (forwarded by the Databricks Apps proxy via `x-forwarded-access-token`). This means:
 
 - Admin detection uses the user's OAuth token when the Apps runtime forwards one.
 - If the user's forwarded token is not available or lacks scope for `/api/2.0/permissions/apps/*`, the app falls back to the SDK (service principal) and then a REST call with the SP token.
 - Those fallbacks require the app's service principal to have at least `CAN_VIEW_PERMISSIONS` on its **own app**, which is **not granted automatically** when the app is created.
+- Without a forwarded user token the app cannot resolve group membership either, so a user who is an admin only through a group may be seen as a regular user. Grant the app the user-authorization scope so the token is forwarded.
 
 ### First-Deploy Bootstrap (required once per workspace)
 

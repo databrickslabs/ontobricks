@@ -44,6 +44,39 @@ class WorkspaceService:
             logger.warning("Could not get current user email: %s", exc)
             return ""
 
+    def get_current_user_groups(self) -> List[str]:
+        """Return the display-names of the groups the caller belongs to.
+
+        Reads SCIM ``/Me``, which any user can call for themselves.  The
+        ``/Users`` search used by :meth:`search_users` needs workspace-admin
+        rights that the app service principal usually lacks, so ``/Me`` with
+        the caller's own forwarded token is the only membership lookup that
+        works for a regular user.
+
+        Only groups SCIM reports directly on the user resource are returned;
+        nested (group-in-group) membership is not expanded.
+        """
+        import requests as req
+
+        if not self._auth.host or not self._auth.has_valid_auth():
+            return []
+
+        host = self._auth.host.rstrip("/")
+        headers = self._auth.get_auth_headers()
+        try:
+            resp = req.get(f"{host}{SCIM_ME_PATH}", headers=headers)
+            resp.raise_for_status()
+            groups = [
+                g.get("display", "")
+                for g in resp.json().get("groups", [])
+                if g.get("display")
+            ]
+            logger.debug("SCIM /Me groups: %s", groups)
+            return groups
+        except Exception as exc:
+            logger.warning("Could not get current user groups: %s", exc)
+            return []
+
     def list_users(self, max_results: int = 500) -> List[Dict[str, Any]]:
         """List workspace users via SCIM.
 

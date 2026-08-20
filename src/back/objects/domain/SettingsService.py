@@ -17,6 +17,7 @@ from back.core.errors import (
 from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
+from back.core.databricks.constants import PERMISSIONS_APPS_PATH
 from back.core.databricks.lakebase.grants import resolve_mcp_app_name
 from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
@@ -3639,60 +3640,46 @@ class SettingsService:
             w = WorkspaceClient()
             diag["sdk_host"] = str(getattr(w.config, "host", ""))
             diag["sdk_auth_type"] = str(getattr(w.config, "auth_type", ""))
-            raw = w.api_client.do("GET", f"/api/2.0/permissions/apps/{app_name}")
-            acl_list = raw.get("access_control_list", [])
-            managers = []
-            for acl in acl_list:
-                principal = (
-                    acl.get("user_name")
-                    or acl.get("group_name")
-                    or acl.get("service_principal_name")
-                    or ""
-                )
-                for p in acl.get("all_permissions", []):
-                    if p.get("permission_level") == "CAN_MANAGE":
-                        managers.append(principal)
-            diag["sdk_can_manage"] = managers
+            raw = w.api_client.do("GET", f"{PERMISSIONS_APPS_PATH}/{app_name}")
+            diag["sdk_can_manage"] = permission_service._extract_can_manage(raw)
             diag["sdk_error"] = None
         except Exception as e:
             diag["sdk_error"] = f"{type(e).__name__}: {e}"
             diag["sdk_can_manage"] = []
 
         # ── User-token path (preferred at runtime) ──
+        managers = diag["sdk_can_manage"]
         if user_token:
             try:
                 host = diag.get("sdk_host", "").rstrip("/")
                 resp = _req.get(
-                    f"{host}/api/2.0/permissions/apps/{app_name}",
+                    f"{host}{PERMISSIONS_APPS_PATH}/{app_name}",
                     headers={"Authorization": f"Bearer {user_token}", "User-Agent": HTTP_USER_AGENT},
                     timeout=5,
                 )
                 resp.raise_for_status()
-                acl_list = resp.json().get("access_control_list", [])
-                managers = []
-                for acl in acl_list:
-                    principal = (
-                        acl.get("user_name")
-                        or acl.get("group_name")
-                        or acl.get("service_principal_name")
-                        or ""
-                    )
-                    for p in acl.get("all_permissions", []):
-                        if p.get("permission_level") == "CAN_MANAGE":
-                            managers.append(principal)
+                managers = permission_service._extract_can_manage(resp.json())
                 diag["user_token_can_manage"] = managers
-                diag["email_is_manager"] = email.lower() in [
-                    m.lower() for m in managers
-                ]
                 diag["user_token_error"] = None
             except Exception as e:
                 diag["user_token_error"] = f"{type(e).__name__}: {e}"
                 diag["user_token_can_manage"] = []
-                diag["email_is_manager"] = False
-        else:
-            diag["email_is_manager"] = email.lower() in [
-                m.lower() for m in diag.get("sdk_can_manage", [])
-            ]
+                managers = diag["sdk_can_manage"]
+
+        # Admin can be granted to the e-mail directly or to any group the
+        # caller belongs to, so report both and why.
+        wanted = {m.lower() for m in managers if m}
+        user_groups = permission_service._get_user_groups(
+            email,
+            diag.get("sdk_host", ""),
+            "",
+            user_token=user_token,
+        )
+        diag["user_groups"] = user_groups
+        diag["email_is_manager"] = email.lower() in wanted
+        diag["group_is_manager"] = sorted(
+            g for g in user_groups if g.lower() in wanted
+        )
 
         diag["admin_cache"] = {
             k: {"result": v[0], "age_s": round(time.time() - v[1], 1)}
