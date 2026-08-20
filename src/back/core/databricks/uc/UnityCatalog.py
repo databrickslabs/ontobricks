@@ -207,7 +207,7 @@ class UnityCatalog:
                 with conn.cursor() as cur:
                     cur.execute(
                         f"SELECT count(*) FROM {catalog_q}.information_schema.tables "
-                        "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
+                        "WHERE table_schema = ? AND table_type = 'BASE TABLE'",
                         (schema_val,),
                     )
                     row = cur.fetchone()
@@ -280,11 +280,14 @@ class UnityCatalog:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
+                    # Databricks SQL Connector (use_inline_params=False) only
+                    # rewrites qmark ``?`` placeholders — pyformat ``%s`` is
+                    # sent to the warehouse verbatim and raises PARSE_SYNTAX_ERROR.
                     query = (
                         f"SELECT comment FROM {catalog_q}.information_schema.tables "
-                        "WHERE table_catalog = %s "
-                        "AND table_schema = %s "
-                        "AND table_name = %s"
+                        "WHERE table_catalog = ? "
+                        "AND table_schema = ? "
+                        "AND table_name = ?"
                     )
                     cur.execute(query, (catalog_val, schema_val, table_val))
                     row = cur.fetchone()

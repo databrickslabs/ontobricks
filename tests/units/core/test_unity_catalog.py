@@ -224,6 +224,9 @@ class TestGetTableComment:
         call_sql = call_args[0][0]
         assert "information_schema.tables" in call_sql
         assert "`cat`.information_schema.tables" in call_sql
+        # Databricks SQL Connector requires qmark placeholders, not pyformat %s.
+        assert "%s" not in call_sql
+        assert call_sql.count("?") == 3
         assert call_args[0][1] == ("cat", "sch", "tbl")
 
     @patch("databricks.sql.connect")
@@ -369,7 +372,8 @@ class TestProbeSchemaHasTables:
         mock_cursor.execute.assert_called_once()
         call_sql, params = mock_cursor.execute.call_args[0]
         assert "`my_cat`.information_schema.tables" in call_sql
-        assert "table_schema = %s" in call_sql
+        assert "table_schema = ?" in call_sql
+        assert "%s" not in call_sql
         assert params == ("my_sch",)
 
     @patch("databricks.sql.connect", side_effect=RuntimeError("denied"))

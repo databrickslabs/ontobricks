@@ -72,3 +72,26 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4820 passed, 275 skipped,
 5 deselected, 23 warnings in 42.78s
+
+## Fix UC table-comment import bind placeholders
+
+Context: RIL / Jio POC on v0.7.0 imported column comments via DESCRIBE but
+table-level descriptions stayed empty despite SELECT grants. App Logs showed
+PARSE_SYNTAX_ERROR at '%' — Databricks SQL Connector does not rewrite pyformat
+%s markers (use_inline_params=False), so information_schema queries were sent
+verbatim. Same bug in probe_schema_has_tables. list_functions already used ?.
+
+Changes:
+
+1. src/back/core/databricks/uc/UnityCatalog.py
+   get_table_comment and probe_schema_has_tables now bind with qmark `?`.
+2. tests/units/core/test_unity_catalog.py
+   Assert executed SQL uses `?` and contains no `%s`.
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- tests/units/core/test_unity_catalog.py
+- changelogs/v0.7.2/benoitcayladbx_2026-08-20.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4820 passed, 275 skipped,
+5 deselected, 23 warnings in 40.26s
