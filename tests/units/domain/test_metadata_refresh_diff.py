@@ -282,3 +282,78 @@ class TestSyncUpdateDiff:
         )
         domain.update_metadata_tables(None)
         domain._s.save.assert_called_once()
+
+
+class TestAsyncUpdateDoesNotMutateTheLiveSession:
+    """Regression: ``start_metadata_update_async`` must hand the background
+    thread an isolated snapshot, not ``self._s.catalog_metadata`` itself.
+
+    ``merge_table_metadata`` overwrites ``old_table["columns"]`` in place;
+    without a deep copy first, that mutation lands directly on the live
+    session dict the moment the UC re-fetch completes — before the user has
+    even seen the review modal — which silently defeats "Discard" (Found by
+    running the Pillar-1 live scenario end to end: the stored metadata showed
+    the renamed column even though the test deliberately never called
+    ``/domain/metadata/save``).
+    """
+
+    def _start(self, monkeypatch, tables, new_columns_by_table):
+        monkeypatch.setattr(
+            domain_module,
+            "get_databricks_host_and_token",
+            lambda session, settings: ("https://host", "token"),
+        )
+        monkeypatch.setattr(
+            domain_module, "resolve_warehouse_id", lambda session, settings: "wh"
+        )
+        captured_thread_args = {}
+
+        class _ImmediateThread:
+            """Runs the target synchronously so the test stays deterministic."""
+
+            def __init__(self, target, args, daemon=None):
+                captured_thread_args["args"] = args
+                self._target = target
+                self._args = args
+
+            def start(self):
+                self._target(*self._args)
+
+        monkeypatch.setattr(domain_module.threading, "Thread", _ImmediateThread)
+        monkeypatch.setattr(
+            _metadata_tasks,
+            "DatabricksClient",
+            lambda **kwargs: _FakeClient(new_columns_by_table),
+        )
+
+        session = MagicMock()
+        live_metadata = {"tables": list(tables), "table_count": len(tables)}
+        session.catalog_metadata = live_metadata
+        session._data = {"domain": {"metadata": live_metadata}}
+        domain = Domain(session, MagicMock())
+        domain.start_metadata_update_async(None)
+        return live_metadata, captured_thread_args["args"]
+
+    def test_thread_receives_a_copy_not_the_live_metadata_object(self, monkeypatch):
+        live_metadata, args = self._start(
+            monkeypatch,
+            [_table("customers", [{"name": "email", "type": "string"}])],
+            {"customers": [{"name": "email_address", "type": "string"}]},
+        )
+        existing_metadata_arg = args[7]
+        assert existing_metadata_arg is not live_metadata
+        assert existing_metadata_arg["tables"][0] is not live_metadata["tables"][0]
+
+    def test_live_session_metadata_is_unchanged_after_the_task_runs(
+        self, monkeypatch
+    ):
+        live_metadata, _args = self._start(
+            monkeypatch,
+            [_table("customers", [{"name": "email", "type": "string"}])],
+            {"customers": [{"name": "email_address", "type": "string"}]},
+        )
+        cols = {c["name"] for c in live_metadata["tables"][0]["columns"]}
+        assert cols == {"email"}, (
+            "the background refresh must not touch session state until the "
+            "browser explicitly calls /domain/metadata/save"
+        )

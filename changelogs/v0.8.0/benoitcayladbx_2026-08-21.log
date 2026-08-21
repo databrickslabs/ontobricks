@@ -1,0 +1,63 @@
+## Add a live scenario covering Pillar 1 (schema drift, refresh diff, deletion guard); fix a session-mutation bug it caught
+
+Context: The user asked for an automated test covering the manual UI walkthrough
+for "Pillar 1 · Data Source & Mapping Integrity" (schema drift warnings,
+metadata refresh diff preview, data-source deletion guard). Built a new live
+scenario suite that exercises the three features end to end against a running
+app and a real SQL warehouse — its own scratch domain + two scratch UC tables,
+so it can freely rename/drop columns without touching shared data.
+
+Running it live against a real dev server (not just collecting it) surfaced a
+genuine bug in the metadata-refresh diff preview: `Domain.start_metadata_update_async`
+read `self._s.catalog_metadata` and handed the *live* dict (and its nested
+per-table dicts) straight to the background thread. `merge_table_metadata`
+mutates those dicts in place, so the moment the UC re-fetch completed, the
+session's stored metadata already reflected the new columns — before the user
+had even seen the review modal. Clicking "Discard" therefore did nothing:
+`monitorMetadataTask()`'s decline branch only skips the `POST
+/domain/metadata/save` call, on the assumption that skipping it leaves the
+session untouched, which no longer held once the background task itself had
+already clobbered the live dict. Fixed by deep-copying the metadata before
+spawning the thread, so only the explicit "Apply" (`/domain/metadata/save`)
+call is allowed to mutate session state.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   `start_metadata_update_async` now deep-copies `self._s.catalog_metadata`
+   into a local `existing_metadata` before building `existing_tables` and
+   spawning the background thread, so `run_metadata_update_task` merges into
+   an isolated snapshot instead of the live session dict. Fixes "Discard"
+   silently applying the refresh anyway.
+2. tests/units/domain/test_metadata_refresh_diff.py
+   New `TestAsyncUpdateDoesNotMutateTheLiveSession` (2 cases): asserts the
+   background thread receives a deep copy, not the live metadata object/its
+   nested table dicts, and that the session's `catalog_metadata` is unchanged
+   after the task runs when `/domain/metadata/save` is never called. Verified
+   both fail without the fix and pass with it.
+3. tests/e2e/scenarios/test_scenario_04_metadata_integrity.py (new)
+   Live scenario suite (`ONTOBRICKS_SCENARIO_LIVE=1`, `-m scenario`) covering,
+   as one connected journey against a real warehouse: schema-drift detection
+   after an upstream `RENAME COLUMN`, the refresh-diff discard/apply gate
+   (including the bug above), and the deletion-guard pre-flight + actual
+   removal. Creates and drops its own two scratch UC tables and leaves a
+   dedicated `TestMetadataIntegrity` domain for manual follow-up inspection,
+   same rationale as scenario 1. Independent of scenarios 1-3 (own domain, no
+   dependency-chain wiring). Run and passed live end to end against a real
+   Databricks SQL warehouse.
+
+Modified/added files:
+- src/back/objects/domain/Domain.py
+- tests/units/domain/test_metadata_refresh_diff.py
+- tests/e2e/scenarios/test_scenario_04_metadata_integrity.py (new)
+
+Test result: `uv run --frozen pytest -q -m "not scenario" --deselect
+tests/units/api/test_routes.py::TestHealthRoutes::test_health_check --deselect
+tests/units/core/test_health.py::TestRunReadinessChecks` → 4962 passed, 281
+skipped, 9 deselected, 1 xfailed (the two deselected tests are a pre-existing,
+unrelated hang in this environment — unmocked live Databricks/Lakebase calls —
+not something this change touches). The new live scenario
+(`test_scenario_04_metadata_integrity.py`) was run manually against a real
+warehouse with `ONTOBRICKS_SCENARIO_LIVE=1` and passed end to end, including
+before/after runs that confirmed the regression tests above genuinely catch
+the bug (fail without the fix, pass with it).

@@ -2044,10 +2044,10 @@ class Domain:
         table_names: Optional[List[str]],
     ) -> Dict[str, Any]:
         try:
-            existing_metadata = self._s.catalog_metadata
-            if not existing_metadata or not existing_metadata.get("tables"):
+            live_metadata = self._s.catalog_metadata
+            if not live_metadata or not live_metadata.get("tables"):
                 raise ValidationError("No metadata loaded to update")
-            catalog, schema = get_catalog_schema_from_metadata(existing_metadata)
+            catalog, schema = get_catalog_schema_from_metadata(live_metadata)
             if not catalog or not schema:
                 raise ValidationError(
                     "Cannot determine catalog/schema from table full_names"
@@ -2059,6 +2059,12 @@ class Domain:
                 raise ValidationError(
                     "Databricks not configured. Please configure connection in Settings.",
                 )
+            # Deep-copy before handing off to the background thread: it must
+            # merge into an isolated snapshot, never the live session dict,
+            # so a diff the user discards leaves the session untouched — the
+            # only path allowed to mutate session state is the explicit
+            # POST /domain/metadata/save the browser sends on "Apply".
+            existing_metadata = copy.deepcopy(live_metadata)
             existing_tables = {
                 t["name"]: t for t in existing_metadata.get("tables", [])
             }
