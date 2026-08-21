@@ -2556,6 +2556,64 @@ async function openRelationshipPanelForView(idx, options = {}) {
     await renderRelationshipForm(panel, prop, true);
 }
 
+/**
+ * One clickable card of the graphical direction picker: the two endpoint chips
+ * with the arrow between them, drawn the way the canvas will draw the link.
+ * @param {string} value - 'forward' | 'reverse'
+ * @param {string} icon - Bootstrap Icons class for the arrow
+ * @param {boolean} viewOnly - render as a non-interactive preview
+ * @returns {string} HTML
+ */
+function _relDirectionOption(value, icon, viewOnly) {
+    return `
+        <button type="button" class="rel-direction-option" data-direction="${value}"
+                role="radio" aria-checked="false" ${viewOnly ? 'disabled' : ''}>
+            <span class="rel-direction-node" data-rel-node="domain">Source</span>
+            <span class="rel-direction-arrow">
+                <span class="rel-direction-name" data-rel-node="name"></span>
+                <i class="bi ${icon}"></i>
+            </span>
+            <span class="rel-direction-node" data-rel-node="range">Target</span>
+        </button>
+    `;
+}
+
+/**
+ * Select *direction* in the picker and mirror it into the hidden input that
+ * saveSharedRelationship() reads.
+ * @param {string} direction - 'forward' | 'reverse'
+ */
+function setSharedRelDirection(direction) {
+    const value = direction === 'reverse' ? 'reverse' : 'forward';
+    const input = panelGetById('sharedRelDirection');
+    if (input) input.value = value;
+    panelGetById('sharedRelDirectionPicker')?.querySelectorAll('.rel-direction-option')
+        .forEach(option => {
+            const selected = option.dataset.direction === value;
+            option.classList.toggle('selected', selected);
+            option.setAttribute('aria-checked', String(selected));
+        });
+}
+
+/**
+ * Keep the picker's endpoint chips in sync with the Source / Target / Name
+ * fields, so both cards always read as the relationship being edited.
+ */
+function refreshSharedRelDirectionLabels() {
+    const picker = panelGetById('sharedRelDirectionPicker');
+    if (!picker) return;
+    const text = {
+        domain: panelGetById('sharedRelDomain')?.value || 'Source',
+        range: panelGetById('sharedRelRange')?.value || 'Target',
+        name: panelGetById('sharedRelName')?.value.trim() || ''
+    };
+    Object.entries(text).forEach(([role, label]) => {
+        picker.querySelectorAll(`[data-rel-node="${role}"]`).forEach(el => {
+            el.textContent = label;
+        });
+    });
+}
+
 async function renderRelationshipForm(panel, prop, viewOnly = false) {
     const body = panel.querySelector('#sharedPanelBody');
     const classOptions = OntologyState.config.classes.map(c => `<option value="${c.name}">${c.emoji || '📦'} ${c.name}</option>`).join('');
@@ -2621,11 +2679,13 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label for="sharedRelDirection" class="form-label">Direction</label>
-                    <select class="form-select form-select-sm" id="sharedRelDirection" ${disabled}>
-                        <option value="forward">Forward →</option>
-                        <option value="reverse">Reverse ←</option>
-                    </select>
+                    <label class="form-label">Direction</label>
+                    <input type="hidden" id="sharedRelDirection" value="${prop?.direction || 'forward'}">
+                    <div class="rel-direction-picker" id="sharedRelDirectionPicker" role="radiogroup" aria-label="Relationship direction">
+                        ${_relDirectionOption('forward', 'bi-arrow-right', viewOnly)}
+                        ${_relDirectionOption('reverse', 'bi-arrow-left', viewOnly)}
+                    </div>
+                    <div class="form-text small mt-1">Which way the triple is written — the canvas draws the arrowhead on the side it points to</div>
                 </div>
                 <div class="mb-3">
                     <label for="sharedRelDescription" class="form-label">Description</label>
@@ -2689,7 +2749,18 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     if (prop) {
         panelGetById('sharedRelDomain').value = prop.domain || '';
         panelGetById('sharedRelRange').value = prop.range || '';
-        panelGetById('sharedRelDirection').value = prop.direction || 'forward';
+    }
+
+    setSharedRelDirection(prop?.direction || 'forward');
+    refreshSharedRelDirectionLabels();
+    if (!viewOnly) {
+        panelGetById('sharedRelDirectionPicker')?.addEventListener('click', (event) => {
+            const option = event.target.closest('.rel-direction-option');
+            if (option) setSharedRelDirection(option.dataset.direction);
+        });
+        ['sharedRelDomain', 'sharedRelRange', 'sharedRelName'].forEach(id => {
+            panelGetById(id)?.addEventListener('input', refreshSharedRelDirectionLabels);
+        });
     }
     
     // Add event listener to sync Functional checkbox with Max cardinality

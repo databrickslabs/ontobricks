@@ -458,3 +458,56 @@ Modified files:
 - src/front/static/mapping/js/mapping-design.js
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4976 passed, 281 skipped, 6 deselected, 1 xfailed in 32.31s
+
+---
+
+## Replace the relationship Direction dropdown with a graphical picker
+
+Context: The relationship panel in the Ontology Designer exposed direction as a
+`<select>` with "Forward →" / "Reverse ←" options. Nothing in that control showed *what*
+was being reversed, so the user had to mentally map the choice onto the Source (Domain)
+and Target (Range) fields above it. The canvas already draws the distinction — the panel
+now shows the same picture.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   - `_relDirectionOption()`: renders one clickable card — the two endpoint chips with a
+     `bi-arrow-right` / `bi-arrow-left` between them and the relationship name riding
+     above the arrow, i.e. exactly how the D3 map draws the link. Cards are
+     `type="button"` (the picker sits inside `#sharedRelationshipForm`) and render
+     `disabled` in view-only mode.
+   - `setSharedRelDirection()`: single entry point that mirrors the selection into the
+     hidden `#sharedRelDirection` input (unchanged contract for
+     `saveSharedRelationship()`) and toggles `.selected` / `aria-checked`. Unknown values
+     fall back to `forward`.
+   - `refreshSharedRelDirectionLabels()`: repaints the chips from the Source / Target /
+     Name fields via `textContent`, wired to their `input` events so both cards always
+     read as the relationship being edited.
+   - `renderRelationshipForm()`: seeds the picker from `prop.direction` and attaches the
+     click / sync listeners only when the panel is editable.
+   - The panel-wide dirty tracking already marks a click on any `<button>` inside the
+     body, so switching direction still triggers the auto-save on close.
+   - Accessibility: `role="radiogroup"` + `role="radio"` + `aria-checked`.
+
+2. src/front/static/ontology/css/ontology-shared-panels.css
+   - `.rel-direction-picker` / `.rel-direction-option` / `.rel-direction-node` /
+     `.rel-direction-arrow` / `.rel-direction-name`: a three-column grid
+     (chip | arrow | chip) sized for the 280–500 px panel, chips truncate with an
+     ellipsis. Selected state is a neutral border + `--db-primary-light` fill, per the
+     "no brand red on buttons" rule in `.cursor/11-frontend-design.mdc`; all colours,
+     radii and transitions come from `--db-*` tokens.
+
+3. tests/units/front/test_relationship_direction_picker.py (new)
+   - Contract tests: the value still lives in `#sharedRelDirection`, both directions are
+     offered, arrows are Bootstrap Icons, cards do not submit the form, view-only renders
+     a disabled preview, selection mirrors into the hidden input, unknown values fall back
+     to forward, chips use `textContent` (no HTML injection), listeners are skipped in
+     view-only mode, and the styles use design tokens.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/css/ontology-shared-panels.css
+- tests/units/front/test_relationship_direction_picker.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4991 passed, 281 skipped, 6 deselected, 1 xfailed in 34.18s
