@@ -171,6 +171,22 @@
     stroke-width: 3px;
 }
 
+/* Reverse-direction relationships - arrow at the source end, not the target end */
+.mapping-map-link.reverse.mapped {
+    marker-end: none;
+    marker-start: url(#mapping-arrow-start-mapped);
+}
+
+.mapping-map-link.reverse.unmapped {
+    marker-end: none;
+    marker-start: url(#mapping-arrow-start-unmapped);
+}
+
+.mapping-map-link.reverse.excluded {
+    marker-end: none !important;
+    marker-start: url(#mapping-arrow-start-excluded) !important;
+}
+
 /* Self-loop relationships - override marker-end with self-loop specific markers */
 .mapping-map-link.self-loop {
     stroke-width: 2.5px;
