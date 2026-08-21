@@ -337,3 +337,124 @@ Modified files:
 - src/front/static/mapping/js/mapping-init.js
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4965 passed, 281 skipped, 6 deselected, 1 xfailed in 31.97s
+
+---
+
+## Fix spurious "Source schema changed" warnings in the Mapping Designer
+
+Context: Opening an entity or relationship panel in the Mapping Designer intermittently
+showed a schema-drift banner listing *every* bound column ("9 mapped column(s) no longer
+exist upstream: ID, Label, lastname, …") for mappings that were perfectly valid. Two
+independent defects were involved.
+
+The drift banner is fed by `GET /mapping/schema-drift`, which compares the columns bound
+by a mapping against the physical schema returned by `DESCRIBE`. Designer- and
+auto-assignment-generated mappings bind to the *SELECT projection* of their SQL query —
+i.e. aliases such as `AS ID` / `AS Label` / lowercase attribute aliases — which by design
+never match the base table's column names, so every bound column was flagged as dropped.
+`run_diagnostics()` already guarded against this (`if result["available_columns"] is
+None`), but `get_schema_drift()` did not. The warnings looked transient because the
+designer only paints them once the (slow) warehouse query returns; a page refresh reset
+the state until the next fetch completed.
+
+The second defect made the first far more visible: `initMappingDesigner()` re-rendered
+itself from the `loadSchemaDrift().then(...)` callback, and that re-render fired a new
+drift fetch — an unbounded loop re-running N `DESCRIBE` statements against the warehouse
+for as long as the designer stayed open.
+
+Changes:
+
+1. src/back/objects/mapping/Mapping.py
+   - Added `_binds_to_sql_projection()`: `True` when a mapping's `sql_query` has a
+     readable SELECT list (via `DigitalTwin._extract_select_columns`). `SELECT *` and
+     unparseable clauses return `False`, where the table schema is still the right
+     comparison.
+   - `_entity_drift_checks()` / `_relationship_drift_checks()` now return `[]` for such
+     mappings, so the guard lives in one place instead of being re-implemented by each
+     caller.
+   - `run_diagnostics()`: dropped the duplicated `available_columns is None` conditions —
+     the drift helpers now self-guard.
+   - `get_schema_drift()`: returns early (no warehouse round-trips at all) when every
+     active mapping binds to its own projection.
+
+2. src/front/static/mapping/js/mapping-design.js
+   - Added the `mappingDriftLoaded` flag, set at the end of `loadSchemaDrift()`; the
+     drift fetch in `initMappingDesigner()` is now guarded by it, breaking the
+     render → fetch → render loop.
+   - `refreshMappingDesign()` clears the flag so an explicit refresh after a mapping
+     change still re-checks drift exactly once.
+
+3. tests/units/mapping/test_schema_drift.py
+   - New cases: aliased entity SQL reports no drift; a projection-only mapping performs
+     zero `get_table_columns` calls; `SELECT *` mappings are still checked; aliased
+     relationship SQL reports no drift.
+
+Modified files:
+- src/back/objects/mapping/Mapping.py
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/mapping/test_schema_drift.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4969 passed, 281 skipped, 6 deselected, 1 xfailed in 36.12s
+
+---
+
+## Honour relationship direction in the Mapping Designer canvas
+
+Context: Reverse relationships were drawn with the arrowhead at the target end in the
+Mapping Designer, so the canvas contradicted both the Ontology Designer and the generated
+triples. `direction: 'reverse'` means the relationship is emitted target → source
+(`R2RMLGenerator._generate_relationship` swaps the two sides), and the Ontology map already
+renders that with a start-placed marker. The Mapping designer carried `direction` on every
+link datum but never used it: no `reverse` class, no start marker.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   - Added three start-arrow markers — `mapping-arrow-start-mapped` (green),
+     `-unmapped` (red), `-excluded` (grey) — with `orient='auto-start-reverse'`, mirroring
+     `map-arrow-start` in ontology-map.js but keeping the designer's per-state colours.
+   - Relationship link elements now append a `reverse` class when
+     `d.direction === 'reverse'`, additive to the existing mapped/unmapped/excluded class.
+
+2. src/front/static/mapping/css/mapping-design.css
+   - Added `.mapping-map-link.reverse.{mapped,unmapped,excluded}` rules that clear
+     `marker-end` and set the matching `marker-start`. The excluded variant repeats
+     `!important` because the base `.excluded` rule sets its marker that way.
+
+3. tests/units/front/test_mapping_link_direction.py (new)
+   - Contract tests: one start marker per link state, markers are `auto-start-reverse`,
+     the `reverse` class is additive to the state class, each CSS rule swaps
+     `marker-end` for `marker-start`, and the ontology-map contract still holds.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/css/mapping-design.css
+- tests/units/front/test_mapping_link_direction.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4976 passed, 281 skipped, 6 deselected, 1 xfailed in 32.76s
+
+## Remove Apply/Cancel buttons from Mapping Designer panel
+
+Context: With the auto-save-to-registry feature in place, the Apply and Cancel
+buttons in the Mapping Designer right panel became redundant. Closing the panel
+(via the X button or clicking the canvas background) now auto-saves any changes,
+mirroring the Ontology Designer behaviour introduced earlier in this session.
+
+Changes:
+1. src/front/templates/partials/mapping/_mapping_design.html
+   — Removed the Cancel and Apply buttons from the panel footer.
+2. src/front/static/mapping/js/mapping-design.js
+   — Added `guardedCloseMappingPanel()`: auto-saves panel contents via
+     `savePanelMapping()` before closing; skips save in read-only (non-active)
+     version mode.
+   — X button (closePanelBtn) and SVG background click now call
+     `guardedCloseMappingPanel()` instead of `closeMappingPanel()`.
+   — Removed the cancelPanelBtn and savePanelBtn event-listener registrations.
+   — Updated four "click Apply to persist" notification hints; the phrase is no
+     longer accurate now that there is no Apply button.
+
+Modified files:
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/static/mapping/js/mapping-design.js
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4976 passed, 281 skipped, 6 deselected, 1 xfailed in 32.31s

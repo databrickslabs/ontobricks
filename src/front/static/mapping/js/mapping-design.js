@@ -25,6 +25,11 @@ const MappingDriftState = {
     relationships: {}
 };
 
+// Drift is fetched once per designer render cycle. The fetch triggers a
+// re-render to paint the markers, and that re-render must not fetch again —
+// otherwise the designer loops, re-querying the warehouse forever.
+let mappingDriftLoaded = false;
+
 /**
  * Refresh MappingDriftState. Advisory only — a failure (no warehouse, no
  * permissions) leaves the designer working with no drift markers.
@@ -40,6 +45,7 @@ async function loadSchemaDrift() {
         MappingDriftState.entities = {};
         MappingDriftState.relationships = {};
     }
+    mappingDriftLoaded = true;
 }
 
 /**
@@ -169,9 +175,11 @@ async function initMappingDesigner() {
         // in the background so it never blocks the spinner.  Once it resolves, re-render
         // to pick up any drift indicators on nodes and panels.
         const savedLayout = await loadMapLayout();
-        loadSchemaDrift().then(() => {
-            if (mappingMapInitialized) initMappingDesigner();
-        }).catch(() => {});
+        if (!mappingDriftLoaded) {
+            loadSchemaDrift().then(() => {
+                if (mappingMapInitialized) initMappingDesigner();
+            }).catch(() => {});
+        }
         
         // Get mapping status (only count entries that have a SQL query as truly assigned)
         const mappedClassUris = new Set(
@@ -420,6 +428,26 @@ async function initMappingDesigner() {
             .attr('d', 'M0,-5L10,0L0,5')
             .attr('fill', '#ced4da');
 
+        // Arrows for reverse-direction relationships — drawn at the path start
+        // and rotated, so the head points back toward the source node.
+        [
+            ['mapping-arrow-start-mapped', '#198754'],
+            ['mapping-arrow-start-unmapped', '#dc3545'],
+            ['mapping-arrow-start-excluded', '#ced4da']
+        ].forEach(([id, fill]) => {
+            defs.append('marker')
+                .attr('id', id)
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 28)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto-start-reverse')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', fill);
+        });
+
         // Arrow for inheritance (hollow)
         defs.append('marker')
             .attr('id', 'mapping-arrow-inheritance')
@@ -493,7 +521,7 @@ async function initMappingDesigner() {
             .data(regularLinks.filter(l => l.type === 'relationship'))
             .enter()
             .append('path')
-            .attr('class', d => `mapping-map-link ${d.excluded ? 'excluded' : (d.mapped ? 'mapped' : 'unmapped')}`);
+            .attr('class', d => `mapping-map-link ${d.excluded ? 'excluded' : (d.mapped ? 'mapped' : 'unmapped')}${d.direction === 'reverse' ? ' reverse' : ''}`);
         
         // Draw inheritance links
         const inheritanceLinkElements = g.append('g')
@@ -662,7 +690,7 @@ async function initMappingDesigner() {
             hideMappingMapContextMenu();
             d3.selectAll('.mapping-map-node').classed('selected', false);
             d3.selectAll('.mapping-map-link-hitarea').classed('selected', false);
-            closeMappingPanel();
+            guardedCloseMappingPanel();
         });
         
         svg.on('contextmenu', function(event) {
@@ -935,6 +963,9 @@ async function initMappingDesigner() {
  * Refresh the mapping design view (update mapping status)
  */
 function refreshMappingDesign() {
+    // An explicit refresh follows a mapping change, so the drift picture may
+    // have changed too — allow exactly one new drift fetch.
+    mappingDriftLoaded = false;
     initMappingDesigner();
 }
 
@@ -1042,6 +1073,23 @@ function closeMappingPanel() {
     
     // Resize SVG after transition completes
     setTimeout(resizeMapSvg, 250);
+}
+
+/**
+ * Close the panel with auto-save (used for explicit user dismissal via X or background click).
+ * Skips save when viewing a non-active (read-only) version.
+ * savePanelMapping() calls closeMappingPanel() internally, so no double-close.
+ */
+function guardedCloseMappingPanel() {
+    if (!currentPanelType) {
+        closeMappingPanel();
+        return;
+    }
+    if (window.isActiveVersion === false) {
+        closeMappingPanel();
+        return;
+    }
+    savePanelMapping();
 }
 
 /**
@@ -2423,7 +2471,7 @@ function toggleAllEntityAttrs() {
     _updateEntityAttrToggleBtn();
     const classUri = document.getElementById('panelEntityClass')?.value;
     _syncEntityAttrExclusions(classUri);
-    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Apply to persist`;
+    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded`;
     showNotification(msg, 'info', 2000);
 }
 
@@ -2475,7 +2523,7 @@ function toggleAllRelAttrs() {
     _updateRelAttrToggleBtn();
     const propertyUri = RelPanelState.propertyUri;
     _syncRelAttrExclusions(propertyUri);
-    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Apply to persist`;
+    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded`;
     showNotification(msg, 'info', 2000);
 }
 
@@ -2511,7 +2559,7 @@ function autoExcludeUnmappedEntityAttrs() {
     });
     _updateEntityAttrToggleBtn();
     if (changed > 0) {
-        showNotification(`${changed} unmapped attribute(s) excluded — click Apply to persist`, 'info', 2500);
+        showNotification(`${changed} unmapped attribute(s) excluded`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);
     }
@@ -2544,7 +2592,7 @@ function autoExcludeUnmappedRelAttrs() {
     });
     _updateRelAttrToggleBtn();
     if (changed > 0) {
-        showNotification(`${changed} unmapped attribute(s) excluded — click Apply to persist`, 'info', 2500);
+        showNotification(`${changed} unmapped attribute(s) excluded`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);
     }
@@ -3481,9 +3529,7 @@ window.includeAllExcluded = includeAllExcluded;
 
 // Initialize panel close/save buttons
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('closePanelBtn')?.addEventListener('click', closeMappingPanel);
-    document.getElementById('cancelPanelBtn')?.addEventListener('click', closeMappingPanel);
-    document.getElementById('savePanelBtn')?.addEventListener('click', savePanelMapping);
+    document.getElementById('closePanelBtn')?.addEventListener('click', guardedCloseMappingPanel);
     document.getElementById('autoMapPanelBtn')?.addEventListener('click', autoMapPanel);
     document.getElementById('resetPanelBtn')?.addEventListener('click', resetPanel);
     
