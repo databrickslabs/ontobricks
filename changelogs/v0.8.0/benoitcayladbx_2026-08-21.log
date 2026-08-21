@@ -301,3 +301,39 @@ Modified files:
 - src/front/static/ontology/js/ontology-shared-panels.js
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 4965 passed, 281 skipped, 6 deselected, 1 xfailed in 33.14s
+
+---
+
+## Add registry auto-save for the Mapping Designer (mirrors ontology designer)
+
+Context: The Mapping Designer already saved mapping config to the session on every edit
+(`autoSaveMappings()` → `POST /mapping/save`), but changes were only persisted to the
+Unity Catalog registry when the user explicitly clicked the global "Save" button in the
+navbar. This was inconsistent with the Ontology Designer, which auto-saves to the registry
+whenever the user leaves the Design section or closes the page.
+
+Changes:
+
+1. src/front/static/global/js/mapping-core.js
+   - Added `mappingRegistryDirty` flag (top-level let), set to `true` after every
+     successful `autoSaveMappings()` call so the registry save is triggered only when
+     there is actually something new to persist.
+   - Added `autoSaveToRegistry()`: calls `POST /domain/save-to-uc`, resets the flag on
+     success, shows brief info/success toast notifications.
+   - Added `clearRegistryDirty()`: resets the flag; called by the explicit navbar Save
+     via `window.clearRegistryDirty` so a manual save does not trigger a redundant
+     auto-save on the next section switch.
+   - Added `saveRegistryOnUnload()`: `fetch` with `keepalive: true` for reliable delivery
+     during page teardown; registered on `beforeunload` and `pagehide`.
+   - Exported `autoSaveToRegistry` and `clearRegistryDirty` on `window`.
+
+2. src/front/static/mapping/js/mapping-init.js
+   `onBeforeSectionChange`: after the auto-map running guard, reads the current section
+   via `SidebarNav.getActiveSection()` and calls `autoSaveToRegistry()` when leaving
+   the `design` section (same pattern as ontology-init.js leaving the `design` section).
+
+Modified files:
+- src/front/static/global/js/mapping-core.js
+- src/front/static/mapping/js/mapping-init.js
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4965 passed, 281 skipped, 6 deselected, 1 xfailed in 31.97s

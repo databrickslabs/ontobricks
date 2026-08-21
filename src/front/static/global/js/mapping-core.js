@@ -7,6 +7,11 @@
 // SHARED STATE
 // =====================================================
 
+// Tracks whether the session has unsaved changes that need to be persisted to the registry.
+// Set to true after every successful autoSaveMappings(); reset by an explicit domain save
+// (navbar) or by autoSaveToRegistry() itself.
+let mappingRegistryDirty = false;
+
 // Mapping state - THE central state object
 const MappingState = {
     config: {
@@ -84,6 +89,7 @@ async function autoSaveMappings() {
         const result = await response.json();
         if (result.success) {
             console.log('Mapping Core: Mappings auto-saved to session');
+            mappingRegistryDirty = true;
             
             // Auto-validate after each change
             await autoValidateMappings();
@@ -325,6 +331,69 @@ async function initMappingModule() {
     
     console.log('Mapping Core: Initialization complete');
 }
+
+// =====================================================
+// REGISTRY AUTO-SAVE
+// =====================================================
+
+/**
+ * Silently persist the current domain (including mapping) to the Unity Catalog registry.
+ * Only fires when mappingRegistryDirty is true (i.e. at least one session save has
+ * occurred since the last registry save). Called on section leave and page unload.
+ */
+async function autoSaveToRegistry() {
+    if (!mappingRegistryDirty) return;
+    try {
+        if (typeof showNotification === 'function') {
+            showNotification('Auto-saving mapping to registry…', 'info', 2000);
+        }
+        const resp = await fetch('/domain/save-to-uc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            credentials: 'same-origin'
+        });
+        const data = await resp.json();
+        if (data.success) {
+            mappingRegistryDirty = false;
+            if (typeof showNotification === 'function') {
+                showNotification('Mapping auto-saved to registry', 'success', 2000);
+            }
+        }
+    } catch (e) {
+        console.warn('[MAPPING] Auto-save to registry failed:', e);
+    }
+}
+
+/**
+ * Reset the registry-dirty flag. Called by the explicit navbar Save so a
+ * manual save does not trigger a redundant auto-save on the next section switch.
+ */
+function clearRegistryDirty() {
+    mappingRegistryDirty = false;
+}
+
+/**
+ * Beacon-based registry save for page unload (beforeunload / pagehide).
+ * fetch with keepalive: true guarantees delivery even during page teardown.
+ */
+function saveRegistryOnUnload() {
+    if (!mappingRegistryDirty) return;
+    try {
+        fetch('/domain/save-to-uc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            credentials: 'same-origin',
+            keepalive: true
+        });
+    } catch (e) {}
+}
+
+window.addEventListener('beforeunload', saveRegistryOnUnload);
+window.addEventListener('pagehide', saveRegistryOnUnload);
+window.autoSaveToRegistry = autoSaveToRegistry;
+window.clearRegistryDirty = clearRegistryDirty;
 
 // =====================================================
 // INITIALIZATION
