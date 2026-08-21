@@ -1761,12 +1761,29 @@ class Mapping:
             ),
         }
 
+    @staticmethod
+    def _binds_to_sql_projection(sql_query: str) -> bool:
+        """``True`` when *sql_query* has a readable SELECT list.
+
+        Bound columns then name the query's own output — usually aliases
+        (``… AS ID``) that deliberately differ from the table's column
+        names — so DESCRIBE cannot decide whether they drifted, and every
+        alias would otherwise be reported as dropped upstream.  ``SELECT *``
+        and unparseable clauses yield ``False``: there the table's schema is
+        the right thing to compare against.
+        """
+        from back.objects.digitaltwin import DigitalTwin
+
+        return bool(DigitalTwin._extract_select_columns(sql_query or ""))
+
     def _entity_drift_checks(
         self,
         ent: Dict[str, Any],
         live_columns: Dict[Tuple[str, str, str], Set[str]],
     ) -> List[Dict[str, str]]:
         """Schema-drift warnings for one entity mapping's bound columns."""
+        if self._binds_to_sql_projection(ent.get("sql_query", "")):
+            return []
         triples = [t for t in self._entity_source_triples(ent) if t in live_columns]
         if not triples:
             return []
@@ -1800,6 +1817,8 @@ class Mapping:
         otherwise against the union of the relationship's tables, which is
         the conservative choice (fewer false positives).
         """
+        if self._binds_to_sql_projection(rel.get("sql_query", "")):
+            return []
         by_side: Dict[str, List[Tuple[str, str, str]]] = {}
         for triple, side in self._relationship_source_triples(rel):
             if triple in live_columns:
@@ -1851,6 +1870,24 @@ class Mapping:
             }
 
         assignment = self._domain.assignment or {}
+        candidates = [
+            m
+            for m in assignment.get("entities", []) + assignment.get(
+                "relationships", []
+            )
+            if not m.get("excluded")
+            and not self._binds_to_sql_projection(m.get("sql_query", ""))
+        ]
+        # Every mapping binds to its own SELECT list — nothing DESCRIBE can
+        # tell us, so skip the warehouse round-trips entirely.
+        if not candidates:
+            return {
+                "success": True,
+                "entities": {},
+                "relationships": {},
+                "tables_checked": 0,
+            }
+
         live_columns = self._fetch_live_columns(client)
 
         def _columns(checks: List[Dict[str, str]]) -> List[str]:
@@ -2040,13 +2077,9 @@ class Mapping:
                     data_check, count = self._probe_query_rows(sql, client)
                     result["checks"].append(data_check)
                     result["row_count"] = count
-                # Only when the SELECT clause yielded nothing usable — a
-                # parseable projection is already validated above, and its
-                # aliases/expressions would not match the table's schema.
-                if result["available_columns"] is None:
-                    result["checks"].extend(
-                        self._entity_drift_checks(ent, live_columns)
-                    )
+                # A parseable projection is already validated above; the drift
+                # checks skip those mappings themselves.
+                result["checks"].extend(self._entity_drift_checks(ent, live_columns))
                 result["status"] = self._aggregate_status(result["checks"])
 
             for rel, result in zip(active_rels, rel_results):
@@ -2055,10 +2088,9 @@ class Mapping:
                     data_check, count = self._probe_query_rows(sql, client)
                     result["checks"].append(data_check)
                     result["row_count"] = count
-                if result["available_columns"] is None:
-                    result["checks"].extend(
-                        self._relationship_drift_checks(rel, live_columns)
-                    )
+                result["checks"].extend(
+                    self._relationship_drift_checks(rel, live_columns)
+                )
                 result["status"] = self._aggregate_status(result["checks"])
 
         permission_section = self._run_permission_checks(client)

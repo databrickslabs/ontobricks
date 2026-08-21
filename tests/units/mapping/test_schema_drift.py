@@ -241,6 +241,72 @@ class TestGetSchemaDrift:
         drift = Mapping(domain).get_schema_drift(client)
         assert drift["relationships"]["http://t/buys"]["columns"] == ["customer_id"]
 
+    def test_aliased_sql_projection_is_not_reported_as_drift(self):
+        """Designer/auto-assignment mappings bind to the SELECT aliases
+        (``… AS ID``), which never match the table's own column names."""
+        domain = _mock_domain(
+            entities=[
+                _entity(
+                    sql_query=(
+                        "SELECT customer_id AS ID, last_name AS Label, "
+                        "last_name AS lastname FROM cat.sch.customers"
+                    ),
+                    id_column="ID",
+                    label_column="Label",
+                    attribute_mappings={"lastname": "lastname"},
+                )
+            ]
+        )
+        client = _client({"customers": ["customer_id", "last_name"]})
+        drift = Mapping(domain).get_schema_drift(client)
+        assert drift["entities"] == {}
+
+    def test_projection_only_mapping_skips_the_warehouse(self):
+        """Nothing DESCRIBE could decide — do not pay for the round-trips."""
+        domain = _mock_domain(
+            entities=[
+                _entity(
+                    sql_query="SELECT id AS ID FROM cat.sch.customers",
+                    id_column="ID",
+                )
+            ]
+        )
+        client = _client({"customers": ["id"]})
+        Mapping(domain).get_schema_drift(client)
+        assert client.get_table_columns.call_count == 0
+
+    def test_select_star_mapping_is_still_checked(self):
+        domain = _mock_domain(
+            entities=[
+                _entity(
+                    sql_query="SELECT * FROM cat.sch.customers",
+                    attribute_mappings={"email": "email_addr"},
+                )
+            ]
+        )
+        client = _client({"customers": ["id"]})
+        drift = Mapping(domain).get_schema_drift(client)
+        assert drift["entities"]["http://t/Customer"]["columns"] == ["email_addr"]
+
+    def test_aliased_relationship_sql_is_not_reported_as_drift(self):
+        domain = _mock_domain(
+            relationships=[
+                {
+                    "property": "http://t/buys",
+                    "property_label": "buys",
+                    "source_table": "cat.sch.customers",
+                    "source_id_column": "SourceID",
+                    "sql_query": (
+                        "SELECT customer_id AS SourceID, product_id AS TargetID "
+                        "FROM cat.sch.customers"
+                    ),
+                }
+            ]
+        )
+        client = _client({"customers": ["customer_id", "product_id"]})
+        drift = Mapping(domain).get_schema_drift(client)
+        assert drift["relationships"] == {}
+
     def test_no_client_is_a_safe_noop(self):
         domain = _mock_domain(entities=[_entity()])
         drift = Mapping(domain).get_schema_drift(None)
