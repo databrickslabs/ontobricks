@@ -123,6 +123,12 @@
     stroke-width: 3px;
 }
 
+/* Reverse-direction relationships — arrow at the source end, not the target end */
+.map-link.reverse {
+    marker-end: none;
+    marker-start: url(#map-arrow-start);
+}
+
 /* Self-loop relationships */
 .map-link.self-loop {
     stroke: #495057;

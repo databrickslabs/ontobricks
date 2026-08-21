@@ -164,9 +164,14 @@ async function initMappingDesigner() {
             return;
         }
         
-        // Load saved layout from Ontology Designer, and check the mapped
-        // sources for upstream column changes (both are advisory reads).
-        const [savedLayout] = await Promise.all([loadMapLayout(), loadSchemaDrift()]);
+        // Load saved layout from Ontology Designer synchronously (fast, session-local).
+        // Schema-drift is advisory (warehouse query, can take tens of seconds) — fire it
+        // in the background so it never blocks the spinner.  Once it resolves, re-render
+        // to pick up any drift indicators on nodes and panels.
+        const savedLayout = await loadMapLayout();
+        loadSchemaDrift().then(() => {
+            if (mappingMapInitialized) initMappingDesigner();
+        }).catch(() => {});
         
         // Get mapping status (only count entries that have a SQL query as truly assigned)
         const mappedClassUris = new Set(

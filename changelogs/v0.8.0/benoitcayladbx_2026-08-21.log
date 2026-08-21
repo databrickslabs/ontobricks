@@ -1,3 +1,168 @@
+## Fix "already exists" false positive when editing relationship direction
+
+Context: After the live-canvas-refresh fix (`loadOntologyIntoDesigner` at the end
+of `saveSharedRelationship`), the call fires `scheduleAutoSave()` via the OntoViz
+`onChange` callback. That auto-save runs `syncDesignToOntology` 500 ms later, which
+rewrites `OntologyState.config.properties` (DataType properties first, ObjectProperties
+after), changing the array indices. If the user re-opens the same panel within those
+500 ms, `sharedPanelEditIndex` no longer matches the relationship's new position, and
+the index-based duplicate check finds the relationship at a different index → false
+positive "A relationship named … already exists".  The same race existed for entities.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   - `saveSharedRelationship()`: duplicate check now short-circuits to `false` when
+     `name === sharedPanelOriginalName && sharedPanelEditIndex >= 0` (name-unchanged
+     edit such as a direction change).  The index-based path is only reached for new
+     relationships or renames, where an index collision is an actual duplicate.
+   - `saveSharedEntity()`: same fix applied for entity edits (e.g. icon, parent,
+     description changes that do not rename the entity).
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` → 4965 passed,
+281 skipped, 6 deselected, 1 xfailed.
+
+---
+
+## Fix relationship direction (Forward/Reverse) not updating the canvas arrow
+
+Context: Changing the direction of a relationship in the edit panel had no visible
+effect on the OntoViz designer canvas. Two bugs were at play:
+(1) the ontology version fingerprint did not include `direction`, so switching to
+the Design section after a panel edit was treated as "no change" and the canvas
+reload was skipped; (2) even when the designer was already in memory, saving the
+relationship never pushed the updated direction into the live canvas.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   `_getOntologyVersion()`: added `direction` (defaulting to 'forward') to the
+   per-property fingerprint string so a direction change triggers a canvas reload
+   when the user enters the Design section after editing in another section.
+
+2. src/front/static/ontology/js/ontology-shared-panels.js
+   `saveSharedRelationship()`: after updating `OntologyState` and calling
+   `autoGenerateOwl()`, now fire `loadOntologyIntoDesigner(false)` asynchronously
+   (guarded by existence checks) so the OntoViz canvas arrow flips immediately
+   even when the user is currently on a different section.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` → 4965 passed,
+281 skipped, 6 deselected, 1 xfailed.
+
+---
+
+## Remove Apply/Cancel buttons from entity and relationship edit panels
+
+Context: With the registry auto-save in place, requiring users to explicitly click
+"Apply" (session) was redundant. The panel now saves automatically when closed
+(X button) or when the user switches sections — no manual action needed. The
+"Cancel" button is also removed since there is no longer a two-step commit model.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-shared-panels.js
+   - Removed the `panel-footer` div (Apply + Cancel buttons) from the panel HTML
+     created in `getOrCreateDetailPanel()`.
+   - Removed the `sharedCancelPanelBtn` and `sharedSavePanelBtn` event-listener
+     registrations from `setupPanelListeners()`.
+   - `guardedCloseSharedPanel`: replaced the "Apply or Discard?" confirm dialog
+     with a silent `saveSharedPanelItem()` call when `sharedPanelDirty` is true.
+   - `checkDirtyBeforeSwitch`: same — auto-applies silently instead of prompting.
+   - Removed all six `panel.querySelector('#sharedSavePanelBtn').style.display`
+     show/hide calls across `openEntityPanel`, `openEntityPanelForEdit`,
+     `openEntityPanelForView`, `openRelationshipPanel`, `openRelationshipPanelForEdit`,
+     and `openRelationshipPanelForView`.
+
+Modified files:
+- src/front/static/ontology/js/ontology-shared-panels.js
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` → 4965 passed,
+281 skipped, 6 deselected, 1 xfailed.
+
+---
+
+## Fix "Loading mapping design…" spinner that never ended
+
+Context: The mapping design section showed a persistent loading spinner because
+`initMappingDesigner()` awaited `loadSchemaDrift()` inside a `Promise.all`.
+`/mapping/schema-drift` runs a live warehouse query and takes ~19 s; the spinner
+blocked for the entire duration. The function's own comment already documented
+that schema-drift is "advisory only — a failure leaves the designer working with
+no drift markers," so blocking the spinner on it was incorrect.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js (line ~169)
+   Replaced `await Promise.all([loadMapLayout(), loadSchemaDrift()])` with
+   `await loadMapLayout()` (fast, session-local) followed by
+   `loadSchemaDrift().then(() => { if (mappingMapInitialized) initMappingDesigner(); }).catch(() => {})`.
+   Schema-drift now fires in the background; when it resolves, the designer
+   silently re-renders to pick up any drift markers on nodes and panels.
+
+2. tests/units/front/test_schema_drift_ui.py
+   Updated `test_fetched_in_parallel_with_the_map_layout` (renamed to
+   `test_fetched_without_blocking_the_spinner`) to assert the new pattern:
+   schema-drift is NOT in the blocking await path, fires via `.then()`, and
+   `loadMapLayout()` is still awaited.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_schema_drift_ui.py
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` → 4965 passed,
+281 skipped, 6 deselected, 1 xfailed.
+
+---
+
+## Auto-save design changes to the registry when the user leaves the design section
+
+Context: When designing an ontology, users had to manually click both "Apply"
+(save to session) and "Save" (save to registry), which was confusing. The
+registry save now happens automatically whenever the user navigates away from
+the Design section after making changes, and also on page unload.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   - Added `registryDirty` flag set by `scheduleAutoSave()` to track unsaved
+     registry changes independently of the session-level `layoutDirty` flag.
+   - Added `autoSaveToRegistry()` — async, calls `POST /domain/save-to-uc`
+     silently with brief "Auto-saving to registry…" / "Design auto-saved"
+     toast notifications.
+   - Added `clearRegistryDirty()` (exposed on `window`) so the explicit manual
+     save can reset the flag and avoid a redundant auto-save later.
+   - Added `saveRegistryOnUnload()` registered on `beforeunload` + `pagehide`
+     using `fetch` with `keepalive: true` so in-flight registry saves survive
+     page teardown.
+   - Exposed `autoSaveToRegistry` on `window` for use by `ontology-init.js`.
+
+2. src/front/static/ontology/js/ontology-init.js
+   - In `onBeforeSectionChange`: after `flushDesignLayout()` (session save),
+     now also calls `autoSaveToRegistry()` when leaving the design section, so
+     the registry stays in sync without any manual action from the user.
+
+3. src/front/static/global/js/navbar.js
+   - In `doDomainSave()` success branch: calls `clearRegistryDirty()` so an
+     explicit Save does not trigger a duplicate auto-save on the next section
+     switch.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-init.js
+- src/front/static/global/js/navbar.js
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` → 4965 passed,
+281 skipped, 6 deselected, 1 xfailed.
+
+---
+
 ## Add a live scenario covering Pillar 1 (schema drift, refresh diff, deletion guard); fix a session-mutation bug it caught
 
 Context: The user asked for an automated test covering the manual UI walkthrough
@@ -61,3 +226,78 @@ not something this change touches). The new live scenario
 warehouse with `ONTOBRICKS_SCENARIO_LIVE=1` and passed end to end, including
 before/after runs that confirmed the regression tests above genuinely catch
 the bug (fail without the fix, pass with it).
+
+---
+
+## Fix relationship direction arrow not updating in canvas (targeted in-place update)
+
+Context: Even after the previous fix (`loadOntologyIntoDesigner(false)` call in
+`saveSharedRelationship`), the canvas arrow did not visibly flip when the user changed
+direction. The full async reload path had inherent timing fragility: it issued a network
+call to load the saved design layout before re-rendering, creating a race window during
+which the canvas could still show the old state. Replaced the full reload with a
+synchronous in-place update that directly mutates the OntoViz `Relationship` object
+and calls `_renderRelationship` on just that one element — giving immediate visual
+feedback with no network round-trip.
+
+Changes:
+
+1. src/front/static/global/js/ontology-design.js
+   Added `refreshRelationshipInDesigner(name, direction)`: iterates
+   `ontologyDesigner.relationships`, sets `rel.direction`, calls
+   `ontologyDesigner._renderRelationship(rel)` for an immediate SVG update, then
+   fires `saveDesignLayoutOnly()` (fire-and-forget) to persist the new direction to
+   the design-views session snapshot. Exported as `window.refreshRelationshipInDesigner`.
+
+2. src/front/static/ontology/js/ontology-shared-panels.js
+   `saveSharedRelationship()`: replaced the `loadOntologyIntoDesigner(false)` block
+   with a call to `refreshRelationshipInDesigner(sharedPanelOriginalName || name, direction)`.
+   Uses the original name for the canvas lookup so renames that coincide with a direction
+   change still find the right element.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4965 passed, 281 skipped, 6 deselected, 1 xfailed in 37.46s
+
+---
+
+## Fix relationship direction arrow not updating in the D3 ontology map (section=map)
+
+Context: When the user edits a relationship's direction in the right-hand panel while
+on the `map` section (D3 force-directed graph), the arrow in the graph did not flip.
+The D3 map always rendered arrows via the CSS `marker-end: url(#map-arrow)` rule applied
+to every `.map-link` element; there was no mechanism to reflect the `direction` property
+from the link data. Three changes are needed: (1) a `map-arrow-start` SVG marker that
+points in the reverse direction (using `orient="auto-start-reverse"`), (2) the CSS class
+`reverse` that overrides `marker-end: none` and activates `marker-start`, and (3) a
+`refreshMapLinkDirection(name, direction)` function that flips the class on the live DOM
+element without a full map reload.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   - Added `map-arrow-start` SVG marker to `<defs>` in `initOntologyMap`, using
+     `orient="auto-start-reverse"` so it points backward along the path (toward source).
+   - Changed `.attr('class', 'map-link')` to `.attr('class', d => ...)` so links with
+     `direction === 'reverse'` are initialised with the `reverse` CSS class.
+   - Added `refreshMapLinkDirection(name, direction)` at module level: updates the live
+     `ontologyMapLinks` data and toggles the `reverse` class on the matching SVG `path`
+     via a D3 selection. Exposed as `window.refreshMapLinkDirection`.
+
+2. src/front/static/ontology/css/ontology-map.css
+   Added `.map-link.reverse { marker-end: none; marker-start: url(#map-arrow-start); }`
+   so the CSS handles the marker swap when the `reverse` class is toggled.
+
+3. src/front/static/ontology/js/ontology-shared-panels.js
+   `saveSharedRelationship()`: added a call to `refreshMapLinkDirection(lookupName, direction)`
+   alongside the existing `refreshRelationshipInDesigner` call. Both are guarded by
+   `typeof ... === 'function'` so they are no-ops when the respective view was never opened.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-shared-panels.js
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4965 passed, 281 skipped, 6 deselected, 1 xfailed in 33.14s

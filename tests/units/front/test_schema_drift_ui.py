@@ -64,10 +64,21 @@ class TestDriftFetch:
         assert "data.success && data.entities" in body
         assert "data.success && data.relationships" in body
 
-    def test_fetched_in_parallel_with_the_map_layout(self):
-        """Drift is advisory, so it must not add a serial round-trip to load."""
+    def test_fetched_without_blocking_the_spinner(self):
+        """Drift is advisory, so it must never block the designer spinner.
+
+        The previous approach used Promise.all which forced the spinner to wait
+        ~19 s for the warehouse query.  The new approach fires loadSchemaDrift()
+        as a fire-and-forget background call so the spinner hides as soon as the
+        fast session-local loadMapLayout() resolves.
+        """
         source = _design()
-        assert "Promise.all([loadMapLayout(), loadSchemaDrift()])" in source
+        # Schema-drift is NOT in the blocking await path
+        assert "Promise.all([loadMapLayout(), loadSchemaDrift()])" not in source
+        # Schema-drift fires in the background via .then()
+        assert "loadSchemaDrift().then(" in source
+        # Map layout is still awaited (session-local, fast)
+        assert "await loadMapLayout()" in source
 
     def test_state_holds_both_entities_and_relationships(self):
         source = _design()

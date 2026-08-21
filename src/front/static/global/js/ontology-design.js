@@ -7,6 +7,7 @@ let autoSaveTimeout = null;
 let isLoadingData = false;  // Flag to prevent auto-save during data loading
 let isViewOnlyMode = true;  // Default to view-only mode
 let layoutDirty = false;    // Track unsaved layout changes
+let registryDirty = false;  // Track changes not yet persisted to the registry
 let ontologyVersionAtLoad = null;  // Track ontology version when design was last loaded
 
 /**
@@ -181,7 +182,7 @@ function _getOntologyVersion() {
         classes.length,
         classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '')).join(','),
         props.length,
-        props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '')).join(',')
+        props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '') + ':' + (p.direction || 'forward')).join(',')
     ];
     return parts.join('|');
 }
@@ -306,7 +307,8 @@ function scheduleAutoSave() {
     }
     
     layoutDirty = true;
-    
+    registryDirty = true;
+
     if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
     }
@@ -388,6 +390,91 @@ function saveDesignLayoutBeacon() {
 
 window.addEventListener('beforeunload', saveDesignLayoutBeacon);
 window.addEventListener('pagehide', saveDesignLayoutBeacon);
+
+/**
+ * Auto-save design changes to the registry (silent, no confirmation).
+ * Called when the user leaves the design section or navigates away.
+ */
+async function autoSaveToRegistry() {
+    if (!registryDirty) return;
+    try {
+        console.log('[AUTO-SAVE] Saving design changes to registry...');
+        if (typeof showNotification === 'function') {
+            showNotification('Auto-saving to registry…', 'info', 3000);
+        }
+        const response = await fetch('/domain/save-to-uc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            registryDirty = false;
+            console.log('[AUTO-SAVE] Registry save successful');
+            if (typeof showNotification === 'function') {
+                showNotification('Design auto-saved to registry', 'success', 2500);
+            }
+        } else {
+            console.warn('[AUTO-SAVE] Registry save failed:', data.message);
+        }
+    } catch (e) {
+        console.warn('[AUTO-SAVE] Registry save error:', e);
+    }
+}
+
+/**
+ * Reset the registry-dirty flag (called after an explicit manual save).
+ */
+function clearRegistryDirty() {
+    registryDirty = false;
+}
+
+/**
+ * Fire-and-forget registry save on page unload using fetch keepalive.
+ * Runs after saveDesignLayoutBeacon so the layout is already committed to the
+ * session before the server processes the save-to-uc request.
+ */
+function saveRegistryOnUnload() {
+    if (!registryDirty) return;
+    try {
+        fetch('/domain/save-to-uc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            credentials: 'same-origin',
+            keepalive: true
+        });
+        console.log('[UNLOAD] Registry save request sent (keepalive)');
+    } catch (e) {
+        console.warn('[UNLOAD] Registry save on unload failed:', e);
+    }
+}
+
+window.addEventListener('beforeunload', saveRegistryOnUnload);
+window.addEventListener('pagehide', saveRegistryOnUnload);
+window.autoSaveToRegistry = autoSaveToRegistry;
+window.clearRegistryDirty = clearRegistryDirty;
+
+/**
+ * Targeted in-place update of a single relationship's direction in the canvas.
+ * Avoids a full loadOntologyIntoDesigner reload — updates only the relevant SVG
+ * element, then persists the new layout to the session.
+ * @param {string} name - Relationship name
+ * @param {string} direction - 'forward' | 'reverse'
+ */
+function refreshRelationshipInDesigner(name, direction) {
+    if (!ontologyDesigner) return;
+    ontologyDesigner.relationships.forEach(rel => {
+        if (rel.name === name) {
+            rel.direction = direction;
+            ontologyDesigner._renderRelationship(rel);
+        }
+    });
+    // Persist the updated layout (direction is stored in the design views snapshot)
+    saveDesignLayoutOnly();
+}
+window.refreshRelationshipInDesigner = refreshRelationshipInDesigner;
 
 /**
  * Sync design to OntologyState and optionally save to session

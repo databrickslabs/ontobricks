@@ -648,6 +648,7 @@ async function doDomainSave(opts = {}) {
         });
         const data = await response.json();
         if (data.success) {
+            if (typeof clearRegistryDirty === 'function') clearRegistryDirty();
             showNotification(data.message || 'Domain saved successfully!', 'success');
             enableMenusAfterSave();
             await refreshNavbarIndicators();
