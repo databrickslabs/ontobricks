@@ -1,0 +1,25 @@
+## Stop embedding SQL quotes in exported R2RML column names
+
+Context: Issue #144 — auto-generated R2RML wrapped every column in SQL
+double-quotes. RDFLib then Turtle-escaped them (`rr:column "\"Label\""`,
+`rr:template ".../{\"ID\"}"`), so Ontop looked up a column named `"Label"`
+instead of `Label`. R2RML §7.2/`rr:column` is the bare name; §7.3 only
+quotes non-plain identifiers inside templates.
+
+Changes:
+
+1. src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Emit raw names on `rr:column`; quote inside `rr:template` only when the
+   name is not a plain SQL identifier.
+2. src/back/core/w3c/r2rml/R2RMLParser.py
+   Keep `_unquote_column` for older always-quoted exports.
+3. tests/units/mapping/test_r2rml_generator.py
+   Regression for #144 plus restored helper/template assertions.
+
+Modified files:
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/core/w3c/r2rml/R2RMLParser.py
+- tests/units/mapping/test_r2rml_generator.py
+- changelogs/v0.7.2/benoitcayladbx_2026-08-22.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4811 passed, 286 skipped, 5 deselected in 35.66s
