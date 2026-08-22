@@ -9,6 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="http://ontobricks.datacorner.net/">Website</a>
+  ·
+  <a href="https://github.com/databrickslabs/ontobricks">GitHub</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/fastapi-0.109+-green.svg" alt="FastAPI">
 </p>
@@ -275,4 +281,4 @@ uv sync --extra pitfalls
 
 ### Documentation
 
-Full documentation is available in [`documentation/`](documentation/README.md). For a comprehensive feature list and architecture details, see [INFO.md](documentation/INFO.md).
+Product overview, screenshots, and videos: [ontobricks.datacorner.net](http://ontobricks.datacorner.net/). Full in-repo documentation is in [`documentation/`](documentation/README.md). For a comprehensive feature list and architecture details, see [INFO.md](documentation/INFO.md).
