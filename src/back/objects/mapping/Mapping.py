@@ -661,6 +661,8 @@ class Mapping:
             if m.get("ontology_class") == new_mapping["ontology_class"]:
                 if m.get("excluded") and "excluded" not in new_mapping:
                     new_mapping["excluded"] = True
+                if m.get("excluded_attributes") and "excluded_attributes" not in new_mapping:
+                    new_mapping["excluded_attributes"] = list(m["excluded_attributes"])
                 mappings[i] = new_mapping
                 was_update = True
                 break
@@ -709,6 +711,8 @@ class Mapping:
             if m.get("property") == new_mapping["property"]:
                 if m.get("excluded") and "excluded" not in new_mapping:
                     new_mapping["excluded"] = True
+                if m.get("excluded_attributes") and "excluded_attributes" not in new_mapping:
+                    new_mapping["excluded_attributes"] = list(m["excluded_attributes"])
                 mappings[i] = new_mapping
                 was_update = True
                 break
@@ -2349,10 +2353,26 @@ class Mapping:
         prop_uri = rel.get("property", "")
         prop_label = rel.get("property_label") or prop_uri
         sql_query = (rel.get("sql_query") or "").strip()
-        src_class = rel.get("source_class", "")
-        src_label = rel.get("source_class_label", "")
-        tgt_class = rel.get("target_class", "")
-        tgt_label = rel.get("target_class_label", "")
+
+        # Relationship mappings only carry source_class/target_class when the
+        # UI flow that saved them sent those fields explicitly. Manual Mapping
+        # never does (it only posts property/sql_query/source_id_column/
+        # target_id_column), so they persist as "" and entity resolution below
+        # fails even though the relationship is otherwise fully configured.
+        # Fall back to the ontology property's own rdfs:domain/rdfs:range,
+        # which is always parsed correctly (see /ontology/get-loaded-ontology)
+        # and is exactly what the Designer/Manual Mapping header ("EstudioPais
+        # -> Pais") already displays.
+        ont_prop = ont_props.get(prop_uri) or ont_prop_names.get(prop_label)
+
+        src_class = rel.get("source_class", "") or (
+            ont_prop.get("domain", "") if ont_prop else ""
+        )
+        src_label = rel.get("source_class_label", "") or src_class
+        tgt_class = rel.get("target_class", "") or (
+            ont_prop.get("range", "") if ont_prop else ""
+        )
+        tgt_label = rel.get("target_class_label", "") or tgt_class
         src_id_col = rel.get("source_id_column") or rel.get("source_column", "")
         tgt_id_col = rel.get("target_id_column") or rel.get("target_column", "")
 
@@ -2446,7 +2466,8 @@ class Mapping:
                 }
             )
 
-        ont_prop = ont_props.get(prop_uri) or ont_prop_names.get(prop_label)
+        # ont_prop was already resolved above to compute the src_class/tgt_class
+        # fallback; reuse it instead of looking it up a second time.
         if ont_prop:
             checks.append(
                 {
