@@ -329,7 +329,7 @@ window.SwrlModule = {
         if (typeof d3 !== 'undefined') return Promise.resolve();
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://d3js.org/d3.v7.min.js';
+            script.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
             script.onload = resolve;
             script.onerror = () => reject(new Error('Failed to load D3.js'));
             document.head.appendChild(script);
@@ -415,14 +415,22 @@ window.SwrlModule = {
         });
 
         // Only display entities that participate in at least one business
-        // relationship (object property). Entities with no relationships — or
-        // with inheritance links only — are hidden, and their inheritance edges
-        // are dropped so no orphan nodes remain.
+        // relationship (object property) — plus their direct subclasses, so a
+        // rule can still reference/classify into a specialized subtype (e.g.
+        // EstudioIndicadorLEB under EstudioPais) even though the subtype itself
+        // has no relationships of its own. Entities that are neither connected
+        // nor a subclass of something connected stay hidden.
         const connectedIds = new Set();
         links.forEach(l => {
             if (l.type !== 'relationship') return;
             connectedIds.add(typeof l.source === 'object' ? l.source.id : l.source);
             connectedIds.add(typeof l.target === 'object' ? l.target.id : l.target);
+        });
+        links.forEach(l => {
+            if (l.type !== 'inheritance') return;
+            const parent = typeof l.source === 'object' ? l.source.id : l.source;
+            const child = typeof l.target === 'object' ? l.target.id : l.target;
+            if (connectedIds.has(parent)) connectedIds.add(child);
         });
         nodes = nodes.filter(n => connectedIds.has(n.id));
         this._graphNodes = nodes;
@@ -916,11 +924,15 @@ window.SwrlModule = {
             }
         }
 
-        // Raw editor sync
-        const rawAnt = document.getElementById('swrlRawAntecedent');
-        const rawCon = document.getElementById('swrlRawConsequent');
-        if (rawAnt) rawAnt.value = antStr;
-        if (rawCon) rawCon.value = conStr;
+        // Raw editor sync — solo si NO estamos en modo raw; en modo raw el texto
+        // crudo es la fuente de verdad y puede incluir átomos (p.ej. clases THEN
+        // derivadas) que no existen como nodos del grafo.
+        if (!this.rawMode) {
+            const rawAnt = document.getElementById('swrlRawAntecedent');
+            const rawCon = document.getElementById('swrlRawConsequent');
+            if (rawAnt) rawAnt.value = antStr;
+            if (rawCon) rawCon.value = conStr;
+        }
     },
 
     _buildAtomsFromSelection() {

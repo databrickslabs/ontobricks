@@ -11,6 +11,7 @@ const CohortModule = {
     rules: [],                  // saved rules list
     activeRuleId: null,         // id of the loaded saved rule, if any
     classes: [],                // ontology classes loaded once
+    baseUri: '',                // current ontology base_uri (see _currentUri)
     properties: [],             // ontology properties loaded once
     objectProperties: [],       // ObjectProperty subset
     lastPreview: null,          // last DetectionResult JSON
@@ -42,10 +43,12 @@ const CohortModule = {
                 const ont = data?.ontology || data || {};
                 this.classes = ont.classes || [];
                 this.properties = ont.properties || [];
+                this.baseUri = ont.base_uri || ont.baseUri || '';
             }
         } catch {
             this.classes = [];
             this.properties = [];
+            this.baseUri = '';
         }
         // fall back: read from document if injected
         if (!this.classes.length) {
@@ -53,12 +56,45 @@ const CohortModule = {
                 const ont = window.__ontology__ || {};
                 this.classes = ont.classes || [];
                 this.properties = ont.properties || [];
+                this.baseUri = this.baseUri || ont.base_uri || ont.baseUri || '';
             } catch { /* noop */ }
         }
         this.objectProperties = (this.properties || []).filter(p =>
             (p.type || p.kind || '').toLowerCase().includes('object')
         );
         this._populateClassSelect();
+    },
+
+    /**
+     * Reconstruct the CURRENT, correct ontology-form URI for a class or
+     * property from its local name, using the ``base_uri`` of the
+     * ontology that's actually loaded right now — instead of trusting
+     * whatever ``.uri``/``.iri``/``.id`` field the object itself carries.
+     *
+     * OntoBricks has repeatedly hit the same namespace-drift bug this
+     * session (see ``ontology-axioms.js``'s populateSelect/
+     * addObjectSelect/addChainSelect, and
+     * ``OntologyGenerator._resolve_uri``): classes/properties can carry
+     * a stale ``.uri`` minted under a previous namespace (e.g. a
+     * pre-rebrand ``databricks-ontology.com``) that no longer matches
+     * the live ``base_uri``. Unlike the OWL generator, nothing on the
+     * cohort side re-resolves a saved rule's ``class_uri`` / hop
+     * ``target_class`` against the current base_uri —
+     * ``CohortBuilder._class_uri_variants`` only tries data-namespace /
+     * ontology-namespace *rewrites* of whatever URI it's handed, it
+     * never rebuilds one from a bare name. So a stale ``.uri`` picked
+     * here gets saved verbatim into the rule and silently breaks class
+     * membership / target_class matching (0 members, 0 edges) even
+     * though the entity is otherwise picked correctly. Falls back to
+     * the object's own uri/iri/id fields only when no base_uri or no
+     * name is available (e.g. ontology not loaded yet).
+     */
+    _currentUri(item) {
+        if (!item) return '';
+        const name = item.name || item.label || '';
+        const base = (this.baseUri || '').replace(/[#/]+$/, '');
+        if (base && name) return `${base}#${name}`;
+        return item.uri || item.iri || item.id || '';
     },
 
     _populateClassSelect() {
@@ -69,7 +105,7 @@ const CohortModule = {
             (a.label || a.name || a.uri || '').localeCompare(b.label || b.name || b.uri || '')
         );
         for (const c of classes) {
-            const uri = c.uri || c.iri || c.id || '';
+            const uri = this._currentUri(c);
             const label = c.label || c.name || uri;
             if (!uri) continue;
             const opt = document.createElement('option');
@@ -86,9 +122,11 @@ const CohortModule = {
 
     _classByUri(uri) {
         if (!uri) return null;
-        return (this.classes || []).find(cl =>
-            (cl.uri || cl.iri || cl.id || '') === uri
-        ) || null;
+        // Match against the same reconstructed current-namespace URI
+        // used to populate the select (see _currentUri) — not each
+        // class's own possibly-stale .uri field — so lookups stay
+        // consistent with what's actually in <option value>.
+        return (this.classes || []).find(cl => this._currentUri(cl) === uri) || null;
     },
 
     _classNameByUri(uri) {
@@ -111,13 +149,31 @@ const CohortModule = {
     },
 
     _dataPropsForClass(classUri) {
-        const clsName = this._classNameByUri(classUri || '');
-        const dataProps = (this.properties || []).filter(p =>
-            !(p.type || p.kind || '').toLowerCase().includes('object')
-        );
-        if (!clsName) return dataProps;
-        const matched = dataProps.filter(p => (p.domain || '') === clsName);
-        return matched.length ? matched : dataProps;
+        const cls = this._classByUri(classUri || '');
+        if (!cls) return [];
+        const raw = cls.dataProperties || cls.properties || cls.attributes || [];
+        // Always rebuild the URI from the currently-loaded base_uri (see
+        // _currentUri) rather than trust each property's own stored
+        // uri/iri/id — those can carry a stale pre-rebrand namespace
+        // (same bug class fixed in ontology-axioms.js) and CohortBuilder
+        // has no fallback to re-resolve a foreign-namespace data-property
+        // URI against attribute values, so a stale URI here silently
+        // breaks "where"/"conditions" filters. Some ontology payloads
+        // also only send {name, localName} with no uri/iri/id at all —
+        // _currentUri's name-based reconstruction covers that case too,
+        // so <option value> is never empty (which used to make the
+        // selected property silently fail to persist, dropped by
+        // _sanitizedRulePayload's `w.property` check on save).
+        const domainRoot = (classUri || '').split('#')[0];
+        return raw
+            .filter(p => !(p.type || p.kind || '').toLowerCase().includes('object'))
+            .map(p => {
+                const local = p.localName || p.name || '';
+                const uri = this._currentUri(p)
+                    || (p.uri || p.iri || p.id)
+                    || (local ? `${domainRoot}#${local}` : '');
+                return uri ? Object.assign({}, p, { uri }) : p;
+            });
     },
 
     _compatibleViaProperties(sourceUri, targetUri) {
@@ -132,7 +188,7 @@ const CohortModule = {
     _compatibleTargetClasses(sourceUri, viaUri) {
         const props = this._objectPropsForSource(sourceUri);
         const filtered = viaUri
-            ? props.filter(p => (p.uri || p.iri || p.id || '') === viaUri)
+            ? props.filter(p => this._currentUri(p) === viaUri)
             : props;
         const ranges = new Set();
         for (const p of filtered) {
@@ -234,6 +290,7 @@ const CohortModule = {
         this._hydrateForm();
         this._renderRulesList();
         this._showBuildTab();
+        this._syncDeleteBtn();
         this._setStatus(`Loaded rule "${r.label || r.id}"`);
     },
 
@@ -258,7 +315,28 @@ const CohortModule = {
         if (reset) this._hydrateForm();
         this._renderRulesList();
         this._renderRuleSummary();
+        this._syncDeleteBtn();
         this._setStatus('Drafting a new rule.');
+    },
+
+    // ---- Delete (toolbar button, mirrors New rule / Save rule) ---------
+    //
+    // ``deleteRule(id)`` already existed (DELETE /dtwin/cohorts/rules/:id)
+    // but was only reachable indirectly; nothing in the design-page
+    // toolbar called it. This adds a direct "Delete rule" action next to
+    // Save rule, gated to the currently loaded/saved rule so there's
+    // never any ambiguity about what gets deleted.
+    _syncDeleteBtn() {
+        const btn = document.getElementById('cohortDeleteBtn');
+        if (btn) btn.disabled = !this.activeRuleId;
+    },
+
+    deleteActiveRule() {
+        if (!this.activeRuleId) {
+            this._notify('No rule loaded to delete — pick one from the list first.', 'warning');
+            return;
+        }
+        this.deleteRule(this.activeRuleId);
     },
 
     _resetPreviewPane() {
@@ -750,12 +828,12 @@ const CohortModule = {
     _renderHopRow(linkIdx, hopIdx, hop, sourceUri, isTerminal) {
         const viaProps = this._compatibleViaProperties(sourceUri, hop.target_class);
         if (hop.via && !viaProps.some(p =>
-            (p.uri || p.iri || p.id || '') === hop.via)) {
+            this._currentUri(p) === hop.via)) {
             hop.via = '';
         }
         const targetClasses = this._compatibleTargetClasses(sourceUri, hop.via);
         if (hop.target_class && !targetClasses.some(c =>
-            (c.uri || c.iri || c.id || '') === hop.target_class)) {
+            this._currentUri(c) === hop.target_class)) {
             hop.target_class = '';
         }
         const viaDisabled = !sourceUri;
@@ -776,7 +854,7 @@ const CohortModule = {
                         ? 'pick previous entity first'
                         : (viaProps.length ? '— predicate —' : 'no compatible relationship')}</option>
                     ${viaProps.map(p => {
-                        const uri = p.uri || p.iri || p.id || '';
+                        const uri = this._currentUri(p);
                         const lbl = p.label || p.name || uri;
                         return `<option value="${this._esc(uri)}" ${uri === hop.via ? 'selected' : ''}>${this._esc(lbl)}</option>`;
                     }).join('')}
@@ -794,7 +872,7 @@ const CohortModule = {
                             ? 'pick predicate first'
                             : (targetClasses.length ? '— entity —' : 'no compatible target')}</option>
                         ${targetClasses.map(c => {
-                            const uri = c.uri || c.iri || c.id || '';
+                            const uri = this._currentUri(c);
                             const lbl = c.label || c.name || uri;
                             return `<option value="${this._esc(uri)}" ${uri === hop.target_class ? 'selected' : ''}>${this._esc(lbl)}</option>`;
                         }).join('')}
@@ -816,7 +894,7 @@ const CohortModule = {
         wrap.querySelector('.cohort-hop-via').onchange = (e) => {
             hop.via = e.target.value;
             const stillValid = this._compatibleTargetClasses(sourceUri, hop.via)
-                .some(c => (c.uri || c.iri || c.id || '') === hop.target_class);
+                .some(c => this._currentUri(c) === hop.target_class);
             if (!stillValid) hop.target_class = '';
             this._renderLinks();
             this.markDirty();

@@ -26,6 +26,11 @@
                     onclick="CohortModule.save()">
                 <i class="bi bi-check2 me-1"></i>Save rule
             </button>
+            <button class="btn btn-sm btn-outline-danger" id="cohortDeleteBtn"
+                    onclick="CohortModule.deleteActiveRule()" disabled
+                    title="Delete the currently loaded rule">
+                <i class="bi bi-trash me-1"></i>Delete rule
+            </button>
             <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
                     title="Open the ontology discussion" onclick="openOntologyDiscussion()">
                 <i class="bi bi-chat-dots"></i>
