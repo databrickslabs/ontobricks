@@ -86,7 +86,7 @@ var SigmaGraph = (function () {
     }
 
     var _GRAPH_LIB_URLS = [
-        'https://d3js.org/d3.v7.min.js',
+        'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js',
         'https://cdnjs.cloudflare.com/ajax/libs/graphology/0.26.0/graphology.umd.min.js',
         'https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/dist/graphology-library.min.js',
         'https://cdnjs.cloudflare.com/ajax/libs/sigma.js/3.0.2/sigma.min.js'

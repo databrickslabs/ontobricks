@@ -899,7 +899,7 @@ document.addEventListener('DOMContentLoaded', function () {
     //  BRIDGES
     // =====================================================================
 
-    const D3_CDN = 'https://d3js.org/d3.v7.min.js';
+    const D3_CDN = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
     const BRIDGES_VIEW_KEY = 'ontobricks-bridges-view';
     const NODE_PALETTE = [
         '#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f',
