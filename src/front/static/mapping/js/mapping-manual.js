@@ -565,8 +565,10 @@ window.ManualModule = {
             if (type === 'entity') {
                 // Get values from the panel (same IDs as Designer)
                 const sqlQuery = document.getElementById('epSqlQuery')?.value?.trim();
-                const idColumn = document.getElementById('epSummaryId')?.textContent;
-                const labelColumn = document.getElementById('epSummaryLabel')?.textContent;
+                //JERRY const idColumn = document.getElementById('epSummaryId')?.textContent;
+                //JERRY const labelColumn = document.getElementById('epSummaryLabel')?.textContent;
+                const idColumn    = EntityPanelState.idColumn; //JERRY
+                const labelColumn = EntityPanelState.labelColumn; //JERRY
                 
                 if (!sqlQuery) {
                     showNotification('Please enter a SQL query first', 'warning');
@@ -574,14 +576,25 @@ window.ManualModule = {
                     saveBtn.disabled = false;
                     return;
                 }
-                
+
+                const filteredAttrMappings = Object.fromEntries(
+                    Object.entries(EntityPanelState.attributeMappings).filter(
+                        ([k]) => !EntityPanelState.excludedAttributes.includes(k)
+                    )
+                );
+
                 const mapping = {
                     ontology_class: uri,
-                    class_name: label || name,
+                    ontology_class_label: label || name,
                     sql_query: sqlQuery,
                     id_column: idColumn && idColumn !== 'Not set' ? idColumn : null,
-                    label_column: labelColumn && labelColumn !== 'Not set' ? labelColumn : null
+                    label_column: labelColumn && labelColumn !== 'Not set' ? labelColumn : null,
+                    attribute_mappings: filteredAttrMappings
                 };
+
+                if (EntityPanelState.excludedAttributes.length > 0) {
+                    mapping.excluded_attributes = [...EntityPanelState.excludedAttributes];
+                }
                 
                 const response = await fetch('/mapping/entity/add', {
                     method: 'POST',
@@ -604,9 +617,9 @@ window.ManualModule = {
                 }
             } else {
                 // Get values from the panel (same IDs as Designer)
-                const sqlQuery = document.getElementById('rpSqlQuery')?.value?.trim();
-                const sourceColumn = document.getElementById('rpSummarySource')?.textContent;
-                const targetColumn = document.getElementById('rpSummaryTarget')?.textContent;
+                const sqlQuery     = document.getElementById('rpSqlQuery')?.value?.trim();
+                const sourceColumn = RelPanelState.sourceIdColumn;
+                const targetColumn = RelPanelState.targetIdColumn;
                 
                 if (!sqlQuery) {
                     showNotification('Please enter a SQL query first', 'warning');
@@ -615,13 +628,30 @@ window.ManualModule = {
                     return;
                 }
                 
+                const filteredAttrMappings = Object.fromEntries(
+                    Object.entries(RelPanelState.attributeMappings).filter(
+                        ([k]) => !RelPanelState.excludedAttributes.includes(k)
+                    )
+                );
+                const existingRel = MappingState.config.relationships.find(m => m.property === uri) || {};
+
                 const mapping = {
                     property: uri,
-                    property_name: label || name,
+                    property_label: label || name,
                     sql_query: sqlQuery,
+                    source_class: existingRel.source_class || '',
+                    source_class_label: existingRel.source_class_label || '',
+                    target_class: existingRel.target_class || '',
+                    target_class_label: existingRel.target_class_label || '',
                     source_id_column: sourceColumn && sourceColumn !== 'Not set' ? sourceColumn : null,
-                    target_id_column: targetColumn && targetColumn !== 'Not set' ? targetColumn : null
+                    target_id_column: targetColumn && targetColumn !== 'Not set' ? targetColumn : null,
+                    direction: existingRel.direction || 'forward',
+                    attribute_mappings: filteredAttrMappings
                 };
+
+                if (RelPanelState.excludedAttributes.length > 0) {
+                    mapping.excluded_attributes = [...RelPanelState.excludedAttributes];
+                }
                 
                 const response = await fetch('/mapping/relationship/add', {
                     method: 'POST',
