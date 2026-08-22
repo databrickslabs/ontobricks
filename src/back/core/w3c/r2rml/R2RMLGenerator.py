@@ -240,27 +240,6 @@ class R2RMLGenerator:
         triples_map = self._uriref(f"{self.base_uri}TriplesMap_{map_name}")
         g.add((triples_map, RDF.type, self.rr.TriplesMap))
 
-        # Add comment for clarity
-        comment = f"Mapping for {class_label or table} to {class_uri}"
-        g.add((triples_map, RDFS.comment, Literal(comment)))
-
-        # Logical Table - using SQL query or table name
-        logical_table = BNode(f"lt_{map_name}")
-        g.add((triples_map, self.rr.logicalTable, logical_table))
-
-        if sql_query:
-            # New SQL-based mapping
-            g.add((logical_table, self.rr.sqlQuery, Literal(sql_query)))
-        else:
-            # Legacy table-based mapping
-            g.add(
-                (
-                    logical_table,
-                    self.rr.tableName,
-                    Literal(f"{catalog}.{schema}.{table}"),
-                )
-            )
-
         # Subject Map
         subject_map = BNode(f"sm_{map_name}")
         g.add((triples_map, self.rr.subjectMap, subject_map))
@@ -281,17 +260,40 @@ class R2RMLGenerator:
         )
 
         # Add class if specified
+        resolved_class_uri = class_uri
         if class_uri:
+            domain_root = self.base_uri.rstrip("/").rstrip("#")
             if class_uri.startswith("http://") or class_uri.startswith("https://"):
-                g.add((subject_map, self.rr["class"], self._uriref(class_uri)))
+                if not class_uri.startswith(domain_root):
+                    # Stale class URI from a previous base_uri — rebuild using '#',
+                    # matching how classes are declared in the OWL ontology.
+                    local = self._extract_local_name(class_uri)
+                    resolved_class_uri = f"{domain_root}#{self._sanitize_name(local)}"
             else:
-                g.add(
-                    (
-                        subject_map,
-                        self.rr["class"],
-                        self._uriref(f"{self.base_uri}{class_uri}"),
-                    )
+                resolved_class_uri = f"{self.base_uri}{class_uri}"
+
+            g.add((subject_map, self.rr["class"], self._uriref(resolved_class_uri)))
+
+        # Add comment for clarity
+        comment = f"Mapping for {class_label or table} to {resolved_class_uri}"
+        g.add((triples_map, RDFS.comment, Literal(comment)))
+
+        # Logical Table - using SQL query or table name
+        logical_table = BNode(f"lt_{map_name}")
+        g.add((triples_map, self.rr.logicalTable, logical_table))
+
+        if sql_query:
+            # New SQL-based mapping
+            g.add((logical_table, self.rr.sqlQuery, Literal(sql_query)))
+        else:
+            # Legacy table-based mapping
+            g.add(
+                (
+                    logical_table,
+                    self.rr.tableName,
+                    Literal(f"{catalog}.{schema}.{table}"),
                 )
+            )
 
         # Add label column mapping if specified
         if label_column:
@@ -304,7 +306,7 @@ class R2RMLGenerator:
             g.add((obj_map, self.rr.column, Literal(self._quote_column(label_column))))
 
         # Ontology property-URI lookup for this class
-        ont_props = (data_prop_uri_lookup or {}).get(class_uri, {})
+        ont_props = (data_prop_uri_lookup or {}).get(resolved_class_uri, {})
 
         # Add attribute mappings (DatatypeProperty mappings)
         if attribute_mappings:
