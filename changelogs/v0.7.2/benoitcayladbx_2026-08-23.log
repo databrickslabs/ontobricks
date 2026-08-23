@@ -1,0 +1,50 @@
+## Fix the Manual Mapping panel hanging on the Mapping tab
+
+Context: Issue #145 — in Manual Mapping, clicking a mapped entity and opening the
+rightmost "Mapping" tab showed the spinner forever. The bottom panel reuses the
+Designer's entity/relationship panel (`loadEntityPanelContent()` /
+`loadRelationshipPanelContent()` rendered into `#manualPanelBody`), but the
+Designer's preview query discards its response unless `currentPanelType` says an
+entity/relationship panel is open. Only `openEntityMappingFromDesign()` /
+`openRelationshipMappingFromDesign()` ever set it, so from Manual Mapping the flag
+stayed `null`: `/mapping/test-query` returned 200, the result was dropped, and
+`#epMappingLoading` was never hidden. Second latent defect on the same path — the
+panel markup uses page-global `ep*` / `rp*` element ids and both hosts live in the
+DOM at once, so a leftover copy in the Designer panel shadowed the Manual one on
+every `getElementById` lookup.
+
+Backport of the develop fix (cherry-pick of 2f796c1).
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Added panel-ownership tracking: `currentPanelHostId` plus `claimMappingPanel()`,
+   `releaseMappingPanel()` and `closeActiveMappingPanel()`. Claiming records the
+   host that received the markup and closes the other host, so only one copy of the
+   `ep*` / `rp*` ids exists. `closeMappingPanel()` now delegates its reset to
+   `releaseMappingPanel()` instead of repeating it.
+2. src/front/static/mapping/js/mapping-design.js
+   `loadEntityPanelContent()` and `loadRelationshipPanelContent()` claim the panel
+   before initialising it, so the preview query started by `initEntityPanel()` /
+   `initRelationshipPanel()` passes the stale-response guard whichever host
+   rendered it.
+3. src/front/static/mapping/js/mapping-design.js
+   `_pollAndSaveResult()` closes the owning host via `closeActiveMappingPanel()`;
+   Manual Mapping's Auto-Map shares that poll loop and previously left its panel
+   open with stale content.
+4. src/front/static/mapping/js/mapping-manual.js
+   `ManualModule.closePanel()` releases the shared panel (cancelling any in-flight
+   preview query) and no longer assumes the manual DOM is present, since the
+   Designer side can now call it.
+5. tests/units/front/test_manual_mapping_panel_host.py
+   New source-contract regression covering claim/release/close dispatch and pinning
+   the stale-response guards that make ownership mandatory. 11 of its 13 tests fail
+   without the fix.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- tests/units/front/test_manual_mapping_panel_host.py
+- changelogs/v0.7.2/benoitcayladbx_2026-08-23.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4824 passed, 286 skipped, 5 deselected in 29.83s

@@ -892,6 +892,11 @@ function loadOntologyIntoMappingDesigner() {
 
 let currentPanelType = null; // 'entity' or 'relationship'
 let currentPanelUri = null;
+// Body element id of the host holding the panel: 'panelBody' (Designer right panel)
+// or 'manualPanelBody' (Manual Mapping bottom panel). The panel markup uses
+// page-global ep*/rp* ids, so a leftover copy in the other host would shadow the
+// live one on every getElementById lookup.
+let currentPanelHostId = null;
 
 /**
  * Open the right panel for entity mapping
@@ -961,20 +966,60 @@ function openMappingPanel() {
 }
 
 /**
- * Close the mapping panel
+ * Register the host that now holds the entity/relationship panel markup.
+ * Any other host is closed first so only one copy of those ids exists.
+ * Callers that render panel content must call this before initialising it —
+ * runEntityPanelQuery() / runRelPanelQuery() drop their results when the
+ * panel type does not match the host they were started from.
+ *
+ * @param {HTMLElement} panelBody - The body element receiving the markup
+ * @param {string} type - 'entity' or 'relationship'
+ * @param {string} uri - URI of the ontology item being mapped
  */
-function closeMappingPanel() {
-    const container = document.getElementById('mappingDesignerContainer');
-    if (container) container.classList.remove('panel-open');
+function claimMappingPanel(panelBody, type, uri) {
+    const hostId = panelBody?.id || 'panelBody';
+    if (currentPanelHostId && currentPanelHostId !== hostId) {
+        closeActiveMappingPanel();
+    }
+    currentPanelHostId = hostId;
+    currentPanelType = type;
+    currentPanelUri = uri;
+}
+
+/**
+ * Drop panel ownership and invalidate in-flight panel queries.
+ * Called by every host when it tears its panel down.
+ */
+function releaseMappingPanel() {
+    currentPanelHostId = null;
     currentPanelType = null;
     currentPanelUri = null;
     
-    // Invalidate any in-flight entity panel queries
     if (EntityPanelState._autoLoadTimer) {
         clearTimeout(EntityPanelState._autoLoadTimer);
         EntityPanelState._autoLoadTimer = null;
     }
     EntityPanelState._generation++;
+}
+
+/**
+ * Close whichever host currently holds the panel.
+ */
+function closeActiveMappingPanel() {
+    if (currentPanelHostId === 'manualPanelBody' && window.ManualModule) {
+        ManualModule.closePanel();
+    } else {
+        closeMappingPanel();
+    }
+}
+
+/**
+ * Close the mapping panel
+ */
+function closeMappingPanel() {
+    const container = document.getElementById('mappingDesignerContainer');
+    if (container) container.classList.remove('panel-open');
+    releaseMappingPanel();
     
     const panelBody = document.getElementById('panelBody');
     if (panelBody) panelBody.innerHTML = '';
@@ -1018,6 +1063,7 @@ function resizeMapSvg() {
  */
 function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
     const panelBody = targetPanelBody || document.getElementById('panelBody');
+    claimMappingPanel(panelBody, 'entity', classUri);
     const existingMapping = MappingState.config.entities.find(m => m.ontology_class === classUri);
     const classInfo = MappingState.loadedOntology?.classes?.find(c => c.uri === classUri);
     
@@ -1208,6 +1254,7 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
  */
 function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) {
     const panelBody = targetPanelBody || document.getElementById('panelBody');
+    claimMappingPanel(panelBody, 'relationship', ontologyProperty.uri);
     const existingMapping = MappingState.config.relationships.find(m => m.property === ontologyProperty.uri);
     
     const domainUri = ontologyProperty.domain;
@@ -2785,7 +2832,7 @@ async function _pollAndSaveResult(taskId, itemType, targetUri, itemName) {
         );
 
         if (currentPanelUri === targetUri) {
-            closeMappingPanel();
+            closeActiveMappingPanel();
         }
     } catch (error) {
         console.error('[Auto-Map] Poll/save error for ' + itemName + ':', error);
