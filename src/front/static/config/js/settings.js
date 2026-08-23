@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // failed or had not resolved yet would make the next Save silently write
     // "off" over an admin's "on" — with no error and nobody touching the box.
     let analyticsJobHydrated = false;
+    // Same contract for the graph-read bounds: their inputs live in the Global
+    // section but the Save handler posts them from every section, and a blank
+    // input means "clear the admin override". Without the flag a failed
+    // hydration would let an unrelated Save reset a configured bound.
+    let graphLimitsHydrated = false;
     // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
     // Avoids embedding JSON in onclick HTML attributes (double quotes break the attribute).
     let _lkDomainRegistry = {};
@@ -49,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadRegistryCacheTtl();
     loadEditLockTtl();
+    loadGraphLimits();
     loadAnalyticsJobEnabled();
     loadNavbarLogo();
     // Preload the Delta warehouse selection + registry location so the Delta
@@ -1579,15 +1585,19 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('Graph DB heavy refresh failed', e);
         } finally {
             applyGraphDbEnginePanels();
-            await loadGraphLimits();
         }
     }
 
-    /** Populate the graph-read bound inputs (statement timeout + chat cap). */
+    /**
+     * Populate the graph-read bound inputs (statement timeout + chat cap).
+     * They sit in the Global section next to the other global bounds, so this
+     * runs on page load rather than behind a section-open trigger.
+     */
     async function loadGraphLimits() {
         const timeoutEl = document.getElementById('graphQueryTimeoutS');
         const capEl = document.getElementById('graphChatResultCap');
         if (!timeoutEl && !capEl) return;
+        graphLimitsHydrated = false;
         try {
             const resp = await fetch('/settings/graph-limits', { credentials: 'same-origin' });
             if (!resp.ok) return;
@@ -1599,6 +1609,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (capEl && typeof data.graph_chat_result_cap === 'number') {
                 capEl.value = String(data.graph_chat_result_cap);
             }
+            graphLimitsHydrated = true;
         } catch (e) {
             console.log('Graph limits load failed', e);
         }
@@ -3765,7 +3776,9 @@ document.addEventListener('DOMContentLoaded', function () {
         // 0/blank leaves the env-var / built-in default in force).
         const gTimeoutInput = document.getElementById('graphQueryTimeoutS');
         const gCapInput = document.getElementById('graphChatResultCap');
-        if (gTimeoutInput || gCapInput) {
+        const gTyped = (gTimeoutInput && gTimeoutInput.value.trim() !== '')
+            || (gCapInput && gCapInput.value.trim() !== '');
+        if ((gTimeoutInput || gCapInput) && (graphLimitsHydrated || gTyped)) {
             const body = {};
             if (gTimeoutInput) {
                 const v = parseInt(gTimeoutInput.value, 10);

@@ -32,7 +32,7 @@ Resolution order is:
    `ONTOBRICKS_GRAPH_CHAT_RESULT_CAP`.
 3. The built-in default.
 
-Administrators can change both values in **Settings → Graph DB → Graph read
+Administrators can change both values in **Settings → Global → Graph read
 limits**. Entering `0` clears the saved override.
 
 ## Backend behavior

@@ -155,3 +155,35 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5028 passed, 281 skipped, 6 deselected, 1 xfailed in 42.62s
+
+## Graph read limits hydrate in the Global settings section
+
+Context: The graph-read bounds UI merged with PR #116 lives in the Settings
+**Global** section (the old "Graph DB" section was split into Delta / Lakebase /
+Neo4j), but its loader was only invoked at the end of the deferred Lakebase /
+Delta cascade. Opening Global directly left the two inputs blank, showing only
+their placeholders instead of the effective values — and because the shared Save
+handler posts those inputs from every section, a Save could write `0` (clear
+override) over an administrator's configured bound.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   `loadGraphLimits()` now runs on page load next to the other global bounds
+   (`loadRegistryCacheTtl`, `loadEditLockTtl`) and no longer hangs off
+   `loadGraphDbHeavyFromServer()`.
+2. src/front/static/config/js/settings.js
+   Added a `graphLimitsHydrated` flag, mirroring `analyticsJobHydrated`: the
+   Save handler only posts the bounds once they reflect the stored values, or
+   when the admin actually typed a value.
+3. docs/issues/graph-chat-event-loop-hang.md
+   Admin path corrected from "Settings → Graph DB → Graph read limits" to
+   "Settings → Global → Graph read limits".
+
+Modified files:
+- src/front/static/config/js/settings.js
+- docs/issues/graph-chat-event-loop-hang.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5028 passed, 281 skipped, 6 deselected, 1 xfailed in 33.46s
+
