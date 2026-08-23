@@ -643,6 +643,45 @@ async def save_registry_cache_ttl(
     )
 
 
+@router.get("/graph-limits")
+async def get_graph_limits(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get effective graph-read bounds (statement timeout + chat result cap)."""
+    return config_service.get_graph_limits_result(session_mgr, settings)
+
+
+@router.post("/save-graph-limits")
+async def save_graph_limits(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save graph-read bounds (admin only, stored globally). ``0`` = unset."""
+    data = await request.json()
+
+    def _opt_int(key: str):
+        if key not in data or data[key] is None or data[key] == "":
+            return None
+        try:
+            return int(data[key])
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"{key} must be an integer") from exc
+
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_graph_limits_result(
+        _opt_int("graph_query_timeout_s"),
+        _opt_int("graph_chat_result_cap"),
+        email,
+        user_token,
+        session_mgr,
+        settings,
+    )
+
+
 @router.get("/edit-lock-ttl")
 async def get_edit_lock_ttl(
     session_mgr: SessionManager = Depends(get_session_manager),

@@ -19,6 +19,12 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.query_limits import (
+    get_graph_chat_result_cap as _effective_result_cap,
+    get_graph_query_timeout_s as _effective_timeout_s,
+    set_graph_chat_result_cap_override,
+    set_graph_query_timeout_override,
+)
 from back.objects.registry.registry_cache import set_registry_cache_ttl
 
 logger = get_logger(__name__)
@@ -91,6 +97,17 @@ class GlobalConfigService:
                 self._cache_ts = now
                 if "registry_cache_ttl" in data:
                     set_registry_cache_ttl(int(data["registry_cache_ttl"]))
+                # Apply the persisted graph-read bounds so admin overrides
+                # survive a cold restart (0 / unset clears the override, so
+                # the env var / built-in default applies).
+                if "graph_query_timeout_s" in data:
+                    set_graph_query_timeout_override(
+                        int(data["graph_query_timeout_s"] or 0) or None
+                    )
+                if "graph_chat_result_cap" in data:
+                    set_graph_chat_result_cap_override(
+                        int(data["graph_chat_result_cap"] or 0) or None
+                    )
                 logger.info(
                     "Loaded global config (backend=%s)", store.backend
                 )
@@ -365,6 +382,70 @@ class GlobalConfigService:
         set_registry_cache_ttl(ttl)
         return self._save(host, token, registry_cfg, {"registry_cache_ttl": ttl})
 
+    def get_graph_query_timeout_s(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> int:
+        """Return the effective graph-read statement timeout (seconds).
+
+        The persisted admin value is re-applied through the central clamp in
+        :mod:`back.core.query_limits` so the Settings UI shows the same
+        (bounded) value the database actually enforces — never a stale
+        out-of-range number.
+        """
+        val = self.get(host, token, registry_cfg, "graph_query_timeout_s", "")
+        s = str(val).strip() if val is not None else ""
+        if s.isdigit():
+            set_graph_query_timeout_override(int(s) or None)
+        return _effective_timeout_s()
+
+    def set_graph_query_timeout_s(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        seconds: int,
+    ) -> Tuple[bool, str]:
+        """Persist and apply the graph-read statement timeout (``0`` = unset)."""
+        seconds = max(0, int(seconds))
+        set_graph_query_timeout_override(seconds or None)
+        # Persist the clamped effective value (not the raw input) so config and
+        # the Settings UI can never show a timeout the database won't honour.
+        to_save = 0 if seconds <= 0 else _effective_timeout_s()
+        return self._save(
+            host, token, registry_cfg, {"graph_query_timeout_s": to_save}
+        )
+
+    def get_graph_chat_result_cap(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> int:
+        """Return the effective Graph Chat triple result cap.
+
+        Re-applies the persisted admin value through the central clamp so the
+        Settings UI shows the same bounded cap that is actually enforced.
+        """
+        val = self.get(host, token, registry_cfg, "graph_chat_result_cap", "")
+        s = str(val).strip() if val is not None else ""
+        if s.isdigit():
+            set_graph_chat_result_cap_override(int(s) or None)
+        return _effective_result_cap()
+
+    def set_graph_chat_result_cap(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        count: int,
+    ) -> Tuple[bool, str]:
+        """Persist and apply the Graph Chat triple result cap (``0`` = unset)."""
+        count = max(0, int(count))
+        set_graph_chat_result_cap_override(count or None)
+        # Persist the clamped effective value so config/UI stay consistent with
+        # the enforced cap.
+        to_save = 0 if count <= 0 else _effective_result_cap()
+        return self._save(
+            host, token, registry_cfg, {"graph_chat_result_cap": to_save}
+        )
+
     def get_edit_lock_ttl_s(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> Optional[int]:
@@ -449,6 +530,9 @@ class GlobalConfigService:
             "navbar_logo": "",
             "use_cloud_fetch": True,
             "registry_cache_ttl": 300,
+            # 0 = unset → env var / built-in default from back.core.query_limits.
+            "graph_query_timeout_s": 0,
+            "graph_chat_result_cap": 0,
             "graph_engine_config": {},
         }
 

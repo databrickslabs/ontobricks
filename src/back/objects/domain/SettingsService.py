@@ -1406,6 +1406,64 @@ class SettingsService:
         return {"success": True, "registry_cache_ttl": max(10, int(ttl))}
 
     @staticmethod
+    def get_graph_limits_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the effective graph-read bounds for the Settings UI.
+
+        ``graph_query_timeout_s`` bounds a single graph read (Lakebase /
+        warehouse ``statement_timeout``); ``graph_chat_result_cap`` bounds the
+        triples returned to the Graph Chat agent. Both resolve admin override →
+        env var → built-in default.
+        """
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        return {
+            "success": True,
+            "graph_query_timeout_s": global_config_service.get_graph_query_timeout_s(
+                host, token, registry_cfg
+            ),
+            "graph_chat_result_cap": global_config_service.get_graph_chat_result_cap(
+                host, token, registry_cfg
+            ),
+        }
+
+    @staticmethod
+    def save_graph_limits_result(
+        graph_query_timeout_s: Optional[int],
+        graph_chat_result_cap: Optional[int],
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist admin-set graph-read bounds (``0``/``None`` = unset)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        if graph_query_timeout_s is not None:
+            ok, msg = global_config_service.set_graph_query_timeout_s(
+                host, token, registry_cfg, int(graph_query_timeout_s)
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to save graph query timeout", detail=msg
+                )
+        if graph_chat_result_cap is not None:
+            ok, msg = global_config_service.set_graph_chat_result_cap(
+                host, token, registry_cfg, int(graph_chat_result_cap)
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to save graph chat result cap", detail=msg
+                )
+        return SettingsService.get_graph_limits_result(session_mgr, settings)
+
+    @staticmethod
     def get_edit_lock_ttl_result(
         session_mgr: SessionManager,
         settings: Settings,

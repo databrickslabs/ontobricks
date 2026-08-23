@@ -1579,6 +1579,28 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('Graph DB heavy refresh failed', e);
         } finally {
             applyGraphDbEnginePanels();
+            await loadGraphLimits();
+        }
+    }
+
+    /** Populate the graph-read bound inputs (statement timeout + chat cap). */
+    async function loadGraphLimits() {
+        const timeoutEl = document.getElementById('graphQueryTimeoutS');
+        const capEl = document.getElementById('graphChatResultCap');
+        if (!timeoutEl && !capEl) return;
+        try {
+            const resp = await fetch('/settings/graph-limits', { credentials: 'same-origin' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data || !data.success) return;
+            if (timeoutEl && typeof data.graph_query_timeout_s === 'number') {
+                timeoutEl.value = String(data.graph_query_timeout_s);
+            }
+            if (capEl && typeof data.graph_chat_result_cap === 'number') {
+                capEl.value = String(data.graph_chat_result_cap);
+            }
+        } catch (e) {
+            console.log('Graph limits load failed', e);
         }
     }
 
@@ -3739,7 +3761,33 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // 3c. Save the Databricks graph-analytics job toggle. An explicit "off"
+        // 3c. Save graph-read bounds (statement timeout + chat result cap;
+        // 0/blank leaves the env-var / built-in default in force).
+        const gTimeoutInput = document.getElementById('graphQueryTimeoutS');
+        const gCapInput = document.getElementById('graphChatResultCap');
+        if (gTimeoutInput || gCapInput) {
+            const body = {};
+            if (gTimeoutInput) {
+                const v = parseInt(gTimeoutInput.value, 10);
+                body.graph_query_timeout_s = isNaN(v) ? 0 : Math.max(0, v);
+            }
+            if (gCapInput) {
+                const v = parseInt(gCapInput.value, 10);
+                body.graph_chat_result_cap = isNaN(v) ? 0 : Math.max(0, v);
+            }
+            try {
+                const resp = await fetch('/settings/save-graph-limits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body)
+                });
+                const r = await resp.json();
+                if (!r.success) errors.push('Graph limits: ' + (r.message || 'save failed'));
+            } catch (e) { errors.push('Graph limits: ' + e.message); }
+        }
+
+        // 3d. Save the Databricks graph-analytics job toggle. An explicit "off"
         // is sent as readily as an "on", because unchecking has to persist a
         // value that overrides the env-var default — but only once the checkbox
         // is known to hold the stored state. Posting an unhydrated box would

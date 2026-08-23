@@ -1,5 +1,6 @@
 import asyncio
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any, Callable, Dict, Tuple
@@ -11,10 +12,61 @@ from shared.config.constants import DEFAULT_BASE_URI
 
 logger = get_logger(__name__)
 
+# Floor kept at the historical default so small instances never *lose*
+# capacity; larger Databricks App instances (more vCPUs) scale up automatically.
+_BLOCKING_POOL_MIN = 20
+
+
+def _resolve_blocking_pool_size() -> int:
+    """Resolve the blocking-pool worker count.
+
+    Priority: explicit ``ONTOBRICKS_THREAD_POOL_SIZE`` > instance-size
+    derivation (``vCPUs * 4``, floored at :data:`_BLOCKING_POOL_MIN`). This lets
+    a bigger Databricks App instance get more blocking-worker capacity without a
+    config change, while an operator can still pin an exact value.
+    """
+    explicit = os.getenv("ONTOBRICKS_THREAD_POOL_SIZE", "").strip()
+    if explicit:
+        try:
+            value = int(explicit)
+            if value > 0:
+                return value
+        except ValueError:
+            logger.warning("Ignoring non-integer ONTOBRICKS_THREAD_POOL_SIZE=%r", explicit)
+    cpu = os.cpu_count() or 2
+    return max(_BLOCKING_POOL_MIN, cpu * 4)
+
+
+_BLOCKING_POOL_SIZE = _resolve_blocking_pool_size()
 _BLOCKING_POOL = ThreadPoolExecutor(
-    max_workers=int(os.getenv("ONTOBRICKS_THREAD_POOL_SIZE", "20")),
+    max_workers=_BLOCKING_POOL_SIZE,
     thread_name_prefix="ob-blocking",
 )
+
+# In-flight blocking tasks (submitted but not yet finished). Used to detect
+# thread-pool saturation so the app can advise an instance-size upgrade instead
+# of silently queueing (and appearing to hang).
+_inflight_lock = threading.Lock()
+_inflight_blocking = 0
+_peak_inflight_blocking = 0
+
+
+def get_blocking_pool_stats() -> Dict[str, Any]:
+    """Return blocking thread-pool utilisation.
+
+    ``saturated`` is true when every worker is busy, i.e. further blocking work
+    is queued rather than running — the signal used to surface the
+    resource-pressure advisory.
+    """
+    with _inflight_lock:
+        active = _inflight_blocking
+        peak = _peak_inflight_blocking
+    return {
+        "max_workers": _BLOCKING_POOL_SIZE,
+        "active": active,
+        "peak": peak,
+        "saturated": active >= _BLOCKING_POOL_SIZE,
+    }
 
 
 def make_volume_file_service(domain, settings=None):
@@ -48,18 +100,28 @@ class DatabricksHelpers:
     async def run_blocking(func: Callable, *args: Any, **kwargs: Any) -> Any:
         """Run a blocking function in a sized thread pool.
 
-        Uses a dedicated :class:`ThreadPoolExecutor` (default 20 threads,
-        configurable via ``ONTOBRICKS_THREAD_POOL_SIZE``) instead of the
-        default asyncio executor so that concurrent blocking work does not
-        starve the event loop.
+        Uses a dedicated :class:`ThreadPoolExecutor` (sized from the instance's
+        vCPU count, floored at 20, overridable via ``ONTOBRICKS_THREAD_POOL_SIZE``)
+        instead of the default asyncio executor so that concurrent blocking work
+        does not starve the event loop. In-flight tasks are tracked so
+        :func:`get_blocking_pool_stats` can report saturation.
 
         Usage in an ``async def`` route handler::
 
             result = await run_blocking(client.execute_query, sql)
         """
+        global _inflight_blocking, _peak_inflight_blocking
         loop = asyncio.get_running_loop()
         call = partial(func, *args, **kwargs) if kwargs else partial(func, *args)
-        return await loop.run_in_executor(_BLOCKING_POOL, call)
+        with _inflight_lock:
+            _inflight_blocking += 1
+            if _inflight_blocking > _peak_inflight_blocking:
+                _peak_inflight_blocking = _inflight_blocking
+        try:
+            return await loop.run_in_executor(_BLOCKING_POOL, call)
+        finally:
+            with _inflight_lock:
+                _inflight_blocking -= 1
 
     @staticmethod
     def _resolve_registry_cfg(domain, settings) -> Dict[str, str]:
