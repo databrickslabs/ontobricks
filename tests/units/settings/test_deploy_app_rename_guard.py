@@ -148,40 +148,29 @@ class TestDeployWiring:
         after = body.split("_preflight_check_app_rename", 2)[2]
         assert "die" in after.split("\n\n")[0]
 
-    def test_the_secret_scope_check_is_wired(self):
-        assert "_preflight_check_secret_scope" in DEPLOY.read_text()
 
+class TestDeployDoesNotBindNeo4jSecrets:
+    """Neo4j is optional — DAB must not require a workspace secret (GH #136)."""
 
-class TestSecretScopeIsConfigurable:
-    """The bundle hardcoded a scope named ``ontobricks``, which never existed."""
-
-    def test_the_bundle_no_longer_hardcodes_the_scope(self):
+    def test_the_bundle_has_no_neo4j_secret_overlay(self):
         bundle = yaml.safe_load(BUNDLE.read_text())
         app = bundle["targets"][TARGET]["resources"]["apps"][KEY]
-        secrets = [r for r in app["resources"] if "secret" in r]
-        assert secrets, "expected the neo4j-password secret binding"
-        for res in secrets:
-            assert res["secret"]["scope"] == "${var.neo4j_secret_scope}"
+        secrets = [r for r in app.get("resources") or [] if "secret" in r]
+        assert secrets == [], "DAB must not bind neo4j-password (optional engine)"
 
-    def test_the_variable_is_declared_with_a_default(self):
+    def test_the_neo4j_secret_scope_variable_is_gone(self):
         bundle = yaml.safe_load(BUNDLE.read_text())
-        var = bundle["variables"]["neo4j_secret_scope"]
-        assert var.get("default")
+        assert "neo4j_secret_scope" not in bundle.get("variables", {})
 
-    def test_the_deploy_passes_the_variable(self):
-        assert "--var=neo4j_secret_scope=${NEO4J_SECRET_SCOPE}" in DEPLOY.read_text()
+    def test_deploy_does_not_pass_neo4j_secret_scope(self):
+        assert "neo4j_secret_scope" not in DEPLOY.read_text()
 
-    def test_the_config_exports_it(self):
+    def test_deploy_config_does_not_export_neo4j_secret_scope(self):
         body = CONFIG.read_text()
-        assert "DEFAULT_NEO4J_SECRET_SCOPE=" in body
-        assert "export NEO4J_SECRET_SCOPE=" in body
+        assert "NEO4J_SECRET_SCOPE" not in body
+        assert "DEFAULT_NEO4J_SECRET_SCOPE" not in body
 
-    def test_the_default_matches_the_config(self):
-        """Drift here means a deploy that works only when the var is passed."""
-        bundle = yaml.safe_load(BUNDLE.read_text())
-        default = bundle["variables"]["neo4j_secret_scope"]["default"]
-        assert f'DEFAULT_NEO4J_SECRET_SCOPE="{default}"' in CONFIG.read_text()
-
-    @pytest.mark.parametrize("scope", ["ontobricks"])
-    def test_the_nonexistent_scope_is_gone(self, scope):
-        assert f"scope: {scope}\n" not in BUNDLE.read_text()
+    def test_instance_target_generator_does_not_bind_neo4j_secret(self):
+        gen = (ROOT / "scripts/_internal/_ensure-instance-target.sh").read_text()
+        assert "key: neo4j-password" not in gen
+        assert "neo4j_secret_scope" not in gen

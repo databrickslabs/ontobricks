@@ -9,6 +9,7 @@ Covered:
   GET  /mapping/load
   GET  /mapping/download
   GET  /mapping/diagnostics
+  GET  /mapping/schema-drift
   GET  /mapping/wizard/llm-endpoints
   POST /mapping/generate
   POST /mapping/reset
@@ -76,6 +77,17 @@ class TestMappingReadEndpoints:
     def test_diagnostics_no_5xx(self, page, live_server):
         resp = self._get(page, live_server, "/mapping/diagnostics")
         assert resp.status < 500
+
+    def test_schema_drift_no_5xx(self, page, live_server):
+        resp = self._get(page, live_server, "/mapping/schema-drift")
+        assert resp.status < 500
+
+    def test_schema_drift_has_entity_and_relationship_keys(self, page, live_server):
+        resp = self._get(page, live_server, "/mapping/schema-drift")
+        if resp.status != 200:
+            return
+        payload = _json(resp)
+        assert "entities" in payload and "relationships" in payload
 
     def test_wizard_llm_endpoints_contract(self, page, live_server):
         resp = self._get(page, live_server, "/mapping/wizard/llm-endpoints")

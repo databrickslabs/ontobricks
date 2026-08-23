@@ -340,6 +340,19 @@ async function initOntologyMap() {
         .attr('d', 'M0,-5L10,0L0,5')
         .attr('fill', '#495057');
     
+    // Arrow for reverse-direction relationships (placed at path start, points back toward source)
+    defs.append('marker')
+        .attr('id', 'map-arrow-start')
+        .attr('viewBox', '0 -5 10 10')
+        .attr('refX', 28)
+        .attr('refY', 0)
+        .attr('markerWidth', 6)
+        .attr('markerHeight', 6)
+        .attr('orient', 'auto-start-reverse')
+        .append('path')
+        .attr('d', 'M0,-5L10,0L0,5')
+        .attr('fill', '#6c757d');
+
     // Arrow for inheritance (hollow)
     defs.append('marker')
         .attr('id', 'map-arrow-inheritance')
@@ -418,7 +431,7 @@ async function initOntologyMap() {
         .data(regularLinks.filter(l => l.type === 'relationship'))
         .enter()
         .append('path')
-        .attr('class', 'map-link');
+        .attr('class', d => `map-link${d.direction === 'reverse' ? ' reverse' : ''}`);
 
     // Draw inheritance links
     const inheritanceLinkElements = g.append('g')
@@ -2454,3 +2467,29 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
         modal.show();
     });
 }
+
+/**
+ * Targeted in-place update of a single relationship link's direction in the D3 map.
+ * Updates the live `ontologyMapLinks` data and toggles the `reverse` CSS class on the
+ * corresponding SVG path element so the arrowhead flips immediately.
+ * Called by `saveSharedRelationship` via window.refreshMapLinkDirection.
+ * @param {string} name - Relationship name (matched by link.name)
+ * @param {string} direction - 'forward' | 'reverse'
+ */
+function refreshMapLinkDirection(name, direction) {
+    if (!ontologyMapSimulation) return;
+    const isReverse = direction === 'reverse';
+    // Update the live data so the next simulation tick renders the correct direction
+    ontologyMapLinks.forEach(link => {
+        if (link.name === name) link.direction = direction;
+    });
+    // Update the DOM element class immediately (CSS handles the marker swap)
+    if (typeof d3 !== 'undefined') {
+        d3.selectAll('.map-link').each(function(d) {
+            if (d && d.name === name) {
+                d3.select(this).classed('reverse', isReverse);
+            }
+        });
+    }
+}
+window.refreshMapLinkDirection = refreshMapLinkDirection;

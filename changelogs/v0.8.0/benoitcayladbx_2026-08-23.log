@@ -1,0 +1,130 @@
+## Fix the Manual Mapping panel hanging on the Mapping tab
+
+Context: Issue #145 — in Manual Mapping, clicking a mapped entity and opening the
+rightmost "Mapping" tab showed the spinner forever. The bottom panel reuses the
+Designer's entity/relationship panel (`loadEntityPanelContent()` /
+`loadRelationshipPanelContent()` rendered into `#manualPanelBody`), but the
+Designer's preview query discards its response unless `currentPanelType` says an
+entity/relationship panel is open. Only `openEntityMappingFromDesign()` /
+`openRelationshipMappingFromDesign()` ever set it, so from Manual Mapping the flag
+stayed `null`: `/mapping/test-query` returned 200, the result was dropped, and
+`#epMappingLoading` was never hidden. Second latent defect on the same path — the
+panel markup uses page-global `ep*` / `rp*` element ids and both hosts live in the
+DOM at once, so a leftover copy in the Designer panel shadowed the Manual one on
+every `getElementById` lookup.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Added panel-ownership tracking: `currentPanelHostId` plus `claimMappingPanel()`,
+   `releaseMappingPanel()` and `closeActiveMappingPanel()`. Claiming records the
+   host that received the markup and closes the other host, so only one copy of the
+   `ep*` / `rp*` ids exists. `closeMappingPanel()` now delegates its reset to
+   `releaseMappingPanel()` instead of repeating it.
+2. src/front/static/mapping/js/mapping-design.js
+   `loadEntityPanelContent()` and `loadRelationshipPanelContent()` claim the panel
+   before initialising it, so the preview query started by `initEntityPanel()` /
+   `initRelationshipPanel()` passes the stale-response guard whichever host
+   rendered it.
+3. src/front/static/mapping/js/mapping-design.js
+   `_pollAndSaveResult()` closes the owning host via `closeActiveMappingPanel()`;
+   Manual Mapping's Auto-Map shares that poll loop and previously left its panel
+   open with stale content.
+4. src/front/static/mapping/js/mapping-manual.js
+   `ManualModule.closePanel()` releases the shared panel (cancelling any in-flight
+   preview query) and no longer assumes the manual DOM is present, since the
+   Designer side can now call it.
+5. tests/units/front/test_manual_mapping_panel_host.py
+   New source-contract regression covering claim/release/close dispatch and pinning
+   the stale-response guards that make ownership mandatory. 11 of its 13 tests fail
+   without the fix.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- tests/units/front/test_manual_mapping_panel_host.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5006 passed, 281 skipped, 6 deselected, 1 xfailed in 40.37s
+
+## Require English for all comments
+
+Context: Agents and contributors were not explicitly required to write comments
+in English. Canonical Cursor rules (imported by Claude via CLAUDE.md) and the
+existing Claude skills now state that code comments, docstrings, and
+agent-written notes must be English. No new skill — project convention, not a
+technique. UI copy / localisation is out of scope.
+
+Changes:
+
+1. .cursor/01-expertise-and-principles.mdc
+   Personal-style bullet: all comments in English; rewrite non-English comments
+   when touched.
+2. .cursor/05-code-style-and-structure.mdc
+   New §Comments — English-only for every comment syntax; why not what.
+3. .cursor/08-testing-and-deployment.mdc
+   Docstrings must be English.
+4. src/.coding_rules.md
+   Long-form §3 comments rule + code-review checklist item 11.
+5. CLAUDE.md
+   Tone reminder pointing at `.cursor/05 §Comments` (no duplicated full rule).
+6. .claude/skills/code-review/SKILL.md
+   Quick-reference: non-English comments → `.cursor/05 §Comments`.
+7. .claude/skills/refactoring/SKILL.md
+   Don't add or leave non-English comments.
+8. .claude/skills/adding-subpackage/SKILL.md
+   Don't write non-English comments/docstrings.
+9. .claude/skills/changelog/SKILL.md
+   Changelog prose is English only.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- .cursor/05-code-style-and-structure.mdc
+- .cursor/08-testing-and-deployment.mdc
+- src/.coding_rules.md
+- CLAUDE.md
+- .claude/skills/code-review/SKILL.md
+- .claude/skills/refactoring/SKILL.md
+- .claude/skills/adding-subpackage/SKILL.md
+- .claude/skills/changelog/SKILL.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
+
+Tests: not re-run in this section (docs-only); see next section for follow-up.
+
+## English-only changelogs, logs, and audit trail
+
+Context: The English-only rule covered comments but was easy to miss for
+`/changelogs/`, `logger.*` templates, and domain audit-trail text when the
+user writes in another language. Tightened the canonical rule and skills so
+those artifacts stay English regardless of conversation language.
+
+Changes:
+
+1. .cursor/01-expertise-and-principles.mdc
+   Personal-style bullet now names changelogs, logs, audit trail, and traces.
+2. .cursor/05-code-style-and-structure.mdc
+   §English-only artifacts lists `/changelogs/`, logger templates, audit
+   trail, MLflow traces; log templates called out under Logging Security.
+3. .cursorrules
+   Changelog workflow requires English even if the user used another language.
+4. .cursor/08-testing-and-deployment.mdc
+   Changelog bullet points at the English-only rule.
+5. src/.coding_rules.md
+   Table of artifacts + logger English note + review checklist item 11.
+6. CLAUDE.md, .claude/skills/{changelog,code-review,refactoring,adding-subpackage}/SKILL.md
+   Skills and Claude tone reminder aligned with §English-only artifacts.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- .cursor/05-code-style-and-structure.mdc
+- .cursorrules
+- .cursor/08-testing-and-deployment.mdc
+- src/.coding_rules.md
+- CLAUDE.md
+- .claude/skills/changelog/SKILL.md
+- .claude/skills/code-review/SKILL.md
+- .claude/skills/refactoring/SKILL.md
+- .claude/skills/adding-subpackage/SKILL.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5006 passed, 281 skipped, 6 deselected, 1 xfailed in 38.40s

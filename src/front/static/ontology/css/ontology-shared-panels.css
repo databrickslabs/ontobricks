@@ -306,6 +306,74 @@
     margin-bottom: 0.75rem !important;
 }
 
+/* ---- Graphical relationship direction picker ---- */
+.rel-direction-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.rel-direction-option {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    background: var(--db-bg-secondary, #fff);
+    border: 1px solid var(--db-border, #E0E0E0);
+    border-radius: 6px;
+    color: var(--db-text-secondary, #6B6C6D);
+    transition: var(--db-transition-fast, all 0.15s ease);
+}
+
+.rel-direction-option:hover:not(:disabled) {
+    border-color: var(--db-text-secondary, #6B6C6D);
+}
+
+.rel-direction-option.selected {
+    border-color: var(--db-text, #1E1E1E);
+    background: var(--db-primary-light, rgba(73, 80, 87, 0.1));
+    color: var(--db-text, #1E1E1E);
+}
+
+.rel-direction-option:disabled {
+    opacity: 0.65;
+}
+
+/* Endpoint chips - truncate rather than widen the narrow panel */
+.rel-direction-node {
+    padding: 0.15rem 0.35rem;
+    border: 1px solid var(--db-border-light, #dee2e6);
+    border-radius: 4px;
+    background: var(--db-light-gray, #fff);
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rel-direction-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 3.5rem;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+/* Relationship name rides above the arrow, as it does on the canvas */
+.rel-direction-name {
+    max-width: 6rem;
+    font-size: 0.65rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Emoji picker styles moved to global/css/emoji-picker.css */
 
 .meta-attr-table-scroll {

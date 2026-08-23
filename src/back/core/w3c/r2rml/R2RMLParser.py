@@ -156,8 +156,9 @@ class R2RMLParser:
     def _unquote_column(self, col: str) -> str:
         """Strip surrounding double-quotes from a column name.
 
-        R2RMLGenerator always emits double-quoted column names. When parsing
-        back, we strip the quotes so callers receive the bare name.
+        Older exports quoted every column name. New exports only quote
+        non-plain identifiers inside ``rr:template``. Strip quotes either
+        way so callers receive the bare name.
         """
         if col and col.startswith('"') and col.endswith('"') and len(col) > 1:
             return col[1:-1].replace('""', '"')

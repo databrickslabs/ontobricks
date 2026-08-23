@@ -414,6 +414,10 @@ function showStackedModal(modalEl) {
  * @param {string} options.cancelText - Cancel button text (default: 'Cancel')
  * @param {string} options.confirmClass - Bootstrap button class for confirm (default: 'btn-primary')
  * @param {string} options.icon - Bootstrap icon name (default: 'question-circle')
+ * @param {string} options.detailHtml - Optional HTML rendered below the message in a
+ *   scrollable bordered panel (for listing affected items, diffs, etc.)
+ * @param {string} options.size - Optional Bootstrap modal size class, e.g. 'modal-lg'
+ * @param {string} options.headerClass - Optional Bootstrap class for the header, e.g. 'bg-danger text-white'
  * @returns {Promise<boolean>} Resolves to true if confirmed, false if cancelled
  */
 function showConfirmDialog(options = {}) {
@@ -424,23 +428,31 @@ function showConfirmDialog(options = {}) {
             confirmText = 'Yes',
             cancelText = 'Cancel',
             confirmClass = 'btn-primary',
-            icon = 'question-circle'
+            icon = 'question-circle',
+            detailHtml = '',
+            size = '',
+            headerClass = ''
         } = options;
 
         const modalId = 'confirmDialog_' + Date.now();
+        const closeClass = headerClass.includes('text-white') ? 'btn-close-white' : '';
+        const detailBlock = detailHtml
+            ? `<div class="border rounded p-3 bg-light mt-3" style="max-height: 320px; overflow-y: auto;">${detailHtml}</div>`
+            : '';
 
         const modalHtml = `
             <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-dialog modal-dialog-centered ${size}">
                     <div class="modal-content">
-                        <div class="modal-header">
+                        <div class="modal-header ${headerClass}">
                             <h5 class="modal-title">
                                 <i class="bi bi-${icon} me-2"></i>${title}
                             </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close ${closeClass}" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <p class="mb-0">${message}</p>
+                            ${detailBlock}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="${modalId}_cancel">

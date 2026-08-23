@@ -376,6 +376,22 @@ async def run_diagnostics(
     return await run_blocking(Mapping(domain).run_diagnostics, client=client)
 
 
+@router.get("/schema-drift")
+async def get_schema_drift(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Report mapped columns that no longer exist in their source tables.
+
+    A cheap subset of ``/diagnostics`` (one ``DESCRIBE`` per source table,
+    no SELECT probes) so the Mapping designer can flag upstream schema
+    changes passively when it loads.
+    """
+    domain = get_domain(session_mgr)
+    client = get_databricks_client(domain, settings)
+    return await run_blocking(Mapping(domain).get_schema_drift, client)
+
+
 # ===========================================
 # SQL Wizard API (Text-to-SQL)
 # ===========================================

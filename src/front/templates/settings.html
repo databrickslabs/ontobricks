@@ -585,7 +585,9 @@
                                         <div class="col-12 col-lg-6">
                                             <label for="provMcpAppName" class="form-label small fw-semibold mb-1">MCP app name</label>
                                             <input type="text" class="form-control form-control-sm font-monospace" id="provMcpAppName"
-                                                   maxlength="63" autocomplete="off" value="mcp-ontobricks" placeholder="mcp-ontobricks">
+                                                   maxlength="63" autocomplete="off" value=""
+                                                   placeholder="auto (mcp- + main app name)">
+                                            <div class="form-text small">Leave blank to derive <code>mcp-{main app}</code> (matches <code>deploy.config.sh</code>).</div>
                                         </div>
                                         <div class="col-12">
                                             <div class="form-check">

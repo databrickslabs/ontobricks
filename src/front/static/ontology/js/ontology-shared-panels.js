@@ -163,12 +163,6 @@ function getOrCreateDetailPanel() {
             </button>
         </div>
         <div class="panel-body" id="sharedPanelBody"></div>
-        <div class="panel-footer" id="sharedPanelFooter">
-            <button type="button" class="btn btn-secondary btn-sm" id="sharedCancelPanelBtn">Cancel</button>
-            <button type="button" class="btn btn-dark btn-sm" id="sharedSavePanelBtn">
-                <i class="bi bi-check-circle"></i> Apply
-            </button>
-        </div>
     `;
     
     // Append to container (either section or ontology-map-container for Map)
@@ -190,8 +184,6 @@ function getOrCreateDetailPanel() {
  */
 function setupPanelListeners(section) {
     section.querySelector('#sharedClosePanelBtn')?.addEventListener('click', guardedCloseSharedPanel);
-    section.querySelector('#sharedCancelPanelBtn')?.addEventListener('click', guardedCloseSharedPanel);
-    section.querySelector('#sharedSavePanelBtn')?.addEventListener('click', saveSharedPanelItem);
 }
 
 /**
@@ -246,18 +238,7 @@ function attachDirtyTracking() {
  */
 async function guardedCloseSharedPanel() {
     if (sharedPanelDirty) {
-        const save = await showConfirmDialog({
-            title: 'Unapplied Changes',
-            message: 'You have unapplied changes. Do you want to apply them before closing?',
-            confirmText: 'Apply',
-            cancelText: 'Discard',
-            confirmClass: 'btn-primary',
-            icon: 'exclamation-triangle'
-        });
-        if (save) {
-            await saveSharedPanelItem();
-            return;
-        }
+        await saveSharedPanelItem();
     }
     closeSharedPanel();
 }
@@ -319,19 +300,7 @@ function panelGetById(id) {
  */
 async function checkDirtyBeforeSwitch() {
     if (!sharedPanelDirty) return true;
-    const save = await showConfirmDialog({
-        title: 'Unapplied Changes',
-        message: 'You have unapplied changes. Do you want to apply them before continuing?',
-        confirmText: 'Apply',
-        cancelText: 'Discard',
-        confirmClass: 'btn-primary',
-        icon: 'exclamation-triangle'
-    });
-    if (save) {
-        await saveSharedPanelItem();
-    } else {
-        sharedPanelDirty = false;
-    }
+    await saveSharedPanelItem();
     return true;
 }
 
@@ -455,8 +424,6 @@ async function openEntityPanel(options = {}) {
     }
     
     panel.querySelector('#sharedPanelTitle').innerHTML = '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Entity</span>';
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderEntityForm(panel, null);
     attachDirtyTracking();
 }
@@ -511,8 +478,6 @@ async function openEntityPanelForEdit(idx, options = {}) {
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> ${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderEntityForm(panel, cls);
     attachDirtyTracking();
 }
@@ -548,8 +513,6 @@ async function openEntityPanelForView(idx, options = {}) {
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> ${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = 'none';
-    
     await renderEntityForm(panel, cls, true);
 }
 
@@ -2371,7 +2334,9 @@ async function saveSharedEntity() {
     
     if (!name) { showNotification('Please enter an entity name', 'warning'); return; }
 
-    const duplicateEntity = (OntologyState.config.classes || []).some((c, i) => c.name === name && i !== sharedPanelEditIndex);
+    // Same stale-index guard as saveSharedRelationship: skip when only non-name fields changed.
+    const duplicateEntity = (name !== sharedPanelOriginalName || sharedPanelEditIndex < 0)
+        && (OntologyState.config.classes || []).some((c, i) => c.name === name && i !== sharedPanelEditIndex);
     if (duplicateEntity) { showNotification(`An entity named "${name}" already exists`, 'warning'); return; }
     
     const validAttributes = sharedPanelOwnAttributes.filter(a => a.name?.trim()).map(a => ({ name: a.name.trim(), localName: a.name.trim() }));
@@ -2528,8 +2493,6 @@ async function openRelationshipPanel(options = {}) {
     }
     
     panel.querySelector('#sharedPanelTitle').innerHTML = '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Relationship</span>';
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderRelationshipForm(panel, null);
     attachDirtyTracking();
 }
@@ -2567,8 +2530,6 @@ async function openRelationshipPanelForEdit(idx, options = {}) {
     }
     
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> <span id="sharedPanelItemName">${prop.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderRelationshipForm(panel, prop);
     attachDirtyTracking();
 }
@@ -2592,9 +2553,65 @@ async function openRelationshipPanelForView(idx, options = {}) {
     if (!panel) return;
     
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> <span id="sharedPanelItemName">${prop.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = 'none';
-    
     await renderRelationshipForm(panel, prop, true);
+}
+
+/**
+ * One clickable card of the graphical direction picker: the two endpoint chips
+ * with the arrow between them, drawn the way the canvas will draw the link.
+ * @param {string} value - 'forward' | 'reverse'
+ * @param {string} icon - Bootstrap Icons class for the arrow
+ * @param {boolean} viewOnly - render as a non-interactive preview
+ * @returns {string} HTML
+ */
+function _relDirectionOption(value, icon, viewOnly) {
+    return `
+        <button type="button" class="rel-direction-option" data-direction="${value}"
+                role="radio" aria-checked="false" ${viewOnly ? 'disabled' : ''}>
+            <span class="rel-direction-node" data-rel-node="domain">Source</span>
+            <span class="rel-direction-arrow">
+                <span class="rel-direction-name" data-rel-node="name"></span>
+                <i class="bi ${icon}"></i>
+            </span>
+            <span class="rel-direction-node" data-rel-node="range">Target</span>
+        </button>
+    `;
+}
+
+/**
+ * Select *direction* in the picker and mirror it into the hidden input that
+ * saveSharedRelationship() reads.
+ * @param {string} direction - 'forward' | 'reverse'
+ */
+function setSharedRelDirection(direction) {
+    const value = direction === 'reverse' ? 'reverse' : 'forward';
+    const input = panelGetById('sharedRelDirection');
+    if (input) input.value = value;
+    panelGetById('sharedRelDirectionPicker')?.querySelectorAll('.rel-direction-option')
+        .forEach(option => {
+            const selected = option.dataset.direction === value;
+            option.classList.toggle('selected', selected);
+            option.setAttribute('aria-checked', String(selected));
+        });
+}
+
+/**
+ * Keep the picker's endpoint chips in sync with the Source / Target / Name
+ * fields, so both cards always read as the relationship being edited.
+ */
+function refreshSharedRelDirectionLabels() {
+    const picker = panelGetById('sharedRelDirectionPicker');
+    if (!picker) return;
+    const text = {
+        domain: panelGetById('sharedRelDomain')?.value || 'Source',
+        range: panelGetById('sharedRelRange')?.value || 'Target',
+        name: panelGetById('sharedRelName')?.value.trim() || ''
+    };
+    Object.entries(text).forEach(([role, label]) => {
+        picker.querySelectorAll(`[data-rel-node="${role}"]`).forEach(el => {
+            el.textContent = label;
+        });
+    });
 }
 
 async function renderRelationshipForm(panel, prop, viewOnly = false) {
@@ -2662,11 +2679,13 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label for="sharedRelDirection" class="form-label">Direction</label>
-                    <select class="form-select form-select-sm" id="sharedRelDirection" ${disabled}>
-                        <option value="forward">Forward →</option>
-                        <option value="reverse">Reverse ←</option>
-                    </select>
+                    <label class="form-label">Direction</label>
+                    <input type="hidden" id="sharedRelDirection" value="${prop?.direction || 'forward'}">
+                    <div class="rel-direction-picker" id="sharedRelDirectionPicker" role="radiogroup" aria-label="Relationship direction">
+                        ${_relDirectionOption('forward', 'bi-arrow-right', viewOnly)}
+                        ${_relDirectionOption('reverse', 'bi-arrow-left', viewOnly)}
+                    </div>
+                    <div class="form-text small mt-1">Which way the triple is written — the canvas draws the arrowhead on the side it points to</div>
                 </div>
                 <div class="mb-3">
                     <label for="sharedRelDescription" class="form-label">Description</label>
@@ -2730,7 +2749,18 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     if (prop) {
         panelGetById('sharedRelDomain').value = prop.domain || '';
         panelGetById('sharedRelRange').value = prop.range || '';
-        panelGetById('sharedRelDirection').value = prop.direction || 'forward';
+    }
+
+    setSharedRelDirection(prop?.direction || 'forward');
+    refreshSharedRelDirectionLabels();
+    if (!viewOnly) {
+        panelGetById('sharedRelDirectionPicker')?.addEventListener('click', (event) => {
+            const option = event.target.closest('.rel-direction-option');
+            if (option) setSharedRelDirection(option.dataset.direction);
+        });
+        ['sharedRelDomain', 'sharedRelRange', 'sharedRelName'].forEach(id => {
+            panelGetById(id)?.addEventListener('input', refreshSharedRelDirectionLabels);
+        });
     }
     
     // Add event listener to sync Functional checkbox with Max cardinality
@@ -2775,7 +2805,11 @@ async function saveSharedRelationship() {
     
     if (!name) { showNotification('Please enter a relationship name', 'warning'); return; }
 
-    const duplicateRel = (OntologyState.config.properties || []).some((p, i) => p.name === name && i !== sharedPanelEditIndex);
+    // When the name is unchanged (direction/domain/range edit) the entry cannot be a
+    // duplicate of itself — skip the index-based check, which can be stale when
+    // syncDesignToOntology has reordered the properties array since the panel opened.
+    const duplicateRel = (name !== sharedPanelOriginalName || sharedPanelEditIndex < 0)
+        && (OntologyState.config.properties || []).some((p, i) => p.name === name && i !== sharedPanelEditIndex);
     if (duplicateRel) { showNotification(`A relationship named "${name}" already exists`, 'warning'); return; }
 
     if (!domain) { showNotification('Please select a source entity', 'warning'); return; }
@@ -2835,7 +2869,17 @@ async function saveSharedRelationship() {
     if (typeof ConstraintsModule !== 'undefined' && ConstraintsModule.loadConstraints) {
         ConstraintsModule.loadConstraints();
     }
-    
+
+    // Targeted in-place canvas updates — immediately flip the arrow in whichever
+    // view is currently active. Both calls are no-ops when the view was never opened.
+    const lookupName = sharedPanelOriginalName || name;
+    if (typeof refreshRelationshipInDesigner === 'function') {
+        refreshRelationshipInDesigner(lookupName, direction);
+    }
+    if (typeof refreshMapLinkDirection === 'function') {
+        refreshMapLinkDirection(lookupName, direction);
+    }
+
     closeSharedPanel();
 }
 

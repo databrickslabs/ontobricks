@@ -122,14 +122,6 @@ variables:
     description: "Volume name for the domain registry"
     default: "registry"
 
-  # Workspace secret scope holding ``neo4j-password``. A scope that does not
-  # exist fails ``terraform apply`` on the app resource, so keep this pointed at
-  # a real scope (``databricks secrets list-scopes``) or drop the overlay in the
-  # target below.
-  neo4j_secret_scope:
-    description: "Workspace secret scope holding the Neo4j Bolt password"
-    default: "ontobricks-secrets"
-
   # ── Lakebase resource binding (Autoscaling-only) ────────────────
   # OntoBricks targets **Lakebase Autoscaling** exclusively (the
   # default tier for every instance created after 2026-03-12). The
@@ -209,6 +201,12 @@ resources:
       name: "${var.app_name}"
       description: "OntoBricks (development sandbox app)"
       source_code_path: .
+      # App ACL (not top-level bundle permissions — those reject CAN_USE; see #134).
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_USE
+          group_name: users
       resources:
         - name: sql-warehouse
           description: "SQL Warehouse for executing queries and metadata operations"
@@ -233,6 +231,12 @@ resources:
       name: "${var.mcp_app_name}"
       description: "OntoBricks MCP companion server (FastMCP)"
       source_code_path: ./src/mcp-server
+      # App ACL (not top-level bundle permissions — those reject CAN_USE; see #134).
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+        - level: CAN_USE
+          group_name: users
       resources:
         - name: sql-warehouse
           description: "SQL Warehouse for executing queries and metadata operations"
@@ -280,17 +284,13 @@ targets:
                 branch: projects/${var.lakebase_project}/branches/${var.lakebase_branch}
                 database: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/databases/${var.lakebase_database_resource_segment}
                 permission: "CAN_CONNECT_AND_CREATE"
-            # Neo4j Bolt password — bound to a workspace secret on deploy.
-            # Customer admins can switch to manual UI binding by removing
-            # this overlay (the resource declaration still lives in
-            # ``app.yaml.template``, unbound by default).
+            # Neo4j is optional and configured post-deploy in Settings → Neo4j
+            # (Databricks secret scope/key at runtime). Do NOT bind an Apps
+            # secret resource here — a missing workspace secret fails
+            # ``terraform apply`` on first deploy (GH #136). The unbound
+            # ``neo4j-password`` declaration in ``app.yaml.template`` remains
+            # for legacy ``NEO4J_PASSWORD`` / Apps UI binding only.
             # See documentation/pr47-neo4j-demo/secret-configuration.md.
-            - name: neo4j-password
-              description: "Databricks Apps secret holding the Neo4j Bolt password"
-              secret:
-                scope: ${var.neo4j_secret_scope}
-                key: neo4j-password
-                permission: READ
         mcp_ontobricks_app:
           resources:
             - name: postgres

@@ -146,6 +146,63 @@ class TestDeployScriptPathResolution:
         assert (REPO_ROOT / "scripts/_internal/_lakebase-diag.sh").is_file()
 
 
+class TestBootstrapScriptsRepoRoot:
+    """scripts/bootstrap/* must cd to the repo root, not scripts/ (#133).
+
+    After the scripts/ reorg these lived one level deeper; ``cd "$SCRIPT_DIR/.."``
+    lands in ``scripts/``, so relative paths like
+    ``scripts/_internal/check-deploy-prerequisites.sh`` miss.
+    """
+
+    _BOOTSTRAP = (
+        "scripts/bootstrap/setup-lakebase.sh",
+        "scripts/bootstrap/app-permissions.sh",
+        "scripts/bootstrap/lakebase-perms.sh",
+    )
+
+    @pytest.mark.parametrize("rel", _BOOTSTRAP)
+    def test_climbs_out_of_bootstrap_to_repo_root(self, rel: str):
+        script = REPO_ROOT / rel
+        text = script.read_text()
+        # Must climb two levels (bootstrap → scripts → repo), not one.
+        assert 'cd "$SCRIPT_DIR/../.."' in text or 'REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"' in text
+        assert 'cd "$SCRIPT_DIR/.."\n' not in text
+        root = script.resolve().parents[2]
+        assert root == REPO_ROOT
+        assert (root / "scripts/_internal/check-deploy-prerequisites.sh").is_file()
+        assert (root / "scripts/deploy.config.sh").is_file()
+
+    def test_setup_lakebase_does_not_document_removed_default_segment(self):
+        text = (REPO_ROOT / "scripts/bootstrap/setup-lakebase.sh").read_text()
+        assert "DEFAULT_LAKEBASE_DATABASE_RESOURCE_SEGMENT" not in text
+        assert "DEFAULT_LAKEBASE_DATABASE" in text
+        assert "LAKEBASE_DATABASE_RESOURCE_SEGMENT" in text
+
+
+class TestAppPermissionsInBundle:
+    """App ACL (CAN_USE) must nest under resources.apps.*, not top-level (#134).
+
+    Top-level ``permissions:`` only accepts CAN_MANAGE / CAN_VIEW / CAN_RUN —
+    putting CAN_USE there fails ``databricks bundle validate``.
+    """
+
+    def test_no_top_level_permissions_block(self):
+        data = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
+        assert "permissions" not in data, (
+            "top-level permissions: rejects CAN_USE; nest under resources.apps.*"
+        )
+
+    def test_each_app_declares_can_use_for_users(self):
+        data = yaml.safe_load((REPO_ROOT / "databricks.yml").read_text())
+        apps = data["resources"]["apps"]
+        for key in ("ontobricks_dev_app", "mcp_ontobricks_app"):
+            perms = apps[key].get("permissions") or []
+            levels = {p.get("level") for p in perms}
+            assert "CAN_MANAGE" in levels, f"{key} missing CAN_MANAGE"
+            assert "CAN_USE" in levels, f"{key} missing CAN_USE"
+            assert any(p.get("group_name") == "users" for p in perms)
+
+
 class TestAnalyticsJobPermissionBootstrap:
     """The app SP must get CAN_MANAGE_RUN on the analytics job at deploy time.
 

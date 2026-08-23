@@ -474,6 +474,30 @@ Mapping validation checks:
 
 A green checkmark appears in the navbar when all mappings are complete.
 
+### Source Schema Drift
+
+A mapping can be perfectly well-formed and still be broken by a change made
+outside OntoBricks — a column renamed or dropped in the source table. The Mapping
+designer checks for this when it loads and flags it in three places:
+
+- A **⚠** marker on affected entity nodes in the canvas; hover to see which
+  columns are missing.
+- A warning banner at the top of the entity or relationship panel, listing the
+  bound columns that no longer exist upstream.
+- A **drifted** badge and a `schema drift` row in **Diagnostics**, next to the
+  existing checks.
+
+These are advisory warnings, not errors: nothing about your mapping is invalid,
+the upstream table moved. Fix them by remapping the attribute to its new column
+or restoring the column in the source table.
+
+Drift is only reported when the bound columns come straight from a table — a
+mapping whose SQL has an explicit `SELECT` list is validated against that
+projection instead, since its aliases are expected to differ from the table's
+own column names. Tables the app cannot read (missing, or no `SELECT` grant) are
+skipped rather than reported as fully dropped; the Diagnostics permission section
+covers those.
+
 ### R2RML Output
 
 The R2RML mapping output is available in the **Domain** section under **R2RML**. Navigate to Domain → R2RML to:
@@ -1373,6 +1397,40 @@ This step tells OntoBricks about the Databricks tables you want to model in your
 OntoBricks fetches column names, types, and comments from Unity Catalog for each selected table. This metadata is used by the Wizard and Auto-Map features to understand your data structure.
 
 > **Tip**: Include all tables that are relevant to the domain you want to model. The more context the LLM has, the better the ontology and mappings will be.
+
+#### Refreshing metadata (Update from UC)
+
+**Update from UC** re-reads the schema of the selected tables (or all of them
+when nothing is checked). Because the merge replaces the stored column list
+outright and cannot be undone, the changes are shown for review before they are
+applied:
+
+- A **Review Metadata Changes** dialog lists, per table, the columns that were
+  added, removed, or had their data type change, along with a count of the
+  unchanged ones.
+- **Apply Changes** writes the refresh to the domain; **Discard** throws it away
+  and leaves the stored metadata exactly as it was.
+- When Unity Catalog reports no column changes the refresh is applied silently —
+  the dialog only appears when there is something to decide.
+- If any column was dropped, the dialog warns that mappings bound to it will
+  break, so run **Mapping → Diagnostics** afterwards.
+
+Your own column comments survive a refresh: a comment you typed in OntoBricks is
+carried over whenever the column still exists upstream.
+
+#### Removing data sources
+
+Removing a table (**Remove Tables**, or **Clear Data Sources** for all of them)
+is checked against the mappings first. If any entity or relationship still reads
+from a table you are about to remove, a **Data Sources Still In Use** dialog
+lists each affected table together with the mappings that reference it — for
+example `Entity: Customer` or `Rel: buys (source)`. References buried inside a
+mapping's custom SQL are detected too.
+
+You can still confirm the removal: the guard informs rather than blocks, matching
+**Unmap all** and **Clear metadata**. When you proceed, the generated R2RML and
+SQL are cleared, because they would otherwise describe a table the domain no
+longer knows about.
 
 ---
 
