@@ -156,7 +156,12 @@ class RegistryCfg:
            registries row is found; used alone when step 2 does not
            return a row).
         4. ``settings.*`` env vars — last-resort fallback for catalog,
-           schema, volume, ``lakebase_schema`` and ``lakebase_database``.
+           schema, volume. When those are empty, the session
+           ``domain.settings["registry"]`` catalog/schema/volume is used.
+           A volume equal to the seeded default ``OntoBricksRegistry``
+           (DomainSession and ``Settings.registry_volume``) is treated
+           as unset so ``REGISTRY_VOLUME`` can override it; a custom
+           session volume still wins when env is that default.
 
         ``prefer_volume_binding`` (Initialize path only): when ``True``
         the Lakebase row read in step 2 is skipped. Lets the Initialize
@@ -230,12 +235,38 @@ class RegistryCfg:
             )
 
         return cls(
-            catalog=reg.get("catalog") or settings.registry_catalog,
-            schema=reg.get("schema") or settings.registry_schema,
-            volume=reg.get("volume") or settings.registry_volume or _DEFAULT_VOLUME,
+            catalog=cls._first_nonempty(
+                getattr(settings, "registry_catalog", ""),
+                reg.get("catalog"),
+            ),
+            schema=cls._first_nonempty(
+                getattr(settings, "registry_schema", ""),
+                reg.get("schema"),
+            ),
+            volume=cls._first_named_volume(
+                getattr(settings, "registry_volume", ""),
+                reg.get("volume"),
+            ),
             lakebase_schema=lb_schema,
             lakebase_database=lb_database,
         )
+
+    @staticmethod
+    def _first_nonempty(*values: object) -> str:
+        for raw in values:
+            text = str(raw or "").strip()
+            if text:
+                return text
+        return ""
+
+    @staticmethod
+    def _first_named_volume(*values: object) -> str:
+        """Last-resort volume: skip the seeded ``OntoBricksRegistry`` sentinel."""
+        for raw in values:
+            text = str(raw or "").strip()
+            if text and text != _DEFAULT_VOLUME:
+                return text
+        return _DEFAULT_VOLUME
 
     @classmethod
     def from_session(cls, session_mgr, settings) -> RegistryCfg:

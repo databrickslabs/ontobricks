@@ -128,3 +128,30 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5006 passed, 281 skipped, 6 deselected, 1 xfailed in 38.40s
+
+## Prefer configured registry volume over the seeded session default
+
+Context: GitHub PR #122 (bcastelino) — local Registry init kept selecting the
+seeded session volume ``OntoBricksRegistry`` even when ``REGISTRY_VOLUME`` was
+set. Apps paths already prefer ``REGISTRY_VOLUME_PATH`` / the Lakebase row; the
+last-resort fallback in ``RegistryCfg.from_domain`` still did ``session or env``.
+Rebased onto v0.8.0: env wins when set; a volume equal to the default name is
+treated as unset so a UI-saved custom volume is not hidden by the Pydantic
+``Settings.registry_volume`` default.
+
+Changes:
+
+1. src/back/objects/registry/RegistryService.py
+   Last-resort catalog/schema/volume now read env first; skip the
+   ``OntoBricksRegistry`` sentinel for volume.
+2. tests/units/registry/test_registry.py
+   Regression for env overriding the seeded session volume; coverage that a
+   custom session volume survives the Settings default; session-only tests
+   empty the env triplet.
+
+Modified files:
+- src/back/objects/registry/RegistryService.py
+- tests/units/registry/test_registry.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5028 passed, 281 skipped, 6 deselected, 1 xfailed in 42.62s
