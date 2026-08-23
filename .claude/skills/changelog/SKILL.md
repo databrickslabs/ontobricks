@@ -13,7 +13,9 @@ specifies *what* must be present but not the exact layout.
 
 1. **Get today's date** — `Shell`: `date +%F` → filename `changelogs/YYYY-MM-DD.log`.
 2. **Append** if the file exists, **create** if not. One file per day, multiple sections allowed.
-3. **Write the section** in the layout below.
+3. **Write the section in English** (layout below). User language is irrelevant
+   — `.cursor/05 §English-only artifacts`. Never write `/changelogs/` in French
+   or any other language.
 4. **Run tests** — `uv run --frozen pytest -q -m "not scenario"` (`--frozen` is mandatory; the `tests/e2e/scenarios/` suites are opt-in — see `.cursor/08-testing-and-deployment`; never run them here). Paste the final summary line into `Tests:`.
 5. If tests fail: do **not** mark the change complete. Fix and re-run, or surface the failures explicitly.
 6. **Sphinx** — see `.cursor/08-testing-and-deployment §Sphinx API Documentation` if you added/removed/renamed public Python symbols.
@@ -49,3 +51,5 @@ Tests: <e.g. "uv run --frozen pytest -q -m 'not scenario' → 312 passed, 0 fail
 - Cite Fowler refactorings by name when applicable.
 - Cite the canonical rule when enforcing one (e.g. "complies with `.cursor/10 §Error Handling`").
 - No diffs in the log — paths + one-liners only.
+- English only for the whole section, even if the user wrote in another language
+  (`.cursor/05 §English-only artifacts`). Title, Context, per-file lines, Tests.

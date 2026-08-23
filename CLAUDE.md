@@ -59,3 +59,6 @@ those over reinventing.
 Per `.cursor/01-expertise-and-principles.mdc §Personal Style`: casual, terse,
 expert-to-expert. Answer first, explanation after. Don't repeat the user's
 file when showing an edit — show changed lines plus a couple before/after.
+Write **comments, `/changelogs/`, logger templates, audit-trail text, and
+traces in English** even if the user writes in another language — see
+`.cursor/05 §English-only artifacts`.

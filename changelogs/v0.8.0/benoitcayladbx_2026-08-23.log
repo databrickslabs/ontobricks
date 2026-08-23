@@ -46,3 +46,85 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5006 passed, 281 skipped, 6 deselected, 1 xfailed in 40.37s
+
+## Require English for all comments
+
+Context: Agents and contributors were not explicitly required to write comments
+in English. Canonical Cursor rules (imported by Claude via CLAUDE.md) and the
+existing Claude skills now state that code comments, docstrings, and
+agent-written notes must be English. No new skill — project convention, not a
+technique. UI copy / localisation is out of scope.
+
+Changes:
+
+1. .cursor/01-expertise-and-principles.mdc
+   Personal-style bullet: all comments in English; rewrite non-English comments
+   when touched.
+2. .cursor/05-code-style-and-structure.mdc
+   New §Comments — English-only for every comment syntax; why not what.
+3. .cursor/08-testing-and-deployment.mdc
+   Docstrings must be English.
+4. src/.coding_rules.md
+   Long-form §3 comments rule + code-review checklist item 11.
+5. CLAUDE.md
+   Tone reminder pointing at `.cursor/05 §Comments` (no duplicated full rule).
+6. .claude/skills/code-review/SKILL.md
+   Quick-reference: non-English comments → `.cursor/05 §Comments`.
+7. .claude/skills/refactoring/SKILL.md
+   Don't add or leave non-English comments.
+8. .claude/skills/adding-subpackage/SKILL.md
+   Don't write non-English comments/docstrings.
+9. .claude/skills/changelog/SKILL.md
+   Changelog prose is English only.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- .cursor/05-code-style-and-structure.mdc
+- .cursor/08-testing-and-deployment.mdc
+- src/.coding_rules.md
+- CLAUDE.md
+- .claude/skills/code-review/SKILL.md
+- .claude/skills/refactoring/SKILL.md
+- .claude/skills/adding-subpackage/SKILL.md
+- .claude/skills/changelog/SKILL.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
+
+Tests: not re-run in this section (docs-only); see next section for follow-up.
+
+## English-only changelogs, logs, and audit trail
+
+Context: The English-only rule covered comments but was easy to miss for
+`/changelogs/`, `logger.*` templates, and domain audit-trail text when the
+user writes in another language. Tightened the canonical rule and skills so
+those artifacts stay English regardless of conversation language.
+
+Changes:
+
+1. .cursor/01-expertise-and-principles.mdc
+   Personal-style bullet now names changelogs, logs, audit trail, and traces.
+2. .cursor/05-code-style-and-structure.mdc
+   §English-only artifacts lists `/changelogs/`, logger templates, audit
+   trail, MLflow traces; log templates called out under Logging Security.
+3. .cursorrules
+   Changelog workflow requires English even if the user used another language.
+4. .cursor/08-testing-and-deployment.mdc
+   Changelog bullet points at the English-only rule.
+5. src/.coding_rules.md
+   Table of artifacts + logger English note + review checklist item 11.
+6. CLAUDE.md, .claude/skills/{changelog,code-review,refactoring,adding-subpackage}/SKILL.md
+   Skills and Claude tone reminder aligned with §English-only artifacts.
+
+Modified files:
+- .cursor/01-expertise-and-principles.mdc
+- .cursor/05-code-style-and-structure.mdc
+- .cursorrules
+- .cursor/08-testing-and-deployment.mdc
+- src/.coding_rules.md
+- CLAUDE.md
+- .claude/skills/changelog/SKILL.md
+- .claude/skills/code-review/SKILL.md
+- .claude/skills/refactoring/SKILL.md
+- .claude/skills/adding-subpackage/SKILL.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-23.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5006 passed, 281 skipped, 6 deselected, 1 xfailed in 38.40s
