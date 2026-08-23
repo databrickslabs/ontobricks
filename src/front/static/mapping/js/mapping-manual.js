@@ -456,7 +456,10 @@ window.ManualModule = {
      */
     closePanel: function() {
         const container = document.getElementById('manual-container');
-        container.classList.remove('panel-open');
+        if (container) container.classList.remove('panel-open');
+        
+        // Hand the shared panel back and drop any in-flight preview query
+        if (typeof releaseMappingPanel === 'function') releaseMappingPanel();
         
         // Clear selection
         document.querySelectorAll('#manualAssignmentTree .manual-tree-node-content.selected').forEach(el => {
@@ -464,7 +467,8 @@ window.ManualModule = {
         });
         
         this.currentItem = null;
-        document.getElementById('manualSavePanelBtn').disabled = true;
+        const saveBtn = document.getElementById('manualSavePanelBtn');
+        if (saveBtn) saveBtn.disabled = true;
         
         // Reset panel body to placeholder
         const panelBody = document.getElementById('manualPanelBody');
@@ -475,7 +479,8 @@ window.ManualModule = {
                 </div>
             `;
         }
-        document.getElementById('manualPanelItemName').textContent = 'Select an item above';
+        const titleSpan = document.getElementById('manualPanelItemName');
+        if (titleSpan) titleSpan.textContent = 'Select an item above';
     },
     
     /**
