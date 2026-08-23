@@ -263,10 +263,9 @@ class DeltaFlatStore(GraphDBBackend):
 
         Routed through :meth:`SQLWarehouse.execute_query` with a
         ``statement_timeout_s`` so a runaway traversal (e.g. the recursive BFS
-        CTE) is cancelled server-side instead of pinning a warehouse session
-        and, via the loopback chat agent, the event loop. The unbounded
-        ``client.execute_query`` is intentionally reserved for full-graph dumps
-        (``query_triples``) and the build pipeline.
+        CTE) is cancelled server-side instead of pinning a warehouse session.
+        The unbounded ``client.execute_query`` is intentionally reserved for
+        full-graph dumps (``query_triples``) and the build pipeline.
         """
         from back.core.query_limits import get_graph_query_timeout_s
 

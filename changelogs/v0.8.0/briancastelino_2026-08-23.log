@@ -1,0 +1,58 @@
+## Bound Graph Chat reads
+
+Context: The event-loop offload reported in issue #114 is already present on
+`develop`, but graph reads can still hold a Lakebase or SQL warehouse
+connection indefinitely. This change keeps the contributor's remaining
+resilience work: server-side statement timeouts, a Graph Chat result cap, and
+resource-pressure diagnostics. It deliberately does not duplicate the existing
+`run_blocking` route wrappers.
+
+Changes:
+
+1. `src/back/core/query_limits.py`
+   Resolve and clamp runtime graph query timeout and Graph Chat result limits.
+2. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Apply and reliably reset a per-read PostgreSQL statement timeout.
+3. `src/back/core/databricks/SQLWarehouse.py`
+   Support a scoped SQL warehouse statement timeout without affecting other borrowers.
+4. `src/back/core/graphdb/delta/DeltaFlatStore.py`
+   Route graph reads through the bounded SQL warehouse path.
+5. `src/api/routers/internal/dtwin.py`
+   Enforce the result cap and include blocking-pool pressure in chat responses.
+6. `src/back/core/helpers/DatabricksHelpers.py`, `src/back/core/helpers/__init__.py`
+   Size the blocking pool from available CPUs and expose saturation statistics.
+7. `src/agents/agent_dtwin_chat/tools.py`
+   Keep the loopback timeout above the server-side graph timeout.
+8. `src/back/objects/session/GlobalConfigService.py`, `src/back/objects/domain/SettingsService.py`, `src/api/routers/internal/settings.py`
+   Persist, validate, and expose administrator graph-limit overrides.
+9. `src/front/templates/settings.html`, `src/front/static/config/js/settings.js`
+   Add administrator controls for graph-read limits.
+10. `src/front/static/query/js/query-chat.js`
+    Display the resource-pressure advisory returned by Graph Chat.
+11. `docs/issues/graph-chat-event-loop-hang.md`
+    Document the already-resolved offload and the remaining bounded-read safeguards.
+12. `tests/units/core/test_query_limits.py`, `tests/units/core/test_graph_query_bounds.py`
+    Cover limit precedence, timeout cleanup, result caps, and pool diagnostics.
+
+Modified files:
+- `src/back/core/query_limits.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/back/core/databricks/SQLWarehouse.py`
+- `src/back/core/graphdb/delta/DeltaFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/api/routers/internal/settings.py`
+- `src/back/core/helpers/DatabricksHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/agents/agent_dtwin_chat/tools.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `src/front/static/query/js/query-chat.js`
+- `docs/issues/graph-chat-event-loop-hang.md`
+- `tests/units/core/test_query_limits.py`
+- `tests/units/core/test_graph_query_bounds.py`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5015 passed,
+292 skipped, 6 deselected, 1 xfailed in 31.99s. Focused graph-bound tests:
+41 passed.

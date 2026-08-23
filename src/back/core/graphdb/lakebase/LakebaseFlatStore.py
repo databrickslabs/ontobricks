@@ -481,8 +481,7 @@ class LakebaseFlatStore(LakebaseBase):
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(f'SET search_path TO "{self._schema}", public')
                 # Bound graph reads so a runaway traversal is cancelled
-                # server-side instead of pinning the connection (and, via the
-                # loopback agent, the event loop).
+                # server-side instead of pinning the pooled connection.
                 #
                 # The pool hands out ``autocommit=True`` connections, so this is
                 # a *session* GUC that would otherwise persist to the next

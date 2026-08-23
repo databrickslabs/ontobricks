@@ -2,7 +2,7 @@
 
 Two knobs are resolved here and consumed by the graph store backends and the
 Graph Chat routes so a single broad question can no longer pin a DB connection
-or an event-loop worker indefinitely:
+or blocking worker indefinitely:
 
 * **statement timeout** — how long a graph read query may run before the
   database cancels it server-side (Lakebase ``SET statement_timeout`` /

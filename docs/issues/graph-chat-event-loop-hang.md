@@ -1,114 +1,56 @@
-# [BUG]: Graph Chat heavy query blocks the event loop and freezes the app until redeploy
+# Graph Chat read bounds and overload handling
 
-> Tracked as GitHub issue #114. Formatted to match `.github/ISSUE_TEMPLATE/bug.yml`.
+GitHub issue #114 reported that a broad Graph Chat question could freeze the
+application until redeployment. The original failure had two independent
+parts:
 
-## Is there an existing issue for this?
+1. Blocking graph reads ran on the uvicorn event loop.
+2. Database reads had no server-side timeout or Graph Chat result ceiling.
 
-- [x] I have searched the existing issues
+The event-loop problem is already fixed on `develop`: internal graph routes
+execute blocking work through `run_blocking`. Performance fixes #112 and #115
+also reduced the frequency of expensive reads.
 
-## Current Behavior
+The remaining resilience gap is bounded by this change. A pathological read
+can no longer hold a Lakebase or SQL warehouse connection indefinitely, and
+excessively broad `triples/find` responses are capped before reaching the
+agent.
 
-Asking Graph Chat a broad question (e.g. *"What are the top 10 violations?"*) hangs
-the request and then freezes the **entire** app: no other request — from any user —
-completes until the app is redeployed.
+## Runtime bounds
 
-Root cause: the Graph Chat agent runs in a worker thread and makes **synchronous
-loopback HTTP calls** back into the same FastAPI process. The internal `/dtwin/...`
-routes it hits (`dtwin_triples_find`, `dtwin_graphql_execute`, `dtwin_neighbors`,
-`sync/stats`) are declared `async def` but execute **blocking DB work directly on the
-asyncio event loop** — notably the recursive BFS CTE in
-`TripleStoreBackend.bfs_traversal`. That query joins on
-`(t.subject = b.entity OR t.object = b.entity)` with no `LIMIT` and no DB
-`statement_timeout`, so a broad seed explodes into a multi-minute / effectively
-unbounded query. Because it runs on the event loop, the single uvicorn worker is
-frozen for the whole query, stalling every other request. The agent's httpx client
-timeout fires client-side (`triples/find error: timed out`) but does **not** cancel
-the server-side query, so the loop stays blocked and the Lakebase connection pool
-(`_POOL_MAX_SIZE = 4`) gets pinned.
+Two settings apply only to graph reads:
 
-This violates the project's own guidance in `src/.coding_rules.md`
-("synchronous I/O in an async handler blocks the event loop … wrap it in
-`asyncio.to_thread`"). The helper already exists: `DatabricksHelpers.run_blocking()`.
+- `graph_query_timeout_s` cancels a graph statement server-side. It defaults
+  to 60 seconds and is clamped to 5–900 seconds.
+- `graph_chat_result_cap` limits triples returned by `triples/find`. It
+  defaults to 10,000 and is clamped to 100–100,000.
 
-## Expected Behavior
+Resolution order is:
 
-- Slow/broad questions time out **gracefully** with an error message the agent can
-  react to, cancelled server-side by a `statement_timeout`.
-- The app stays responsive to all other users/requests while a heavy Graph Chat
-  query runs (blocking DB work is offloaded off the event loop).
-- Under sustained load, the app advises upgrading the Databricks App instance size
-  instead of silently freezing.
+1. An administrator override saved in the registry global configuration.
+2. `ONTOBRICKS_GRAPH_QUERY_TIMEOUT_S` or
+   `ONTOBRICKS_GRAPH_CHAT_RESULT_CAP`.
+3. The built-in default.
 
-## Steps To Reproduce
+Administrators can change both values in **Settings → Graph DB → Graph read
+limits**. Entering `0` clears the saved override.
 
-1. Create / load a domain and build its Knowledge Graph (Lakebase backend).
-2. Open the **Graph Chat** tab.
-3. Ask a broad question, e.g. *"What are the top 10 violations?"*.
-4. Observe the request hang; then observe that all other pages/requests also stall
-   until the app is redeployed.
+## Backend behavior
 
-## Cloud
+- Lakebase applies PostgreSQL `statement_timeout` for each graph read and
+  resets it in `finally` before returning the pooled connection.
+- The SQL warehouse applies `STATEMENT_TIMEOUT` around bounded graph reads and
+  restores the unbounded session value afterward.
+- Build pipelines and full-graph exports keep their existing unbounded paths.
+- The Graph Chat loopback timeout is longer than the database timeout, allowing
+  the server-side cancellation to reach the agent as a normal error.
 
-<!-- AWS / Azure / GCP -->
+## Resource pressure
 
-## Browser
+The dedicated blocking pool scales from the Databricks App vCPU count while
+retaining the historical minimum of 20 workers. When all workers are occupied,
+Graph Chat responses include a resource-pressure advisory so users see why
+responses are delayed and administrators can consider a larger App instance.
 
-<!-- Chrome / Firefox / Edge / Safari / Other -->
-
-## OntoBricks Version
-
-0.6.1
-
-## Relevant log output
-
-```shell
-WARNING  agents.agent_graph_chat_tools | tools._error:71 | agent_dbx_chat: triples/find error: timed out
-INFO     uvicorn.access | 'POST /dtwin/graphql/execute HTTP/1.1' 200
-# ... after the timeout, no further requests are served until redeploy
-```
-
-## Additional Context
-
-- Graph backend: Lakebase Postgres (the same class of bug affects the Delta/SQL
-  warehouse backend, which likewise has no per-statement cancellation — only a
-  30s socket timeout).
-- Deployed logs reference `agents.agent_graph_chat_tools` / `agent_dbx_chat`, which
-  are renamed to `agent_dtwin_chat` on current `main`; the architectural bug is
-  identical on `main`.
-
-## Related issues (query-performance layer)
-
-This issue is the **resilience / graceful-degradation** half of the problem. The
-contributor **@ulsmo** confirmed the bug and traced the *triggers* on a
-1–5M-triple graph to two underlying performance bottlenecks — this fix bounds
-their blast radius but does not replace them:
-
-- **#112** — Indexes dropped/not applied during Lakeflow sync, leaving `_sync`
-  tables unindexed and causing exploding query times. A root cause of the slow
-  reads that trip this hang.
-- **#115** — `Perf(graphdb): Optimize finding subjects with local id's` (PR):
-  optimizes `describe_entity` alias expansion on large ID sets — the same
-  `expand_uri_aliases` / `get_triples_for_subjects` path the `triples/find` route
-  invokes.
-
-These are complementary: even with #112 and #115 fixed, an unbounded read can
-still starve the single event loop, so the bounding + offloading here is still
-required.
-
-## Proposed Fix
-
-1. Offload the blocking DB work in the internal `/dtwin` graph routes via
-   `run_blocking(...)` so it never runs on the event loop.
-2. Add a configurable graph-read `statement_timeout` on **both** backends
-   (Lakebase `SET statement_timeout`, warehouse `SET STATEMENT_TIMEOUT`) so a runaway
-   query is cancelled server-side.
-3. Auto-tune the blocking thread pool from the instance size and surface an
-   admin-configurable advisory recommending an instance-size upgrade under pressure.
-
-### Caveat / trade-off
-
-On an **unindexed** large graph (see #112), a legitimate `describe` / `triples/find`
-can now exceed the default 60s `statement_timeout` and be **cancelled** — turning a
-*silent app-wide freeze* into a *clean, per-request "query cancelled" error*. This
-is the intended trade-off; the admin timeout knob (up to 900s) lets operators raise
-the bound until #112/#115 fix the underlying query speed.
+This advisory is diagnostic only. The statement timeout and result cap remain
+the safeguards that bound each individual graph read.
