@@ -865,7 +865,7 @@ Every domain version carries a **lifecycle status**, shown as a colour-coded bad
 - **PUBLISHED** (green) — locked for editing and served on the API/MCP.
 
 Transitions are made from **Registry → Browse** (or Domain → Information):
-DRAFT → IN-REVIEW → PUBLISHED (admin or builder), IN-REVIEW → DRAFT (admin or builder), and PUBLISHED → DRAFT (admin only). While a version is **not DRAFT**, the ontology/mapping editors, metadata/document writes, and the **Build** (`/dtwin/sync/start`) and **Load** (`/dtwin/sync/load`) actions are blocked server-side — set it back to **DRAFT** to rebuild. Read-only Knowledge Graph operations (Explorer filter/expand, stats, status, etc.) remain fully accessible regardless of lifecycle status.
+DRAFT → IN-REVIEW → PUBLISHED (admin or builder), IN-REVIEW → DRAFT (admin or builder), and PUBLISHED → DRAFT (admin only). While a version is **not DRAFT**, its ontology/mapping editors and metadata/document writes stay locked. Builders and admins can still use **Build** (`/dtwin/sync/start`), **Load** (`/dtwin/sync/load`), and reasoning materialisation to refresh graph data from the frozen design without reverting the version to DRAFT. Read-only Knowledge Graph operations (Explorer filter/expand, stats, status, etc.) also remain fully accessible regardless of lifecycle status.
 
 #### Single-editor concurrency (open in edit vs. view) & the Close button
 

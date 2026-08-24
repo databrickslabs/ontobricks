@@ -219,7 +219,7 @@ Engine *connection* config remains **workspace-global** and is configured under 
 
 1. **Design** an ontology visually using the OntoViz canvas, or import OWL/RDFS/industry standards (FIBO, CDISC, IOF, HL7 FHIR R4/R4B/R5)
 2. **Map** ontology entities to Databricks tables with column-level precision
-3. **Build** the Knowledge Graph — materializes triples into the triple store (incremental by default)
+3. **Build** the Knowledge Graph — materializes triples into the triple store (incremental by default); builders can refresh IN-REVIEW and PUBLISHED versions from their frozen design
 4. **Query** through the GraphQL playground or explore the interactive graph viewer
 5. **Reason** over the graph — run OWL 2 RL inference, SWRL rules, SHACL validation, and constraint checks
 

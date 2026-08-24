@@ -32,6 +32,13 @@ let tripleStoreHasData = false;
  */
 let tripleStoreStatusUnknown = false;
 
+/** Whether the current caller may refresh graph data for the loaded version. */
+function _canStartBuild() {
+    const permitted = !(window.OB && typeof window.OB.canRefreshGraph === 'function'
+        && !window.OB.canRefreshGraph());
+    return syncIsReady && permitted;
+}
+
 /**
  * Fetch all Information-page data in a single round-trip and distribute
  * results to the individual rendering functions.
@@ -133,10 +140,7 @@ function _applyReadiness(data) {
 
     var syncBtn = document.getElementById('syncStartBtn');
     var loadBtn = document.getElementById('syncLoadBtn');
-    // Read-only versions / viewers must not be able to start a build even
-    // when the graph is otherwise "ready" — CSS also blocks the click.
-    var canBuild = syncIsReady && !(window.OB && typeof window.OB.canEditOntology === 'function'
-        && !window.OB.canEditOntology());
+    var canBuild = _canStartBuild();
     if (syncBtn) syncBtn.disabled = !canBuild;
     if (loadBtn) loadBtn.disabled = !syncIsReady;
 
@@ -858,8 +862,8 @@ async function checkAndResumeSyncTask() {
 }
 
 /**
- * Show a confirmation modal before building the Knowledge Graph.
- * Always displayed so the domain is saved with the latest changes.
+ * Show a confirmation modal before building an editable Knowledge Graph.
+ * Frozen versions skip this step because their design cannot be saved.
  * Resolves to 'save' (user confirms) or 'cancel'.
  */
 function _showSaveBeforeBuildDialog() {
@@ -921,15 +925,14 @@ function _showSaveBeforeBuildDialog() {
 }
 
 /**
- * Start the synchronization process.
- * Always prompts the user to save the domain first so the registry
- * contains the latest ontology and mapping configuration.
+ * Start the synchronization process. Editable versions are saved first;
+ * frozen versions build directly from their persisted design.
  */
 async function startTripleStoreSync() {
-    if (window.OB && typeof window.OB.canEditOntology === 'function'
-            && !window.OB.canEditOntology()) {
+    if (window.OB && typeof window.OB.canRefreshGraph === 'function'
+            && !window.OB.canRefreshGraph()) {
         showNotification(
-            'Build is unavailable — this version is read-only.',
+            'Build is unavailable — builder access and an unlocked domain are required.',
             'warning'
         );
         return;
@@ -943,17 +946,21 @@ async function startTripleStoreSync() {
         return;
     }
 
-    const choice = await _showSaveBeforeBuildDialog();
-    if (choice === 'cancel') return;
+    const canEdit = !(window.OB && typeof window.OB.canEditOntology === 'function'
+        && !window.OB.canEditOntology());
+    if (canEdit) {
+        const choice = await _showSaveBeforeBuildDialog();
+        if (choice === 'cancel') return;
 
-    try {
-        if (typeof saveDomainInfoBeforeSave === 'function') {
-            await saveDomainInfoBeforeSave();
+        try {
+            if (typeof saveDomainInfoBeforeSave === 'function') {
+                await saveDomainInfoBeforeSave();
+            }
+            await doDomainSave();
+        } catch (err) {
+            showNotification('Save failed: ' + err.message, 'error');
+            return;
         }
-        await doDomainSave();
-    } catch (err) {
-        showNotification('Save failed: ' + err.message, 'error');
-        return;
     }
 
     // Disable button and menus
@@ -984,7 +991,7 @@ async function startTripleStoreSync() {
             hideSyncProgress();
             syncIsRunning = false;
             updateDataMenus();
-            if (btn) btn.disabled = !syncIsReady;
+            if (btn) btn.disabled = !_canStartBuild();
             showNotification('Error: ' + (data.message || 'Failed to start sync'), 'error');
             return;
         }
@@ -998,7 +1005,7 @@ async function startTripleStoreSync() {
         hideSyncProgress();
         syncIsRunning = false;
         updateDataMenus();
-        if (btn) btn.disabled = !syncIsReady;
+        if (btn) btn.disabled = !_canStartBuild();
         showNotification('Error: ' + error.message, 'error');
     }
 }
@@ -1100,8 +1107,7 @@ async function monitorSyncTask(taskId) {
 
     const btn = document.getElementById('syncStartBtn');
     if (btn) {
-        var canBuild = syncIsReady && !(window.OB && typeof window.OB.canEditOntology === 'function'
-            && !window.OB.canEditOntology());
+        var canBuild = _canStartBuild();
         btn.disabled = !canBuild;
     }
 }

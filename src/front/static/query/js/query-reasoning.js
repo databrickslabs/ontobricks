@@ -550,10 +550,13 @@ const ReasoningModule = {
     },
 
     async runMaterialize() {
-        if (window.OB && typeof window.OB.canEditOntology === 'function'
-                && !window.OB.canEditOntology()) {
+        if (window.OB && typeof window.OB.canRefreshGraph === 'function'
+                && !window.OB.canRefreshGraph()) {
             if (typeof showNotification === 'function')
-                showNotification('Materialise is unavailable — this version is read-only.', 'warning');
+                showNotification(
+                    'Materialise is unavailable — builder access and an unlocked domain are required.',
+                    'warning'
+                );
             return;
         }
 

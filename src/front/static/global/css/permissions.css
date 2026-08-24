@@ -171,12 +171,6 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingIncludeExcl
        is unavailable rather than wondering where it went. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsDesignBtn,
-/* --- Knowledge Graph > Build: start of a triple-store rebuild. JS
-       re-enables ``#syncStartBtn`` when readiness flips true; pointer-events
-       keeps the click dead on a non-DRAFT / viewer / locked domain. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #syncStartBtn,
-/* --- Knowledge Graph > Reasoning: materialise inferred triples. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #runMaterializeBtn,
 /* --- Ontology > Business Views: CRUD buttons (top toolbar) + the
        empty-state "Create View" CTA shown when no view exists. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #createViewBtn,
@@ -191,6 +185,16 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #newGroupBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .dq-shape-card .btn-group button,
 /* --- Save Domain navbar item: still rendered, but neutralised. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #menuSaveDomain {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* --- Knowledge Graph data refresh: Build and reasoning materialisation
+       remain available to builders on IN-REVIEW / PUBLISHED versions. Only
+       role-viewer and active edit-lock view mode block these operations. */
+body:is(.role-viewer, .read-only-locked) #syncStartBtn,
+body:is(.role-viewer, .read-only-locked) #runMaterializeBtn {
     pointer-events: none !important;
     opacity: 0.5 !important;
     cursor: not-allowed !important;

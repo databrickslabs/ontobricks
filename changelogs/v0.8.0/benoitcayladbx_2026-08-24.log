@@ -1,0 +1,36 @@
+## Allow graph refreshes on published domain versions
+
+Context: Issue #78 remained reproducible in the UI after a later view-mode
+permission change reconnected Build and reasoning materialisation to ontology
+editability. The backend already treats these operations as data refreshes.
+Builders can now refresh graph data from a frozen IN-REVIEW or PUBLISHED design
+without reopening that version for editing.
+
+Changes:
+
+1. `src/front/static/global/js/permissions.js`
+   Added a builder-level graph-refresh permission independent of lifecycle status while preserving edit-lock enforcement.
+2. `src/front/static/global/css/permissions.css`
+   Removed lifecycle read-only gating from Build and reasoning materialisation while retaining viewer and edit-lock gates.
+3. `src/front/static/query/js/query-sync.js`
+   Applied the graph-refresh permission consistently and skipped the domain save step when building a frozen version.
+4. `src/front/static/query/js/query-reasoning.js`
+   Allowed builders to materialise reasoning results on frozen versions.
+5. `tests/units/front/test_view_mode_write_gates.py`
+   Added regression coverage for lifecycle-independent refresh permissions, view-mode gates, and the frozen-version save bypass.
+6. `documentation/user-guide.md`
+   Documented that builders and admins can refresh graph data on IN-REVIEW and PUBLISHED versions.
+7. `README.md`
+   Clarified the lifecycle behavior of the Build workflow.
+
+Modified files:
+- `src/front/static/global/js/permissions.js`
+- `src/front/static/global/css/permissions.css`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/static/query/js/query-reasoning.js`
+- `tests/units/front/test_view_mode_write_gates.py`
+- `documentation/user-guide.md`
+- `README.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5030 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.19s.
