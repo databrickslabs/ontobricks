@@ -462,6 +462,12 @@ Click **Auto-Map** in the sidebar to batch-assign all unmapped entities and rela
 4. Progress is tracked with a progress bar — you can navigate away and return later.
 5. Results are displayed in a report table showing success/failure per item.
 
+**Live agent activity**: while the run is in progress, expand **Agent activity log** in the progress overlay to watch the agent work item by item — which tool it called, what it got back, and how long each step took. The log refreshes roughly every 1.5 seconds and keeps growing until the run ends, so a long auto-map is no longer a silent progress bar.
+
+**Cancelling a run**: **Cancel** stops the agent at the next item boundary instead of at the end of the batch. Everything already mapped is kept, and the run is recorded as cancelled.
+
+**Execution report in the Audit Trail**: every auto-map run — completed, failed, or cancelled — writes an **Auto-mapping agent run** entry to **Domain → Audit trail**, with the status, the entity/relationship counts, the duration, and the full ordered step list the overlay showed live. Like the individual mapping change entries, it appears in the Audit Trail once the domain version has been saved to the registry.
+
 **Re-Assign Missing Attributes**: If some entities are assigned but have incomplete attribute mappings, a third card appears showing the count and a **Re-Assign Missing Attributes** button. This re-runs auto-mapping only for those specific entities to fill in the missing *included* attribute mappings (excluded attributes are ignored).
 
 ### Validate Your Mappings

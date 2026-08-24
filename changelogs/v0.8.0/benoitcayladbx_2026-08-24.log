@@ -361,3 +361,105 @@ Modified files:
 - `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
 
 Tests: not run — documentation-only link change, no code touched.
+
+## Auto-mapping live trace + agent execution report in the Audit Trail
+
+Context: a batch auto-map could run for minutes behind a progress bar with no
+visibility into what the agent was doing, Cancel only stopped the *task* (the
+worker kept issuing LLM calls to the end of the batch), and once the run ended
+nothing durable explained what the agent had executed — only the resulting
+mapping change events. This adds both surfaces of one run: the live step log in
+the Mapping overlay, and a durable `agent_auto_map_run` report in the Domain
+Audit Trail. No new streaming route was needed: `Task.to_dict()` already
+serializes `result` while a task is running, and the frontend already polls it
+every 1.5 s.
+
+Changes:
+
+1. `.planning/agents/agent_auto_assignment/SPEC.md`
+   Fixed section 1 (it described `agent_auto_icon_assign`, not this agent) and
+   added section 3.1 as the authoritative observability contract: step JSON keys
+   (`type` / `tool` / `content` / `ms`), append-only live publication,
+   cancellation semantics, and the audit report field table. Added
+   `trace_step_order` and `audit_report_parity` as pass/fail eval dimensions
+   with no aggregate weight, plus three new failure modes. The pre-existing
+   icon/layout dimensions were deliberately left untouched so this change does
+   not re-baseline an unrelated gate.
+
+2. `tests/eval/datasets/agent_auto_assignment/observability.jsonl` (new),
+   `.planning/agents/agent_auto_assignment/eval/dataset.jsonl` (new mirror)
+   Three golden cases — happy, chunk error, mid-run cancel — expressed with the
+   existing `{id, input, expected.constraints[], tags}` row shape.
+
+3. `tests/eval/thresholds.yaml`
+   Added the two contract thresholds under `auto_assignment`.
+
+4. `src/back/objects/mapping/Mapping.py`
+   - `AUTO_MAP_RUN_ACTION`, `build_auto_map_run_event()` and `_task_duration_ms()`:
+     a pure builder producing the exact shape `DomainSession.record_change`
+     writes, so the worker thread (which holds no live session) can buffer the
+     event itself.
+   - `run_auto_assign_task` now republishes `serialize_agent_steps(all_steps)` on
+     `task.result["agent_steps"]` after every chunk, which is what makes the run
+     observable live.
+   - Cooperative cancellation: `tm.is_cancelled(task.id)` at the top of the chunk
+     loop (before the cooldown sleep, so a cancel during the sleep window is
+     honoured without another LLM round-trip). On cancel, the mappings from the
+     completed chunks are still saved and the run is reported as `cancelled`.
+   - `record_auto_map_run()` is called on all four terminal paths (completed,
+     no-mappings failure, unexpected crash, cancelled). `all_steps` moved above
+     the `try` so the crash path can still report what ran.
+   - `append_change_event_to_session()`: best-effort append into
+     `domain_data.change_log` (returns `False` instead of raising, so a broken
+     audit trail can never fail a mapping save). Also handles the legacy
+     `project_data` bucket and refreshes the in-memory session ref.
+   - `_resolve_session_path()`: extracted the session-id validation + path
+     resolution that `save_mappings_to_session` had inline, now shared by both
+     writers.
+
+5. `src/front/static/global/js/task-progress-ui.js`
+   `updateFromTask` mounts the agent step log as soon as `result.agent_steps` is
+   present instead of only on `completed`, and `mountAgentStepsLog` now refreshes
+   an existing mount instead of returning early — carrying over the `<details>`
+   open state so a poll tick cannot collapse the panel under the cursor.
+
+6. `src/front/static/domain/js/domain-audit.js`
+   Added `CHANGE_META.agent_auto_map_run` and `agentRunReport()`: status chip,
+   entity/relationship/unmapped counters, chunk-error count, duration, and an
+   expandable ordered step list. All values go through `esc()` — step content is
+   model output. Rendered inside the existing `changes` stream and version
+   filter; no fourth stream.
+
+7. `documentation/user-guide.md`
+   Auto-Map section: live agent activity log, what Cancel now does, and the
+   Audit Trail execution report (including that it lands after the version is
+   saved).
+
+8. `documentation/superpowers/plans/2026-08-24-auto-mapping-live-trace.md`
+   Rewritten for the incremental-publish + cooperative-cancel design, replacing
+   the earlier SSE draft, with a "Why no SSE" section recording the three
+   findings that removed the need for a new route.
+
+9. `tests/units/mapping/test_auto_assign_observability.py` (new, 17 tests)
+   Event shape parity with `record_change`, `meta` contents, no step aliasing;
+   session append (existing log, missing bucket, legacy `project_data`, ref
+   refresh, malformed id, corrupted file); live publication before the terminal
+   event and full step list at completion; audit report on completed / failed /
+   crashed runs; and cancellation (loop stops, completed chunks persisted,
+   cancelled report, no agent call when cancelled up front).
+
+Modified files:
+- `.planning/agents/agent_auto_assignment/SPEC.md`
+- `.planning/agents/agent_auto_assignment/eval/dataset.jsonl` (new)
+- `tests/eval/datasets/agent_auto_assignment/observability.jsonl` (new)
+- `tests/eval/thresholds.yaml`
+- `src/back/objects/mapping/Mapping.py`
+- `src/front/static/global/js/task-progress-ui.js`
+- `src/front/static/domain/js/domain-audit.js`
+- `documentation/user-guide.md`
+- `documentation/superpowers/plans/2026-08-24-auto-mapping-live-trace.md`
+- `tests/units/mapping/test_auto_assign_observability.py` (new)
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5117 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 40.24s (+17 new tests).

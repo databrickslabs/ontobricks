@@ -144,20 +144,33 @@
     }
 
     /**
+     * Mount (or refresh) the agent step log.
+     *
+     * Called on every poll tick while a task runs, so an existing mount is
+     * re-rendered in place rather than skipped — otherwise the log would
+     * freeze on the first batch of steps. The <details> open/closed state is
+     * carried over so a refresh never collapses the panel under the user.
+     *
      * @param {HTMLElement|null} panelEl
      * @param {object[]} steps
      * @param {string} mountId
      */
     function mountAgentStepsLog(panelEl, steps, mountId) {
         if (!panelEl || !steps || !steps.length) return;
-        if (panelEl.querySelector('#' + mountId)) return;
-        const mount = document.createElement('div');
-        mount.id = mountId;
-        mount.className = 'task-agent-steps-mount';
+        let mount = panelEl.querySelector('#' + mountId);
+        let wasOpen = true;
+        if (mount) {
+            const prev = mount.querySelector('details');
+            if (prev) wasOpen = prev.open;
+        } else {
+            mount = document.createElement('div');
+            mount.id = mountId;
+            mount.className = 'task-agent-steps-mount';
+            panelEl.appendChild(mount);
+        }
         mount.innerHTML = renderAgentStepsLogHtml(steps);
-        panelEl.appendChild(mount);
         const details = mount.querySelector('details');
-        if (details) details.open = true;
+        if (details) details.open = wasOpen;
     }
 
     /**
@@ -242,7 +255,11 @@
             messageEl.textContent = msg || 'Processing...';
         }
 
-        if (task.status === 'completed' && task.result && task.result.agent_steps) {
+        // Render agent steps as soon as the worker publishes them, not only at
+        // completion: the auto-map task republishes its cumulative step log on
+        // ``result.agent_steps`` after each chunk, which is what makes the
+        // agent's per-entity reasoning visible live.
+        if (task.result && task.result.agent_steps) {
             mountAgentStepsLog(activityPanel, task.result.agent_steps, cfg.agentMountId);
         }
     }
