@@ -1671,11 +1671,14 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
     });
     _updateEntityAttrToggleBtn();
 
-    // Auto-load query data in background when there is an existing mapping with SQL
+    // Auto-load query data in background when there is an existing mapping with SQL.
+    // Pass the generation captured now, at schedule time, so the response isn't
+    // discarded if initEntityPanel has already finished mounting by the time it arrives.
     if (existingMapping?.sql_query) {
+        const scheduledGeneration = EntityPanelState._generation;
         EntityPanelState._autoLoadTimer = setTimeout(() => {
             EntityPanelState._autoLoadTimer = null;
-            runEntityPanelQuery({ autoLoad: true });
+            runEntityPanelQuery({ autoLoad: true, generation: scheduledGeneration });
         }, 100);
     }
 }
@@ -1689,8 +1692,12 @@ async function runEntityPanelQuery(options = {}) {
         return;
     }
     
-    // Capture the generation at call time so we can detect stale responses
-    const capturedGeneration = EntityPanelState._generation;
+    // Capture the generation at call time so we can detect stale responses.
+    // A caller that scheduled this ahead of time (the auto-load timer) passes
+    // its own captured generation explicitly; otherwise capture it now.
+    const capturedGeneration = (options && options.generation != null)
+        ? options.generation
+        : EntityPanelState._generation;
     
     const previewLimit = parseInt(document.getElementById('epPreviewLimit')?.value) || 10;
     const btn = document.getElementById('epRunQueryBtn');
@@ -1707,15 +1714,14 @@ async function runEntityPanelQuery(options = {}) {
         });
         const result = await response.json();
         
-        // Discard stale response if the user switched to a different entity
-        if (currentPanelType !== 'entity' || capturedGeneration !== EntityPanelState._generation) return;
-        
         if (result.success) {
             EntityPanelState.columns = result.columns;
             EntityPanelState.rows = result.rows || [];
             
             if (!EntityPanelState.idColumn || !result.columns.includes(EntityPanelState.idColumn)) {
-                EntityPanelState.idColumn = null;
+                // Previously saved id column is gone from this result set — fall
+                // back to the first available column instead of leaving it unset.
+                EntityPanelState.idColumn = result.columns[0] || null;
             }
             if (EntityPanelState.labelColumn && !result.columns.includes(EntityPanelState.labelColumn)) {
                 EntityPanelState.labelColumn = null;
@@ -1724,7 +1730,7 @@ async function runEntityPanelQuery(options = {}) {
             autoMapEntityColumns(result.columns);
             renderEntityPanelGrid();
             const epSummary = document.getElementById('epMappingSummary');
-            if (epSummary) epSummary.style.display = 'none';
+            if (epSummary) epSummary.style.display = '';
             const epLoading = document.getElementById('epMappingLoading');
             if (epLoading) epLoading.style.display = 'none';
             const epGrid = document.getElementById('epMappingGrid');
@@ -1751,9 +1757,17 @@ async function runEntityPanelQuery(options = {}) {
         if (statusEl) statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> Error</span>';
         showNotification('Error: ' + error.message, 'error');
     } finally {
-        if (capturedGeneration === EntityPanelState._generation && btn) {
+        // Always restore the button, regardless of generation — otherwise a
+        // panel switch mid-query leaves "Refreshing..." stuck permanently.
+        if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+        }
+        if (capturedGeneration !== EntityPanelState._generation) {
+            // Response belongs to a superseded generation: still hide the
+            // loading spinner so it doesn't stay stuck if the user comes back.
+            const epLoadingStale = document.getElementById('epMappingLoading');
+            if (epLoadingStale) epLoadingStale.style.display = 'none';
         }
     }
 }
@@ -1764,16 +1778,12 @@ function renderEntityPanelGrid() {
     if (!headerRow || !tbody) return;
     
     headerRow.innerHTML = EntityPanelState.columns.map(col => {
-        let badge = '';
-        if (EntityPanelState.idColumn === col) {
-            badge = '<span class="badge bg-primary">ID</span>';
-        } else if (EntityPanelState.labelColumn === col) {
-            badge = '<span class="badge bg-info">Label</span>';
-        } else {
-            const attr = Object.entries(EntityPanelState.attributeMappings).find(([a, c]) => c === col);
-            if (attr) badge = `<span class="badge bg-secondary">${attr[0]}</span>`;
-            else badge = '<span class="badge bg-light text-muted border">Map</span>';
-        }
+        const badges = [];
+        if (EntityPanelState.idColumn === col) badges.push('<span class="badge bg-primary">ID</span>');
+        if (EntityPanelState.labelColumn === col) badges.push('<span class="badge bg-info">Label</span>');
+        const attr = Object.entries(EntityPanelState.attributeMappings).find(([a, c]) => c === col);
+        if (attr) badges.push(`<span class="badge bg-secondary">${attr[0]}</span>`);
+        let badge = badges.length ? badges.join(' ') : '<span class="badge bg-light text-muted border">Map</span>';
         if (EntityPanelState.driftedColumns.has(col)) {
             badge += ' <span class="badge bg-warning text-dark" ' +
                 'title="This column no longer exists in the source table">' +
@@ -1821,20 +1831,43 @@ function showEntityColumnMenu(th, column) {
     document.body.appendChild(menu);
     
     menu.querySelectorAll('.dropdown-item').forEach(item => {
-        item.addEventListener('click', () => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
             const action = item.dataset.action;
-            if (EntityPanelState.idColumn === column) EntityPanelState.idColumn = null;
-            if (EntityPanelState.labelColumn === column) EntityPanelState.labelColumn = null;
-            Object.keys(EntityPanelState.attributeMappings).forEach(a => {
-                if (EntityPanelState.attributeMappings[a] === column) delete EntityPanelState.attributeMappings[a];
-            });
-            
-            if (action === 'id') EntityPanelState.idColumn = column;
-            else if (action === 'label') EntityPanelState.labelColumn = column;
-            else if (action === 'attr') EntityPanelState.attributeMappings[item.dataset.attr] = column;
 
-            menu.remove();
+            if (action === 'id') {
+                // Unique across the query, and toggles off on its own column.
+                EntityPanelState.idColumn = (EntityPanelState.idColumn === column) ? null : column;
+            } else if (action === 'label') {
+                EntityPanelState.labelColumn = (EntityPanelState.labelColumn === column) ? null : column;
+            } else if (action === 'attr') {
+                const attrName = item.dataset.attr;
+                const alreadyHere = EntityPanelState.attributeMappings[attrName] === column;
+                // One attribute maps to a single column...
+                delete EntityPanelState.attributeMappings[attrName];
+                // ...and one column maps to a single attribute.
+                Object.keys(EntityPanelState.attributeMappings).forEach(a => {
+                    if (EntityPanelState.attributeMappings[a] === column) delete EntityPanelState.attributeMappings[a];
+                });
+                if (!alreadyHere) EntityPanelState.attributeMappings[attrName] = column;
+            } else if (action === 'clear') {
+                if (EntityPanelState.idColumn === column) EntityPanelState.idColumn = null;
+                if (EntityPanelState.labelColumn === column) EntityPanelState.labelColumn = null;
+                Object.keys(EntityPanelState.attributeMappings).forEach(a => {
+                    if (EntityPanelState.attributeMappings[a] === column) delete EntityPanelState.attributeMappings[a];
+                });
+            }
+
+            const openColumn = column;
             renderEntityPanelGrid();
+            if (action === 'clear') {
+                menu.remove();
+            } else {
+                // Reopen the menu on the same column so multiple roles can be
+                // assigned in a row without having to reopen it each time.
+                const th = document.querySelector(`#epResultsHeader th[data-col="${CSS.escape(openColumn)}"]`);
+                if (th) showEntityColumnMenu(th, openColumn);
+            }
         });
     });
     
@@ -2021,8 +2054,6 @@ async function runRelPanelQuery(options = {}) {
             credentials: 'same-origin'
         });
         const result = await response.json();
-        
-        if (currentPanelType !== 'relationship') return;
         
         if (result.success) {
             RelPanelState.columns = result.columns;
