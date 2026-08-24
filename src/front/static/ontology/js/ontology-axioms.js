@@ -69,7 +69,15 @@ window.AxiomsModule = {
         
         select.innerHTML = '<option value="">Select...</option>';
         items.forEach(item => {
-            select.innerHTML += `<option value="${item.uri || item.name}">${item.name}</option>`;
+            // Prefer the plain name over the class/property's stored `uri`.
+            // That `uri` field can be stale (e.g. left over from before the
+            // ontology's base URI was renamed) — sending just the name lets
+            // the backend (OntologyGenerator._resolve_uri) always rebuild
+            // the correct, current URI from `base_uri + name`, the same way
+            // every other part of the ontology already resolves class/
+            // property identities. Falls back to `uri` only if a name is
+            // somehow missing.
+            select.innerHTML += `<option value="${item.name || item.uri}">${item.name}</option>`;
         });
     },
     
@@ -131,7 +139,9 @@ window.AxiomsModule = {
         
         newSelect.innerHTML = '<option value="">Select...</option>';
         items.forEach(item => {
-            newSelect.innerHTML += `<option value="${item.uri || item.name}">${item.name}</option>`;
+            // See populateSelect() above — prefer the plain name so a stale
+            // stored `uri` never gets baked into a saved axiom/expression.
+            newSelect.innerHTML += `<option value="${item.name || item.uri}">${item.name}</option>`;
         });
         
         container.appendChild(newSelect);
@@ -151,7 +161,9 @@ window.AxiomsModule = {
         
         let selectHtml = '<select class="form-select chain-select"><option value="">Select property...</option>';
         this.properties.forEach(prop => {
-            selectHtml += `<option value="${prop.uri || prop.name}">${prop.name}</option>`;
+            // See populateSelect() above — prefer the plain name so a stale
+            // stored `uri` never gets baked into a saved axiom/expression.
+            selectHtml += `<option value="${prop.name || prop.uri}">${prop.name}</option>`;
         });
         selectHtml += '</select><span class="input-group-text">∘</span>';
         
