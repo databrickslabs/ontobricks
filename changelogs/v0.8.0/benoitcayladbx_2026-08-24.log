@@ -287,3 +287,60 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5107 passed, 281 skipped,
 6 deselected, 1 xfailed, 0 failed in 35.66s (+11 tests).
+
+## Remove the GitHub Pages marketing site under docs/
+
+Context: the marketing site has moved to an externally hosted domain — the
+README's Website link already points there, and the repository's Pages
+configuration has no CNAME of its own. The `docs/` tree was therefore a
+second, unmaintained copy of a site served elsewhere.
+
+Changes:
+
+1. `docs/` (11 tracked files)
+   Removed the static site: `index.html`, `404.html`, the `about/`,
+   `features/`, `get-started/` and `docs/` pages, `assets/` (CSS, JS, icon),
+   and the site README describing the Pages cutover. `docs/issues/
+   graph-chat-event-loop-hang.md`, an investigation note that happened to live
+   there, was dropped with it (that hang was fixed in #116).
+2. `tests/units/site/test_marketing_site.py`
+   Removed with the package: all 7 tests asserted on files under `docs/` and
+   failed once the site was gone. Nothing else referenced the package.
+3. `databricks.yml`
+   Dropped the now-dead `- docs/` bundle exclusion and its comment. The path no
+   longer exists, so excluding it from the App sync was misleading.
+4. `.gitignore`
+   Dropped the legacy `docs/sphinx/_build/` ignore. It predated the V0.7.0
+   `docs/` → `documentation/` move and is now doubly dead;
+   `documentation/sphinx/_build/` and `**/sphinx/_build/` still cover the real
+   output.
+
+Left deliberately untouched:
+
+- **GitHub Pages configuration.** Still set to `build_type=legacy`,
+  `source.branch=develop`, `source.path=/docs`, so
+  https://databrickslabs.github.io/ontobricks/ will 404 once this is pushed.
+  Disabling or repointing Pages is a repository-settings change the owner is
+  making separately.
+- `releases/ReleaseNotes_V0.7.0.md` and
+  `documentation/superpowers/specs/2026-08-03-github-pages-marketing-site-design.md`
+  keep describing the site — they are historical records of what shipped, not
+  live documentation, and rewriting them would falsify the archive.
+
+Known pre-existing issue, not touched here: several stale `docs/…` paths
+survive the V0.7.0 documentation move (`app.yaml.template`,
+`documentation/code_organization.md`, `documentation/dab-reference.md`, the
+graphdb starter kit, `Neo4jConnection.py`). They pointed at product docs that
+moved to `documentation/`, were already broken before this change, and are
+unrelated to the marketing site.
+
+Modified files:
+- `docs/` (deleted, 11 files)
+- `tests/units/site/test_marketing_site.py` (deleted)
+- `databricks.yml`
+- `.gitignore`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5100 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 34.02s (−7 tests: the marketing
+site suite went with the site).

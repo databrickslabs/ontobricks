@@ -39,7 +39,6 @@ htmlcov/
 artifacts/
 
 # Sphinx HTML/doctree output — regenerate locally, never commit
-docs/sphinx/_build/
 documentation/sphinx/_build/
 **/sphinx/_build/
 

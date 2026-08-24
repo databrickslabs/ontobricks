@@ -94,8 +94,6 @@ sync:
     - .claude/
     - documentation/sphinx/_build/
     - documentation/sphinx/.doctrees/
-    # GitHub Pages marketing site (not needed in the Databricks App bundle)
-    - docs/
 
 variables:
   # ── App names ──────────────────────────────────────────────────────
