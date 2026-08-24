@@ -12,6 +12,13 @@
     var _jobAvailable = false;       // Databricks analytics job can run for this domain
     var _jobBlockedReason = '';      // why not, when an admin has enabled it and expects it to work
 
+    // Whether the live probe found no graph to analyse — set by
+    // _loadEntityTypes, read by analyticsResume. The stored result comes from
+    // the registry and survives the graph objects being dropped, so without
+    // this the page would show KPIs and charts describing a graph that no
+    // longer exists, next to a banner saying it was never built.
+    var _graphMissing = false;
+
     // The class URI the on-screen result was actually computed with (null =
     // full graph). Deliberately separate from the scope modal's select: that
     // select is a request being composed, this is a fact about what is
@@ -138,9 +145,16 @@
         if (show && !existing) {
             var banner = document.createElement('div');
             banner.id = 'analyticsNoGraphBanner';
-            banner.className = 'alert alert-warning d-flex align-items-center gap-2 small mb-3';
-            banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>'
-                + '<span>No Knowledge Graph has been built yet. Go to <strong>KG → Sync</strong> to build one before running analysis.</span>';
+            banner.className = 'alert alert-warning d-flex align-items-start gap-2 small mb-3';
+            // Naming the hidden result matters: a user who saw charts here
+            // before would otherwise read the empty dashboard as a broken page
+            // and go looking for the numbers rather than rebuilding.
+            banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>'
+                + '<span>No Knowledge Graph has been built yet. Go to <strong>KG → Sync</strong> '
+                + 'to build one before running analysis.'
+                + '<span class="d-block mt-1">Results from an earlier analysis are '
+                + 'no longer shown, because the graph they describe does not exist. '
+                + 'The run history is kept under <strong>KG → Management → Runs</strong>.</span></span>';
             var section = document.getElementById('analyticsSection');
             var header = section && section.querySelector('.section-header');
             if (header) header.insertAdjacentElement('afterend', banner);
@@ -197,6 +211,7 @@
         // Quick check: if the graph_name is empty, no KG has been built
         var cfg = window.__TRIPLESTORE_CONFIG || {};
         if (!cfg.graph_name) {
+            _graphMissing = true;
             _setComputeBtnState(false, 'Build the Knowledge Graph first (KG → Sync)');
             _showNoGraphBanner(true);
             _showLimitInfo(false);
@@ -212,12 +227,17 @@
             var resp = await fetch('/dtwin/sync/stats', { credentials: 'same-origin' });
             var data = await resp.json();
             if (!data.success) {
+                // How dropped Unity Catalog objects surface: the stats query
+                // against the graph relation errors out. The graph is gone even
+                // though the domain still names one.
+                _graphMissing = true;
                 _setComputeBtnState(false, 'Build the Knowledge Graph first (KG → Sync)');
                 _showNoGraphBanner(true);
                 _showLimitInfo(false);
                 sel.innerHTML = '<option value="">All types (full graph)</option>';
                 return;
             }
+            _graphMissing = false;
             _allTypes = data.entity_types || [];
             _populateTypeSelect(sel);
             _showNoGraphBanner(false);
@@ -287,6 +307,47 @@
         if (_is) _is.classList.add('d-none');
         var _ias = document.getElementById('analyticsInsightsStatus');
         if (_ias) _ias.textContent = '';
+    }
+
+    // The inverse of _renderAnalyticsData: put the dashboard back to the state
+    // it has before any result has been rendered. Used when the graph the
+    // stored result describes no longer exists — the numbers are not merely
+    // stale, they are about something that is gone.
+    function _clearAnalyticsResults() {
+        _analyticsData = null;
+        _analyticsLastSections = null;
+        _resultScope = null;
+
+        var results = document.getElementById('analyticsResults');
+        if (results) results.classList.add('d-none');
+
+        // Interpret would otherwise post the dropped graph's payload to the LLM.
+        var interpretBtn = document.getElementById('analyticsInterpretBtn');
+        if (interpretBtn) interpretBtn.classList.add('d-none');
+        var auditBtn = document.getElementById('analyticsAuditBtn');
+        if (auditBtn) auditBtn.classList.add('d-none');
+
+        var subtitle = document.getElementById('analyticsSubtitle');
+        if (subtitle) subtitle.classList.add('d-none');
+        var computedAt = document.getElementById('analyticsComputedAt');
+        if (computedAt) computedAt.classList.add('d-none');
+
+        // Chart.js keeps drawing a destroyed-in-name-only chart on resize, so
+        // the instances have to go, not just their container.
+        Object.keys(_charts).forEach(function (key) {
+            if (_charts[key] && typeof _charts[key].destroy === 'function') {
+                _charts[key].destroy();
+            }
+            delete _charts[key];
+        });
+        Object.keys(_distCharts).forEach(function (key) {
+            if (_distCharts[key] && typeof _distCharts[key].destroy === 'function') {
+                _distCharts[key].destroy();
+            }
+            delete _distCharts[key];
+        });
+
+        _resetAnalyticsCards();
     }
 
     // Format an ISO timestamp into a short "x ago" / locale string.
@@ -447,6 +508,13 @@
     // background, re-show the spinner and resume waiting (the last result stays
     // visible underneath until the new one lands).
     window.analyticsResume = async function () {
+        // The stored result lives in the registry and outlives the graph it
+        // describes. Rendering it next to the "not built yet" banner told the
+        // user two contradictory things; the live probe wins.
+        if (_graphMissing) {
+            _clearAnalyticsResults();
+            return;
+        }
         await window.analyticsLoadLatest();
         var running = await _findRunningAnalyticsTask();
         if (running) {

@@ -34,3 +34,256 @@ Modified files:
 - `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5030 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.19s.
+
+## Lakehouse view-only materialization
+
+Context: the Lakehouse backend always copied the mapped triples out of the
+R2RML gateway view into a `…_data` Delta table (CTAS + `OPTIMIZE`). That copy
+costs storage, costs build time proportional to graph size, and goes stale
+between builds. A new per-domain **Materialization** option lets a Lakehouse
+domain make `…_data` a pass-through view over the gateway instead, so nothing
+is duplicated and every read sees live source data. Inferred triples keep
+their own Delta table — they have no source to be derived from — and Graph
+Analytics materializes a disposable snapshot for the duration of a run, since
+its iterative BFS would otherwise re-run the whole mapping query on every
+pass. Lakebase and Neo4j domains are unaffected: the resolver forces `table`
+for any backend other than `databricks`, because their own graph is not what
+the analytics job reads.
+
+Changes:
+
+1. `src/back/core/graphdb/GraphDBFactory.py`
+   Added the `LAKEHOUSE_MATERIALIZATIONS` vocabulary, `normalize_lakehouse_materialization`, and `resolve_lakehouse_materialization` — the single resolver, which returns `table` for any non-Lakehouse backend.
+2. `src/back/core/graphdb/delta/materialize.py`
+   Added `build_data_view_sql` / `create_data_view` for the pass-through view, `drop_relation`, and `apply_data_relation` as the one entry point both pipelines use. Each branch cross-drops the relation of the other kind first, since Databricks refuses to replace a TABLE with a VIEW or the reverse.
+3. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+   Resolves the mode in `__init__`, routes through `apply_data_relation`, skips `OPTIMIZE` in view mode, and reports `build_mode` / `materialization` in the task result and build-run record.
+4. `src/back/objects/digitaltwin/_build_pipeline.py`
+   Same routing for the shared pipeline used by every engine, with progress wording that matches the mode.
+5. `src/back/core/graphdb/delta/_table_naming.py`
+   Added the `…_analytics` suffix and `analytics_snapshot_fqn` for the disposable analytics snapshot.
+6. `src/back/core/graph_analysis/JobMetrics.py`
+   Added the `analytics_snapshot` context manager: a no-op for a materialized domain, a CTAS + guaranteed drop for a view-only one. Raises when no snapshot can be prepared rather than letting the job scan the view.
+7. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Wrapped `compute_graph_metrics` in `analytics_snapshot` — the single hook both the interactive endpoint and the scheduler pass through.
+8. `src/back/core/graphdb/delta/objects.py`
+   `_drop_sort_key` now orders `_graph` → `_data` → gateway among views, so a view-mode `_data` drops before the gateway it reads from; `object_base` groups a leftover `…_analytics` with its domain for purging.
+9. `src/back/core/graphdb/delta/health.py`, `src/api/routers/internal/dtwin.py`
+   Both status payloads expose `materialization`.
+10. `src/back/objects/domain/Domain.py`, `src/back/objects/session/DomainSession.py`
+    Persist and normalize `lakehouse_materialization` across `get_domain_info`, `save_domain_info`, `get_domain_template_data`, the empty-domain defaults, and the export/import round-trip.
+11. `src/front/templates/partials/domain/_domain_information.html`, `src/front/static/domain/js/domain-information.js`, `src/front/static/domain/js/domain.js`, `src/front/static/global/js/navbar.js`
+    Added the Materialization selector, shown only for the Lakehouse backend, with both save paths sending the field and resetting it to `table` when the backend is not Lakehouse.
+12. `src/front/static/config/js/settings.js`, `src/front/static/query/js/query-databricks-build.js`, `src/front/templates/partials/dtwin/_query_databricks_build.html`
+    The Lakehouse health card and the Build page now label `…_data` as a view when it is one, and note that the triple count is a live query.
+13. `tests/units/graphdb/delta/test_delta_package.py`, `tests/units/graphdb/delta/test_triple_store_backend_config.py`, `tests/units/objects/test_build_pipeline_materialize.py`, `tests/units/core/test_job_metrics.py`, `tests/units/domain/test_domain_service.py`, `tests/units/domain/test_domain_session.py`, `tests/units/settings/test_delta_objects.py`
+    Added coverage for the view SQL, both cross-drop branches, the non-Lakehouse guard, the `OPTIMIZE` skip, the snapshot drop on a failing run, the persistence round-trip, and the new drop ordering.
+14. `documentation/user-guide.md`, `documentation/architecture.md`, `documentation/sphinx/api/*.rst`, `README.md`
+    Documented the two modes, their trade-offs, and the analytics snapshot; autodoc'd `materialize` and `JobMetrics`.
+
+Modified files:
+- `src/back/core/graphdb/GraphDBFactory.py`
+- `src/back/core/graphdb/delta/materialize.py`
+- `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+- `src/back/core/graphdb/delta/_table_naming.py`
+- `src/back/core/graphdb/delta/objects.py`
+- `src/back/core/graphdb/delta/health.py`
+- `src/back/core/graph_analysis/JobMetrics.py`
+- `src/back/core/graph_analysis/__init__.py`
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `src/back/objects/digitaltwin/_build_pipeline.py`
+- `src/back/objects/domain/Domain.py`
+- `src/back/objects/session/DomainSession.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/domain/_domain_information.html`
+- `src/front/templates/partials/dtwin/_query_databricks_build.html`
+- `src/front/static/domain/js/domain-information.js`
+- `src/front/static/domain/js/domain.js`
+- `src/front/static/global/js/navbar.js`
+- `src/front/static/config/js/settings.js`
+- `src/front/static/query/js/query-databricks-build.js`
+- `tests/units/graphdb/delta/test_delta_package.py`
+- `tests/units/graphdb/delta/test_triple_store_backend_config.py`
+- `tests/units/objects/test_build_pipeline_materialize.py`
+- `tests/units/core/test_job_metrics.py`
+- `tests/units/domain/test_domain_service.py`
+- `tests/units/domain/test_domain_session.py`
+- `tests/units/settings/test_delta_objects.py`
+- `documentation/user-guide.md`
+- `documentation/architecture.md`
+- `documentation/sphinx/api/app.core.graphdb.rst`
+- `documentation/sphinx/api/app.core.graph_analysis.rst`
+- `README.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5058 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 33.78s. Sphinx docs rebuild clean (`sphinx-build -b html`).
+
+## Stop tracking generated Sphinx HTML
+
+Context: Sphinx HTML used to live under `docs/sphinx/_build/` (already gitignored).
+After the docs move to `documentation/sphinx/`, generated HTML was committed again
+and would have been pushed to GitHub. Ignore the new path and drop it from the index.
+
+Changes:
+
+1. `.gitignore`
+   Ignore `documentation/sphinx/_build/` (and any `**/sphinx/_build/`) in addition to the legacy `docs/sphinx/_build/` path.
+2. `documentation/sphinx/_build/` (git index)
+   Untracked ~330 generated HTML/doctree files; sources under `documentation/sphinx/` stay in git.
+
+Modified files:
+- `.gitignore`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5086 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 35.75s.
+
+## Name the storage kind on Knowledge Graph → Build, and harden the feature's tests
+
+Context: with Lakehouse view-only materialization shipped, the Build page still
+described its target as a "Delta table" in the places it had not been made
+mode-aware — the page subtitle and the target FQN block. Same FQN, very
+different behaviour: a materialized copy is a point-in-time snapshot refreshed
+only by a build, a view is always live and its triple count is a live query.
+Someone landing on the page could not tell which one they had without opening
+Domain → Information.
+
+The feature's test coverage also had gaps at the edges: the two payloads that
+report the mode (task result, audited build run), the two read APIs that expose
+it (`settings_health_summary`, `/dtwin/databricks-build/info`), and the whole
+UI wiring were untested.
+
+Changes:
+
+1. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Added `#dbxBuildStorageBadge` next to the target label, `#dbxBuildStorageNote`
+   under the FQN, and an id on the page subtitle so JS can rewrite it. Replaced
+   the stale "Delta TABLE only" file comment.
+2. `src/front/static/query/js/query-databricks-build.js`
+   New `_applyDbxStorageKind(isViewMode)` centralises every mode-dependent
+   string: label, badge (`TABLE · materialized copy` / `VIEW · no data copy`
+   with tooltip), explanatory note, and subtitle. Status card title shortened to
+   `View status`. Info tint for the view (the deliberate, non-default choice),
+   neutral for the table — primary red stays reserved per `.cursor/11`.
+3. `src/front/static/query/js/query-databricks-build.js` (bug fix)
+   `count` was declared with `const` inside `if (statusCard)` but read in the
+   `statusText` block below it — a `ReferenceError` whenever `has_data` was
+   truthy, i.e. on every domain with triples. Hoisted alongside `isViewMode`.
+4. `src/front/static/query/css/query-sync.css`
+   Added `.dbx-storage-badge` so the badge sizing is not an inline `style`.
+5. `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+   Module docstring said "R2RML VIEW → materialized Delta TABLE"; it now builds
+   either relation.
+6. `src/api/routers/internal/dtwin.py`
+   `databricks_build_info` docstring said "Delta table status" and did not
+   mention the `materialization` field it returns.
+7. `tests/units/front/test_lakehouse_materialization_ui.py` (new, 26 tests)
+   UI contracts: the picker (rendered through Jinja, so the backend gating and
+   the default selection are asserted as behaviour rather than as source text),
+   the toggle wiring, both save paths including the off-Lakehouse reset, and the
+   mode-aware labels on the health card and the Build page.
+8. `tests/units/dtwin/test_databricks_build_info_materialization.py` (new, 4 tests)
+   `/dtwin/databricks-build/info` through a real `TestClient` and a real
+   `DomainSession`: both modes, the legacy default, and the non-Lakehouse guard.
+9. `tests/units/objects/test_build_pipeline_materialize.py`
+   Added `TestWhatABuildReports` — `build_mode`/`materialization` in the task
+   result and in the registry build-run entry, including the zero-triple early
+   exit, which has its own payload. Added a test that the progress step names the
+   object it creates. `_StubTM` now records steps and results.
+10. `tests/units/graphdb/delta/test_delta_package.py`
+    `settings_health_summary` reports the mode (both modes); analytics-snapshot
+    naming rejects an unqualified view and is not derived from `…_data`. Stubbed
+    `create_databricks_client` in the health tests, removing a
+    `PytestUnraisableExceptionWarning` from the SQL connector dialing out with
+    mock credentials.
+11. `documentation/user-guide.md`
+    Documented the storage-kind indicator under **Build (Sidebar)** with a
+    per-mode comparison table.
+
+Mutation spot-check (to confirm the new tests can fail): forcing
+`resolve_lakehouse_materialization` to always return the default failed 4 tests
+across the resolver, health card, endpoint and pipeline layers; removing the
+`OPTIMIZE` guard and hardcoding `build_mode` failed 3 more. Both mutations
+reverted.
+
+Modified files:
+- `src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_query_databricks_build.html`
+- `src/front/static/query/js/query-databricks-build.js`
+- `src/front/static/query/css/query-sync.css`
+- `tests/units/front/test_lakehouse_materialization_ui.py` (new)
+- `tests/units/dtwin/test_databricks_build_info_materialization.py` (new)
+- `tests/units/objects/test_build_pipeline_materialize.py`
+- `tests/units/graphdb/delta/test_delta_package.py`
+- `documentation/user-guide.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5096 passed, 281 skipped,
+6 deselected, 1 xfailed, 0 failed in 36.76s (+38 tests).
+
+## Fix: Analytics showed KPIs and charts for a deleted Knowledge Graph
+
+Context: after dropping every Unity Catalog object of a domain (tables, views),
+opening Knowledge Graph → Analytics showed the "No Knowledge Graph has been
+built yet" banner *and*, at the same time, populated KPI tiles, distribution
+tiles and a ranking chart. The page asserted two contradictory things at once.
+
+Root cause: the banner and the charts were driven by two independent sources
+that were never connected.
+
+- The banner comes from a live check in `_loadEntityTypes` — first
+  `__TRIPLESTORE_CONFIG.graph_name`, then `/dtwin/sync/stats`. With the objects
+  dropped, `store.get_aggregate_stats()` raises, the endpoint returns an
+  `InfrastructureError`, `data.success` is falsy, and the banner is shown.
+- The charts come from `analyticsResume()` → `analyticsLoadLatest()` →
+  `/dtwin/metrics/latest`, which is a pure registry read of the last persisted
+  run. It is *correctly* unaware of whether the graph objects still exist — it
+  also has to serve history — but it survives the graph being deleted.
+
+`analyticsResume()` called `analyticsLoadLatest()` unconditionally, so the live
+"there is no graph" signal only ever painted a banner and disabled the Run
+button. It never gated the rendering. Fixed in the presentation layer, where the
+live signal already is, rather than by making a cheap registry read probe the
+warehouse on every call.
+
+Changes:
+
+1. `src/front/static/query/js/query-analytics.js`
+   Added module-level `_graphMissing`, set on both no-graph exit paths of
+   `_loadEntityTypes` (empty `graph_name`, failed stats probe) and cleared on
+   the success path so a rebuild brings the dashboard back.
+2. `src/front/static/query/js/query-analytics.js`
+   New `_clearAnalyticsResults()` — the exact inverse of `_renderAnalyticsData`:
+   hides `#analyticsResults`, the scope subtitle and the provenance line, hides
+   Interpret/Audit, nulls `_analyticsData`, and destroys the Chart.js instances
+   (a hidden container still redraws on resize).
+3. `src/front/static/query/js/query-analytics.js`
+   `analyticsResume()` now clears and returns when `_graphMissing`, before the
+   fetch — checking after would still flash the stale charts. Nulling
+   `_analyticsData` also stops Interpret from posting a dropped graph's metrics
+   to the LLM.
+4. `src/front/static/query/js/query-analytics.js`
+   The no-graph banner now says previous results are no longer shown because the
+   graph they describe does not exist, and points at KG → Management → Runs,
+   which retains the history. An empty dashboard with no explanation reads as a
+   broken page to someone who saw charts there before.
+5. `tests/units/front/test_analytics_stale_result_gate.py` (new, 11 tests)
+   The contract: the live signal is recorded on every path, the dashboard is
+   gated before the fetch, the clear helper hides the container and drops the
+   cached payload, and the banner explains the disappearance.
+
+Verification: drove the real module in Node with a stubbed DOM and a `fetch`
+that fails `/dtwin/sync/stats` while `/dtwin/metrics/latest` still returns a
+result — the deleted-objects situation. Before the guard the Nodes/Edges tiles
+filled with `4,321` / `9,876` from the stale run and Interpret was revealed,
+reproducing the report; after it they stay empty and Interpret stays hidden. Ran
+the same harness with a healthy `/dtwin/sync/stats` to confirm a live graph
+still renders its stored result and Run stays enabled.
+
+Modified files:
+- `src/front/static/query/js/query-analytics.js`
+- `tests/units/front/test_analytics_stale_result_gate.py` (new)
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5107 passed, 281 skipped,
+6 deselected, 1 xfailed, 0 failed in 35.66s (+11 tests).
