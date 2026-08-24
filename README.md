@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="http://ontobricks.datacorner.net/">Website</a>
+  <a href="https://ontobricks.org/">Website</a>
   ·
   <a href="https://github.com/databrickslabs/ontobricks">GitHub</a>
 </p>
