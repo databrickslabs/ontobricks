@@ -195,7 +195,7 @@ git push origin main --tags
 The **graph** triple-store backend is pluggable (`GraphDBFactory` / `GraphDBBackend`). The **selection is made per domain** — each domain picks its backend from a single **Graph Backend** dropdown under **Domain → Information → Knowledge Graph** (mandatory; defaults to `lakebase`). Three engines ship:
 
 - **Lakebase (Postgres)** — default; **three Postgres objects per domain version** (`*_sync` bulk-data table, `*__app` companion for reasoning/cohort writes, `g_<dom>_v<n>` UNION view for reads) inside a configurable Postgres schema on the **App-bound** Lakebase database (same connection as the optional Lakebase registry backend). Requires the `lakebase` extra (`uv sync --extra lakebase`) so `psycopg` is installed.
-- **Lakehouse** — governed Unity Catalog Delta triple tables; no separate graph database to provision.
+- **Lakehouse** — governed Unity Catalog Delta triple tables; no separate graph database to provision. A per-domain **Materialization** option trades the materialized copy for pass-through views, so the graph reads live source data and duplicates nothing.
 - **Neo4j** — native graph database over Bolt (Neo4j Aura or self-hosted). The `neo4j` Python driver is a core dependency.
 
 The backend *selection* is stored per-domain in `DomainSession.info['graph_backend']` and versioned with the domain. Switching a domain's backend after a build requires **rebuilding** the Knowledge Graph — graph artifacts are not migrated between engines.

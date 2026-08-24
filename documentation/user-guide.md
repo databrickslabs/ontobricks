@@ -521,6 +521,17 @@ Click **Build** in the sidebar to manage your triple store:
 - **Synchronize**: Generates all triples from your mappings and writes them to the Delta view in Unity Catalog and to the configured Graph DB engine (Lakebase Postgres)
 - **Last Updated**: When the table contains data, the status area displays the last modification date and time (for Delta from Unity Catalog metadata; for Lakebase from the Postgres `count_triples` + table metadata)
 
+**Storage kind (Lakehouse domains).** On a Lakehouse domain the page names the kind of object `…_data` is, because the two [materialization modes](#materialization-modes-lakehouse) produce objects with the same name and very different behaviour. Next to the target FQN a badge reads either **TABLE · materialized copy** or **VIEW · no data copy**, and the page's subtitle, the note under the FQN, and the status card title all follow the same mode:
+
+| | `Materialized Delta table` | `Views only` |
+|---|---|---|
+| Badge | **TABLE · materialized copy** | **VIEW · no data copy** |
+| What Build does | Copies the gateway output into the Delta table | Refreshes the gateway definition; copies nothing |
+| Triple count shown | Stored row count, as of the last build | A live query against your source tables |
+| Freshness | Point-in-time snapshot — rebuild to refresh | Always reflects current source data |
+
+In both modes `…_inferred` stays a Delta table, so reasoning and cohort writes are unaffected.
+
 ### Runs (Sidebar)
 
 Click **Runs** in the sidebar (next to **Build**, in the **Management** group) to see the domain's run history. The page has two tabs, each with its own table, newest first — **neither has a version filter, so both always span every version of the domain**:
@@ -614,9 +625,11 @@ Because the job can take a while on large graphs, it runs **asynchronously** in 
 >
 > 1. **Admin toggle on** — an admin must enable *Compute large-graph metrics on Databricks* in **Settings → Global**. `ONTOBRICKS_ANALYTICS_JOB_ENABLED` sets the *initial* value for a new deployment; once an admin uses the checkbox their choice wins (including an explicit "off").
 > 2. **Bundle deployed** — the Lakeflow job (`resources/graph_analytics.job.yml`) must be deployed via `make deploy`. OntoBricks resolves the job by name (suffix-matching so `[dev <user>]` prefixes work automatically).
-> 3. **Domain built** — the domain must have been built at least once after this version of OntoBricks was deployed. Build unconditionally materialises a Delta snapshot of the R2RML-mapped triples (`catalog.schema.triplestore_<domain>_V<n>_data`). If that snapshot is absent or empty, the panel names this requirement and the remedy is a rebuild. Domains built before upgrading to this version need one rebuild.
+> 3. **Domain built** — the domain must have been built at least once after this version of OntoBricks was deployed. Build always produces the R2RML-mapped triples as `catalog.schema.triplestore_<domain>_V<n>_data`. If that relation is absent or empty, the panel names this requirement and the remedy is a rebuild. Domains built before upgrading to this version need one rebuild.
 >
-> **What the job scores.** Analytics reads the mapped-triple snapshot — the same table regardless of whether your backend is Lakehouse, Lakebase or Neo4j. Inferred and cohort triples are out of scope; reasoning does not affect the KPIs.
+> **What the job scores.** Analytics reads the mapped triples — the same relation regardless of whether your backend is Lakehouse, Lakebase or Neo4j. Inferred and cohort triples are out of scope; reasoning does not affect the KPIs.
+>
+> **View-only Lakehouse domains.** When `…_data` is a pass-through view rather than a table (see [Materialization modes](#materialization-modes-lakehouse)), each run first materializes a temporary `…_analytics` Delta snapshot and drops it when the run ends. The KPIs are identical; the run just carries the cost of one extra scan of your source tables up front, and needs a configured SQL warehouse to build the snapshot.
 >
 > **Betweenness and closeness are estimates.** The job samples `ONTOBRICKS_ANALYTICS_JOB_PIVOTS` source nodes (default **64**) and runs a breadth-first search from each (the Brandes–Pich approach). Both metrics carry an "Estimate" note on the ranking chart. Treat them as a ranking of the clear leaders, not as absolute values. If the BFS hits the depth cap (`ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH`, default **32**) before the graph is fully explored, betweenness and closeness are withheld entirely — reported as unavailable rather than as numbers — because truncated distance sums would be biased; their distribution tiles then read "Not computed for this run" and the ranking chart explains why. Raise `ONTOBRICKS_ANALYTICS_JOB_MAX_DEPTH` and re-run to resolve this. Set pivots to `0` to skip both metrics and make the job cheaper; setting pivots at or above the node count makes them exact.
 >
@@ -800,6 +813,7 @@ The **Global** tab in the Domain Information section contains the main domain se
 | Field | Description |
 |-------|-------------|
 | **Backend** | Select the Graph DB engine for this domain (`lakebase`, `databricks` / Lakehouse, or `neo4j`). Build always also creates the Unity Catalog triple-store family below. |
+| **Materialization** | Lakehouse only. `Materialized Delta table` (default) copies the mapped triples into `…_data` at build time; `Views only` makes `…_data` a pass-through view over the gateway instead — nothing is duplicated. See [Materialization modes](#materialization-modes-lakehouse). |
 | **Triple-Store** | Read-only. Base name in the domain's registry `catalog.schema`: `triplestore_<domain>_V<version>`. Build creates four related objects from that base (see below). |
 | **Graph DB table** | Read-only. For Lakebase, the flat triple table name is derived as `g_<domain>_v<version>` in the configured Postgres schema (default `ontobricks_graph`). |
 
@@ -810,7 +824,7 @@ When you **commit** the domain name (blur the field or trigger `change`) or chan
 | Object | Kind | What it is for |
 |--------|------|----------------|
 | `triplestore_<domain>_V<n>` | VIEW | Live R2RML mapping over your source tables |
-| `…_data` | Delta TABLE | Materialised mapped triples — what **Analytics** reads; also the bulk half of the graph |
+| `…_data` | Delta TABLE *or* VIEW | Mapped triples — what **Analytics** reads; also the bulk half of the graph. A table by default, a pass-through view under `Views only` materialization |
 | `…_inferred` | Delta TABLE | Reasoning / cohort / app-written triples |
 | `…_graph` | VIEW | `_data ∪ _inferred` — what Explorer and most graph reads use |
 
@@ -820,13 +834,44 @@ Full detail: [Architecture → Lakehouse Unity Catalog objects](architecture.md#
 
 | Backend | Storage | Sync | Best for |
 |---------|---------|------|----------|
-| **Lakehouse (Delta)** | The UC objects above (SQL Warehouse) | Build CTAS + companion tables | Unity Catalog governance, analytics on the mapped snapshot, no separate graph DB |
+| **Lakehouse (Delta)** | The UC objects above (SQL Warehouse) | Build CTAS + companion tables, or views only | Unity Catalog governance, analytics on the mapped snapshot, no separate graph DB |
 | **Lakebase Postgres** | Flat `(subject, predicate, object)` table on the App-bound Lakebase instance | App-managed (`COPY FROM STDIN`) or managed-synced (Lakeflow) | Low-latency reads from the FastAPI process, reasoning, BFS / cohort builds |
 | **Neo4j** | Bolt-connected property graph | Build `MERGE` of mapped triples | Cypher traversal workloads |
 
 **Performance:**
-- **Delta** materialises the R2RML VIEW into `_data` with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW.
+- **Delta** materialises the R2RML VIEW into `_data` with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW. Under `Views only` materialization there is nothing to cluster or optimise, and that read cost moves from a single Delta scan to a full re-execution of the mapping SQL.
 - **Lakebase** stores triples in Postgres flat tables. Two modes are available: `app_managed` (the app streams batches via `COPY FROM STDIN`, idempotent on `(subject, predicate, object)`) and `managed_synced` (Databricks Lakeflow keeps a synced table in lock-step with the mapped Delta snapshot, while a writable companion table absorbs reasoning/cohort writes — the read view UNIONs both).
+
+#### Materialization modes (Lakehouse)
+
+A Lakehouse domain chooses how `…_data` is built, in **Domain → Information →
+Knowledge Graph → Materialization**. The rest of the object family is identical
+either way, and a change takes effect on the next Build.
+
+| | Materialized Delta table (default) | Views only |
+|---|---|---|
+| `…_data` | Delta table, `CLUSTER BY (predicate, subject)` | View: `SELECT subject, predicate, object FROM <gateway view>` |
+| Storage used | One copy of every mapped triple | None |
+| Build time | Proportional to graph size (CTAS + `OPTIMIZE`) | Near-instant — only DDL runs |
+| Freshness | As of the last Build | Always live: every read re-runs the mapping SQL |
+| Query cost | One scan of a clustered Delta table | Re-executes the R2RML SQL against your source tables |
+
+Two things are unaffected by the choice:
+
+- **Inferred triples** keep their own `…_inferred` Delta table. Reasoning and
+  cohort output has no source table to be derived from, so it always lands in
+  real storage.
+- **Graph Analytics** always scans a Delta table. For a view-only domain the
+  job materializes a temporary `…_analytics` snapshot for the duration of one
+  run and drops it at the end — its iterative BFS would otherwise re-run the
+  whole mapping query on every pass. A leftover snapshot (from a run that died)
+  is listed under **Settings → Lakehouse** and can be purged there.
+
+Pick `Views only` when source data changes constantly and you would rather pay
+per query than rebuild, or when duplicating the triples is not acceptable for
+governance or cost reasons. Keep the default when the graph is queried
+interactively — Explorer, GraphQL and reasoning all read through `…_graph`, and
+each of those reads inherits the mapping query's cost in view-only mode.
 
 ### Saving Domains
 

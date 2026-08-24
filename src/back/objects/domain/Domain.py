@@ -242,6 +242,9 @@ class Domain:
                 self._s.info.get("graph_backend")
             ),
             "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
+            "lakehouse_materialization": self._coerce_lakehouse_materialization(
+                self._s.info.get("lakehouse_materialization")
+            ),
             "view_table": view_table,
             "graph_name": graph_name,
         }
@@ -384,6 +387,12 @@ class Domain:
                     )
                     or ""
                 ).strip(),
+                "lakehouse_materialization": self._coerce_lakehouse_materialization(
+                    data.get(
+                        "lakehouse_materialization",
+                        self._s.info.get("lakehouse_materialization"),
+                    )
+                ),
             }
         )
         self._s.info.pop("neo4j_database", None)
@@ -429,6 +438,9 @@ class Domain:
                 self._s.info.get("graph_backend")
             ),
             "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
+            "lakehouse_materialization": self._coerce_lakehouse_materialization(
+                self._s.info.get("lakehouse_materialization")
+            ),
         }
 
     @staticmethod
@@ -445,6 +457,17 @@ class Domain:
         from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 
         return normalize_graph_backend(raw if isinstance(raw, str) else None)
+
+    @staticmethod
+    def _coerce_lakehouse_materialization(raw: Any) -> str:
+        """Normalise the Lakehouse materialization mode (default ``table``)."""
+        from back.core.graphdb.GraphDBFactory import (
+            normalize_lakehouse_materialization,
+        )
+
+        return normalize_lakehouse_materialization(
+            raw if isinstance(raw, str) else None
+        )
 
     @staticmethod
     def _sanitize_base_uri(uri: str) -> str:
@@ -526,6 +549,9 @@ class Domain:
                 self._s.info.get("graph_backend")
             ),
             "neo4j_connection": str(self._s.info.get("neo4j_connection", "") or "").strip(),
+            "lakehouse_materialization": self._coerce_lakehouse_materialization(
+                self._s.info.get("lakehouse_materialization")
+            ),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,

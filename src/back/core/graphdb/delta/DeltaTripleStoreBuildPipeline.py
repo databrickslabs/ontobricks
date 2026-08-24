@@ -1,4 +1,4 @@
-"""Narrow build pipeline: R2RML VIEW → materialized Delta TABLE (no Lakebase)."""
+"""Narrow build pipeline: R2RML VIEW → ``…_data`` relation (no Lakebase)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from back.core.errors import OntoBricksError, OperationCancelledError
+from back.core.graphdb.GraphDBFactory import GraphDBFactory
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.logging import get_logger
 from back.objects.digitaltwin._build_pipeline import collect_domain_stats
@@ -16,7 +17,13 @@ logger = get_logger(__name__)
 
 
 class DeltaTripleStoreBuildPipeline:
-    """Materialize the UC Delta triple store from R2RML mappings only."""
+    """Build the UC Delta triple store from R2RML mappings only.
+
+    ``…_data`` is either materialized (CTAS) or exposed as a pass-through view
+    over the gateway VIEW, depending on the domain's Lakehouse materialization
+    setting. Everything downstream — the inferred companion, the union graph
+    view — is identical either way.
+    """
 
     def __init__(
         self,
@@ -65,6 +72,9 @@ class DeltaTripleStoreBuildPipeline:
         self.triple_count: int = 0
         self.inferred_table = _table_naming.inferred_table_fqn(domain, settings)
         self.graph_view = _table_naming.graph_view_fqn(domain, settings)
+        self.materialization = GraphDBFactory.resolve_lakehouse_materialization(
+            domain, settings
+        )
 
     def _log_phase(self, name: str, t0_phase: float) -> None:
         elapsed = time.time() - t0_phase
@@ -81,11 +91,12 @@ class DeltaTripleStoreBuildPipeline:
 
     def run(self) -> None:
         logger.info(
-            "[DT-DELTA-BUILD %s] START domain=%s view=%s data=%s",
+            "[DT-DELTA-BUILD %s] START domain=%s view=%s data=%s materialization=%s",
             self.task_id,
             self.domain_name,
             self.view_table,
             self.data_table,
+            self.materialization,
         )
         try:
             t_phase = time.time()
@@ -117,9 +128,12 @@ class DeltaTripleStoreBuildPipeline:
             self._ensure_graph_view()
             self._log_phase("ensure_graph_view", t_phase)
 
-            t_phase = time.time()
-            materialize.optimize_table(self.source_client, self.data_table)
-            self._log_phase("optimize", t_phase)
+            # Nothing to compact when ``…_data`` is a view — OPTIMIZE only
+            # applies to a Delta table.
+            if not self._is_view_mode:
+                t_phase = time.time()
+                materialize.optimize_table(self.source_client, self.data_table)
+                self._log_phase("optimize", t_phase)
 
             self._complete_task()
         except OperationCancelledError as exc:
@@ -231,10 +245,21 @@ class DeltaTripleStoreBuildPipeline:
             logger.warning("Could not count VIEW %s: %s", self.view_table, exc)
             return 0
 
+    @property
+    def _is_view_mode(self) -> bool:
+        return self.materialization == "view"
+
+    @property
+    def build_mode(self) -> str:
+        return "delta_view" if self._is_view_mode else "delta_full"
+
     def _materialize_data_table(self) -> bool:
-        self.tm.advance_step(
-            self.task_id, f"Materializing Delta table {self.data_table}..."
+        step = (
+            f"Creating pass-through VIEW {self.data_table}..."
+            if self._is_view_mode
+            else f"Materializing Delta table {self.data_table}..."
         )
+        self.tm.advance_step(self.task_id, step)
         self.triple_count = self._count_view_triples()
         if self.triple_count == 0:
             msg = "VIEW created but no triples generated (check your mappings)"
@@ -244,7 +269,8 @@ class DeltaTripleStoreBuildPipeline:
                     "triple_count": 0,
                     "view_table": self.view_table,
                     "data_table": self.data_table,
-                    "build_mode": "delta_full",
+                    "build_mode": self.build_mode,
+                    "materialization": self.materialization,
                     "duration_seconds": time.time() - self.start_time,
                 },
                 message=msg,
@@ -257,19 +283,25 @@ class DeltaTripleStoreBuildPipeline:
         # snapshot has to be taken here too. The two never run in the same
         # build, so this is not a second materialisation of the same table.
         try:
-            materialize.materialize_from_view(
-                self.source_client, self.view_table, self.data_table
+            materialize.apply_data_relation(
+                self.source_client,
+                self.view_table,
+                self.data_table,
+                mode=self.materialization,
             )
             self.tm.update_progress(
                 self.task_id,
                 85,
-                f"Materialized {self.triple_count} triples",
+                (
+                    f"Exposed {self.triple_count} triples through a view"
+                    if self._is_view_mode
+                    else f"Materialized {self.triple_count} triples"
+                ),
             )
             return True
         except Exception as exc:  # noqa: BLE001
-            self.tm.fail_task(
-                self.task_id, f"Failed to materialize Delta table: {exc}"
-            )
+            what = "pass-through view" if self._is_view_mode else "Delta table"
+            self.tm.fail_task(self.task_id, f"Failed to create the {what}: {exc}")
             return False
 
     def _ensure_inferred_companion(self) -> None:
@@ -301,7 +333,8 @@ class DeltaTripleStoreBuildPipeline:
                 "triple_count": self.triple_count,
                 "view_table": self.view_table,
                 "data_table": self.data_table,
-                "build_mode": "delta_full",
+                "build_mode": self.build_mode,
+                "materialization": self.materialization,
                 "duration_seconds": duration,
             },
             message=msg,
@@ -340,6 +373,7 @@ class DeltaTripleStoreBuildPipeline:
                 "relationship_count": len(self.relationship_mappings or []),
                 "sql_chars": len(self.spark_sql or ""),
                 "triple_store_backend": "databricks",
+                "materialization": self.materialization,
                 "view_table": self.view_table,
                 "data_table": self.data_table,
                 "task_id": self.task_id,

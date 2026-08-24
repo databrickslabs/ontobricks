@@ -522,6 +522,7 @@ function buildDomainInfoPayload() {
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
     const graphBackendEl = document.getElementById('domainGraphBackend');
     const neo4jConnEl = document.getElementById('domainNeo4jDatabase');
+    const materializationEl = document.getElementById('domainLakehouseMaterialization');
     const versionEl = document.getElementById('domainVersionSelect');
 
     const payload = {
@@ -537,6 +538,13 @@ function buildDomainInfoPayload() {
         // connection name cannot linger on the domain.
         neo4j_connection: graphBackendEl
             ? (graphBackendEl.value === 'neo4j' && neo4jConnEl ? neo4jConnEl.value : '')
+            : undefined,
+        // Only meaningful for Lakehouse; reset for other backends so a domain
+        // that moved off Lakehouse cannot carry a view-only setting the other
+        // engines would have to ignore.
+        lakehouse_materialization: graphBackendEl
+            ? (graphBackendEl.value === 'databricks' && materializationEl
+                ? materializationEl.value : 'table')
             : undefined,
         version: versionEl ? versionEl.value : undefined,
     };

@@ -795,7 +795,7 @@ Knowledge Graph**; connection settings live under **Settings → Back end**.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
-| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + materialised Delta tables (SQL Warehouse) | Spark SQL | Yes (mapped snapshot = `_data`) |
+| **Delta Triple Store** | `view` / `_data` / `_inferred` / `_graph` | Unity Catalog R2RML VIEW + Delta tables, or views only (SQL Warehouse) | Spark SQL | Yes (mapped triples = `_data`) |
 | **Lakebase Graph DB** | `graph` (engine `lakebase`) | Postgres flat `(subject, predicate, object)` table on the App-bound Lakebase instance | Postgres SQL | Mirror of the mapped snapshot |
 | **Databricks Graph DB** | `graph` (engine `databricks`) | Same Delta objects as the triple store (no second copy) | Spark SQL | The mapped snapshot itself |
 | **Neo4j Graph DB** | `graph` (engine `neo4j`) | Bolt-connected Neo4j (Aura / self-hosted); flat-triple nodes per store | Cypher | Mirror of the mapped snapshot |
@@ -807,14 +807,14 @@ Every successful **Knowledge Graph → Build** creates (or refreshes) four relat
 | Object | Kind | Role |
 |--------|------|------|
 | `triplestore_<domain>_V<n>` | **VIEW** | Live R2RML mapping: SQL that projects source Unity Catalog tables into `(subject, predicate, object)`. Refreshed on Build. Not a durable store — it recomputes from sources when queried. |
-| `…_data` | **Delta TABLE** | Materialised snapshot of that VIEW (`CREATE OR REPLACE TABLE … AS SELECT subject, predicate, object FROM <view>`), clustered by `(predicate, subject)`. Stable triples used by **Graph Analytics** and as the bulk half of the graph. Build always materialises this; domains built before that step need one rebuild. |
-| `…_inferred` | **Delta TABLE** | Writable companion with the same schema. Holds app-written / reasoning / cohort triples that are *not* in the mapped sources. Truncated on a full rebuild, then refilled as those features write. |
+| `…_data` | **Delta TABLE** or **VIEW** | The mapped triples. By default a materialised snapshot of the VIEW (`CREATE OR REPLACE TABLE … AS SELECT subject, predicate, object FROM <view>`) clustered by `(predicate, subject)`; under view-only materialization, a pass-through `CREATE OR REPLACE VIEW` over the same VIEW. Either way it is what **Graph Analytics** reads and the bulk half of the graph. Domains built before this step existed need one rebuild. |
+| `…_inferred` | **Delta TABLE** | Writable companion with the same schema. Holds app-written / reasoning / cohort triples that are *not* in the mapped sources. Truncated on a full rebuild, then refilled as those features write. A table in both materialization modes — inferred triples have no source to be derived from. |
 | `…_graph` | **VIEW** | Read façade: `_data UNION ALL _inferred`. Explorer, filters, stats, GraphQL, and most interactive reads use this when inferred triples are included. |
 
 ```text
 source tables
     → R2RML VIEW          (live mapping definition)
-    → _data TABLE         (frozen mapped triples)
+    → _data               (TABLE: frozen mapped triples, or VIEW: pass-through)
          ↘
            _graph VIEW    (what the UI usually reads)
          ↗
@@ -823,7 +823,16 @@ source tables
 
 **Why both a VIEW and `_data`?** The R2RML view is the definition of “what the mapping says.” Analytics and heavy jobs need a fixed Delta table they can scan reliably (and identically across Lakehouse, Lakebase, and Neo4j backends). `_data` is that freeze. `_graph` then layers inferred rows on top for interactive reads without copying them into the mapped snapshot.
 
-**Analytics outputs** (node metrics, `_summary`, `_type_profiles`, …) are a separate family written by the Lakeflow analytics job. They *read* `_data`; they are not part of the graph store.
+**Materialization modes** are a per-domain Lakehouse setting (`info['lakehouse_materialization']`, resolved by `GraphDBFactory.resolve_lakehouse_materialization`, applied by `materialize.apply_data_relation`):
+
+- `table` (default) — CTAS + `OPTIMIZE`. One copy of the triples; reads are a single clustered Delta scan.
+- `view` — no copy at all. `_data` is a view over the gateway, so every read re-executes the mapping SQL against the source tables and always sees live data. Builds only run DDL, and `OPTIMIZE` is skipped since there is nothing to compact.
+
+Lakebase and Neo4j domains always get the table: the resolver returns `table` for any backend other than `databricks`, because their own graph is not what the analytics job reads.
+
+Switching a domain between modes needs the stale relation of the other kind dropped first — Databricks refuses to replace a TABLE with a VIEW and vice versa — so `apply_data_relation` issues that cross-drop before creating either.
+
+**Analytics outputs** (node metrics, `_summary`, `_type_profiles`, …) are a separate family written by the Lakeflow analytics job. They *read* `_data`; they are not part of the graph store. For a view-only domain the job cannot scan `_data` directly — its iterative BFS would re-derive the mapping on every pass — so `JobMetrics.analytics_snapshot` materialises a disposable `…_analytics` table for the run and drops it in a `finally`. A leftover from a run that died is grouped with its domain in Settings → Lakehouse for purging.
 
 ### Backend Abstraction
 

@@ -3066,6 +3066,11 @@ class DigitalTwin:
         deliberate — the same domain must produce the same KPIs whatever engine
         holds its graph, and at any size.
 
+        A view-only Lakehouse domain has no such snapshot standing, so
+        :func:`analytics_snapshot` materialises a disposable one around the run
+        and drops it afterwards. The job therefore always scans a Delta table,
+        whatever the domain's materialization.
+
         Raises rather than degrading when the job cannot run: a run that
         silently returns fewer metrics is exactly what this path replaced.
 
@@ -3074,7 +3079,11 @@ class DigitalTwin:
 
         Returns a JSON-serializable dict matching the API contract.
         """
-        from back.core.graph_analysis import MetricsRequest, resolve_analytics_source
+        from back.core.graph_analysis import (
+            MetricsRequest,
+            analytics_snapshot,
+            resolve_analytics_source,
+        )
 
         source_table, reason = resolve_analytics_source(self._domain, settings)
         if not source_table:
@@ -3082,17 +3091,18 @@ class DigitalTwin:
                 "The graph analytics job cannot read this domain", detail=reason
             )
 
-        job_metrics = DigitalTwin.build_job_metrics(
-            self._domain,
-            settings,
-            source_table=source_table,
-            graph_name=graph_name,
-            top_n=top_n,
-        )
         request = MetricsRequest(
             predicate_filter=predicate_filter, class_filter=class_filter
         )
-        return job_metrics.compute(request, on_progress=on_progress).to_dict()
+        with analytics_snapshot(self._domain, settings, source_table) as scan_table:
+            job_metrics = DigitalTwin.build_job_metrics(
+                self._domain,
+                settings,
+                source_table=scan_table,
+                graph_name=graph_name,
+                top_n=top_n,
+            )
+            return job_metrics.compute(request, on_progress=on_progress).to_dict()
 
     @staticmethod
     def build_job_metrics(

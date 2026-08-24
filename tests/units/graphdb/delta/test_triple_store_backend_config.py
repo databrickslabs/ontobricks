@@ -5,8 +5,10 @@ from unittest.mock import MagicMock, patch
 from back.core.helpers import effective_graph_query_table
 from back.core.graphdb.GraphDBFactory import (
     GRAPH_BACKENDS,
+    LAKEHOUSE_MATERIALIZATIONS,
     GraphDBFactory,
     normalize_graph_backend,
+    normalize_lakehouse_materialization,
 )
 
 REGISTRY = {"catalog": "c", "schema": "s", "volume": "v"}
@@ -51,6 +53,42 @@ class TestPerDomainResolution:
         d.info = {}
         assert GraphDBFactory._resolve_triple_store_backend(d) == "lakebase"
         assert GraphDBFactory._resolve_graph_engine(d) == "lakebase"
+
+
+class TestLakehouseMaterialization:
+    """``…_data`` is a copy unless a Lakehouse domain asked otherwise."""
+
+    def test_allowed_modes(self):
+        assert set(LAKEHOUSE_MATERIALIZATIONS) == {"table", "view"}
+
+    def test_normalize_defaults_to_table(self):
+        assert normalize_lakehouse_materialization(None) == "table"
+        assert normalize_lakehouse_materialization("") == "table"
+        assert normalize_lakehouse_materialization("materialized") == "table"
+
+    def test_normalize_case_insensitive(self):
+        assert normalize_lakehouse_materialization(" VIEW ") == "view"
+
+    def _domain(self, backend, materialization=None):
+        d = MagicMock()
+        d.info = {"graph_backend": backend}
+        if materialization is not None:
+            d.info["lakehouse_materialization"] = materialization
+        return d
+
+    def test_lakehouse_honours_view_only(self):
+        d = self._domain("databricks", "view")
+        assert GraphDBFactory.resolve_lakehouse_materialization(d) == "view"
+
+    def test_lakehouse_defaults_to_table(self):
+        d = self._domain("databricks")
+        assert GraphDBFactory.resolve_lakehouse_materialization(d) == "table"
+
+    def test_other_backends_ignore_the_setting(self):
+        """Their graph is not what analytics reads, so the snapshot is mandatory."""
+        for backend in ("lakebase", "neo4j"):
+            d = self._domain(backend, "view")
+            assert GraphDBFactory.resolve_lakehouse_materialization(d) == "table"
 
 
 class TestEffectiveGraphQueryTable:

@@ -1,4 +1,5 @@
-<!-- Databricks triple-store build (Delta TABLE only — no Lakebase sync) -->
+<!-- Lakehouse triple-store build: ..._data as a Delta TABLE or a pass-through
+     VIEW over the gateway, per the domain's Materialization setting. -->
 <div class="content-section sync-content-section" id="databricksBuildRoot">
 
     <div id="dbxBuildLoadingOverlay" class="sync-loading-overlay">
@@ -10,7 +11,7 @@
     <div class="section-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="bi bi-fast-forward me-2"></i>Build</h4>
-            <p class="text-muted mb-0 small">Materialize mapped triples into a governed Delta table in Unity Catalog</p>
+            <p class="text-muted mb-0 small" id="dbxBuildSubtitle">Materialize mapped triples into a governed Delta table in Unity Catalog</p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <span id="dbxBuildStatusText" class="text-muted small"></span>
@@ -40,9 +41,13 @@
     <div id="dbxBuildResultAlert" class="alert small mb-3 d-none" role="alert"></div>
 
     <div class="alert alert-light border small mb-3">
-        <strong>Target Delta table</strong>
+        <div class="d-flex align-items-center flex-wrap gap-2">
+            <strong id="dbxBuildDataTableLabel">Target Delta table</strong>
+            <span id="dbxBuildStorageBadge" class="badge dbx-storage-badge d-none"></span>
+        </div>
         <div class="font-monospace mt-1" id="dbxBuildDataTable">—</div>
         <div class="text-muted mt-1">Triple-Store Gateway: <span class="font-monospace" id="dbxBuildViewTable">—</span></div>
+        <div class="text-muted mt-1 d-none" id="dbxBuildStorageNote"></div>
     </div>
 
     <div id="dbxBuildReadinessCard" class="mb-3"></div>

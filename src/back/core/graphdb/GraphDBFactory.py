@@ -32,11 +32,26 @@ logger = get_logger(__name__)
 GRAPH_BACKENDS: Tuple[str, ...] = ("lakebase", "databricks", "neo4j")
 DEFAULT_GRAPH_BACKEND = "lakebase"
 
+# How the Lakehouse backend shapes the ``…_data`` relation, stored per domain in
+# ``DomainSession.info['lakehouse_materialization']``:
+#   ``table`` -> CTAS the gateway VIEW into a clustered Delta TABLE (a copy)
+#   ``view``  -> a pass-through VIEW over the gateway VIEW (no copy)
+# Only ever ``view`` for the ``databricks`` backend: Lakebase and Neo4j domains
+# need the materialized snapshot for Graph Analytics.
+LAKEHOUSE_MATERIALIZATIONS: Tuple[str, ...] = ("table", "view")
+DEFAULT_LAKEHOUSE_MATERIALIZATION = "table"
+
 
 def normalize_graph_backend(value: Optional[str]) -> str:
     """Return a valid per-domain graph backend, defaulting to ``lakebase``."""
     v = (value or "").strip().lower()
     return v if v in GRAPH_BACKENDS else DEFAULT_GRAPH_BACKEND
+
+
+def normalize_lakehouse_materialization(value: Optional[str]) -> str:
+    """Return a valid Lakehouse materialization mode, defaulting to ``table``."""
+    v = (value or "").strip().lower()
+    return v if v in LAKEHOUSE_MATERIALIZATIONS else DEFAULT_LAKEHOUSE_MATERIALIZATION
 
 
 class GraphDBFactory:
@@ -252,6 +267,28 @@ class GraphDBFactory:
         """Resolve the triple-store backend from the per-domain backend choice."""
         backend = GraphDBFactory._resolve_graph_backend(domain)
         return "databricks" if backend == "databricks" else "lakebase"
+
+    @staticmethod
+    def resolve_lakehouse_materialization(
+        domain: Any, settings: Optional[Any] = None
+    ) -> str:
+        """Return how this domain's ``…_data`` relation must be built.
+
+        ``view`` only when the domain runs on the Lakehouse backend and asked
+        for it; every other combination materializes, because Lakebase and
+        Neo4j domains have no other source for Graph Analytics.
+        """
+        if GraphDBFactory._resolve_triple_store_backend(domain, settings) != "databricks":
+            return DEFAULT_LAKEHOUSE_MATERIALIZATION
+        try:
+            info = getattr(domain, "info", None)
+            if isinstance(info, dict):
+                return normalize_lakehouse_materialization(
+                    info.get("lakehouse_materialization")
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not read lakehouse_materialization: %s", exc)
+        return DEFAULT_LAKEHOUSE_MATERIALIZATION
 
     @staticmethod
     def _resolve_graph_engine_config(

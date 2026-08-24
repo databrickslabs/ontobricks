@@ -3,7 +3,11 @@
 from back.core.graph_analysis.CohortVocabulary import CohortVocabulary
 from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
-from back.core.graph_analysis.JobMetrics import JobMetrics, resolve_analytics_source
+from back.core.graph_analysis.JobMetrics import (
+    JobMetrics,
+    analytics_snapshot,
+    resolve_analytics_source,
+)
 from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
 from back.core.graph_analysis.preflight import (
     analytics_job_configured,
@@ -106,6 +110,7 @@ __all__ = [
     "GraphBuilder",
     "JobMetrics",
     "LakeflowRunner",
+    "analytics_snapshot",
     "resolve_analytics_source",
     "analytics_job_configured",
     "analytics_job_status",

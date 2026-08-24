@@ -9,6 +9,19 @@ Models
    :undoc-members:
    :show-inheritance:
 
+Job Metrics
+-----------
+
+Source resolution and read-back for the Databricks analytics job. The job
+always scans a Delta table: :func:`~back.core.graph_analysis.JobMetrics.analytics_snapshot`
+materializes a disposable one for a domain whose ``…_data`` is a pass-through
+view, and drops it when the run ends.
+
+.. automodule:: back.core.graph_analysis.JobMetrics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Community Detector
 ------------------
 

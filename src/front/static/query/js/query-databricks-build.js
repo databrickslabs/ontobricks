@@ -1,5 +1,6 @@
 /**
- * Databricks triple-store build page — VIEW → Delta TABLE only.
+ * Databricks triple-store build page — R2RML VIEW into a Delta TABLE, or into
+ * a pass-through VIEW when the domain uses view-only materialization.
  */
 
 const DBX_BUILD_TASK_KEY = 'ontobricks_databricks_build_task';
@@ -88,6 +89,56 @@ function applyTripleStoreBackendPanels() {
     if (dbxPanel) dbxPanel.classList.toggle('d-none', !isDbx);
 }
 
+/**
+ * Name the storage kind of ``…_data`` everywhere the page refers to it.
+ *
+ * The two modes produce objects with the same name and very different cost
+ * and freshness characteristics, so "Target Delta table" over a pass-through
+ * view is actively misleading: it implies a copy exists, that the triple
+ * count is stored, and that a rebuild is needed after the source changes.
+ */
+function _applyDbxStorageKind(isViewMode) {
+    const label = document.getElementById('dbxBuildDataTableLabel');
+    if (label) {
+        label.textContent = isViewMode ? 'Target view' : 'Target Delta table';
+    }
+
+    const badge = document.getElementById('dbxBuildStorageBadge');
+    if (badge) {
+        // Info tint for the view: it is the deliberate, non-default choice.
+        // The materialized table is the default, so it stays neutral —
+        // primary red is reserved for high-signal moments.
+        badge.className = 'badge dbx-storage-badge ' + (isViewMode
+            ? 'bg-info bg-opacity-10 text-info border border-info'
+            : 'bg-secondary bg-opacity-10 text-secondary border');
+        badge.innerHTML = isViewMode
+            ? '<i class="bi bi-eye me-1"></i>VIEW · no data copy'
+            : '<i class="bi bi-table me-1"></i>TABLE · materialized copy';
+        badge.title = isViewMode
+            ? 'Views only: ..._data is a SELECT over the gateway view, so it '
+              + 'always reflects the current source data.'
+            : 'Materialized: ..._data is a Delta copy of the gateway view, '
+              + 'refreshed only by a build.';
+    }
+
+    const note = document.getElementById('dbxBuildStorageNote');
+    if (note) {
+        note.textContent = isViewMode
+            ? 'Views only — Build refreshes the gateway definition; no triples '
+              + 'are copied. Inferred triples keep their own Delta table.'
+            : 'Materialized — Build copies the gateway output into this Delta '
+              + 'table, so it is a point-in-time snapshot of the source.';
+        note.classList.remove('d-none');
+    }
+
+    const subtitle = document.getElementById('dbxBuildSubtitle');
+    if (subtitle) {
+        subtitle.textContent = isViewMode
+            ? 'Expose mapped triples through a governed Unity Catalog view — no data copy'
+            : 'Materialize mapped triples into a governed Delta table in Unity Catalog';
+    }
+}
+
 async function loadDatabricksBuildInfo() {
     const overlay = document.getElementById('dbxBuildLoadingOverlay');
     if (overlay) overlay.classList.remove('d-none');
@@ -96,10 +147,13 @@ async function loadDatabricksBuildInfo() {
         const data = await resp.json();
         if (!data.success) return;
 
+        const isViewMode = data.materialization === 'view';
+
         const viewEl = document.getElementById('dbxBuildViewTable');
         const dataEl = document.getElementById('dbxBuildDataTable');
         if (viewEl) viewEl.textContent = data.view_table || '—';
         if (dataEl) dataEl.textContent = data.data_table || '—';
+        _applyDbxStorageKind(isViewMode);
 
         const r = data.readiness || {};
         dbxBuildReady = !!r.mapping_valid;
@@ -112,13 +166,18 @@ async function loadDatabricksBuildInfo() {
         }
 
         const ts = data.triplestore_status || {};
+        const count = ts.count != null ? ts.count : 0;
         const statusCard = document.getElementById('dbxBuildStatusCard');
         if (statusCard) {
-            const count = ts.count != null ? ts.count : 0;
             const exists = ts.exists ? 'Yes' : 'No';
+            const icon = isViewMode ? 'bi-eye' : 'bi-table';
+            const title = isViewMode ? 'View status' : 'Delta table status';
             statusCard.innerHTML =
-                '<h6 class="fw-semibold mb-2"><i class="bi bi-table me-1"></i>Delta table status</h6>' +
-                '<div class="small">Exists: ' + exists + ' · Triples: <strong>' + count + '</strong></div>';
+                '<h6 class="fw-semibold mb-2"><i class="bi ' + icon + ' me-1"></i>' + title + '</h6>' +
+                '<div class="small">Exists: ' + exists + ' · Triples: <strong>' + count + '</strong></div>' +
+                (isViewMode
+                    ? '<div class="small text-muted mt-1">No triples are copied — this count is a live query.</div>'
+                    : '');
         }
 
         const btn = document.getElementById('dbxBuildStartBtn');

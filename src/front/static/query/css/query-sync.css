@@ -221,6 +221,12 @@
     flex: 2;
     gap: 0;
 }
+/* Storage-kind badge on the Lakehouse Build page: whether ..._data is a
+   materialized Delta table or a pass-through view over the gateway. */
+.dbx-storage-badge {
+    font-size: 0.65rem;
+    flex-shrink: 0;
+}
 .dt-arch-icon-triplestore   { color: #FF3621; }
 .dt-arch-icon-lakebase-img  { width: 1.5rem; height: 1.5rem; flex-shrink: 0; }
 .dt-arch-icon-table         { color: #0dcaf0; font-size: 0.9rem; }

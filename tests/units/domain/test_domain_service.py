@@ -175,6 +175,27 @@ class TestSaveDomainInfo:
         )
         assert domain.info["graph_backend"] == "neo4j"
 
+    def test_save_lakehouse_materialization(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info(
+            {"graph_backend": "databricks", "lakehouse_materialization": "view"}
+        )
+        assert domain.info["lakehouse_materialization"] == "view"
+        assert result["lakehouse_materialization"] == "view"
+
+    def test_unknown_lakehouse_materialization_falls_back_to_table(self):
+        """An unrecognised mode must not silently stop materialising."""
+        domain = _mock_domain()
+        Domain(domain).save_domain_info(
+            {"graph_backend": "databricks", "lakehouse_materialization": "nope"}
+        )
+        assert domain.info["lakehouse_materialization"] == "table"
+
+    def test_lakehouse_materialization_defaults_to_table(self):
+        domain = _mock_domain()
+        result = Domain(domain).get_domain_info()
+        assert result["info"]["lakehouse_materialization"] == "table"
+
     def test_review_quorum_clamped_to_minimum_one(self):
         domain = _mock_domain()
         Domain(domain).save_domain_info({"review_quorum": 0})

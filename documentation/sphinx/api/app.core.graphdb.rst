@@ -48,6 +48,19 @@ Delta (Unity Catalog) backend
    :undoc-members:
    :show-inheritance:
 
+Delta relation lifecycle
+------------------------
+
+The SQL that builds a domain's Unity Catalog objects. The ``…_data`` relation
+is either a materialized Delta table or a pass-through view over the R2RML
+gateway view, per the domain's Lakehouse materialization setting — see
+:func:`back.core.graphdb.GraphDBFactory.GraphDBFactory.resolve_lakehouse_materialization`.
+
+.. automodule:: back.core.graphdb.delta.materialize
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Lakebase (Postgres) subpackage
 ------------------------------
 

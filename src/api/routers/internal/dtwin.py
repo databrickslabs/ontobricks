@@ -1281,7 +1281,11 @@ async def databricks_build_info(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Readiness + Delta table status for the Databricks triple-store build page."""
+    """Readiness + ``…_data`` status for the Databricks triple-store build page.
+
+    ``materialization`` tells the page whether that relation is a Delta table
+    or a pass-through view, so it can label it and explain the triple count.
+    """
     from back.core.graphdb.delta import _table_naming
     from back.core.graphdb.delta.health import probe_from_client
     from back.core.graphdb.delta.DeltaBase import create_databricks_client
@@ -1297,6 +1301,9 @@ async def databricks_build_info(
     return {
         "success": True,
         "triple_store_backend": backend,
+        "materialization": GraphDBFactory.resolve_lakehouse_materialization(
+            domain, settings
+        ),
         "readiness": readiness,
         "view_table": view_table,
         "data_table": data_table,

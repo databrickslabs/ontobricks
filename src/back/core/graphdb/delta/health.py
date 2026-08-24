@@ -62,6 +62,7 @@ def settings_health_summary(
     registry_cfg: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Payload for Settings → Lakehouse triple-store health card."""
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
     from back.core.graphdb.delta import _table_naming
     from back.core.graphdb.delta.DeltaBase import create_databricks_client
 
@@ -102,6 +103,12 @@ def settings_health_summary(
         "storage_location": storage_location,
         "registry_configured": bool(storage_location),
         "active_domain": domain_name,
+        # ``table`` or ``view``: whether ``…_data`` is a materialized copy of
+        # the gateway view or a pass-through over it. The card labels the
+        # relation from this, since a count on a view is a live query.
+        "materialization": GraphDBFactory.resolve_lakehouse_materialization(
+            domain, settings
+        ),
         "view_fqn": view,
         "data_table_fqn": data,
         "inferred_table_fqn": inferred,

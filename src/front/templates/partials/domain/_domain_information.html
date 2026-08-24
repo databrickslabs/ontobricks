@@ -209,6 +209,32 @@
                             </div>
                         </div>
 
+                        <!-- Materialization mode (shown only when backend = Lakehouse) -->
+                        <div class="mb-4 {% if domain.graph_backend != 'databricks' %}d-none{% endif %}" id="lakehouseMaterializationSection">
+                            <label for="domainLakehouseMaterialization" class="form-label fw-semibold">
+                                <i class="bi bi-layers me-1"></i> Materialization
+                            </label>
+                            <select class="form-select domain-editable" id="domainLakehouseMaterialization"
+                                    data-saved-value="{{ domain.lakehouse_materialization or 'table' }}">
+                                <option value="table" {% if (domain.lakehouse_materialization or 'table') == 'table' %}selected{% endif %}>Materialized Delta table (recommended)</option>
+                                <option value="view" {% if domain.lakehouse_materialization == 'view' %}selected{% endif %}>Views only &mdash; no data copy</option>
+                            </select>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>How the mapped triples
+                                (<code>&hellip;_data</code>) are stored. <strong>Materialized</strong> copies them
+                                into a clustered Delta table at build time. <strong>Views only</strong> creates a
+                                pass-through view over the Triple-Store Gateway instead &mdash; nothing is
+                                duplicated and queries always read live source data.
+                            </small>
+                            <div class="alert alert-light border small mt-2 py-2 mb-0">
+                                <i class="bi bi-lightbulb me-1"></i>
+                                In <strong>Views only</strong> mode, builds are near-instant and no storage is
+                                consumed, but every graph query re-runs the mapping SQL against your source
+                                tables. Inferred triples (reasoning, cohorts) always keep their own Delta table,
+                                and Graph Analytics materializes a temporary snapshot for the duration of a run.
+                            </div>
+                        </div>
+
                         <!-- Neo4j connection selector (shown only when backend = neo4j) -->
                         <div class="mb-4 {% if domain.graph_backend != 'neo4j' %}d-none{% endif %}" id="neo4jDatabaseSection">
                             <label for="domainNeo4jDatabase" class="form-label fw-semibold">

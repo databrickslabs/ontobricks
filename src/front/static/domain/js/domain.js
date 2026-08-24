@@ -272,6 +272,7 @@ async function saveDomainInfo() {
     const llmEndpointEl = document.getElementById('domainLlmEndpoint');
     const graphBackendEl = document.getElementById('domainGraphBackend');
     const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
+    const materializationEl = document.getElementById('domainLakehouseMaterialization');
 
     if (!nameEl || !descEl || !authorEl) {
         showNotification('Form fields not found', 'error');
@@ -308,6 +309,8 @@ async function saveDomainInfo() {
             graph_backend: graphBackendEl ? graphBackendEl.value : 'lakebase',
             neo4j_connection: (graphBackendEl && graphBackendEl.value === 'neo4j' && neo4jDbEl)
                 ? neo4jDbEl.value : '',
+            lakehouse_materialization: (graphBackendEl && graphBackendEl.value === 'databricks' && materializationEl)
+                ? materializationEl.value : 'table',
         };
     
     try {
@@ -328,6 +331,9 @@ async function saveDomainInfo() {
             // Settings connection list re-selects what was just persisted.
             if (neo4jDbEl) {
                 neo4jDbEl.dataset.savedValue = domainInfoPayload.neo4j_connection;
+            }
+            if (materializationEl) {
+                materializationEl.dataset.savedValue = domainInfoPayload.lakehouse_materialization;
             }
             // ``refreshNavbarIndicators`` invalidates ``/navbar/state``
             // and ``/domain/info`` then re-fetches — no separate

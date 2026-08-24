@@ -8,6 +8,7 @@ the store.
 """
 
 import sqlite3
+from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import pytest
@@ -17,6 +18,7 @@ from back.core.graph_analysis.JobMetrics import (
     APPROXIMATE_METRICS,
     UNAVAILABLE_METRICS,
     JobMetrics,
+    analytics_snapshot,
     distribution_bounds_query,
     distributions_query,
     interpolate_quantile,
@@ -93,6 +95,79 @@ def test_quoted_identifiers_are_accepted(monkeypatch):
     table, reason = resolve_analytics_source(object(), object())
     assert table == "cat.sch.tbl_data"
     assert reason == ""
+
+
+# ---------------------------------------------------------------------------
+# analytics_snapshot
+# ---------------------------------------------------------------------------
+
+
+def _view_only_domain():
+    """A Lakehouse domain whose ``…_data`` is a pass-through view."""
+    return SimpleNamespace(
+        info={
+            "name": "Dom",
+            "graph_backend": "databricks",
+            "lakehouse_materialization": "view",
+        },
+        current_version=3,
+        delta={"catalog": "cat", "schema": "sch"},
+    )
+
+
+def test_a_materialized_domain_is_scanned_in_place():
+    """Nothing to prepare, and nothing to clean up, when ..._data is a table."""
+    domain = SimpleNamespace(info={"graph_backend": "databricks"})
+    with analytics_snapshot(domain, None, "cat.sch.t_data") as table:
+        assert table == "cat.sch.t_data"
+
+
+def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):
+    """The job scans its source repeatedly, which a view would re-derive each time."""
+    statements: List[str] = []
+    client = SimpleNamespace(execute_statement=statements.append)
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings=None: client,
+    )
+
+    with analytics_snapshot(_view_only_domain(), None, "cat.sch.t_data") as table:
+        assert table == "cat.sch.triplestore_dom_V3_analytics"
+        assert "CREATE OR REPLACE TABLE" in statements[0]
+        assert "FROM cat.sch.t_data" in statements[0]
+        assert len(statements) == 1
+
+    assert statements[1] == (
+        "DROP TABLE IF EXISTS cat.sch.triplestore_dom_V3_analytics"
+    )
+
+
+def test_the_snapshot_is_dropped_even_when_the_run_fails(monkeypatch):
+    """A failed run must not leave storage behind for the next one to pay for."""
+    statements: List[str] = []
+    client = SimpleNamespace(execute_statement=statements.append)
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings=None: client,
+    )
+
+    with pytest.raises(RuntimeError, match="job died"):
+        with analytics_snapshot(_view_only_domain(), None, "cat.sch.t_data"):
+            raise RuntimeError("job died")
+
+    assert any(s.startswith("DROP TABLE IF EXISTS") for s in statements)
+
+
+def test_a_view_only_domain_without_a_warehouse_says_so(monkeypatch):
+    """Silently scanning the view instead would make the run cost unbounded."""
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings=None: None,
+    )
+
+    with pytest.raises(InfrastructureError, match="temporary Delta snapshot"):
+        with analytics_snapshot(_view_only_domain(), None, "cat.sch.t_data"):
+            pass
 
 
 # ---------------------------------------------------------------------------

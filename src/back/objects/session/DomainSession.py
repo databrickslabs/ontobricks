@@ -84,6 +84,9 @@ def get_empty_domain() -> Dict[str, Any]:
                 # Named Neo4j connection from Settings → Neo4j (required when
                 # graph_backend == "neo4j"). Value is the connection ``name``.
                 "neo4j_connection": "",
+                # How the Lakehouse backend builds ``…_data``: table | view.
+                # Only honoured when graph_backend == "databricks".
+                "lakehouse_materialization": "table",
             },
             "triplestore": {
                 "stats": {},
@@ -1330,7 +1333,10 @@ class DomainSession:
         version = self._data["domain"].get("current_version", "1")
 
         # Export info from project.info (without version - version is at versions level)
-        from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+        from back.core.graphdb.GraphDBFactory import (
+            normalize_graph_backend,
+            normalize_lakehouse_materialization,
+        )
 
         info_export = {
             "name": self._data["domain"]["info"].get("name", "NewDomain"),
@@ -1348,6 +1354,9 @@ class DomainSession:
             "neo4j_connection": str(
                 self._data["domain"]["info"].get("neo4j_connection", "") or ""
             ).strip(),
+            "lakehouse_materialization": normalize_lakehouse_materialization(
+                self._data["domain"]["info"].get("lakehouse_materialization")
+            ),
             "last_update": self._data["domain"].get("last_update", ""),
             "last_build": self._data["domain"].get("last_build", ""),
         }
@@ -1438,7 +1447,10 @@ class DomainSession:
 
         # Import info into domain.info
         if "info" in data:
-            from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+            from back.core.graphdb.GraphDBFactory import (
+                normalize_graph_backend,
+                normalize_lakehouse_materialization,
+            )
 
             info = data["info"]
             self._data["domain"]["info"]["name"] = info.get("name", "NewDomain")
@@ -1456,6 +1468,11 @@ class DomainSession:
             self._data["domain"]["info"]["neo4j_connection"] = str(
                 info.get("neo4j_connection", "") or ""
             ).strip()
+            self._data["domain"]["info"]["lakehouse_materialization"] = (
+                normalize_lakehouse_materialization(
+                    info.get("lakehouse_materialization")
+                )
+            )
             # Drop legacy domain DB override if present on import.
             self._data["domain"]["info"].pop("neo4j_database", None)
             self._data["domain"]["last_update"] = info.get("last_update", "")

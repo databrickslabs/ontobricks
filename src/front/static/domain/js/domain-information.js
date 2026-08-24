@@ -20,6 +20,15 @@ function syncNeo4jConnectionSection() {
     if (backend === 'neo4j') loadNeo4jDatabases();
 }
 
+// Show the materialization picker only for Lakehouse: it is the one backend
+// whose ..._data relation can be a view rather than a copy.
+function toggleLakehouseMaterializationSection() {
+    const backend = (document.getElementById('domainGraphBackend') || {}).value;
+    const section = document.getElementById('lakehouseMaterializationSection');
+    if (!section) return;
+    section.classList.toggle('d-none', backend !== 'databricks');
+}
+
 // Populate the Neo4j connection dropdown from Settings named connections.
 // In-flight guard: the section toggle fires on init and on every backend
 // change, so without it a single reveal would issue several identical fetches.
@@ -389,6 +398,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (graphBackendEl) {
             graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
             graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
+            graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
             graphBackendEl.addEventListener('change', () => {
                 graphBackendEl.dataset.userEdited = '1';
             });
@@ -398,7 +408,14 @@ document.addEventListener('DOMContentLoaded', async function() {
                 neo4jDbElInit.dataset.userEdited = '1';
             });
         }
+        const materializationElInit = document.getElementById('domainLakehouseMaterialization');
+        if (materializationElInit) {
+            materializationElInit.addEventListener('change', () => {
+                materializationElInit.dataset.userEdited = '1';
+            });
+        }
         syncNeo4jConnectionSection();
+        toggleLakehouseMaterializationSection();
         const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
         if (refreshDbBtn) {
             refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
@@ -450,12 +467,19 @@ document.addEventListener('DOMContentLoaded', async function() {
                 neo4jDbEl.value = saved;
                 neo4jDbEl.dataset.savedValue = saved;
             }
+            const materializationEl = document.getElementById('domainLakehouseMaterialization');
+            if (materializationEl && !materializationEl.dataset.userEdited
+                    && infoData.info && infoData.info.lakehouse_materialization) {
+                materializationEl.value = infoData.info.lakehouse_materialization;
+                materializationEl.dataset.savedValue = infoData.info.lakehouse_materialization;
+            }
             // Runs after the saved value is known, so the freshly fetched
             // option list keeps it selected. Safe even when the user already
             // edited the field: it reads the select's *current* value first
             // (see `_loadNeo4jConnectionOptions`) and only falls back to
             // `dataset.savedValue` when the select has nothing of its own.
             syncNeo4jConnectionSection();
+            toggleLakehouseMaterializationSection();
         }
 
         // The DT panel reads catalog/schema from the dropdown rendering of

@@ -26,7 +26,8 @@ per metric is returned, never a row per node.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 from back.core.errors import InfrastructureError
 from back.core.graph_analysis.models import (
@@ -84,6 +85,51 @@ def resolve_analytics_source(domain: Any, settings: Any) -> Tuple[str, str]:
             f"catalog.schema.table name the Databricks job can read."
         )
     return table, ""
+
+
+@contextmanager
+def analytics_snapshot(domain: Any, settings: Any, source_table: str) -> Iterator[str]:
+    """Yield a table the analytics job can scan repeatedly, cleaning up after.
+
+    In the default materialization ``source_table`` is already a Delta table
+    and this yields it unchanged. Under view-only materialization it is a
+    pass-through view over the R2RML gateway, and the job's iterative BFS would
+    re-run that whole query on every scan — so a disposable snapshot is
+    materialized for the run and dropped on the way out, including when the run
+    raises.
+
+    A failure to drop is logged rather than raised: the run's result matters
+    more than the leftover, which Settings → Lakehouse lists for purging.
+    """
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    if GraphDBFactory.resolve_lakehouse_materialization(domain, settings) != "view":
+        yield source_table
+        return
+
+    from back.core.graphdb.delta import _table_naming, materialize
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
+
+    snapshot = _table_naming.analytics_snapshot_fqn(domain, settings)
+    client = create_databricks_client(domain, settings)
+    if not snapshot or client is None:
+        raise InfrastructureError(
+            "Graph analytics needs a temporary Delta snapshot for a view-only "
+            "domain, and it could not be prepared",
+            detail=(
+                "No snapshot table name could be derived"
+                if not snapshot
+                else "No SQL warehouse is configured for this domain"
+            ),
+        )
+
+    logger.info("Materializing analytics snapshot %s from %s", snapshot, source_table)
+    materialize.materialize_from_view(client, source_table, snapshot)
+    try:
+        yield snapshot
+    finally:
+        logger.info("Dropping analytics snapshot %s", snapshot)
+        materialize.drop_relation(client, snapshot, kind="table")
 
 
 # ---------------------------------------------------------------------------

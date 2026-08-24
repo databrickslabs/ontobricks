@@ -1666,8 +1666,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '<dt class="col-sm-3">R2RML VIEW</dt><dd class="col-sm-9 font-monospace">' +
                     escapeHtmlSettings(data.view_fqn) + '</dd>';
             }
+            // In view-only materialization ``…_data`` is a pass-through view,
+            // so calling it a table would misdescribe both the object and the
+            // cost of the count reported just below it.
+            const dataIsView = data.materialization === 'view';
+            const dataKind = dataIsView ? 'VIEW' : 'TABLE';
             if (data.data_table_fqn) {
-                html += '<dt class="col-sm-3">Data TABLE</dt><dd class="col-sm-9 font-monospace">' +
+                html += '<dt class="col-sm-3">Data ' + dataKind + '</dt><dd class="col-sm-9 font-monospace">' +
                     escapeHtmlSettings(data.data_table_fqn) + '</dd>';
             }
             if (data.inferred_table_fqn) {
@@ -1677,11 +1682,17 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.data_table_fqn) {
                 const exists = dt.exists ? 'yes' : 'no';
                 const count = dt.count != null ? dt.count : '—';
-                html += '<dt class="col-sm-3">Data table</dt><dd class="col-sm-9">exists: ' +
+                html += '<dt class="col-sm-3">Data ' + dataKind.toLowerCase() + '</dt><dd class="col-sm-9">exists: ' +
                     escapeHtmlSettings(exists) + ' · triples: <strong>' + escapeHtmlSettings(String(count)) +
                     '</strong></dd>';
             }
             html += '</dl>';
+            if (dataIsView && data.data_table_fqn) {
+                html += '<p class="text-muted small mt-2 mb-0">' +
+                    '<i class="bi bi-info-circle me-1"></i>' +
+                    'This domain uses view-only materialization: no triples are copied, and the ' +
+                    'count above is a live query against the source tables.</p>';
+            }
             if (!data.active_domain) {
                 html += '<p class="text-muted mt-2 mb-0">Open a domain to see resolved FQNs and row counts.</p>';
             } else if (viewErr || dataErr) {
