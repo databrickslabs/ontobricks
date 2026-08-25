@@ -312,3 +312,44 @@ failed, 2 info. The 2 skips are environmental and pre-existing — the pytest
 process itself has no `DATABRICKS_HOST` / `DATABRICKS_TOKEN` /
 `DATABRICKS_SQL_WAREHOUSE_ID`, so `test_full_lifecycle.py` and
 `test_scenario_04_metadata_integrity.py` opt out.
+
+================================================================================
+Fix — MCP tab: query_graphql stayed clickable on a read-only domain
+================================================================================
+
+Context: on a read-only domain the MCP tab correctly froze every control except
+one — the `Query GraphQL` checkbox stayed interactive, letting a viewer (or a
+reader on a PUBLISHED / IN-REVIEW version, or an editor locked out of a DRAFT)
+toggle the domain's published tool set.
+
+Root cause: `permissions.css` neutralises form fields with a generic rule that
+exempts search / filter / query inputs, including `:not([id*="query"])` — an
+exemption meant for query editors. The tool checkboxes are rendered as
+`#mcpTool_<tool>`, so the tool literally named `query_graphql` produced
+`#mcpTool_query_graphql`, matched the exemption, and escaped the lockdown. Only
+that one control was affected, which is why the tab looked correct otherwise.
+The same trap was waiting for any future tool whose name contains "search" or
+"filter".
+
+Changes:
+
+1. `src/front/static/global/css/permissions.css` — added a read-only rule
+   gating `.js-mcp-tool`, `.js-mcp-context` and `#mcpToolsSelectAll` by class.
+   The lockdown no longer depends on what a tool happens to be called. Gated
+   for all three read-only signals (`read-only-version`, `role-viewer`,
+   `read-only-locked`): the policy is a property of the domain, so editing it
+   is a domain write. Server-side enforcement was already correct — this is the
+   UI catching up.
+
+2. `tests/units/front/test_view_mode_write_gates.py` — two regression tests:
+   the three MCP selectors sit in a read-only disable rule, and no MCP rule
+   leans on an id derived from a tool name. Mutation-checked: removing the CSS
+   rule fails the suite.
+
+Modified files:
+- `src/front/static/global/css/permissions.css`
+- `tests/units/front/test_view_mode_write_gates.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5190 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 36.28s (+2 new tests).

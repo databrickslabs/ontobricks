@@ -22,6 +22,9 @@ INFO_JS = REPO_ROOT / "src/front/static/global/js/mapping-information.js"
 SYNC_JS = REPO_ROOT / "src/front/static/query/js/query-sync.js"
 COHORT_JS = REPO_ROOT / "src/front/static/query/js/query-cohorts.js"
 REASONING_JS = REPO_ROOT / "src/front/static/query/js/query-reasoning.js"
+MCP_TAB_HTML = (
+    REPO_ROOT / "src/front/templates/partials/domain/_domain_information.html"
+)
 
 pytestmark = pytest.mark.unit
 
@@ -97,6 +100,36 @@ class TestCssGates:
             "body:is(.role-viewer, .read-only-locked) #runMaterializeBtn"
             in css
         )
+
+    def test_mcp_policy_controls_are_disabled(self):
+        """Editing the published tool set is a domain write, not navigation."""
+        css = _css()
+        assert _gated(css, ".js-mcp-tool")
+        assert _gated(css, ".js-mcp-context")
+        assert _gated(css, "#mcpToolsSelectAll")
+
+    def test_mcp_controls_are_gated_by_class_not_by_generated_id(self):
+        """Regression: ``query_graphql`` escaped the read-only lockdown.
+
+        The tool checkboxes are ``#mcpTool_<tool>``, so the generic form rule's
+        ``[id*="query"]`` exemption — meant for query editors — matched
+        ``#mcpTool_query_graphql`` and left it clickable on a read-only domain.
+        Gating on the class keeps the lockdown independent of tool names, which
+        also covers a future tool containing "search" or "filter".
+        """
+        css = _css()
+        html = MCP_TAB_HTML.read_text(encoding="utf-8")
+        # The id that triggered the bug is still the one the template emits.
+        assert 'id="mcpTool_{{ tool.name }}"' in html
+        assert "js-mcp-tool" in html
+        # No MCP rule may lean on an id built from the tool name. Only the
+        # selector list counts — the comment above the rule names the offending
+        # id on purpose, to explain why the gate is class-based.
+        for rule in css.split("}"):
+            if ".js-mcp-tool" not in rule:
+                continue
+            selectors = rule.rsplit("*/", 1)[-1].split("{")[0]
+            assert "mcpTool_" not in selectors
 
 
 class TestJsGuards:

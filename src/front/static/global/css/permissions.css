@@ -301,6 +301,25 @@ body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="dig
     cursor: not-allowed !important;
 }
 
+/* --- MCP policy controls (Domain → Information → MCP).
+   Their ids are derived from the tool / context-feature name
+   (``#mcpTool_<tool>`` / ``#mcpContext_<feature>``), so the tool named
+   ``query_graphql`` yields ``#mcpTool_query_graphql`` and slips through the
+   ``[id*="query"]`` exemption above — an exemption meant for query editors,
+   not for a checkbox that rewrites the domain's published tool set. The same
+   trap waits for any future tool whose name contains "search" or "filter".
+   Gate them by class so the lockdown never depends on what a tool is called.
+   The policy is a property of the domain, so editing it is a domain write:
+   readers, viewers and editors locked out of a DRAFT must all see it frozen. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) .js-mcp-tool,
+body:is(.read-only-version, .role-viewer, .read-only-locked) .js-mcp-context,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #mcpToolsSelectAll {
+    pointer-events: none !important;
+    background-color: #e9ecef !important;
+    opacity: 0.7 !important;
+    cursor: not-allowed !important;
+}
+
 /* The READ-ONLY indicator is now a navbar pill (see
    ``base.html`` → ``#readOnlyNavBadge``) instead of a banner under
    the navbar, so no extra ``margin-top`` is needed on the content
