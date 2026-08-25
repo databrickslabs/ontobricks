@@ -117,23 +117,31 @@ class TestGetTables:
 
 
 class TestListFunctions:
+    # Input parameters and RETURNS TABLE result columns live in two different
+    # information_schema views, so they are read by two separate statements.
+    _ROUTINES = [
+        ["recompute_risk", "STRING", "Recompute the risk score", "entity_id"],
+        ["risk_history", "TABLE_TYPE", None, "days,entity_id"],
+        ["no_args", "STRING", "", ""],
+    ]
+    _RETURN_COLUMNS = [
+        ["risk_history", "as_of", "DATE"],
+        ["risk_history", "score", "DOUBLE"],
+    ]
+
+    def _cursor(self, mock_connect, *, routines=None, return_columns=None):
+        cursor = _make_sql_mocks(mock_connect)
+        cursor.fetchall.side_effect = [
+            self._ROUTINES if routines is None else routines,
+            self._RETURN_COLUMNS if return_columns is None else return_columns,
+        ]
+        return cursor
+
     @patch("databricks.sql.connect")
     def test_returns_functions_with_param_metadata(
         self, mock_connect, auth_with_warehouse
     ):
-        mock_cursor = _make_sql_mocks(
-            mock_connect,
-            fetchall=[
-                [
-                    "recompute_risk",
-                    "STRING",
-                    "Recompute the risk score",
-                    "entity_id",
-                ],
-                ["risk_history", "TABLE_TYPE", None, "days,entity_id"],
-                ["no_args", "STRING", "", ""],
-            ],
-        )
+        cursor = self._cursor(mock_connect)
         uc = UnityCatalog(auth_with_warehouse)
         out = uc.list_functions("main", "ops")
 
@@ -145,6 +153,8 @@ class TestListFunctions:
                 "input_params": ["entity_id"],
                 "param_count": 1,
                 "returns_table": False,
+                "return_type": "STRING",
+                "return_columns": [],
             },
             {
                 "name": "risk_history",
@@ -153,6 +163,11 @@ class TestListFunctions:
                 "input_params": ["days", "entity_id"],
                 "param_count": 2,
                 "returns_table": True,
+                "return_type": "TABLE",
+                "return_columns": [
+                    {"name": "as_of", "data_type": "DATE"},
+                    {"name": "score", "data_type": "DOUBLE"},
+                ],
             },
             {
                 "name": "no_args",
@@ -161,15 +176,51 @@ class TestListFunctions:
                 "input_params": [],
                 "param_count": 0,
                 "returns_table": False,
+                "return_type": "STRING",
+                "return_columns": [],
             },
         ]
-        call_sql, call_params = mock_cursor.execute.call_args[0]
+        call_sql, call_params = cursor.execute.call_args_list[0][0]
         # Parameter listing must come from information_schema: the REST
         # /functions collection endpoint does not populate input_params.
         assert "`main`.information_schema.routines" in call_sql
         assert "`main`.information_schema.parameters" in call_sql
         assert "p.parameter_mode   = 'IN'" in call_sql
         assert call_params == ("ops",)
+
+    @patch("databricks.sql.connect")
+    def test_return_columns_come_from_routine_columns_not_parameters(
+        self, mock_connect, auth_with_warehouse
+    ):
+        """Databricks lists only the declared arguments in ``parameters``, so a
+        table function contributes no row there for what it returns."""
+        cursor = self._cursor(mock_connect)
+        UnityCatalog(auth_with_warehouse).list_functions("main", "ops")
+
+        call_sql, call_params = cursor.execute.call_args_list[1][0]
+        assert "`main`.information_schema.routine_columns" in call_sql
+        assert "information_schema.parameters" not in call_sql
+        assert "ORDER BY r.routine_name, c.ordinal_position" in call_sql
+        assert call_params == ("ops",)
+
+    @patch("databricks.sql.connect")
+    def test_unreadable_return_columns_do_not_cost_the_function_list(
+        self, mock_connect, auth_with_warehouse
+    ):
+        """The action picker only needs the parameter count, so a metastore
+        that cannot answer the second query must still yield the functions."""
+        cursor = _make_sql_mocks(mock_connect)
+        cursor.fetchall.side_effect = [self._ROUTINES]
+        cursor.execute.side_effect = [None, RuntimeError("no such column")]
+
+        out = UnityCatalog(auth_with_warehouse).list_functions("main", "ops")
+
+        assert [f["name"] for f in out] == [
+            "recompute_risk",
+            "risk_history",
+            "no_args",
+        ]
+        assert out[1]["return_columns"] == []
 
     @patch("databricks.sql.connect", side_effect=RuntimeError("boom"))
     def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):

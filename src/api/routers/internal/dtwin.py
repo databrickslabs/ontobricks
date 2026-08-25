@@ -42,6 +42,7 @@ from back.objects.digitaltwin import (
     DigitalTwin,
     DomainSnapshot,
     NodeContextService,
+    VirtualAttributeService,
 )
 from back.objects.domain import HomeService, Domain
 from api.routers.digitaltwin import NodeContextResponse
@@ -1862,6 +1863,7 @@ async def dtwin_classes(
                     drop_unavailable=False,
                 ),
                 "actions": NodeContextService.class_action_entries(cls),
+                "virtualAttributes": VirtualAttributeService.class_entries(cls),
             }
             for cls in (domain.get_classes() or [])
         ],
@@ -2015,6 +2017,7 @@ async def dtwin_nodes_context(
     dataset_row_limit: int = 5,
     follow_bridges: bool = False,
     bridge_depth: int = 1,
+    compute_virtual_attributes: bool = False,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -2029,11 +2032,34 @@ async def dtwin_nodes_context(
         dataset_row_limit=max(1, min(dataset_row_limit or 5, 20)),
         follow_bridges=follow_bridges,
         bridge_depth=max(1, min(bridge_depth or 1, 1)),
+        compute_virtual_attributes=compute_virtual_attributes,
         registry_catalog=None,
         registry_schema=None,
         registry_volume=None,
     )
     return NodeContextResponse(**payload)
+
+
+@router.get("/nodes/virtual-attributes")
+async def dtwin_nodes_virtual_attributes(
+    entity_uri: str,
+    function: Optional[str] = None,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Compute a node's virtual attributes against the active session domain.
+
+    Dedicated to the Graph Explorer's Compute button: going through
+    ``/nodes/context`` would re-resolve the dataset and the bridges for
+    nothing. Omit *function* to compute every group declared on the class.
+    """
+    domain = get_domain(session_mgr)
+    return await NodeContextService.compute_virtual_attributes(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        function_full_name=function,
+    )
 
 
 # Session key for the Graph Chat cache (history + limit + pending actions).

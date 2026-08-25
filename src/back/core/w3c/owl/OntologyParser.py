@@ -288,6 +288,15 @@ class OntologyParser:
                     pass
                 break
 
+            # Get virtual attribute declarations from OntoBricks property
+            virtual_attributes = []
+            for va in self.graph.objects(cls, ONTOBRICKS_NS.virtualAttributes):
+                try:
+                    virtual_attributes = json.loads(str(va))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                break
+
             # Get parent class (subClassOf)
             parent = None
             for parent_cls in self.graph.objects(cls, RDFS.subClassOf):
@@ -319,6 +328,7 @@ class OntologyParser:
                     "bridges": bridges,
                     "dataset": dataset,
                     "actions": actions,
+                    "virtualAttributes": virtual_attributes,
                     "dataProperties": data_properties,
                 }
             )

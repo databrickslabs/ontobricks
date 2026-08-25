@@ -6,7 +6,11 @@ from back.core.helpers.DatabricksHelpers import (  # noqa: F401
     get_blocking_pool_stats,
     make_volume_file_service,
 )
-from back.core.helpers.SQLHelpers import SQLHelpers  # noqa: F401
+from back.core.helpers.SQLHelpers import (  # noqa: F401
+    SAFE_COL_IDENT,
+    SAFE_SQL_IDENT,
+    SQLHelpers,
+)
 from back.core.helpers.URIHelpers import URIHelpers  # noqa: F401
 
 # SQL / URI helpers must be bound before importing databricks: transitive
@@ -78,4 +82,6 @@ __all__ = [
     "is_uri",
     "extract_local_name",
     "safe_identifier",
+    "SAFE_SQL_IDENT",
+    "SAFE_COL_IDENT",
 ]

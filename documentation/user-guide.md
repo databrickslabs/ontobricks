@@ -284,6 +284,52 @@ the node right-click menu. Only functions declared on the entity's ontology
 class can be invoked — the server rejects anything else, so the ontology acts as
 the allow-list.
 
+### Virtual Attributes (computed on demand)
+
+A **virtual attribute** is an attribute nobody maps. Instead of coming from a
+column, it is computed by a Unity Catalog function from the entity's ID, at the
+moment someone asks for it. Use one for a value that is a *function of* the
+entity rather than a fact stored about it: a live risk score, a current
+inventory position, a distance to the nearest depot.
+
+The difference from an action is what it looks like, not what it runs. An action
+is a verb the user clicks; a virtual attribute is declared on the class like any
+other attribute and sits next to the mapped ones.
+
+1. Go to **Ontology** → **Entities** and select an entity type
+2. Open the **Attributes** tab and find the **Virtual Attributes** section
+3. Click **Add** to open the function picker, then choose a catalog and schema
+4. Pick a function — the picker shows what it returns
+5. Fill in the **description** and, optionally, a display **label** per attribute
+6. Click **Apply** (writes into the session; publish the domain to persist)
+
+Picking a function creates **one virtual attribute per returned column**, named
+after the column and read from `information_schema`. A scalar function creates
+exactly one, named after the function. The same one-parameter contract as
+actions applies: the function must take exactly the entity's ID, and functions
+with any other signature are greyed out.
+
+If a derived name is already used by a mapped or virtual attribute of the class,
+it is suffixed (`score` → `score_2`) and the UI tells you — the Graph Explorer
+and MCP render both families in one list, so the collision has to be settled
+here. Removal works per function, not per attribute: the attributes are the
+function's signature, so dropping one alone would make the column-to-attribute
+mapping ambiguous.
+
+In the Graph Explorer, virtual attributes get their own section under
+**Attributes**, listed but empty, with a **Compute** button per function, a
+**Compute all** when there are several, and a **Compute virtual attributes**
+entry in the node right-click menu. Values stay cached for the page's lifetime
+so revisiting a node costs nothing; **Recompute** is the refresh. A function
+that fails reports its error inline and leaves the other functions' values
+alone.
+
+> **Not queryable.** Because a virtual attribute is never materialised, it takes
+> no part in mappings, R2RML, the build, SHACL or data-quality checks — and it
+> cannot be selected or filtered in SPARQL, GraphQL or a cohort. That is the
+> trade for a value that is always current. Use a mapped attribute when you need
+> to query it.
+
 ### Option C: AI-Powered Wizard
 
 Click **Generate** in the sidebar to generate an ontology automatically from your database schema using an LLM.
@@ -604,7 +650,7 @@ Right-click any entity node and pick **Expand neighbours (N hops)** to enrich th
 - The hop count follows the **Depth** slider in the right-pane filter panel (default `2`).
 - A small spinner appears in the top-right corner of the canvas while the request is running; the rest of the UI stays interactive.
 - Newly added entities are merged with the existing graph, briefly ringed with a highlight, and the camera zooms to frame them.
-- The same context menu still exposes the existing **View Dashboard**, **Dataset preview**, **Actions** and **Bridges** entries when configured for the entity's class.
+- The same context menu still exposes the existing **View Dashboard**, **Dataset preview**, **Actions**, **Bridges** and **Compute virtual attributes** entries when configured for the entity's class.
 
 **Data Clusters:**
 
@@ -915,12 +961,15 @@ unrecoverable.
 | **Datasets** | The Unity Catalog table or view linked to a class. |
 | **Bridges** | Cross-domain links declared between ontology classes. |
 | **Actions** | Unity Catalog functions declared on a class. |
+| **Virtual attributes** | Class attributes computed on demand by a Unity Catalog function instead of being mapped. |
 
 > **The Actions overlap.** The `invoke_entity_action` *tool* and the
 > **Actions** *context element* are two switches over the same feature.
 > Setting the element to **Disabled** also refuses invocation, even when the
 > tool stays checked — otherwise a client that already learned a function name
-> could keep running it after the names stopped being advertised.
+> could keep running it after the names stopped being advertised. **Virtual
+> attributes** behaves the same way: disabled, it refuses
+> `compute_virtual_attributes=True` rather than answering with nothing.
 
 Use **Preferred** to steer an agent that under-uses a genuinely useful
 attachment, and **Disabled** to keep a sensitive dataset, a private bridge

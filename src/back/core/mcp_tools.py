@@ -12,8 +12,8 @@ Two independent settings make up a domain's MCP policy:
   in :data:`MCP_REGISTRY_TOOLS` run *before* a domain is selected, so a
   per-domain policy cannot govern them and they are always exposed. Only the
   domain-scoped tools in :data:`MCP_DOMAIN_TOOLS` are configurable.
-* **context** — how the three ontology attachments (dataset, bridges,
-  actions) are surfaced, via :data:`MCP_CONTEXT_MODES`.
+* **context** — how the ontology attachments (dataset, bridges, actions,
+  virtual attributes) are surfaced, via :data:`MCP_CONTEXT_MODES`.
 
 The persisted shape is a single JSONB blob on ``domains.mcp_policy``::
 
@@ -105,6 +105,13 @@ MCP_CONTEXT_FEATURES: tuple[Dict[str, str], ...] = (
         "label": "Actions",
         "description": "Unity Catalog functions declared on a class. Disabling "
         "this also refuses invocation, even when the tool stays enabled.",
+    },
+    {
+        "name": "virtual_attributes",
+        "label": "Virtual attributes",
+        "description": "Class attributes computed on demand by a Unity Catalog "
+        "function instead of being mapped. Disabling this also refuses "
+        "computation, not just the listing.",
     },
 )
 

@@ -143,6 +143,55 @@ class TestBuildClassFromData:
         cls = Ontology.build_class_from_data({"name": "Customer"}, existing)
         assert cls["actions"] == actions
 
+    def test_virtual_attributes_field(self):
+        virtual_attributes = [
+            {
+                "catalog": "main",
+                "schema": "kg",
+                "function": "customer_risk",
+                "fullName": "main.kg.customer_risk",
+                "description": "Live credit risk",
+                "returns_table": True,
+                "attributes": [
+                    {"name": "risk_score", "column": "risk_score", "dataType": "DOUBLE"}
+                ],
+            }
+        ]
+        cls = Ontology.build_class_from_data(
+            {"name": "Customer", "virtualAttributes": virtual_attributes}
+        )
+        assert cls["virtualAttributes"] == virtual_attributes
+
+    def test_virtual_attributes_stay_out_of_data_properties(self):
+        """They are computed on demand, so the mapping layer, R2RML and the
+        build pipeline must never see them as attributes."""
+        cls = Ontology.build_class_from_data(
+            {
+                "name": "Customer",
+                "virtualAttributes": [
+                    {
+                        "fullName": "main.kg.customer_risk",
+                        "attributes": [{"name": "risk_score", "column": "risk_score"}],
+                    }
+                ],
+            }
+        )
+        assert cls["dataProperties"] == []
+
+    def test_virtual_attributes_defaults_empty(self):
+        cls = Ontology.build_class_from_data({"name": "Customer"})
+        assert cls["virtualAttributes"] == []
+
+    def test_virtual_attributes_preserved_from_existing(self):
+        """A save from a panel that does not know about them (or an older
+        client) must not wipe the declarations."""
+        virtual_attributes = [
+            {"fullName": "main.kg.f", "attributes": [{"name": "x", "column": "x"}]}
+        ]
+        existing = {"name": "Customer", "virtualAttributes": virtual_attributes}
+        cls = Ontology.build_class_from_data({"name": "Customer"}, existing)
+        assert cls["virtualAttributes"] == virtual_attributes
+
 
 class TestBuildPropertyFromData:
     def test_new_property(self):

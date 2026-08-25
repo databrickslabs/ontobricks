@@ -42,7 +42,7 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 | `get_design_status` | Design pipeline readiness (ontology, metadata, assignment, build_ready) for a domain |
 | `list_entity_types` | Returns a human-readable overview of the selected domain's graph viewer: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
 | `describe_entity` | Searches for an entity by name/type and returns a **full-text description** — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal) |
-| `get_entity_context` | Returns a node's external context: linked Unity Catalog dataset (optionally with rows), cross-domain bridges, and the Unity Catalog function **actions** configured on its class |
+| `get_entity_context` | Returns a node's external context: linked Unity Catalog dataset (optionally with rows), cross-domain bridges, the Unity Catalog function **actions** configured on its class, and its **virtual attributes** (declared always, computed with `compute_virtual_attributes=True`) |
 | `invoke_entity_action` | Runs one of the class's Unity Catalog function actions on an entity. The function is called with exactly one argument: the entity's ID. Only functions declared on the entity's ontology class can be invoked |
 | `get_status` | Compact diagnostic: domain name, view table, graph name, data availability, triple count |
 | `get_graphql_schema` | Returns the auto-generated GraphQL schema (SDL) for the selected domain — shows types, fields, and relationships |
@@ -351,7 +351,8 @@ hiding `select_domain` would make the domain unusable *and* unrecoverable.
 
 ### Ontology context
 
-`Datasets`, `Bridges` and `Actions` each take one of three states:
+`Datasets`, `Bridges`, `Actions` and `Virtual attributes` each take one of
+three states:
 
 | State | Effect |
 |---|---|
@@ -367,7 +368,9 @@ authoring UI is unaffected and always shows the ontology designer everything.
 > `Actions` **context element** are separate switches over the same feature.
 > Disabling the element also refuses invocation, even when the tool is still
 > checked — otherwise a client that already knew a function name could run it
-> after the names were hidden.
+> after the names were hidden. `Virtual attributes` works the same way: with
+> the element disabled, `get_entity_context(compute_virtual_attributes=True)`
+> is refused rather than silently returning nothing.
 
 ### Switching domains switches the tool set
 
@@ -402,7 +405,8 @@ and is published on `GET /api/v1/domains`:
   "description": "Customer 360 ontology",
   "mcp_policy": {
     "disabled_tools": ["query_graphql"],
-    "context": {"bridges": "preferred", "actions": "disabled"}
+    "context": {"bridges": "preferred", "actions": "disabled",
+                "virtual_attributes": "preferred"}
   }
 }
 ```

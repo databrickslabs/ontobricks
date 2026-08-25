@@ -219,6 +219,34 @@
     max-height: none !important;
 }
 
+/* White content box inside a form tab (attribute lists, dataset, actions,
+   bridges, virtual attributes). Replaces per-box inline backgrounds. */
+.shared-detail-panel .panel-box {
+    background: var(--db-bg-secondary);
+}
+
+.shared-detail-panel .panel-box-scroll {
+    overflow-y: auto;
+}
+
+/* ---- Virtual attributes ---- */
+.shared-detail-panel .va-group + .va-group {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--db-border-light);
+}
+
+.va-function-list {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.shared-detail-panel .va-group-attrs {
+    margin-top: 0.25rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid var(--db-border-light);
+}
+
 /* ---- Form tabs inside panel body ---- */
 .form-tabs-nav {
     display: flex;

@@ -25,6 +25,14 @@ NodeContextService class
    :undoc-members:
    :show-inheritance:
 
+VirtualAttributeService class
+-----------------------------
+
+.. automodule:: back.objects.digitaltwin.VirtualAttributeService
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Models
 ------
 

@@ -29,6 +29,7 @@ _HIDES_NOTHING: dict = {}
 _ACTIONS_OFF = {"context": {"actions": "disabled"}}
 _BRIDGES_OFF = {"context": {"bridges": "disabled"}}
 _DATASET_OFF = {"context": {"dataset": "disabled"}}
+_VIRTUAL_OFF = {"context": {"virtual_attributes": "disabled"}}
 
 
 class FakeContext:
@@ -339,6 +340,7 @@ async def test_refused_action_never_reaches_the_backend(mcp_env) -> None:
     [
         (_DATASET_OFF, "fetch_dataset_rows", "Datasets"),
         (_BRIDGES_OFF, "follow_bridges", "Bridges"),
+        (_VIRTUAL_OFF, "compute_virtual_attributes", "Virtual attributes"),
     ],
 )
 async def test_get_entity_context_refuses_a_disabled_argument(

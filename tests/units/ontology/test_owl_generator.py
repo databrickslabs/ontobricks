@@ -122,6 +122,78 @@ class TestClassGeneration:
         parsed = {c["name"]: c for c in parser.get_classes()}
         assert parsed["Customer"]["actions"] == []
 
+    def test_class_with_virtual_attributes_roundtrip(self):
+        virtual_attributes = [
+            {
+                "catalog": "main",
+                "schema": "kg",
+                "function": "customer_risk",
+                "fullName": "main.kg.customer_risk",
+                "description": "Live credit risk",
+                "returns_table": True,
+                "attributes": [
+                    {
+                        "name": "risk_score",
+                        "column": "risk_score",
+                        "label": "Risk score",
+                        "dataType": "DOUBLE",
+                    },
+                    {
+                        "name": "risk_band",
+                        "column": "risk_band",
+                        "label": "Risk band",
+                        "dataType": "STRING",
+                    },
+                ],
+            }
+        ]
+        classes = [
+            {
+                "name": "Customer",
+                "label": "Customer",
+                "virtualAttributes": virtual_attributes,
+            }
+        ]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+        assert "virtualAttributes" in owl
+
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["virtualAttributes"] == virtual_attributes
+
+    def test_virtual_attributes_are_not_datatype_properties(self):
+        """They are computed on demand, so they must stay out of the mapped
+        attribute list that R2RML and the build pipeline read."""
+        classes = [
+            {
+                "name": "Customer",
+                "label": "Customer",
+                "virtualAttributes": [
+                    {
+                        "fullName": "main.kg.customer_risk",
+                        "returns_table": True,
+                        "attributes": [{"name": "risk_score", "column": "risk_score"}],
+                    }
+                ],
+            }
+        ]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["dataProperties"] == []
+        assert "risk_score" in parsed["Customer"]["virtualAttributes"][0]["attributes"][0]["name"]
+
+    def test_class_without_virtual_attributes_has_empty_list(self):
+        classes = [{"name": "Customer", "label": "Customer"}]
+        gen = _make_generator(classes=classes)
+        owl = gen.generate()
+        parser = OntologyParser(owl_content=owl)
+        parsed = {c["name"]: c for c in parser.get_classes()}
+        assert parsed["Customer"]["virtualAttributes"] == []
+
     def test_class_with_data_properties(self):
         classes = [
             {

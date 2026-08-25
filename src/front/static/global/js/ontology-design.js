@@ -436,6 +436,12 @@ function clearRegistryDirty() {
  * session before the server processes the save-to-uc request.
  */
 function saveRegistryOnUnload() {
+    // Same ordering requirement as the layout beacon, and the reason it is
+    // called from here rather than left to its own listener: the detail panel
+    // module is loaded after this one, so its unload handler would run second
+    // and the registry would be written from a session that never saw the
+    // pending edit. The flush is a no-op once the panel is clean.
+    if (typeof flushSharedPanelOnUnload === 'function') flushSharedPanelOnUnload();
     if (!registryDirty) return;
     try {
         fetch('/domain/save-to-uc', {
@@ -554,6 +560,7 @@ async function syncDesignToOntology(showFeedback = false) {
             bridges: existing.bridges || [],
             dataset: existing.dataset || null,
             actions: existing.actions || [],
+            virtualAttributes: existing.virtualAttributes || [],
             dataProperties: [...ownProperties, ...inheritedProperties]
         };
         

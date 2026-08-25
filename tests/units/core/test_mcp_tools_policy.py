@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from back.core.mcp_tools import (
     MCP_CONTEXT_FEATURE_NAMES,
+    MCP_CONTEXT_FEATURES,
     MCP_CONTEXT_MODES,
     MCP_DOMAIN_TOOL_NAMES,
     MCP_REGISTRY_TOOLS,
@@ -78,3 +79,23 @@ def test_coercion_is_idempotent() -> None:
 
 def test_context_modes_are_the_three_documented_states() -> None:
     assert set(MCP_CONTEXT_MODES) == {"preferred", "normal", "disabled"}
+
+
+def test_virtual_attributes_is_a_configurable_context_element() -> None:
+    """Computing one costs a warehouse round-trip, so a domain must be able to
+    push it (preferred) or take it off the table entirely (disabled)."""
+    assert "virtual_attributes" in MCP_CONTEXT_FEATURE_NAMES
+
+    policy = coerce_mcp_policy({"context": {"virtual_attributes": "disabled"}})
+    assert policy == {"context": {"virtual_attributes": "disabled"}}
+    assert coerce_mcp_policy({"context": {"virtual_attributes": "preferred"}}) == {
+        "context": {"virtual_attributes": "preferred"}
+    }
+
+
+def test_every_context_element_is_labelled_and_described() -> None:
+    """The MCP settings panel renders the catalog directly, so a new element
+    without a label would ship as a blank checkbox."""
+    for feature in MCP_CONTEXT_FEATURES:
+        assert feature["label"].strip()
+        assert feature["description"].strip()

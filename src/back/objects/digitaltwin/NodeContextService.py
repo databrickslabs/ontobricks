@@ -8,12 +8,13 @@ the success payload as ``message``.
 
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List, Optional
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.graphdb import get_graphdb
 from back.core.helpers import (
+    SAFE_COL_IDENT as _SAFE_COL_IDENT,
+    SAFE_SQL_IDENT as _SAFE_SQL_IDENT,
     effective_graph_query_table,
     extract_local_name,
     get_databricks_client,
@@ -23,11 +24,13 @@ from back.core.helpers import (
 from back.core.logging import get_logger
 from back.core.mcp_tools import MCP_CONTEXT_MODE_DEFAULT, coerce_mcp_policy
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+from back.objects.digitaltwin.VirtualAttributeService import (
+    VIRTUAL_ATTRIBUTES_FEATURE,
+    VirtualAttributeService,
+)
 
 logger = get_logger(__name__)
 
-_SAFE_SQL_IDENT = re.compile(r"^[A-Za-z0-9_.]+$")
-_SAFE_COL_IDENT = re.compile(r"^[A-Za-z0-9_]+$")
 _RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
 
@@ -274,6 +277,7 @@ class NodeContextService:
         dataset_row_limit: int = 5,
         follow_bridges: bool = False,
         bridge_depth: int = 1,
+        compute_virtual_attributes: bool = False,
         registry_catalog: Optional[str] = None,
         registry_schema: Optional[str] = None,
         registry_volume: Optional[str] = None,
@@ -287,6 +291,10 @@ class NodeContextService:
         skipped entirely. ``None`` — the default, used by the internal
         authoring routes — surfaces everything, mirroring
         ``enrich_bridge_targets(drop_unavailable=False)``.
+
+        Virtual attribute *declarations* always ride along; their *values*
+        only when *compute_virtual_attributes* is set, since each function
+        costs a warehouse round-trip.
 
         Raises:
             ValidationError: invalid dataset identifiers or bridge_depth.
@@ -323,6 +331,20 @@ class NodeContextService:
             else NodeContextService.class_action_entries(matched_cls)
         )
 
+        # Declarations are cheap (a read of the class dict); the values cost a
+        # warehouse round-trip per function, so they only come when asked for.
+        virtual_out: List[Dict[str, Any]] = []
+        if not disabled(context_policy, VIRTUAL_ATTRIBUTES_FEATURE):
+            if compute_virtual_attributes:
+                virtual_out = await VirtualAttributeService.compute(
+                    domain,
+                    settings,
+                    entity_uri=entity_uri,
+                    matched_cls=matched_cls,
+                )
+            else:
+                virtual_out = VirtualAttributeService.class_entries(matched_cls)
+
         dataset_out: Optional[Dict[str, Any]] = None
         fetch_error: Optional[str] = None
         if not disabled(context_policy, "dataset"):
@@ -352,13 +374,16 @@ class NodeContextService:
             )
 
         logger.info(
-            "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d actions=%d",
+            "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d "
+            "actions=%d virtual=%d computed=%s",
             local_id,
             class_name,
             dname,
             bool(dataset_out),
             len(bridges_out),
             len(actions_out),
+            len(virtual_out),
+            compute_virtual_attributes,
         )
 
         return {
@@ -369,7 +394,59 @@ class NodeContextService:
             "dataset": dataset_out,
             "bridges": bridges_out or None,
             "actions": actions_out or None,
+            "virtual_attributes": virtual_out or None,
             "message": fetch_error,
+        }
+
+    @staticmethod
+    async def compute_virtual_attributes(
+        domain: Any,
+        settings: Any,
+        *,
+        entity_uri: str,
+        function_full_name: Optional[str] = None,
+        context_policy: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Compute the virtual attributes of the class matching *entity_uri*.
+
+        Standalone counterpart of the ``compute_virtual_attributes`` flag on
+        :meth:`resolve_context`, for callers that only want the values and not
+        a fresh dataset/bridge resolution — the Graph Explorer's Compute
+        button. Class matching lives here so it stays in one place; the
+        computation itself is :class:`VirtualAttributeService`.
+
+        Raises:
+            NotFoundError: no ontology class matches the entity.
+            ValidationError: virtual attributes disabled for the domain, or the
+                requested function is not declared on the class.
+            InfrastructureError: Databricks client missing.
+        """
+        if NodeContextService.context_feature_disabled(
+            context_policy, VIRTUAL_ATTRIBUTES_FEATURE
+        ):
+            raise ValidationError(
+                "Virtual attributes are disabled for this domain by its MCP policy"
+            )
+
+        local_id = DigitalTwin.extract_local_id(entity_uri)
+        raw_classes = domain.get_classes() or []
+        matched_cls = NodeContextService.match_ontology_class(entity_uri, raw_classes)
+        if matched_cls is None:
+            raise NotFoundError("No ontology class matches this entity URI")
+
+        groups = await VirtualAttributeService.compute(
+            domain,
+            settings,
+            entity_uri=entity_uri,
+            matched_cls=matched_cls,
+            function_full_name=function_full_name,
+        )
+        return {
+            "success": True,
+            "entity_uri": entity_uri,
+            "entity_local_id": local_id,
+            "class_name": matched_cls.get("name", ""),
+            "virtual_attributes": groups,
         }
 
     @staticmethod

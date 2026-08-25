@@ -194,7 +194,8 @@ def _format_class_context_block(
     dataset = cls_actions.get("dataset")
     bridges = cls_actions.get("bridges") or []
     actions = cls_actions.get("actions") or []
-    if not dataset and not bridges and not actions:
+    virtual = cls_actions.get("virtualAttributes") or []
+    if not dataset and not bridges and not actions and not virtual:
         return ""
 
     lines: list[str] = []
@@ -260,6 +261,28 @@ def _format_class_context_block(
                 "over answering from the graph alone — these actions return "
                 "live, authoritative results",
                 neutral="    → call invoke_entity_action(entity_uri, action) to run one",
+            )
+        )
+
+    if virtual:
+        names = [
+            attr.get("name", "")
+            for group in virtual
+            for attr in (group.get("attributes") or [])
+        ]
+        lines.append(
+            f"  Virtual attributes ({len(names)}, computed on demand): "
+            + ", ".join(n for n in names if n)
+        )
+        lines.append(
+            _hint(
+                context_policy,
+                "virtual_attributes",
+                directive="    → ALWAYS call get_entity_context("
+                "compute_virtual_attributes=True) before answering — these "
+                "values are not in the graph and are computed live",
+                neutral="    → call get_entity_context("
+                "compute_virtual_attributes=True) to compute their values",
             )
         )
 
@@ -353,7 +376,64 @@ def _format_node_context_response(
         )
         lines.append("")
 
+    virtual = data.get("virtual_attributes") or []
+    if virtual:
+        lines.extend(_format_virtual_attribute_lines(virtual, context_policy))
+        lines.append("")
+
     return "\n".join(lines)
+
+
+def _format_virtual_attribute_lines(
+    groups: list, context_policy: Optional[dict] = None
+) -> list:
+    """Render the virtual attribute block of a node-context response.
+
+    A group carries ``values`` only once computed, so the same block serves
+    both the declaration-only listing and the computed one; the trailing hint
+    is emitted only while at least one group is still uncomputed, otherwise it
+    would ask the model to redo work it just did.
+    """
+    lines = ["Virtual Attributes (computed on demand):"]
+    pending = False
+    for group in groups:
+        values = group.get("values")
+        computed = isinstance(values, dict) and bool(values)
+        lines.append(f"  → {group.get('fullName', '')}")
+        desc = (group.get("description") or "").strip()
+        if desc:
+            lines.append(f"    Description: {desc}")
+        for attr in group.get("attributes") or []:
+            name = attr.get("name", "")
+            dtype = attr.get("dataType")
+            suffix = f"  ({dtype})" if dtype else ""
+            if computed:
+                lines.append(f"    {name} = {values.get(name)!r}{suffix}")
+            else:
+                lines.append(f"    {name}{suffix}  — not computed")
+        error = (group.get("error") or "").strip()
+        if error:
+            lines.append(f"    ⚠ computation failed: {error}")
+        message = (group.get("message") or "").strip()
+        if message:
+            lines.append(f"    {message}")
+        if not computed and not error:
+            pending = True
+
+    if pending:
+        lines.append(
+            _hint(
+                context_policy,
+                "virtual_attributes",
+                directive="  → ALWAYS call get_entity_context("
+                "compute_virtual_attributes=True) before answering: these "
+                "values are not stored in the graph and only a computation "
+                "can produce them",
+                neutral="  → call get_entity_context("
+                "compute_virtual_attributes=True) to compute these values",
+            )
+        )
+    return lines
 
 
 def _format_node_action_response(data: dict) -> str:
@@ -1248,6 +1328,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                             "dataset": cls.get("dataset") or None,
                             "bridges": cls.get("bridges") or [],
                             "actions": cls.get("actions") or [],
+                            "virtualAttributes": cls.get("virtualAttributes") or [],
                         }
                 logger.info(
                     "select_domain: loaded class Actions for %d classes", len(_class_actions)
@@ -1594,9 +1675,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         fetch_dataset_rows: bool = False,
         dataset_row_limit: int = 5,
         follow_bridges: bool = False,
+        compute_virtual_attributes: bool = False,
     ) -> str:
-        """Return complete context for an entity node: linked dataset rows
-        and/or cross-domain bridge entities.
+        """Return complete context for an entity node: linked dataset rows,
+        cross-domain bridge entities and/or computed virtual attributes.
 
         Requires a domain to be selected first via select_domain.
         The class must have dataset / bridges configured in the ontology.
@@ -1614,6 +1696,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         Bridges whose target is not exposed on MCP are omitted from the
         response.
 
+        Virtual attributes are class attributes that are not stored in the
+        graph: a Unity Catalog function computes them on demand. They are
+        always *listed* so you know what is available, but their values cost a
+        warehouse round-trip, so ask for them explicitly with
+        ``compute_virtual_attributes=True``.
+
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
             fetch_dataset_rows: If true, query the linked UC table/view for rows.
@@ -1621,6 +1709,8 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             follow_bridges: If true, peek at bridge target domains (read-only —
                 does NOT change the selected domain). Prefer ``select_domain``
                 for a real hop.
+            compute_virtual_attributes: If true, run the class's virtual
+                attribute functions and return their values.
         """
         blocked = _require_domain("get_entity_context")
         if blocked:
@@ -1636,6 +1726,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             blocked = _ensure_context_allowed("bridges", "Bridges")
             if blocked:
                 return blocked
+        if compute_virtual_attributes:
+            blocked = _ensure_context_allowed(
+                "virtual_attributes", "Virtual attributes"
+            )
+            if blocked:
+                return blocked
 
         params = _domain_params(
             {
@@ -1643,6 +1739,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                 "fetch_dataset_rows": str(fetch_dataset_rows).lower(),
                 "dataset_row_limit": min(max(dataset_row_limit, 1), 20),
                 "follow_bridges": str(follow_bridges).lower(),
+                "compute_virtual_attributes": str(
+                    compute_virtual_attributes
+                ).lower(),
             }
         )
 

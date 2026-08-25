@@ -362,6 +362,18 @@ async function showEntityDetails(entity) {
             </div>
         `;
     }
+
+    // Virtual attributes: declared here, computed only when the user asks.
+    const virtualGroups = entityMapping?.virtualAttributes || classInfo?.virtualAttributes || [];
+    if (virtualGroups.length > 0 && typeof renderVirtualAttributeSection === 'function') {
+        const vaCount = virtualGroups.reduce((n, g) => n + ((g.attributes || []).length), 0);
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-magic"></i> Virtual Attributes (${vaCount})</h6>
+                ${renderVirtualAttributeSection(entity.id, virtualGroups)}
+            </div>
+        `;
+    }
     
     // Dashboard section (separate, at the bottom of attributes area)
     if (dashboardUrl) {

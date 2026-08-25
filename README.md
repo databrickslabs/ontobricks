@@ -230,6 +230,7 @@ Engine *connection* config remains **workspace-global** and is configured under 
 - **Right-click "Expand neighbours"** — enrich the current graph in place with N-hop neighbours of any selected node (depth follows the right-pane Depth slider, default 2); newly added entities are highlighted and the camera zooms to frame them, with a non-blocking spinner in the canvas top-right while the request runs
 - **Bridge navigation** — follow cross-domain bridges to automatically switch domains and focus on the target entity in the graph viewer
 - **Class actions (Unity Catalog functions)** — bind any number of UC functions to an ontology class (**Ontology → Designer → External**), then run them on a node from the details pane or its right-click menu and read the result in a popup. Each function takes exactly one argument, the entity's ID, and only functions declared on the node's class can be invoked. The same actions are exposed to the MCP server via `get_entity_context` and `invoke_entity_action`. See [`documentation/user-guide.md`](documentation/user-guide.md#class-actions-unity-catalog-functions).
+- **Virtual attributes (computed on demand)** — attributes no mapping feeds: declare a UC function on a class (**Ontology → Designer → Attributes → Virtual Attributes**) and get one attribute per returned column. They appear in their own section under the mapped attributes with a **Compute** button per function, a **Compute all**, and a right-click shortcut; values are cached per entity for the page's lifetime. Over MCP the declarations always ride along with `get_entity_context` while values need `compute_virtual_attributes=True`, so nothing is computed unless a model asks. Never materialised, hence not queryable in SPARQL or GraphQL. See [`documentation/user-guide.md`](documentation/user-guide.md#virtual-attributes-computed-on-demand).
 - **Data cluster detection** — detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms; available client-side (Graphology) for the visible subgraph and server-side (NetworkX) for the full graph; cluster results can be visualized with color-by-cluster mode and collapsed into super-nodes
 - **Cohort discovery** — group entities that travel together using rule-based linkage (shared resources via predicates) and compatibility constraints (same-value, value-equals, value-in, value-range); deterministic, explainable cohorts with live counters, why/why-not explainers, and idempotent materialisation as graph triples (`:inCohort`) or Unity Catalog Delta tables. See [`documentation/cohort_discovery.md`](documentation/cohort_discovery.md).
 - **Data quality violation limits** — cap the number of violations displayed per rule (configurable via dropdown, default 10) for faster quality checks
@@ -254,9 +255,9 @@ OntoBricks exposes the graph viewer to LLM agents via the [Model Context Protoco
 
 Each domain then decides **what it publishes**, from **Domain → Information →
 MCP**: which of the seven domain-scoped tools it exposes, and whether its
-datasets, bridges and class actions are *preferred* (the hint the model reads
-becomes a directive), *normal*, or *disabled* (withheld from every MCP and
-external REST response). Registry-level tools stay always-on, the tool set is
+datasets, bridges, class actions and virtual attributes are *preferred* (the
+hint the model reads becomes a directive), *normal*, or *disabled* (withheld
+from every MCP and external REST response). Registry-level tools stay always-on, the tool set is
 recomputed when the agent calls `select_domain` (no restart), and an
 unconfigured domain behaves exactly as before. See
 [`documentation/mcp.md`](documentation/mcp.md#per-domain-mcp-policy).

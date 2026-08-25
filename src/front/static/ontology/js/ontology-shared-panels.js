@@ -80,6 +80,12 @@ let sharedPanelDataset = null;  // Linked Unity Catalog dataset { catalog, schem
 // The bound function must take exactly one parameter: the ID of the entity
 // being acted on — it is passed automatically at invocation time.
 let sharedPanelActions = [];
+// Virtual attribute declarations. One entry per bound Unity Catalog function:
+// { catalog, schema, function, fullName, description, returns_table,
+//   attributes: [{ name, column, label, dataType }] }.
+// Values are never stored here — they are computed on demand by the consumers
+// (Graph Explorer, MCP), never at design time.
+let sharedPanelVirtualAttributes = [];
 let sharedPanelDirty = false;
 
 // Remembered active tab per panel type — persists across entity/relationship selections
@@ -414,6 +420,7 @@ async function openEntityPanel(options = {}) {
     sharedPanelBridges = [];  // Reset bridges for new entity
     sharedPanelDataset = null;  // Reset dataset for new entity
     sharedPanelActions = [];  // Reset UC function actions for new entity
+    sharedPanelVirtualAttributes = [];  // Reset virtual attributes for new entity
     
     openSharedPanel();
     
@@ -456,6 +463,7 @@ async function openEntityPanelForEdit(idx, options = {}) {
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
     sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
     sharedPanelActions = cls.actions ? JSON.parse(JSON.stringify(cls.actions)) : [];
+    sharedPanelVirtualAttributes = cls.virtualAttributes ? JSON.parse(JSON.stringify(cls.virtualAttributes)) : [];
 
     console.log('[SharedPanel] Edit - Loaded class:', cls.name, 'dataProperties:', (cls.dataProperties || []).length);
     
@@ -496,6 +504,7 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
     sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
     sharedPanelActions = cls.actions ? JSON.parse(JSON.stringify(cls.actions)) : [];
+    sharedPanelVirtualAttributes = cls.virtualAttributes ? JSON.parse(JSON.stringify(cls.virtualAttributes)) : [];
 
     sharedPanelInheritedAttributes = getSharedInheritedProperties(cls.parent);
     const inheritedNames = new Set(sharedPanelInheritedAttributes.map(a => a.name));
@@ -629,7 +638,19 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="addSharedEntityAttribute()" title="Add manually"><i class="bi bi-plus"></i></button>
                     ` : ''}
                 </div>
-                <div id="sharedEntityAttributes" class="border rounded p-2" style="background: #ffffff; overflow-y: auto;"></div>
+                <div id="sharedEntityAttributes" class="border rounded p-2 panel-box panel-box-scroll"></div>
+                <div class="mt-3">
+                    <label class="form-label d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-magic me-1"></i>Virtual Attributes</span>
+                        ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openVirtualAttributeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
+                    </label>
+                    <div id="sharedEntityVirtualAttributes" class="border rounded p-2 panel-box">
+                        <div id="sharedEntityVirtualAttributesContent">
+                            <small class="text-muted">No virtual attributes</small>
+                        </div>
+                    </div>
+                    <div class="form-text small">Computed on demand by a Unity Catalog function taking exactly one parameter: the ID of the entity. Not mapped, not stored in the graph, and not queryable in SPARQL or GraphQL.</div>
+                </div>
             </div>
 
             <div class="form-tab-pane ${_eTab === 'actions' ? 'active' : ''}" data-form-tab-content="actions">
@@ -724,6 +745,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     }
     
     renderSharedEntityAttributes(viewOnly);
+    renderSharedEntityVirtualAttributes(viewOnly);
     renderSharedEntityDashboard(viewOnly);
     renderSharedEntityDataset(viewOnly);
     renderSharedEntityActions(viewOnly);
@@ -1394,6 +1416,107 @@ function closeDatasetSelectorModal() {
 }
 
 // =====================================================
+// UNITY CATALOG FUNCTION PICKERS — shared cascade
+// =====================================================
+// Both the Actions picker and the Virtual Attributes picker walk the same
+// catalog -> schema -> function cascade. Only the eligibility rules and what
+// they do with the chosen function differ, so the three fetches live here.
+
+/**
+ * Fill a catalog <select> with the accessible Unity Catalog catalogs.
+ */
+async function _ucFillCatalogSelect(selectId) {
+    try {
+        const resp = await fetch('/settings/catalogs', { credentials: 'same-origin' });
+        const data = await resp.json();
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const catalogs = data.catalogs || [];
+        sel.innerHTML = '<option value="">Select a catalog...</option>' +
+            catalogs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    } catch (err) {
+        console.error('[UCPicker] Error loading catalogs:', err);
+        const sel = document.getElementById(selectId);
+        if (sel) sel.innerHTML = '<option value="">Failed to load catalogs</option>';
+    }
+}
+
+/**
+ * Fill a schema <select> with the schemas of *catalog*.
+ */
+async function _ucFillSchemaSelect(catalog, selectId) {
+    const schemaSel = document.getElementById(selectId);
+    if (!schemaSel) return;
+    schemaSel.disabled = true;
+    schemaSel.innerHTML = '<option value="">Loading...</option>';
+    try {
+        const resp = await fetch(`/settings/schemas/${encodeURIComponent(catalog)}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        const schemas = data.schemas || [];
+        schemaSel.innerHTML = '<option value="">Select a schema...</option>' +
+            schemas.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+        schemaSel.disabled = false;
+    } catch (err) {
+        console.error('[UCPicker] Error loading schemas:', err);
+        schemaSel.innerHTML = '<option value="">Failed to load schemas</option>';
+    }
+}
+
+/**
+ * Return the user-defined functions of catalog.schema, or [] on failure.
+ * Each entry carries param_count, returns_table, return_type and
+ * return_columns.
+ */
+async function _ucFetchFunctions(catalog, schema) {
+    const resp = await fetch(
+        `/settings/uc-functions?catalog=${encodeURIComponent(catalog)}&schema=${encodeURIComponent(schema)}`,
+        { credentials: 'same-origin' }
+    );
+    const data = await resp.json();
+    return (data.success && data.functions) ? data.functions : [];
+}
+
+/**
+ * Number of values a function returns: one RETURNS TABLE column each, or 1 for
+ * a scalar. Null when the metastore did not report the columns of a table
+ * function, which is not the same as returning nothing.
+ *
+ * @param {Object} fn Entry from /settings/uc-functions.
+ * @returns {?number} Output count, or null when unknown.
+ */
+function _ucOutputCount(fn) {
+    if (!fn.returns_table) return 1;
+    const columns = fn.return_columns || [];
+    return columns.length > 0 ? columns.length : null;
+}
+
+/**
+ * Badge stating how many values a function returns, for the picker list.
+ * Empty when the count is unknown rather than guessing at it.
+ */
+function _ucOutputBadge(fn) {
+    const count = _ucOutputCount(fn);
+    if (count === null) {
+        return '<span class="badge bg-light text-muted border" ' +
+            'title="Unity Catalog did not report this function\'s result columns">' +
+            'outputs unknown</span>';
+    }
+    return `<span class="badge bg-light text-dark border" title="Returns ${count} value${count === 1 ? '' : 's'}">` +
+        `${count} output${count === 1 ? '' : 's'}</span>`;
+}
+
+/**
+ * Discard a dynamically inserted picker modal once Bootstrap has hidden it.
+ */
+function _ucClosePickerModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    const bsModal = bootstrap.Modal.getInstance(modal);
+    if (bsModal) bsModal.hide();
+    modal.addEventListener('hidden.bs.modal', () => modal.remove(), { once: true });
+}
+
+// =====================================================
 // UNITY CATALOG FUNCTION ACTIONS
 // =====================================================
 
@@ -1514,19 +1637,7 @@ async function openActionSelectorModal() {
     const modal = new bootstrap.Modal(document.getElementById(modalId));
     modal.show();
 
-    try {
-        const resp = await fetch('/settings/catalogs', { credentials: 'same-origin' });
-        const data = await resp.json();
-        const sel = document.getElementById('actionCatalogSelect');
-        if (!sel) return;
-        const catalogs = data.catalogs || [];
-        sel.innerHTML = '<option value="">Select a catalog...</option>' +
-            catalogs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-    } catch (err) {
-        console.error('[Action] Error loading catalogs:', err);
-        const sel = document.getElementById('actionCatalogSelect');
-        if (sel) sel.innerHTML = '<option value="">Failed to load catalogs</option>';
-    }
+    await _ucFillCatalogSelect('actionCatalogSelect');
 }
 
 async function _actionOnCatalogChange() {
@@ -1539,31 +1650,13 @@ async function _actionOnCatalogChange() {
     const list = document.getElementById('actionFunctionList');
     if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list functions</div>';
     if (catalog) {
-        await _actionLoadSchemas(catalog);
+        await _ucFillSchemaSelect(catalog, 'actionSchemaSelect');
     } else {
         const schemaSel = document.getElementById('actionSchemaSelect');
         if (schemaSel) {
             schemaSel.disabled = true;
             schemaSel.innerHTML = '<option value="">Select a catalog first</option>';
         }
-    }
-}
-
-async function _actionLoadSchemas(catalog) {
-    const schemaSel = document.getElementById('actionSchemaSelect');
-    if (!schemaSel) return;
-    schemaSel.disabled = true;
-    schemaSel.innerHTML = '<option value="">Loading...</option>';
-    try {
-        const resp = await fetch(`/settings/schemas/${encodeURIComponent(catalog)}`, { credentials: 'same-origin' });
-        const data = await resp.json();
-        const schemas = data.schemas || [];
-        schemaSel.innerHTML = '<option value="">Select a schema...</option>' +
-            schemas.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
-        schemaSel.disabled = false;
-    } catch (err) {
-        console.error('[Action] Error loading schemas:', err);
-        schemaSel.innerHTML = '<option value="">Failed to load schemas</option>';
     }
 }
 
@@ -1582,9 +1675,7 @@ async function _actionLoadFunctions(catalog, schema) {
     const list = document.getElementById('actionFunctionList');
     if (list) list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading functions...</div>';
     try {
-        const resp = await fetch(`/settings/uc-functions?catalog=${encodeURIComponent(catalog)}&schema=${encodeURIComponent(schema)}`, { credentials: 'same-origin' });
-        const data = await resp.json();
-        _actionAllFunctions = (data.success && data.functions) ? data.functions : [];
+        _actionAllFunctions = await _ucFetchFunctions(catalog, schema);
         const searchInput = document.getElementById('actionFunctionSearch');
         if (searchInput) searchInput.disabled = _actionAllFunctions.length === 0;
         if (!_actionAllFunctions.length) {
@@ -1616,7 +1707,7 @@ function _renderActionFunctionList(functions) {
                     ${eligible ? `onclick='_actionSelectFunction(${JSON.stringify(fn).replace(/'/g, "&#39;")})'` : 'disabled'}>
                 <i class="bi bi-lightning-charge text-warning"></i>
                 <div class="flex-grow-1">
-                    <div class="fw-semibold">${escapeHtml(fn.name)} ${badge}</div>
+                    <div class="fw-semibold">${escapeHtml(fn.name)} ${badge} ${_ucOutputBadge(fn)}</div>
                     ${hint}
                 </div>
                 ${eligible ? '<i class="bi bi-chevron-right text-muted"></i>' : ''}
@@ -1655,12 +1746,373 @@ function _actionSelectFunction(fn) {
 }
 
 function closeActionSelectorModal() {
-    const modal = document.getElementById('actionSelectorModal');
-    if (modal) {
-        const bsModal = bootstrap.Modal.getInstance(modal);
-        if (bsModal) bsModal.hide();
-        modal.addEventListener('hidden.bs.modal', () => modal.remove(), { once: true });
+    _ucClosePickerModal('actionSelectorModal');
+}
+
+// =====================================================
+// VIRTUAL ATTRIBUTES
+// =====================================================
+// A virtual attribute is not mapped and not stored in the graph: a Unity
+// Catalog function computes it on demand. One function yields one attribute
+// per RETURNS TABLE column, or a single one when it is scalar. Nothing is
+// computed here — at design time there is no entity instance to bind the ID to.
+
+/**
+ * Alias used for the single value of a scalar function, which has no result
+ * column name of its own. Must match SCALAR_RESULT_COLUMN server-side.
+ */
+const VA_SCALAR_COLUMN = 'result';
+
+/**
+ * Render the declared virtual attribute groups in the entity form.
+ */
+function renderSharedEntityVirtualAttributes(viewOnly = false) {
+    const container = panelGetById('sharedEntityVirtualAttributesContent');
+    if (!container) return;
+
+    if (!sharedPanelVirtualAttributes.length) {
+        container.innerHTML = '<small class="text-muted">No virtual attributes</small>';
+        return;
     }
+
+    container.innerHTML = sharedPanelVirtualAttributes.map((group, idx) => {
+        const fullName = group.fullName
+            || `${group.catalog || ''}.${group.schema || ''}.${group.function || ''}`;
+        const badge = group.returns_table
+            ? '<span class="badge bg-info text-dark">Table</span>'
+            : '<span class="badge bg-secondary">Scalar</span>';
+        const descHtml = !viewOnly
+            ? `<textarea class="form-control form-control-sm mt-1" rows="2"
+                         id="vaDescriptionInput-${idx}"
+                         placeholder="What does this function compute?"
+                         oninput="onVirtualAttributeDescriptionChange(${idx}, this.value)">${escapeHtml(group.description || '')}</textarea>`
+            : (group.description
+                ? `<small class="text-muted d-block ms-3">${escapeHtml(group.description)}</small>`
+                : '');
+        const attrsHtml = (group.attributes || []).map((attr, aIdx) => {
+            const type = attr.dataType
+                ? `<span class="badge bg-light text-muted border ms-1">${escapeHtml(attr.dataType)}</span>`
+                : '';
+            const labelHtml = !viewOnly
+                ? `<input type="text" class="form-control form-control-sm mt-1"
+                          value="${escapeHtml(attr.label || attr.name || '')}"
+                          placeholder="Display label"
+                          oninput="onVirtualAttributeLabelChange(${idx}, ${aIdx}, this.value)">`
+                : '';
+            return `
+                <div class="${aIdx > 0 ? 'mt-2' : ''}">
+                    <div class="small"><code>${escapeHtml(attr.name || '')}</code>${type}</div>
+                    ${labelHtml}
+                </div>
+            `;
+        }).join('');
+        return `
+            <div class="va-group">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-magic text-primary"></i>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">${escapeHtml(group.function || '')} ${badge}</div>
+                        <small class="text-muted">${escapeHtml(fullName)}</small>
+                    </div>
+                    ${!viewOnly ? `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSharedEntityVirtualAttribute(${idx})" title="Remove this function and its attributes"><i class="bi bi-x"></i></button>` : ''}
+                </div>
+                ${descHtml}
+                <div class="va-group-attrs">${attrsHtml}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function onVirtualAttributeDescriptionChange(index, value) {
+    const group = sharedPanelVirtualAttributes[index];
+    if (!group) return;
+    group.description = value.trim() || null;
+    markPanelDirty();
+}
+
+function onVirtualAttributeLabelChange(index, attrIndex, value) {
+    const attr = sharedPanelVirtualAttributes[index]?.attributes?.[attrIndex];
+    if (!attr) return;
+    attr.label = value.trim() || attr.name;
+    markPanelDirty();
+}
+
+/**
+ * Remove a whole group. A single attribute cannot be removed on its own: it is
+ * part of the function's signature, so dropping one would make the mapping
+ * from result column to attribute ambiguous.
+ */
+async function removeSharedEntityVirtualAttribute(index) {
+    const group = sharedPanelVirtualAttributes[index];
+    if (!group) return;
+    const count = (group.attributes || []).length;
+    const confirmed = await showConfirmDialog({
+        title: 'Remove virtual attributes',
+        message: `Remove <strong>${escapeHtml(group.function || group.fullName)}</strong> and its ${count} virtual attribute${count === 1 ? '' : 's'}?`,
+        confirmText: 'Remove',
+        confirmClass: 'btn-danger',
+        icon: 'trash'
+    });
+    if (!confirmed) return;
+    sharedPanelVirtualAttributes.splice(index, 1);
+    markPanelDirty();
+    renderSharedEntityVirtualAttributes(false);
+}
+
+/**
+ * Names already taken on this class: mapped attributes (own + inherited) and
+ * the other virtual attributes. The Graph Explorer and the MCP render both
+ * families in one namespace, so a collision has to be resolved at declaration
+ * time rather than surfacing as two rows with the same name.
+ */
+function _vaTakenNames(exceptGroupIndex = -1) {
+    const taken = new Set();
+    sharedPanelOwnAttributes.forEach(a => a.name && taken.add(a.name));
+    sharedPanelInheritedAttributes.forEach(a => a.name && taken.add(a.name));
+    sharedPanelVirtualAttributes.forEach((group, idx) => {
+        if (idx === exceptGroupIndex) return;
+        (group.attributes || []).forEach(a => a.name && taken.add(a.name));
+    });
+    return taken;
+}
+
+/**
+ * Derive the virtual attributes of *fn*, suffixing any colliding name.
+ * Returns { attributes, renamed } where renamed lists "old -> new" pairs.
+ */
+function _vaDeriveAttributes(fn) {
+    const taken = _vaTakenNames();
+    const columns = fn.returns_table
+        ? (fn.return_columns || [])
+        : [{ name: fn.name, data_type: fn.return_type || '' }];
+    const attributes = [];
+    const renamed = [];
+    columns.forEach(col => {
+        const rawName = String(col.name || '').trim();
+        if (!rawName) return;
+        let name = rawName;
+        let suffix = 2;
+        while (taken.has(name)) {
+            name = `${rawName}_${suffix}`;
+            suffix += 1;
+        }
+        if (name !== rawName) renamed.push(`${rawName} → ${name}`);
+        taken.add(name);
+        attributes.push({
+            name,
+            column: fn.returns_table ? rawName : VA_SCALAR_COLUMN,
+            label: name,
+            dataType: String(col.data_type || '').trim() || null,
+        });
+    });
+    return { attributes, renamed };
+}
+
+// Virtual attribute selector state
+let _vaSelCatalog = '';
+let _vaSelSchema = '';
+let _vaAllFunctions = [];
+
+/**
+ * Open the virtual attribute selector modal (catalog -> schema -> function).
+ */
+async function openVirtualAttributeSelectorModal() {
+    const modalId = 'virtualAttributeSelectorModal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    _vaSelCatalog = '';
+    _vaSelSchema = '';
+    _vaAllFunctions = [];
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-magic me-2"></i>Select a Unity Catalog Function</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2 px-3 small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            The function must accept <strong>exactly one parameter</strong>: the ID of the
+                            entity. One virtual attribute is created per returned column.
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Catalog</label>
+                                <select class="form-select form-select-sm" id="vaCatalogSelect" onchange="_vaOnCatalogChange()">
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Schema</label>
+                                <select class="form-select form-select-sm" id="vaSchemaSelect" onchange="_vaOnSchemaChange()" disabled>
+                                    <option value="">Select a catalog first</option>
+                                </select>
+                            </div>
+                        </div>
+                        <input type="text" class="form-control form-control-sm mb-2" id="vaFunctionSearch" placeholder="Search functions..." oninput="_filterVaFunctions()" disabled>
+                        <div id="vaFunctionList" class="list-group va-function-list">
+                            <div class="text-muted p-3 text-center">Select a catalog and schema to list functions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById(modalId));
+    modal.show();
+
+    await _ucFillCatalogSelect('vaCatalogSelect');
+}
+
+async function _vaOnCatalogChange() {
+    const catalog = document.getElementById('vaCatalogSelect')?.value || '';
+    _vaSelCatalog = catalog;
+    _vaSelSchema = '';
+    _vaAllFunctions = [];
+    const searchInput = document.getElementById('vaFunctionSearch');
+    if (searchInput) searchInput.disabled = true;
+    const list = document.getElementById('vaFunctionList');
+    if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list functions</div>';
+    if (catalog) {
+        await _ucFillSchemaSelect(catalog, 'vaSchemaSelect');
+    } else {
+        const schemaSel = document.getElementById('vaSchemaSelect');
+        if (schemaSel) {
+            schemaSel.disabled = true;
+            schemaSel.innerHTML = '<option value="">Select a catalog first</option>';
+        }
+    }
+}
+
+async function _vaOnSchemaChange() {
+    const schema = document.getElementById('vaSchemaSelect')?.value || '';
+    _vaSelSchema = schema;
+    if (schema && _vaSelCatalog) {
+        await _vaLoadFunctions(_vaSelCatalog, schema);
+    } else {
+        const list = document.getElementById('vaFunctionList');
+        if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list functions</div>';
+    }
+}
+
+async function _vaLoadFunctions(catalog, schema) {
+    const list = document.getElementById('vaFunctionList');
+    if (list) list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading functions...</div>';
+    try {
+        _vaAllFunctions = await _ucFetchFunctions(catalog, schema);
+        const searchInput = document.getElementById('vaFunctionSearch');
+        if (searchInput) searchInput.disabled = _vaAllFunctions.length === 0;
+        if (!_vaAllFunctions.length) {
+            if (list) list.innerHTML = '<div class="text-muted p-3 text-center">No functions found in this schema</div>';
+            return;
+        }
+        _renderVaFunctionList(_vaAllFunctions);
+    } catch (err) {
+        console.error('[VirtualAttribute] Error loading functions:', err);
+        if (list) list.innerHTML = '<div class="text-danger p-2"><i class="bi bi-exclamation-triangle"></i> Failed to load functions</div>';
+    }
+}
+
+function _renderVaFunctionList(functions) {
+    const list = document.getElementById('vaFunctionList');
+    if (!list) return;
+    const assigned = new Set(sharedPanelVirtualAttributes.map(g => g.fullName));
+    list.innerHTML = functions.map(fn => {
+        const fullName = fn.full_name || `${_vaSelCatalog}.${_vaSelSchema}.${fn.name}`;
+        // Same single-parameter rule as actions: the one argument is the entity ID.
+        const singleParam = Number(fn.param_count) === 1;
+        const alreadyAssigned = assigned.has(fullName);
+        const eligible = singleParam && !alreadyAssigned;
+        const badge = fn.returns_table
+            ? '<span class="badge bg-info text-dark">Table</span>'
+            : '<span class="badge bg-secondary">Scalar</span>';
+        const returns = fn.returns_table
+            ? (fn.return_columns || []).map(c => `${c.name}${c.data_type ? ` ${c.data_type}` : ''}`).join(', ')
+            : (fn.return_type || '');
+        let hint;
+        if (!singleParam) {
+            hint = `<small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Needs exactly 1 parameter (has ${Number(fn.param_count) || 0})</small>`;
+        } else if (alreadyAssigned) {
+            hint = '<small class="text-warning"><i class="bi bi-check2-circle me-1"></i>Already assigned to this entity</small>';
+        } else {
+            // The output count is what the user is really choosing here: it is
+            // the number of virtual attributes the function will create.
+            const count = _ucOutputCount(fn);
+            const creates = count === null
+                ? ''
+                : ` — creates ${count} attribute${count === 1 ? '' : 's'}`;
+            hint = `<small class="text-muted">returns: ${escapeHtml(returns || 'unknown')}${creates}</small>`;
+        }
+        return `
+            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                    ${eligible ? `onclick='_vaSelectFunction(${JSON.stringify(fn).replace(/'/g, "&#39;")})'` : 'disabled'}>
+                <i class="bi bi-magic text-primary"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">${escapeHtml(fn.name)} ${badge} ${_ucOutputBadge(fn)}</div>
+                    ${hint}
+                </div>
+                ${eligible ? '<i class="bi bi-chevron-right text-muted"></i>' : ''}
+            </button>
+        `;
+    }).join('');
+}
+
+function _filterVaFunctions() {
+    const q = (document.getElementById('vaFunctionSearch')?.value || '').toLowerCase();
+    const filtered = _vaAllFunctions.filter(fn =>
+        (fn.name || '').toLowerCase().includes(q) ||
+        (fn.comment || '').toLowerCase().includes(q)
+    );
+    _renderVaFunctionList(filtered);
+}
+
+function _vaSelectFunction(fn) {
+    const fullName = fn.full_name || `${_vaSelCatalog}.${_vaSelSchema}.${fn.name}`;
+    if (sharedPanelVirtualAttributes.some(g => g.fullName === fullName)) {
+        showNotification(`Function already assigned: ${fullName}`, 'warning', 3000);
+        return;
+    }
+    const { attributes, renamed } = _vaDeriveAttributes(fn);
+    if (!attributes.length) {
+        showNotification(
+            `${fn.name} exposes no usable return column — cannot create virtual attributes`,
+            'warning', 4000
+        );
+        return;
+    }
+    sharedPanelVirtualAttributes.push({
+        catalog: _vaSelCatalog,
+        schema: _vaSelSchema,
+        function: fn.name,
+        fullName,
+        description: String(fn.comment || '').trim() || null,
+        returns_table: Boolean(fn.returns_table),
+        attributes,
+    });
+    markPanelDirty();
+    renderSharedEntityVirtualAttributes(false);
+    closeVirtualAttributeSelectorModal();
+    if (renamed.length) {
+        showNotification(
+            `Name already used on this entity, renamed: ${renamed.join(', ')}`,
+            'warning', 5000
+        );
+    } else {
+        showNotification(
+            `${attributes.length} virtual attribute${attributes.length === 1 ? '' : 's'} added from ${fn.name}`,
+            'success', 3000
+        );
+    }
+}
+
+function closeVirtualAttributeSelectorModal() {
+    _ucClosePickerModal('virtualAttributeSelectorModal');
 }
 
 // =====================================================
@@ -2318,7 +2770,7 @@ function applyManualDashboardUrl() {
     selectDashboard(url, 'Custom Dashboard');
 }
 
-async function saveSharedEntity() {
+async function saveSharedEntity(options = {}) {
     const name = panelGetById('sharedEntityName')?.value.trim();
     const labelRaw = panelGetById('sharedEntityLabel')?.value.trim();
     const label = labelRaw || name;
@@ -2356,7 +2808,8 @@ async function saveSharedEntity() {
         dashboardParams: Object.keys(sharedPanelDashboardParams).length > 0 ? sharedPanelDashboardParams : undefined,
         bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined,
         dataset: sharedPanelDataset || undefined,
-        actions: sharedPanelActions.length > 0 ? sharedPanelActions : undefined
+        actions: sharedPanelActions.length > 0 ? sharedPanelActions : undefined,
+        virtualAttributes: sharedPanelVirtualAttributes.length > 0 ? sharedPanelVirtualAttributes : undefined
     };
     
     console.log('[SharedPanel] Saving - classData.dashboardParams:', JSON.stringify(classData.dashboardParams));
@@ -2377,7 +2830,7 @@ async function saveSharedEntity() {
         showNotification('Entity added', 'success', 2000);
     }
     
-    await window.saveConfigToSession();
+    await window.saveConfigToSession({ keepalive: options.keepalive });
     
     // Save entity constraints to the ONLY storage location: session_data/ontology/constraints
     await saveEntityConstraintsToServer(name, disjointWith, equivalentTo);
@@ -2786,7 +3239,7 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     }
 }
 
-async function saveSharedRelationship() {
+async function saveSharedRelationship(options = {}) {
     const name = panelGetById('sharedRelName')?.value.trim();
     const labelRaw = panelGetById('sharedRelLabel')?.value.trim();
     const label = labelRaw || name;
@@ -2853,7 +3306,7 @@ async function saveSharedRelationship() {
         showNotification('Relationship added', 'success', 2000);
     }
     
-    await window.saveConfigToSession();
+    await window.saveConfigToSession({ keepalive: options.keepalive });
     if (isRename) {
         try { await fetch('/ontology/update-relationship-references', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ old_name: sharedPanelOriginalName, new_name: name }) }); } catch (e) {}
     }
@@ -2977,12 +3430,42 @@ async function saveRelationshipConstraintsToServer(propertyName, domainClass, co
 // SAVE HANDLER
 // =====================================================
 
-async function saveSharedPanelItem() {
+async function saveSharedPanelItem(options = {}) {
     if (sharedPanelViewOnly) return;
-    if (sharedPanelEditType === 'entity') await saveSharedEntity();
-    else if (sharedPanelEditType === 'relationship') await saveSharedRelationship();
+    if (sharedPanelEditType === 'entity') await saveSharedEntity(options);
+    else if (sharedPanelEditType === 'relationship') await saveSharedRelationship(options);
     sharedPanelDirty = false;
 }
+
+/**
+ * Commit the panel's pending edit while the page is being torn down.
+ *
+ * The panel is an edit buffer: closing it, switching section or opening
+ * another item all flush it first. Leaving the page did not, so a pending
+ * edit — a removed virtual attribute, a renamed entity — was dropped, and the
+ * registry auto-save on unload then persisted the state that never heard about
+ * it. This closes that gap.
+ *
+ * Deliberately not awaited: only the synchronous prefix of the save can run
+ * before teardown. That prefix commits the change to `OntologyState.config`
+ * and dispatches the session save with `keepalive`, which is the part that
+ * must not be lost. The tail (constraints, OWL regeneration, notifications)
+ * is skipped — the OWL is regenerated from the config on the next load.
+ */
+function flushSharedPanelOnUnload() {
+    if (!sharedPanelDirty || sharedPanelViewOnly) return;
+    try {
+        saveSharedPanelItem({ keepalive: true });
+        console.log('[UNLOAD] Pending panel edit flushed to session');
+    } catch (err) {
+        console.warn('[UNLOAD] Could not flush the pending panel edit:', err);
+    }
+    sharedPanelDirty = false;
+}
+
+window.addEventListener('beforeunload', flushSharedPanelOnUnload);
+window.addEventListener('pagehide', flushSharedPanelOnUnload);
+window.flushSharedPanelOnUnload = flushSharedPanelOnUnload;
 
 // =====================================================
 // COMPATIBILITY FUNCTIONS

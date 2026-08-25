@@ -353,3 +353,364 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5190 passed, 281
 skipped, 6 deselected, 1 xfailed, 0 failed in 36.28s (+2 new tests).
+
+================================================================================
+Virtual attributes — UC-function-computed attributes, resolved on demand
+================================================================================
+
+Context: every attribute an ontology could carry had to be fed by a mapping and
+materialized by a build, so a value that is a *function of* the entity rather
+than a fact stored about it (a live risk score, a current inventory position, a
+distance to the nearest hub) had nowhere to live. The workaround was a class
+action, which is a verb the user clicks — wrong affordance for something that
+reads as an attribute, and invisible to an agent asking "what do you know about
+this customer". Virtual attributes fill that gap: declared on the class like any
+other attribute, computed by a Unity Catalog function from the entity's ID at
+the moment someone asks, never materialized. The trade is stated everywhere it
+matters — they are not queryable in SPARQL, GraphQL or a cohort, and take no
+part in mappings, R2RML, SHACL or data-quality checks.
+
+The declarations live in a new `cls["virtualAttributes"]` list rather than in
+`dataProperties`, which is what keeps them out of every downstream pipeline
+without a single guard clause in those pipelines. No registry migration: the
+ontology is already a `jsonb` blob.
+
+Falls under the AI feature lifecycle gate (`.cursor/12`): the MCP tool contract
+changes, so SPEC.md and an eval dataset ship with the change.
+
+Changes:
+
+1. `src/back/core/databricks/uc/UnityCatalog.py`
+   `list_functions` now returns `return_type` and `return_columns` (the
+   `RETURNS TABLE` result columns in declaration order). Read by a *second*
+   statement on `information_schema.parameters` filtered to the complement of
+   the `IN` predicate: aggregating input parameters and result columns in one
+   join multiplies rows. A metastore that cannot answer the second query logs a
+   warning and yields empty `return_columns` rather than losing the function
+   list, which the Actions picker also depends on.
+2. `src/back/objects/digitaltwin/VirtualAttributeService.py` (new)
+   Declaration reading (`class_entries`) and computation (`compute`). Reading is
+   forgiving by contract: a group with an unsafe `fullName`, an unusable column
+   or a duplicate attribute name is logged and skipped, because one bad
+   declaration must not cost the node its whole context. Computation isolates
+   per group — a failing UC function carries an `error` and leaves the other
+   groups' values intact. Only the first row is used (a virtual attribute is
+   single-valued per entity, so several rows is a declaration error, reported
+   via `message` rather than aggregated), and a scalar function is read through
+   the reserved `result` alias.
+3. `src/back/objects/digitaltwin/NodeContextService.py`
+   `resolve_context` gained `compute_virtual_attributes`; declarations always
+   ride along with the class lookup, values only on request. Added the
+   `compute_virtual_attributes` facade for callers that want the values without
+   a fresh dataset/bridge resolution — the Graph Explorer's Compute button. The
+   policy check precedes the class lookup, so a disabled element does not leak
+   whether the URI resolves.
+4. `src/back/core/helpers/SQLHelpers.py`, `src/back/core/helpers/__init__.py`
+   Promoted the `_SAFE_SQL_IDENT` / `_SAFE_COL_IDENT` regexes out of
+   `NodeContextService` into module-level `SAFE_SQL_IDENT` / `SAFE_COL_IDENT`.
+   The new service needs the same guards, and importing them from
+   `NodeContextService` would have inverted the dependency.
+5. `src/back/objects/ontology/Ontology.py`
+   `build_class_from_data` carries `virtualAttributes`, falling back to the
+   existing value so a save from a panel that does not know about them cannot
+   wipe the declarations.
+6. `src/back/core/w3c/owl/OntologyGenerator.py`,
+   `src/back/core/w3c/owl/OntologyParser.py`
+   Round-trip through an `ONTOBRICKS_NS.virtualAttributes` JSON literal, kept
+   deliberately out of the `owl:DatatypeProperty` block. A malformed literal is
+   swallowed: an unreadable declaration must not make the ontology unloadable.
+7. `src/back/core/mcp_tools.py`
+   New `virtual_attributes` context element, so a domain can push it
+   (*preferred*) or take it off the table (*disabled*).
+8. `src/api/routers/digitaltwin.py`
+   `NodeContextVirtualAttribute` / `NodeContextVirtualAttributeGroup` response
+   models and the `compute_virtual_attributes` query flag on
+   `GET /nodes/context`. `values` is omitted rather than emptied when nothing
+   was computed: the difference between *not computed* and *computed as null*
+   is load-bearing for an agent.
+9. `src/api/routers/internal/dtwin.py`
+   `GET /dtwin/classes` exposes the declarations, `/dtwin/nodes/context` takes
+   the flag, and a new `GET /dtwin/nodes/virtual-attributes` computes on demand
+   with an optional `function` filter — the Graph Explorer's per-group button.
+10. `src/api/routers/domains.py`
+    `/domain/classes` publishes `virtualAttributes` through
+    `VirtualAttributeService.class_entries`, so the MCP server caches normalized
+    declarations rather than raw ontology JSON.
+11. `src/mcp-server/server/app.py`
+    `get_entity_context` gained `compute_virtual_attributes` and refuses it when
+    the element is disabled, rather than answering with nothing — same contract
+    as the actions overlap. `describe_entity` names the declarations with a
+    count; the node-context formatter renders `not computed` placeholders and
+    swaps the "call with the flag" hint for the values once they arrive, so the
+    model is never asked to redo work it just did.
+12. `src/front/static/ontology/js/ontology-shared-panels.js`
+    Virtual Attributes box in the **Attributes** tab, with its own UC function
+    picker. Factored the catalog → schema → function cascade out of the Actions
+    picker (`_ucFillCatalogSelect`, `_ucFillSchemaSelect`, `_ucFetchFunctions`,
+    `_ucClosePickerModal`) instead of copying it. Picking a function derives one
+    attribute per returned column, deduplicated against the class's mapped *and*
+    virtual names (`score` → `score_2`) since the Explorer and MCP render both
+    families in one list. Removal is per function group: the attributes are the
+    function's signature, so dropping one alone would leave the
+    column-to-attribute mapping ambiguous.
+13. `src/front/static/query/js/query-virtual-attributes.js` (new)
+    The Explorer's section renderer and compute client. Values are cached per
+    entity *and* function for the page's lifetime, so revisiting a node costs
+    nothing and the button reads `Recompute`. Results are matched back to their
+    DOM block by function name, not by position — a single-group computation
+    returns one entry, which would otherwise land on the first group's rows.
+14. `src/front/static/query/js/query-sigmagraph.js`,
+    `src/front/static/query/js/query-entity-details.js`,
+    `src/front/static/query/js/query-loaders.js`,
+    `src/front/templates/dtwin.html`
+    Section under Attributes in both detail renderers, plus a **Compute virtual
+    attributes** context-menu entry. The menu entry goes through
+    `computeVirtualAttributesForNode`, which selects the entity first and waits
+    for the buttons to render: right-clicking does not open the panel, so the
+    values would otherwise have nowhere to land.
+15. `src/front/static/global/js/ontology-design.js`,
+    `src/front/static/ontology/js/ontology-information.js`
+    Carried `virtualAttributes` through the designer → ontology sync and both
+    import remappers. Found while writing the round-trip guards: all three
+    rebuild each class field by field, so anything they forget is silently lost
+    on the next save — the same class of bug the existing `actions` assertions
+    were written for.
+16. `src/back/objects/domain/SettingsService.py`,
+    `src/front/static/ontology/css/ontology-shared-panels.css`,
+    `src/front/static/query/css/query-visualization.css`,
+    `src/back/objects/digitaltwin/__init__.py`
+    Docstring for the second picker consuming `fetch_uc_functions`, styles for
+    the designer groups and the Explorer section, and the service export.
+17. `.planning/virtual-attributes/SPEC.md` (new)
+    Declaration and response contracts, the enforcement points, success criteria
+    and the eval dimensions table the CI gate parses.
+18. `tests/eval/datasets/mcp/virtual_attributes.jsonl` (new)
+    10 rows — the material-change floor — covering declaration listing without
+    the flag, computation when asked, scalar functions, the element disabled
+    (absent, then refusing the flag), the preferred directive, a failing
+    function degrading gracefully, an undeclared function refused, and a renamed
+    collision.
+19. `tests/units/dtwin/test_virtual_attribute_service.py` (new, 16 tests)
+    Declaration filtering (bad function name, unusable column, duplicate name),
+    then computation: row-to-attribute mapping, the scalar alias, ID escaping,
+    the function filter, refusal before any query for an undeclared function,
+    per-group failure isolation, no-row and extra-row messages, and the client
+    never being resolved when there is nothing to compute.
+20. `tests/units/dtwin/test_node_context_virtual_attributes.py` (new, 10 tests)
+    The `resolve_context` integration (free declarations, values behind the
+    flag, disabled element withheld and the flag ignored) and the compute
+    facade (unmatched entity, refusal instead of an empty answer, the policy
+    check preceding the class lookup, filter forwarding).
+21. `tests/units/api/test_virtual_attributes_endpoint.py` (new, 8 tests)
+    Both HTTP surfaces: declarations without a query, values with the flag,
+    `values` absent rather than empty, disabled policy skipping the query, the
+    Compute endpoint's 400 on an undeclared function and 404 on an unmatched
+    URI, and `/domain/classes` honouring the policy.
+22. `tests/units/mcp/test_virtual_attribute_formatting.py` (new, 8 tests)
+    The rendering contracts: placeholder then value, the hint appearing only
+    while it is actionable, per-group errors, the preferred directive, and a
+    class carrying nothing but virtual attributes still producing a block.
+23. `tests/units/mcp/test_domain_policy_gating.py`
+    Extended the disabled-argument parametrization with
+    `compute_virtual_attributes`, driven through the real FastMCP server.
+24. `tests/units/front/test_virtual_attributes_ui.py` (new, 24 tests)
+    Designer box and picker (shared cascade, one attribute per column, name
+    deduplication, confirmed per-group removal), the three round-trips that must
+    not drop the declarations, and the Explorer module (cache key, endpoint and
+    filter, name-based result matching, escaping, the context-menu ordering).
+25. `tests/units/core/test_unity_catalog.py`
+    Rewrote `TestListFunctions` for the two-statement introspection (the old
+    single-`fetchall` mock would have fed the routines rows back as return
+    columns), and added the complement-filter and degradation cases.
+26. `tests/units/ontology/test_owl_generator.py`,
+    `tests/units/ontology/test_ontology_service.py`,
+    `tests/units/core/test_mcp_tools_policy.py`
+    OWL round-trip plus the assertion that virtual attributes never land in
+    `dataProperties`; `build_class_from_data` default and preservation; the new
+    context element in the policy catalog, with a guard that every element is
+    labelled and described (the MCP settings panel renders the catalog directly,
+    so an unlabelled element would ship as a blank checkbox).
+27. `documentation/user-guide.md`
+    New **Virtual Attributes** section next to Class Actions: when to reach for
+    one instead of an action, the authoring walkthrough, the one-attribute-per-
+    column rule, name collisions, why removal is per function, the Explorer
+    behaviour, and an explicit not-queryable callout. Added the element to the
+    MCP tab's attachment table and the context-menu list.
+28. `documentation/api.md`, `documentation/mcp.md`, `documentation/features.md`,
+    `README.md`
+    The `compute_virtual_attributes` flag with its response sample and the
+    not-computed / computed-as-null distinction, `virtualAttributes` on
+    `/domain/classes`, the fourth context element and its overlap note, and
+    feature-level entries.
+29. `documentation/sphinx/api/app.objects.digitaltwin.rst`
+    Exposed `VirtualAttributeService` in the generated API reference.
+
+Modified files:
+- `src/back/objects/digitaltwin/VirtualAttributeService.py` (new)
+- `src/back/objects/digitaltwin/NodeContextService.py`
+- `src/back/objects/digitaltwin/__init__.py`
+- `src/back/core/databricks/uc/UnityCatalog.py`
+- `src/back/core/helpers/SQLHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/core/mcp_tools.py`
+- `src/back/core/w3c/owl/OntologyGenerator.py`
+- `src/back/core/w3c/owl/OntologyParser.py`
+- `src/back/objects/ontology/Ontology.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/digitaltwin.py`
+- `src/api/routers/domains.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/mcp-server/server/app.py`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/js/ontology-information.js`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/global/js/ontology-design.js`
+- `src/front/static/query/js/query-virtual-attributes.js` (new)
+- `src/front/static/query/js/query-sigmagraph.js`
+- `src/front/static/query/js/query-entity-details.js`
+- `src/front/static/query/js/query-loaders.js`
+- `src/front/static/query/css/query-visualization.css`
+- `src/front/templates/dtwin.html`
+- `.planning/virtual-attributes/SPEC.md` (new)
+- `tests/eval/datasets/mcp/virtual_attributes.jsonl` (new)
+- `tests/units/dtwin/test_virtual_attribute_service.py` (new)
+- `tests/units/dtwin/test_node_context_virtual_attributes.py` (new)
+- `tests/units/api/test_virtual_attributes_endpoint.py` (new)
+- `tests/units/mcp/test_virtual_attribute_formatting.py` (new)
+- `tests/units/front/test_virtual_attributes_ui.py` (new)
+- `tests/units/mcp/test_domain_policy_gating.py`
+- `tests/units/core/test_unity_catalog.py`
+- `tests/units/core/test_mcp_tools_policy.py`
+- `tests/units/ontology/test_owl_generator.py`
+- `tests/units/ontology/test_ontology_service.py`
+- `documentation/user-guide.md`
+- `documentation/api.md`
+- `documentation/mcp.md`
+- `documentation/features.md`
+- `documentation/sphinx/api/app.objects.digitaltwin.rst`
+- `README.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5268 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 35.12s (+78 new tests).
+
+Asana: https://app.asana.com/1/8808412813448/project/1217637563677287/task/1217822537534525
+
+================================================================================
+Fix — UC function picker: output count, and return columns read from the wrong view
+================================================================================
+
+Context: the picker was asked to state how many values each Unity Catalog
+function returns. Adding the count surfaced a bug that the unit suite could not
+have caught: it read `outputs unknown` for every table function against a real
+workspace, and the virtual attribute picker consequently refused all of them
+("exposes no usable return column").
+
+Root cause: `_fetch_return_columns` queried `information_schema.parameters`
+with the complement of the `parameter_mode = 'IN'` filter, on the assumption
+that result columns are rows in that view. They are not — Databricks lists only
+the declared *arguments* there, so a `RETURNS TABLE` function contributes no
+row for what it returns. Verified live: `parameters` yields exactly one row for
+a six-column table function (its single input), while
+`information_schema.routine_columns` yields the six result columns with their
+types and ordinal positions. The mock in the unit test satisfied the shape of
+the old query, which is why it passed.
+
+Changes:
+
+1. `src/back/core/databricks/uc/UnityCatalog.py` — `_fetch_return_columns` now
+   joins `information_schema.routine_columns` on the `specific_*` triple. The
+   second-statement split is still needed (a single join of arguments and
+   result columns multiplies rows), but the reason is now the view, not the
+   predicate. Soft-fail behaviour unchanged.
+2. `src/front/static/ontology/js/ontology-shared-panels.js` — added the shared
+   `_ucOutputCount` / `_ucOutputBadge` helpers and an output-count badge to
+   both function pickers (they share the "Select a Unity Catalog Function"
+   title). A scalar function counts as 1; a table function whose columns the
+   metastore did not report reads `outputs unknown` rather than being shown as
+   returning nothing. In the virtual attribute picker the hint also spells out
+   the consequence — "creates N attributes" — since that count is what the
+   user is really choosing.
+3. `tests/units/core/test_unity_catalog.py` — the query-shape test now asserts
+   the `routine_columns` source and the absence of `parameters` in that second
+   statement, so the same mistake cannot come back silently.
+4. `tests/units/front/test_virtual_attributes_ui.py` — two guards: both
+   pickers state the count, and the unknown case is stated rather than guessed.
+
+Also created `benoit_cayla.customer.customer_live_standing(p_customer_id)` in
+the demo workspace — a six-column table function (active contracts, overdue
+invoices, outstanding amount, open claims, average satisfaction, derived
+standing) over the existing contract / invoice / claim / call tables. It is the
+fixture that exposed the bug above: one input parameter, six outputs, which is
+exactly the shape a virtual attribute needs.
+
+Modified files:
+- `src/back/core/databricks/uc/UnityCatalog.py`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `tests/units/core/test_unity_catalog.py`
+- `tests/units/front/test_virtual_attributes_ui.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5270 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 36.48s (+2 new tests). The fixed
+query was additionally validated live against `benoit_cayla.information_schema`
+in the exact form the code emits.
+
+================================================================================
+Fix: a pending detail-panel edit was lost when leaving the page
+================================================================================
+
+Context
+-------
+Reported against the new virtual attributes, but not specific to them: removing
+a virtual attribute and then clicking straight on the Knowledge Graph menu lost
+the change. The entity detail panel is an edit buffer, and it was already
+flushed on every exit but one:
+
+- closing it via the X       -> `guardedCloseSharedPanel` saves first
+- switching sidebar section  -> `checkDirtyBeforeSwitch` saves first
+- opening another item       -> `checkDirtyBeforeSwitch` saves first
+- leaving for another route  -> nothing
+
+Knowledge Graph, Mapping and Domain are separate routes, so the click was a
+full page navigation and none of the in-page hooks ran. Worse, the page already
+auto-saves on unload: `saveRegistryOnUnload` then persisted a session that had
+never heard about the pending edit, which is what made the loss durable instead
+of merely transient. Any panel field was affected — a removed action, a renamed
+entity — the virtual attribute was just the one that surfaced it.
+
+Changes
+-------
+1. `src/front/static/ontology/js/ontology-shared-panels.js` — added
+   `flushSharedPanelOnUnload`, registered on `beforeunload` and `pagehide`.
+   It is deliberately not awaited: only the synchronous prefix of the save can
+   run before teardown, and that prefix is the part that matters — it commits
+   the edit to `OntologyState.config` and dispatches the session save. The tail
+   (constraints, OWL regeneration, notifications) is skipped; the OWL is
+   regenerated from the config on the next load. The flush is a no-op on a
+   clean or read-only panel, so it is safe to call twice.
+2. `src/front/static/global/js/ontology-core.js` — `saveConfigToSession` takes
+   an optional `keepalive` flag. Without it the browser cancels the request
+   during page teardown, which is the mechanism by which the edit vanished.
+   `saveSharedEntity` and `saveSharedRelationship` forward the flag.
+3. `src/front/static/global/js/ontology-design.js` — `saveRegistryOnUnload`
+   calls the flush first. This is an ordering fix, not a duplicate: the panel
+   module is loaded after the design module, so its own unload listener runs
+   second and the registry would still be written from the stale session. Same
+   dependency the layout beacon already documents.
+4. `tests/units/front/test_shared_panel_unload_flush.py` (new) — five guards:
+   the handlers are registered, the flush no-ops when there is nothing to save,
+   the session save is keepalive on that path, the flush precedes the registry
+   save inside `saveRegistryOnUnload` (scoped to that function, since
+   `autoSaveToRegistry` shares the `registryDirty` guard), and the pre-existing
+   exits still flush.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/global/js/ontology-core.js`
+- `src/front/static/global/js/ontology-design.js`
+- `tests/units/front/test_shared_panel_unload_flush.py` (new)
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5275 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 40.54s (+5 new tests).

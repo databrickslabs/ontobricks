@@ -482,9 +482,11 @@ class SettingsService:
     ) -> Dict[str, Any]:
         """List user-defined functions in *catalog*.*schema*.
 
-        Used by the ontology *Actions* picker. Callers only bind functions
-        taking exactly one parameter (the entity ID), so ``param_count`` is
-        surfaced for client-side filtering.
+        Used by the ontology *Actions* and *Virtual Attributes* pickers. Both
+        only bind functions taking exactly one parameter (the entity ID), so
+        ``param_count`` is surfaced for client-side filtering; the virtual
+        attribute picker additionally reads ``return_columns`` to derive one
+        attribute per result column.
         """
         try:
             client = get_databricks_client(get_domain(session_mgr), settings)

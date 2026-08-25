@@ -596,10 +596,12 @@ also enforced server-side on the endpoints below.
 
 #### `GET /api/v1/domain/classes`
 
-Return per-class **dataset**, **bridge** and Unity Catalog **action** metadata
-for every class in the domain's published ontology, without loading the full
-OWL. This is what the MCP server caches on `select_domain` to build its
-`[Context]` blocks. Only non-empty values are included.
+Return per-class **dataset**, **bridge**, Unity Catalog **action** and **virtual
+attribute** metadata for every class in the domain's published ontology, without
+loading the full OWL. This is what the MCP server caches on `select_domain` to
+build its `[Context]` blocks. Only non-empty values are included, and virtual
+attributes are declarations only — their values come from
+[`/nodes/context`](#get-apiv1digitaltwinnodescontext).
 
 **Parameters:**
 - `domain_name` (query, optional): Domain name in the registry (session domain if omitted)
@@ -623,6 +625,14 @@ OWL. This is what the MCP server caches on `select_domain` to build its
             ],
             "actions": [
                 {"fullName": "main.crm.churn_score", "description": "Churn risk"}
+            ],
+            "virtualAttributes": [
+                {"fullName": "main.kg.customer_risk", "function": "customer_risk",
+                 "description": "Live credit risk", "returns_table": true,
+                 "attributes": [
+                     {"name": "risk_score", "column": "risk_score",
+                      "label": "Risk score", "dataType": "DOUBLE"}
+                 ]}
             ]
         }
     ]
@@ -630,10 +640,10 @@ OWL. This is what the MCP server caches on `select_domain` to build its
 ```
 
 > **Policy filtering.** Attachments set to **Disabled** in the domain's MCP
-> policy are withheld here: `dataset` comes back `null`, `bridges` and
-> `actions` come back empty. Bridges are additionally filtered to targets that
-> are themselves API/MCP-visible. The authoring UI does not go through this
-> endpoint and always sees the full ontology.
+> policy are withheld here: `dataset` comes back `null`, `bridges`, `actions`
+> and `virtualAttributes` come back empty. Bridges are additionally filtered to
+> targets that are themselves API/MCP-visible. The authoring UI does not go
+> through this endpoint and always sees the full ontology.
 
 ---
 
@@ -766,9 +776,9 @@ BFS-based entity search with depth control.
 #### `GET /api/v1/digitaltwin/nodes/context`
 
 Resolve the ontology class for an entity URI and return its external context:
-linked Unity Catalog dataset (optionally with rows), cross-domain bridges, and
-the Unity Catalog function actions declared on the class. Metadata only — no
-function is executed here.
+linked Unity Catalog dataset (optionally with rows), cross-domain bridges, the
+Unity Catalog function actions declared on the class, and its virtual attributes
+(optionally computed). No action is executed here.
 
 **Parameters:**
 - `entity_uri` (query): Full URI of the entity node
@@ -776,12 +786,34 @@ function is executed here.
 - `fetch_dataset_rows` (query, optional): Fetch rows from the linked table/view
 - `dataset_row_limit` (query, optional): Max rows to return, 1–20 (default: 5)
 - `follow_bridges` (query, optional): Traverse bridge target domains
+- `compute_virtual_attributes` (query, optional): Run the class's virtual
+  attribute functions and return their values
+
+**Virtual attributes.** Declarations always ride along, so a caller knows what
+is available for the cost of the class lookup. Each function costs a warehouse
+round-trip, so `values` only appears when `compute_virtual_attributes=true` —
+the difference between *not computed* and *computed as null* is preserved by
+omitting the key entirely. A group whose function fails carries an `error` and
+leaves the others intact; only the first returned row is used, and a function
+returning several sets `message` instead of aggregating.
+
+```json
+"virtual_attributes": [
+    {"fullName": "main.kg.customer_risk", "function": "customer_risk",
+     "returns_table": true,
+     "attributes": [{"name": "risk_score", "column": "risk_score",
+                     "label": "Risk score", "dataType": "DOUBLE"}],
+     "values": {"risk_score": 0.82}}
+]
+```
 
 > **Policy filtering.** Each attachment set to **Disabled** in the domain's
 > [MCP policy](mcp.md#per-domain-mcp-policy) is withheld from the response, and
 > the work behind it is skipped: a disabled dataset is not queried even with
-> `fetch_dataset_rows=true`, and disabled bridges are not traversed even with
-> `follow_bridges=true`. The flags are simply ignored rather than raising.
+> `fetch_dataset_rows=true`, disabled bridges are not traversed even with
+> `follow_bridges=true`, and disabled virtual attributes are neither listed nor
+> computed even with `compute_virtual_attributes=true`. The flags are simply
+> ignored rather than raising.
 
 #### `POST /api/v1/digitaltwin/nodes/action`
 

@@ -141,8 +141,11 @@ class UnityCatalog:
         actions. Returns an empty list on error.
 
         Each dict has ``name``, ``full_name``, ``comment``, ``input_params``
-        (parameter names in declaration order), ``param_count`` and
-        ``returns_table`` (True for table-valued functions).
+        (parameter names in declaration order), ``param_count``,
+        ``returns_table`` (True for table-valued functions), ``return_type``
+        and ``return_columns``: the ``RETURNS TABLE`` result columns in
+        declaration order, each ``{"name", "data_type"}``. A scalar function
+        has an empty ``return_columns`` and its type in ``return_type``.
         """
         catalog_q = quote_uc_identifier(catalog, role="catalog")
         try:
@@ -171,6 +174,9 @@ class UnityCatalog:
                 with conn.cursor() as cur:
                     cur.execute(query, (schema,))
                     rows = cur.fetchall()
+                    return_columns = self._fetch_return_columns(
+                        cur, catalog_q, schema
+                    )
         except Exception as exc:
             logger.exception("Error listing functions: %s", exc)
             return []
@@ -181,6 +187,8 @@ class UnityCatalog:
             if not name:
                 continue
             input_params = [p for p in (row[3] or "").split(",") if p]
+            data_type = str(row[1] or "").strip()
+            returns_table = data_type.upper() == "TABLE_TYPE"
             functions.append(
                 {
                     "name": name,
@@ -188,10 +196,62 @@ class UnityCatalog:
                     "comment": row[2] or "",
                     "input_params": input_params,
                     "param_count": len(input_params),
-                    "returns_table": str(row[1] or "").upper() == "TABLE_TYPE",
+                    "returns_table": returns_table,
+                    "return_type": "TABLE" if returns_table else data_type,
+                    "return_columns": (
+                        return_columns.get(name, []) if returns_table else []
+                    ),
                 }
             )
         return functions
+
+    @staticmethod
+    def _fetch_return_columns(
+        cur: Any, catalog_q: str, schema: str
+    ) -> Dict[str, List[Dict[str, str]]]:
+        """Return the ``RETURNS TABLE`` columns of each function in *schema*.
+
+        Result columns live in ``routine_columns``, not in ``parameters``:
+        Databricks only lists the declared arguments there, so a table function
+        contributes no row for what it returns. Hence a second statement, which
+        also avoids the row multiplication a single join of arguments and
+        result columns would cause.
+
+        Soft-fails to an empty mapping: the action picker only needs the input
+        parameter count, so a metastore that cannot answer this must not cost
+        the caller its function list.
+        """
+        query = f"""
+            SELECT r.routine_name, c.column_name, c.full_data_type
+            FROM {catalog_q}.information_schema.routines r
+            JOIN {catalog_q}.information_schema.routine_columns c
+                   ON  c.specific_catalog = r.specific_catalog
+                   AND c.specific_schema  = r.specific_schema
+                   AND c.specific_name    = r.specific_name
+            WHERE r.routine_schema = ?
+            ORDER BY r.routine_name, c.ordinal_position
+        """
+        try:
+            cur.execute(query, (schema,))
+            rows = cur.fetchall()
+        except Exception as exc:  # noqa: BLE001 — soft-fail is the contract
+            logger.warning(
+                "list_functions: could not read return columns of %s: %s",
+                schema,
+                exc,
+            )
+            return {}
+
+        columns: Dict[str, List[Dict[str, str]]] = {}
+        for row in rows:
+            routine = (row[0] or "").strip()
+            col_name = (row[1] or "").strip()
+            if not routine or not col_name:
+                continue
+            columns.setdefault(routine, []).append(
+                {"name": col_name, "data_type": str(row[2] or "").strip()}
+            )
+        return columns
 
     def probe_schema_has_tables(self, catalog: str, schema: str) -> int:
         """Return the number of tables in *catalog*.*schema* via information_schema.
