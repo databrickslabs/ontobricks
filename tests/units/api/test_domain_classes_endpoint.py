@@ -75,3 +75,57 @@ class TestDomainClassesEndpoint:
             resp = client.get("/api/v1/domain/classes")
 
         assert resp.status_code == 200
+
+    def test_bridges_enriched_with_target_description(self, client):
+        mock_domain = MagicMock()
+        mock_domain.get_classes.return_value = _MOCK_CLASSES
+
+        with patch(
+            "api.routers.domains.DigitalTwin.resolve_domain", return_value=mock_domain
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "._load_mcp_target_descriptions",
+            return_value={"Finance": "Finance ontology"},
+        ):
+            resp = client.get("/api/v1/domain/classes", params={"domain_name": "test"})
+
+        body = resp.json()
+        customer = next(c for c in body["classes"] if c["name"] == "Customer")
+        assert customer["bridges"][0]["target_domain_description"] == "Finance ontology"
+        assert customer["bridges"][0]["target_domain"] == "Finance"
+
+    def test_bridges_omit_non_mcp_visible_target(self, client):
+        mock_domain = MagicMock()
+        mock_domain.get_classes.return_value = _MOCK_CLASSES
+
+        with patch(
+            "api.routers.domains.DigitalTwin.resolve_domain", return_value=mock_domain
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "._load_mcp_target_descriptions",
+            return_value={"Other": "Some other domain"},
+        ):
+            resp = client.get("/api/v1/domain/classes", params={"domain_name": "test"})
+
+        body = resp.json()
+        customer = next(c for c in body["classes"] if c["name"] == "Customer")
+        assert customer["bridges"] == []  # bridge to Finance dropped: not MCP-visible
+
+    def test_bridges_soft_fail_when_registry_unavailable(self, client):
+        mock_domain = MagicMock()
+        mock_domain.get_classes.return_value = _MOCK_CLASSES
+
+        with patch(
+            "api.routers.domains.DigitalTwin.resolve_domain", return_value=mock_domain
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "._load_mcp_target_descriptions",
+            return_value=None,
+        ):
+            resp = client.get("/api/v1/domain/classes", params={"domain_name": "test"})
+
+        body = resp.json()
+        customer = next(c for c in body["classes"] if c["name"] == "Customer")
+        # Soft-fail: bridge kept, description empty, no filtering.
+        assert len(customer["bridges"]) == 1
+        assert customer["bridges"][0]["target_domain_description"] == ""

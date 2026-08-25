@@ -18,6 +18,7 @@ from back.core.errors import (
 )
 from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
+from back.objects.digitaltwin.NodeContextService import NodeContextService
 from back.objects.registry import RegistryCfg, RegistryService
 from back.objects.session import SessionManager, get_domain, get_session_manager
 
@@ -492,7 +493,14 @@ async def get_domain_classes(
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
         dataset = cls.get("dataset") or None
-        bridges = cls.get("bridges") or []
+        bridges = NodeContextService.enrich_bridge_targets(
+            cls.get("bridges") or [],
+            session_mgr=session_mgr,
+            settings=settings,
+            registry_catalog=registry_catalog,
+            registry_schema=registry_schema,
+            registry_volume=registry_volume,
+        )
         actions = cls.get("actions") or []
         items.append(
             ClassActionsItem(

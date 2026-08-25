@@ -463,3 +463,100 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5117 passed, 281
 skipped, 6 deselected, 1 xfailed, 0 failed in 40.24s (+17 new tests).
+
+## MCP: expose class bridges with target-domain description so the agent can switch domains
+
+Context: MCP sessions bind to a single domain via `select_domain`. Class
+bridges were exposed only as `{target_domain, target_class_name, target_class_uri, label}`
+with no description of the target and no filter on MCP-visible domains, and
+the only cross-domain path (`get_entity_context(follow_bridges=True)`) is a
+read-only peek that never switches the selected domain. An interrogating LLM
+had no signal to hop into another domain, and no way to know whether a hop
+would even be reachable. This change surfaces the target-domain description
+alongside every bridge, filters bridges to MCP-visible targets on the
+external surface (keeping every authored bridge on the internal UI path), and
+reframes the tool prompts around `select_domain(<target>)` as the primary
+hop, with `follow_bridges` documented as a peek only. Ships under v0.8.0,
+tracked by Asana task 1217792873648378 and SPEC
+`.planning/mcp-bridge-context/SPEC.md`.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/NodeContextService.py`
+   Added `enrich_bridge_targets(bridges, *, session_mgr, settings,
+   registry_*, drop_unavailable=True)` and the private
+   `_load_mcp_target_descriptions` helper. Resolves `target_domain`
+   descriptions once from `RegistryService.list_mcp_domains()`, drops
+   non-visible targets by default (external / MCP contract), or keeps every
+   bridge when `drop_unavailable=False` (internal UI). Registry errors
+   soft-fail so a broken registry never breaks a node-context response.
+   Wired the enricher into `_resolve_bridges`, so `follow_bridges=true` skips
+   non-visible targets before any BFS SQL scan.
+2. `src/api/routers/domains.py`
+   `GET /api/v1/domain/classes` runs each class's bridges through
+   `NodeContextService.enrich_bridge_targets(...)` before serialisation.
+3. `src/api/routers/digitaltwin.py`
+   Added `target_domain_description: str = ""` to the `NodeContextBridge`
+   Pydantic response model so the enriched field survives serialisation
+   through `NodeContextResponse`.
+4. `src/api/routers/internal/dtwin.py`
+   `GET /dtwin/classes` now depends on `Settings` and calls
+   `enrich_bridge_targets(..., drop_unavailable=False)` on top of
+   `class_bridge_entries` so the ontology-authoring UI keeps seeing every
+   bridge, enriched with the target-domain description when available.
+5. `src/mcp-server/server/app.py`
+   `_format_class_context_block` and `_format_node_context_response` now
+   render `Target domain: <description>` under each bridge, and replace the
+   legacy `get_entity_context(follow_bridges=True)` hint with a
+   `select_domain(<target_domain>)` hop-then-query workflow.
+   `FastMCP.instructions` gains a "CROSS-DOMAIN BRIDGES" paragraph that
+   spells out the switch workflow and clarifies that `follow_bridges` is a
+   peek only. `get_entity_context` docstring mirrors the same guidance.
+6. `documentation/mcp.md`
+   `describe_entity` sample output now shows the enriched `[Context]` bridge
+   block, and a new "Hopping across domains" subsection describes the
+   `describe_entity → select_domain(target) → describe_entity/GraphQL`
+   workflow, the peek-vs-hop distinction, and the MCP-visibility filter.
+   `documentation/sphinx/guides/mcp.md` inherits via `{include}`.
+7. `.planning/mcp-bridge-context/SPEC.md` (new)
+   AI-feature-gate SPEC per `.cursor/12-ai-feature-lifecycle.mdc`: bridge
+   payload contract, tool-surface delta, success criteria, four eval
+   dimensions (`bridge_description_present`, `unavailable_bridge_omitted`,
+   `hop_tool_selection`, `no_silent_peek`), and failure modes.
+8. `tests/eval/datasets/mcp/bridge_switch.jsonl` (new, 10 examples)
+   Material-change floor per the AI-feature gate: happy hops, hidden targets,
+   peek-vs-switch, ambiguous multi-target choice, registry soft-fail.
+9. `tests/units/api/test_domain_classes_endpoint.py` (+3 tests)
+   Bridges enriched with target description when visible; bridges dropped
+   when target is not MCP-visible; soft-fail keeps bridges unchanged when
+   the registry lookup returns `None`.
+10. `tests/units/api/test_node_context_endpoint.py` (+3 tests)
+    Same coverage on `/api/v1/digitaltwin/nodes/context`, plus a
+    `follow_bridges=true` check that no BFS SQL scan runs against a filtered
+    target.
+11. `tests/units/api/test_dtwin_nodes_context.py` (+2 tests)
+    Internal `/dtwin/classes` route keeps every bridge (UI authoring path)
+    while still enriching descriptions when the target is MCP-visible.
+12. `tests/units/mcp/test_node_context_formatting.py` (+3 tests)
+    Formatter guards: bridge target description renders, blank description
+    is omitted, the `select_domain(<target_domain>)` hint replaces the old
+    `follow_bridges=True` peek hint on both `[Context]` and
+    `Cross-domain Bridges:` blocks.
+
+Modified files:
+- `src/back/objects/digitaltwin/NodeContextService.py`
+- `src/api/routers/domains.py`
+- `src/api/routers/digitaltwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/mcp-server/server/app.py`
+- `documentation/mcp.md`
+- `.planning/mcp-bridge-context/SPEC.md` (new)
+- `tests/eval/datasets/mcp/bridge_switch.jsonl` (new)
+- `tests/units/api/test_domain_classes_endpoint.py`
+- `tests/units/api/test_node_context_endpoint.py`
+- `tests/units/api/test_dtwin_nodes_context.py`
+- `tests/units/mcp/test_node_context_formatting.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-24.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5128 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 41.31s (+11 new tests).

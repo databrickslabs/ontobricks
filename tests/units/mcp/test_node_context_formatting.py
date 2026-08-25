@@ -89,3 +89,73 @@ def test_source_still_reads_dataset_description_field():
     assert 'dataset.get("description")' in source
     assert 'f"  Description: {purpose}"' in source
     assert 'f"    Description: {desc}"' in source
+
+
+def test_class_context_formatter_shows_bridge_target_description(formatters):
+    """Class-context bridges must render the target-domain description
+    and direct the LLM to `select_domain`, not `follow_bridges`."""
+    format_class, _ = formatters
+    text = format_class(
+        "CUST1",
+        {
+            "name": "Customer",
+            "bridges": [
+                {
+                    "target_domain": "finance",
+                    "target_domain_description": "Finance ontology with contracts and payments",
+                    "target_class_name": "Contract",
+                    "label": "Owns contracts",
+                }
+            ],
+        },
+    )
+    assert "Bridges:" in text
+    assert "finance / Contract" in text
+    assert "Target domain: Finance ontology with contracts and payments" in text
+    assert "select_domain(<target_domain>)" in text
+    # The legacy peek-only hint must be gone: follow_bridges is not the primary hop.
+    assert "call get_entity_context(follow_bridges=True) to load cross-domain data" not in text
+
+
+def test_class_context_formatter_omits_blank_target_description(formatters):
+    format_class, _ = formatters
+    text = format_class(
+        "CUST1",
+        {
+            "name": "Customer",
+            "bridges": [
+                {
+                    "target_domain": "finance",
+                    "target_domain_description": "   ",
+                    "target_class_name": "Contract",
+                }
+            ],
+        },
+    )
+    assert "Bridges:" in text
+    assert "Target domain:" not in text
+
+
+def test_node_context_formatter_shows_bridge_target_description(formatters):
+    _, format_node = formatters
+    text = format_node(
+        {
+            "success": True,
+            "entity_uri": "http://example.org/Customer/CUST1",
+            "entity_local_id": "CUST1",
+            "class_name": "Customer",
+            "bridges": [
+                {
+                    "target_domain": "finance",
+                    "target_domain_description": "Finance ontology with contracts and payments",
+                    "target_class_name": "Contract",
+                    "label": "Owns contracts",
+                    "entities": None,
+                }
+            ],
+        }
+    )
+    assert "Cross-domain Bridges:" in text
+    assert "finance / Contract" in text
+    assert "Target domain: Finance ontology with contracts and payments" in text
+    assert "select_domain(<target_domain>)" in text

@@ -158,12 +158,21 @@ Found 1 matching entity (33 triples across 3 entities, depth=2)
   URI: https://ontobricks.com/ontology/Interaction/INT000019
   Attributes:
     • label: Service_Activation via in_person
+
+  [Context — class: Customer]
+  Dataset: main.crm.customers  (key: customer_id = 'CUST00094')
+    → call get_entity_context(fetch_dataset_rows=True) to retrieve rows
+  Bridges:
+    → finance / Contract  "Owns contracts"
+      Target domain: Finance ontology with contracts and payments
+    → to query the target domain, call select_domain(<target_domain>) then re-run describe_entity or GraphQL there. get_entity_context(follow_bridges=True) only peeks — it does NOT switch the session.
 ```
 
 Key features of the text output:
 - **URI alias merging** — if an entity has multiple URI patterns (e.g. `…/Customer/CUST00094` and `…/CUST00094`), triples are merged into a single block
 - **Predicate prettifying** — URIs like `ontologylastname` become `lastname`, camelCase is split
 - **Hop-by-hop structure** — matching entities first, then related entities (neighbors)
+- **Bridges expose target domain descriptions** so the agent can decide to hop with `select_domain(<target>)` — bridges to non-MCP-visible domains are hidden
 
 #### `get_status`
 
@@ -266,6 +275,44 @@ allCustomer (1 results)
 | Get all attributes and relationships for one entity | `describe_entity` |
 | Nested relationship queries (2+ levels) | `query_graphql` |
 | Explore an unfamiliar domain | `get_graphql_schema` → `query_graphql` |
+
+### Hopping across domains
+
+Ontology classes can declare **bridges** to related classes in other
+domains (e.g. `Customer` in `customer360` bridges to `Contract` in
+`finance`). MCP exposes bridges in two places:
+
+1. `describe_entity` — the `[Context]` block lists each bridge with the
+   target domain's **name** and **description** (pulled from the
+   registry), plus the target class.
+2. `get_entity_context` — the `Cross-domain Bridges:` section same shape,
+   with `follow_bridges=True` optionally peeking at matching entities on
+   the target graph.
+
+**Only bridges whose target is API/MCP-enabled are shown.** Bridges to
+private / non-published domains are hidden so the LLM never proposes a
+hop it cannot perform.
+
+To actually query the target domain, the agent must hop:
+
+```
+list_domains
+   ↓
+select_domain("customer360")
+   ↓
+describe_entity(search="Jacob Martinez")
+   ↓  (sees a bridge → finance / Contract with description)
+select_domain("finance")     ← ACTUAL hop; previous domain is replaced
+   ↓
+describe_entity(search="CUST00094", entity_type="Contract")
+```
+
+`get_entity_context(follow_bridges=True)` is a **peek only** — it reads
+the target graph in a single request and returns the matching triples,
+but `_selected_domain` is unchanged. Any subsequent `describe_entity`,
+GraphQL, or `list_entity_types` still runs on the origin domain. Prefer
+`select_domain(<target>)` whenever the user's question requires more
+than a lookup.
 
 ## Available Resources
 

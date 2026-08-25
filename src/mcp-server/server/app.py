@@ -190,11 +190,17 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
     if bridges:
         lines.append("  Bridges:")
         for b in bridges:
-            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            target_domain = b.get("target_domain", "")
+            target = f"{target_domain} / {b.get('target_class_name', '')}"
             label = f"  \"{b['label']}\"" if b.get("label") else ""
             lines.append(f"    → {target}{label}")
+            target_desc = (b.get("target_domain_description") or "").strip()
+            if target_desc:
+                lines.append(f"      Target domain: {target_desc}")
         lines.append(
-            "    → call get_entity_context(follow_bridges=True) to load cross-domain data"
+            "    → to query the target domain, call select_domain(<target_domain>) "
+            "then re-run describe_entity or GraphQL there. "
+            "get_entity_context(follow_bridges=True) only peeks — it does NOT switch the session."
         )
 
     if actions:
@@ -245,14 +251,23 @@ def _format_node_context_response(data: dict) -> str:
     if bridges:
         lines.append("Cross-domain Bridges:")
         for b in bridges:
-            target = f"{b.get('target_domain', '')} / {b.get('target_class_name', '')}"
+            target_domain = b.get("target_domain", "")
+            target = f"{target_domain} / {b.get('target_class_name', '')}"
             label = f"  \"{b['label']}\"" if b.get("label") else ""
             lines.append(f"  → {target}{label}")
+            target_desc = (b.get("target_domain_description") or "").strip()
+            if target_desc:
+                lines.append(f"    Target domain: {target_desc}")
             entities = b.get("entities")
             if entities:
                 lines.append(f"    Entities ({len(entities)}):")
                 for e in entities:
                     lines.append(f"      • {_local_name(e.get('uri', ''))}  {e.get('predicate', '')} → {e.get('object', '')}")
+        lines.append(
+            "  → to actually query one of these targets, "
+            "call select_domain(<target_domain>) then describe_entity / GraphQL there. "
+            "follow_bridges only peeks; it does not switch the session."
+        )
         lines.append("")
 
     actions = data.get("actions") or []
@@ -871,6 +886,15 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             "relationships, always start with 'describe_entity'. Only fall back "
             "to 'query_graphql' for bulk/typed queries after confirming the schema "
             "covers the predicates you need.\n\n"
+            "CROSS-DOMAIN BRIDGES: describe_entity and get_entity_context expose "
+            "bridges configured on an entity's class. Each bridge carries the "
+            "target domain's name AND description, and only MCP-visible targets "
+            "are shown. When a bridge is relevant to the user's question, "
+            "call select_domain(<target_domain>) to switch — the previously "
+            "selected domain is replaced — then describe_entity or GraphQL in "
+            "the target. get_entity_context(follow_bridges=True) only PEEKS at "
+            "the target graph; it does NOT switch the session, so subsequent "
+            "tools stay on the origin domain.\n\n"
             "Always select a domain before entity/triple/GraphQL queries. "
             "If the user's question maps clearly to one domain, select it automatically."
         ),
@@ -1408,11 +1432,21 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         column, and ontology-authored Description (from the class dataset
         ``description`` field).
 
+        Bridges include the target domain's description so an interrogating
+        agent can decide whether to hop. To actually run queries in the
+        target domain, call ``select_domain(<target_domain>)`` and then
+        ``describe_entity`` / GraphQL there — ``follow_bridges=True`` only
+        peeks at the target graph and does NOT switch the selected domain.
+        Bridges whose target is not exposed on MCP are omitted from the
+        response.
+
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
             fetch_dataset_rows: If true, query the linked UC table/view for rows.
             dataset_row_limit: Max rows to return (1–20, default 5).
-            follow_bridges: If true, load entities from bridge target domains.
+            follow_bridges: If true, peek at bridge target domains (read-only —
+                does NOT change the selected domain). Prefer ``select_domain``
+                for a real hop.
         """
         if not _selected_domain["name"]:
             return (

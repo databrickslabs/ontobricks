@@ -1843,6 +1843,7 @@ async def get_inferred_triples(
 @router.get("/classes")
 async def dtwin_classes(
     session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
     """Return session-domain classes and Graph Chat action metadata."""
     domain = get_domain(session_mgr)
@@ -1854,7 +1855,12 @@ async def dtwin_classes(
                 "name": cls.get("name", ""),
                 "uri": cls.get("uri", ""),
                 "dataset": cls.get("dataset") or None,
-                "bridges": NodeContextService.class_bridge_entries(cls),
+                "bridges": NodeContextService.enrich_bridge_targets(
+                    NodeContextService.class_bridge_entries(cls),
+                    session_mgr=session_mgr,
+                    settings=settings,
+                    drop_unavailable=False,
+                ),
                 "actions": NodeContextService.class_action_entries(cls),
             }
             for cls in (domain.get_classes() or [])

@@ -189,6 +189,7 @@ class NodeContextDataset(BaseModel):
 
 class NodeContextBridge(BaseModel):
     target_domain: str
+    target_domain_description: str = ""
     target_class_name: str
     target_class_uri: str = ""
     label: str = ""

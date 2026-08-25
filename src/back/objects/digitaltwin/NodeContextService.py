@@ -118,6 +118,10 @@ class NodeContextService:
         the front-end all read ``target_domain``. This mirrors the alias
         resolution :meth:`_resolve_bridges` already does so a shallow, static
         listing (no traversal) stays consistent with the traversal path.
+
+        Description enrichment / MCP-visibility filtering are opt-in via
+        :meth:`enrich_bridge_targets` — the raw shape here stays authoring-
+        friendly (UI callers keep seeing every bridge).
         """
         entries: List[Dict[str, Any]] = []
         for b in cls.get("bridges") or []:
@@ -132,6 +136,109 @@ class NodeContextService:
                 }
             )
         return entries
+
+    @staticmethod
+    def enrich_bridge_targets(
+        bridges: List[Dict[str, Any]],
+        *,
+        session_mgr: Any,
+        settings: Any,
+        registry_catalog: Optional[str] = None,
+        registry_schema: Optional[str] = None,
+        registry_volume: Optional[str] = None,
+        drop_unavailable: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Attach ``target_domain_description`` to each bridge.
+
+        Fetches the MCP-visible domain map from
+        :meth:`RegistryService.list_mcp_domains` once and looks each bridge's
+        ``target_domain`` up (accepts the historical ``target_project`` alias).
+
+        When *drop_unavailable* is True (default — the MCP / external REST
+        contract), bridges whose target is not MCP-visible are omitted so an
+        interrogating agent can only see targets it can actually hop to via
+        ``select_domain``. Internal UI callers (``/dtwin/classes``) pass
+        ``drop_unavailable=False`` so the ontology designer keeps seeing every
+        authored bridge.
+
+        Registry lookup errors soft-fail: the input bridges pass through
+        with an empty description and without filtering. This matches the
+        soft-fail contract of the rest of ``NodeContextService`` — a broken
+        registry never breaks a node-context response.
+        """
+        normalized: List[Dict[str, Any]] = []
+        for b in bridges:
+            if not isinstance(b, dict):
+                continue
+            entry = dict(b)
+            entry["target_domain"] = b.get("target_domain") or b.get("target_project", "")
+            normalized.append(entry)
+        if not normalized:
+            return []
+
+        descriptions = NodeContextService._load_mcp_target_descriptions(
+            session_mgr=session_mgr,
+            settings=settings,
+            registry_catalog=registry_catalog,
+            registry_schema=registry_schema,
+            registry_volume=registry_volume,
+        )
+        if descriptions is None:
+            for entry in normalized:
+                entry.setdefault("target_domain_description", "")
+            return normalized
+
+        enriched: List[Dict[str, Any]] = []
+        for entry in normalized:
+            target = entry["target_domain"]
+            if target in descriptions:
+                entry["target_domain_description"] = descriptions[target] or ""
+                enriched.append(entry)
+            elif not drop_unavailable:
+                entry["target_domain_description"] = ""
+                enriched.append(entry)
+        return enriched
+
+    @staticmethod
+    def _load_mcp_target_descriptions(
+        *,
+        session_mgr: Any,
+        settings: Any,
+        registry_catalog: Optional[str],
+        registry_schema: Optional[str],
+        registry_volume: Optional[str],
+    ) -> Optional[Dict[str, str]]:
+        """Return ``{domain_name: description}`` for MCP-visible domains.
+
+        Returns ``None`` on any failure so :meth:`enrich_bridge_targets` can
+        soft-fail. Kept private because the exact registry wiring may evolve
+        (e.g. request-scoped caching) without affecting the enricher contract.
+        """
+        try:
+            from back.objects.registry import RegistryCfg, RegistryService
+            from back.objects.session import get_domain
+
+            if session_mgr is None:
+                return None
+            base_cfg = RegistryCfg.from_session(session_mgr, settings)
+            cfg = RegistryCfg(
+                catalog=registry_catalog or base_cfg.catalog,
+                schema=registry_schema or base_cfg.schema,
+                volume=registry_volume or base_cfg.volume,
+                lakebase_schema=base_cfg.lakebase_schema,
+                lakebase_database=base_cfg.lakebase_database,
+            )
+            domain = get_domain(session_mgr)
+            svc = RegistryService(cfg, DigitalTwin.uc_from_domain(domain, settings))
+            ok, items, _ = svc.list_mcp_domains()
+            if not ok:
+                return None
+            return {p["name"]: (p.get("description") or "") for p in items}
+        except Exception as exc:  # noqa: BLE001 — soft-fail is the contract
+            logger.debug(
+                "enrich_bridge_targets: registry lookup failed — %s", exc
+            )
+            return None
 
     @staticmethod
     async def resolve_context(
@@ -394,15 +501,25 @@ class NodeContextService:
         registry_volume: Optional[str],
     ) -> List[Dict[str, Any]]:
         del matched_cls  # reserved for future class-scoped bridge filters
+        enriched = NodeContextService.enrich_bridge_targets(
+            raw_bridges,
+            session_mgr=session_mgr,
+            settings=settings,
+            registry_catalog=registry_catalog,
+            registry_schema=registry_schema,
+            registry_volume=registry_volume,
+        )
         bridges_out: List[Dict[str, Any]] = []
-        for b in raw_bridges:
-            target_domain = b.get("target_domain") or b.get("target_project", "")
+        for b in enriched:
+            target_domain = b.get("target_domain", "")
             target_class_name = b.get("target_class_name", "")
             target_class_uri = b.get("target_class_uri", "")
             label = b.get("label", "")
+            target_domain_description = b.get("target_domain_description", "")
 
             bridge_entry: Dict[str, Any] = {
                 "target_domain": target_domain,
+                "target_domain_description": target_domain_description,
                 "target_class_name": target_class_name,
                 "target_class_uri": target_class_uri,
                 "label": label,
@@ -461,6 +578,7 @@ class NodeContextService:
                             ]
                             bridge_entry = {
                                 "target_domain": target_domain,
+                                "target_domain_description": target_domain_description,
                                 "target_class_name": target_class_name,
                                 "target_class_uri": target_class_uri,
                                 "label": label,
