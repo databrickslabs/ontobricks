@@ -20,8 +20,8 @@ There are **two namespaced token systems**, by design — do not mix them.
 
 | Scope | File | Prefix | Theme |
 |-------|------|--------|-------|
-| App shell (navbar, pages, modals, forms, KPI tiles, etc.) | `src/front/static/global/css/main.css` | `--db-*` | Databricks Red on light grey |
-| OntoViz canvas (entity boxes, relationships, toolbar) | `src/front/static/global/ontoviz/css/ontoviz-variables.css` | `--ovz-*` | Greyscale only |
+| App shell (navbar, pages, modals, forms, KPI tiles, etc.) | `src/front/static/global/css/main.css` | `--db-*` | Clarity indigo accent on warm neutrals |
+| OntoViz canvas (entity boxes, relationships, toolbar) | `src/front/static/global/ontoviz/css/ontoviz-variables.css` | `--ovz-*` | Dedicated OntoViz tokens (kept separate) |
 
 **Rules:**
 
@@ -32,48 +32,82 @@ There are **two namespaced token systems**, by design — do not mix them.
 - Do not introduce a third namespace. If a new token is needed, extend the
   appropriate file (`main.css :root` or `ontoviz-variables.css :root`).
 
-### Colour Palette (`--db-*`)
+### Colour Palette (`--db-*`, implemented values)
 
 | Role | Token | Value |
 |------|-------|-------|
-| Brand primary | `--db-primary` | `#FF3621` (Databricks Red) |
-| Primary dark / darker | `--db-primary-dark`, `--db-primary-darker` | `#E62E1C`, `#CC2819` |
-| Primary tint (focus rings, badges) | `--db-primary-light` | `rgba(255, 54, 33, 0.1)` |
-| Surface dark (navbar) | `--db-dark`, `--db-gray` | `#1B1C1D`, `#2C2D2E` |
-| Page background | `--db-light-gray` | `#F7F7F7` |
-| Borders | `--db-border`, `--db-border-light` | `#E0E0E0`, `#dee2e6` |
-| Text | `--db-text`, `--db-text-secondary`, `--db-text-muted` | `#1E1E1E`, `#6B6C6D`, `#666666` |
-| Status | `--db-success`, `--db-warning`, `--db-info`, `--db-success-bg`, `--db-success-text`, `--db-danger-bg`, `--db-danger-text` | Bootstrap-aligned |
-| Shadows | `--db-shadow-sm`, `--db-shadow-md`, `--db-shadow-lg`, `--db-shadow-primary` | layered |
+| Brand primary | `--db-primary` | `#4F46E5` |
+| Primary dark / darker | `--db-primary-dark`, `--db-primary-darker` | `#4338CA`, `#3730A3` |
+| Primary tint | `--db-primary-light` | `rgba(79, 70, 229, 0.1)` |
+| Warm canvas / surface / line | `--db-canvas-warm`, `--db-surface-warm`, `--db-line-soft` | `#FAFAF9`, `#FFFFFF`, `#F4F2EF` |
+| App chrome surfaces | `--db-navbar-bg`, `--db-subnav-bg` | `#FFFFFF`, `#F7F6F4` |
+| Borders | `--db-border`, `--db-border-light` | `#ECEAE6`, `#F4F2EF` |
+| Text | `--db-text`, `--db-text-secondary`, `--db-text-muted` | `#191817`, `#6B6864`, `#6F6B65` |
+| Semantic tinted status | `--db-status-success/warning/danger/info/draft` + `*-soft-bg` | success / warning / danger / info / draft on soft backgrounds |
+| Shared radii | `--db-radius-control`, `--db-radius-card`, `--db-radius-chip` | `10px`, `14px`, `999px` |
+| Shadows | `--db-shadow-sm`, `--db-shadow-md`, `--db-shadow-lg` | floating surfaces only |
 | Transitions | `--db-transition`, `--db-transition-fast` | `0.2s` / `0.15s ease` |
 
-### Where Primary Red Is (and Is Not) Allowed
+`--db-text-muted: #6F6B65` is the current accessible muted token and must remain
+the lower-bound support/body-muted color.
 
-Primary red (`--db-primary`) is **reserved** for high-signal moments:
+### Accent Use and Button Hierarchy
 
-- Navbar brand, navbar active state, navbar dropdown hover/active.
-- Workflow step circles and the connecting line on the home page.
-- Form-control focus ring (`box-shadow: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.25)`).
-- `.badge-primary`, `.bg-primary`, `.text-primary`, `.border-primary` utility overrides.
-- The OntoBricks loading spinner accent.
+The Clarity indigo accent (`--db-primary`) is used for high-signal moments:
 
-**Primary red is NOT allowed on plain buttons.** All Bootstrap colored button
-variants (`.btn-primary`, `.btn-success`, `.btn-danger`, …, including
-`.btn-outline-*`) are deliberately **forced to a neutral grey palette** in
-`global/css/components.css`. When a contributor reaches for `class="btn
-btn-success"`, they get the same grey button as `btn-secondary` — this is
-intentional. Convey state via icon, label, or a sibling `.badge` /
-`.alert`, not via button colour.
+- L1/L2 active navigation and active/hover emphasis.
+- Focus states and control focus ring (`--db-focus-ring`).
+- Active indicators (sidebar stripe, square selected tabs with indigo-soft
+  fill, selected controls).
+- Primary emphasis utilities (`.badge-primary`, `.bg-primary`, `.text-primary`, `.border-primary`).
+
+Button hierarchy in `global/css/components.css` is mandatory:
+
+- `.btn-primary` is the only **filled primary** action and should be the
+  rightmost section CTA.
+- Secondary solid and non-danger outline variants remain unfilled/neutral.
+- `.btn-outline-danger` is the semantic destructive exception (red text/border,
+  soft-danger hover background), without turning it into a generic filled CTA.
+- Status/destructive intent cannot rely on color alone; include icon + label.
 
 ### Typography
+
+The system font stack is mandatory across app-shell pages.
 
 - System font stack only:
   `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`.
 - No webfont imports. No `@font-face`. No Google Fonts.
 - OntoViz uses `--ovz-font-main`, `--ovz-font-display`, `--ovz-font-mono`
   defined in `ontoviz-variables.css`.
-- Page header sizes: `.page-header h1` = `2rem` / `600` weight; subtitle
-  paragraph = secondary text colour.
+- Body default size is `13.5px`, with compact app chrome (`0.8125rem`
+  navbar/subnav links) and strong page titles (`.page-header h1` = `2rem`,
+  `700`, slight tracking).
+- Keep the scale consistent: page title > section title (`h4`) > body/labels >
+  helper/muted text.
+
+### Semantic Status Vocabulary
+
+Use semantic tinted status vocabulary consistently across badges, alerts, chips,
+inline notices, and table states:
+
+- `success`: `--db-status-success` + `--db-status-success-soft-bg`
+- `warning`: `--db-status-warning` + `--db-status-warning-soft-bg`
+- `danger`: `--db-status-danger` + `--db-status-danger-soft-bg`
+- `info`: `--db-status-info` + `--db-status-info-soft-bg`
+- `draft`: `--db-status-draft` + `--db-status-draft-soft-bg`
+
+Status color is assistive, not sufficient alone: provide icon + label text.
+
+### Surface, Borders, Radius, Elevation
+
+- Resting component borders are one-pixel and warm (`--db-border` /
+  `--db-border-light`).
+- Shared shape scale is mandatory: `14px` cards, `10px` controls/buttons, pill
+  chips (`--db-radius-chip`).
+- Resting cards/forms/tables keep `box-shadow: none`; elevation is reserved for
+  floating surfaces (dropdowns, modals, overlays, transient toasts).
+- Tables/forms/tabs/modals/dropdowns must use warm/white surfaces and warm
+  separators from the shared token set; avoid isolated per-page palette drift.
 
 ### Iconography
 
@@ -83,6 +117,8 @@ intentional. Convey state via icon, label, or a sibling `.badge` /
   `src/front/config/menu_config.json` (`"icon": "bi-..."`), never hard-coded
   in templates.
 - Do not introduce another icon font, SVG icon library, or emoji-as-icon.
+- Keep existing OntoBricks logo and favicon assets (`#brandLogoImg`,
+  `global/img/favicon.svg`) as-is; no replacement logo set.
 
 ### Page Layout (mandatory skeleton)
 
@@ -91,7 +127,7 @@ the entire app chrome — never duplicate or substitute any of it:
 
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
-| L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-dark">` driven by `menu_config.json` | a custom top bar |
+| L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
 | L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains Domain / Ontology / Mapping / KG dropdowns + breadcrumb + Save Domain button | a second nav element |
 | Breadcrumb | `#obBreadcrumb` inside `#obBreadcrumbWrap` (`<li>` in the L2 subnav row), populated by `breadcrumb.js` | a per-page breadcrumb |
 | Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav | a per-page save button |
@@ -245,11 +281,20 @@ keyboard handling.
 
 - Sidebar width: `200px` expanded, `48px` collapsed (driven by
   `.sidebar-nav.collapsed`). Do not override per page.
+- The sidebar is a **framed card**, not a flush rail: `0.5rem` margin,
+  `1px solid var(--db-border)`, `var(--db-radius-card)` on all four
+  corners, `height: calc(100% - 1rem)` — same language as the
+  split-panel panes. The gutter is what makes the rounding possible, so
+  don't drop the margin and keep a radius, and don't reintroduce the
+  `border-right`-only hairline.
 - Nav-link visual: `0.82rem`, left-border accent of `3px transparent`
-  that grows on `:hover` and `.active`. Active background is
-  `rgba(0,0,0,0.15)` (greyscale by design — do not colourise).
+  slot with rounded row targets and indigo-soft hover
+  (`--db-hover-indigo`). Active state uses a stronger indigo-soft
+  background (`rgba(79, 70, 229, 0.12)`), indigo text/icon (`#4F46E5`),
+  and a `3px` active indicator. The same hover/active pair is shared by
+  L1 and L2 dropdown items.
 - Section group titles (`.sidebar-title`) are uppercase `0.65rem`,
-  `letter-spacing: 1px`, muted grey. Hidden when collapsed.
+  `letter-spacing: 1px`, muted token text. Hidden when collapsed.
 - Icons inside `.nav-link i` are `0.95rem`, fixed `20px` slot
   (alignment is consistent across the menu).
 - Disabled gates: `.sidebar-disabled` (generic),
@@ -288,6 +333,8 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
   when no domain is loaded. Do not enable it from page code.
 - Other menus (Knowledge Graph / digitaltwin) may be hidden via
   `"navbar_hidden": true` in `menu_config.json`.
+- Visual contract: white L1 surface, warm one-pixel divider, dark text, indigo
+  active/hover emphasis.
 
 **Top-level menu icons** (source of truth: `menu_config.json`; keep
 `breadcrumb.js` `_ROUTE_MAP` in sync):
@@ -326,14 +373,20 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 - `--ob-chrome-height` = navbar height + subnav height (subnav already
   contains the breadcrumb). Updated by `_updateChromeHeight()` in
   `breadcrumb.js` and called from `updateDomainMenuVisibility`.
+- Visual contract: warm L2 surface, square selected L2 tabs (no rounded
+  corners) with `--db-primary-light` fill and indigo text, matching
+  Knowledge Graph / Explorer right-panel tabs. L1 and L2 dropdown items
+  use the same hover as the left sidebar (`--db-hover-indigo` well,
+  `9px` radius) — not a solid indigo invert, not a grey well. L1/L2
+  structure, order, and ownership are immutable.
 
 **Tokens**
 
 | Level | Token | Value |
 |-------|-------|-------|
-| L1 navbar background | `--db-navbar-bg` | `#ECECEC` |
-| L2 subnav background | `--db-subnav-bg` | `#F4F4F4` (lighter than L1) |
-| Breadcrumb | white (page background) | n/a |
+| L1 navbar background | `--db-navbar-bg` | `#FFFFFF` |
+| L2 subnav background | `--db-subnav-bg` | `#F7F6F4` |
+| Breadcrumb strip | `.ob-subnav-breadcrumb-wrap` | muted text + one-pixel left separator |
 
 **New Domain flow**
 
@@ -467,10 +520,9 @@ hide inside a Bootstrap `.card-header`.
 - Every icon-only button **must** have a `title=` attribute (and ideally
   `aria-label=`) — it is the only label the user sees.
 - Use Bootstrap colour intent (`btn-primary`, `btn-outline-secondary`,
-  `btn-success`, `btn-danger`) to communicate hierarchy, even though
-  the override in `components.css` neutralises the surface — the
-  semantic class still reads correctly to assistive tech and to
-  future theme work.
+  `btn-success`, `btn-danger`) to communicate hierarchy/semantics.
+  `.btn-primary` is visibly filled; secondary and non-danger outlines stay
+  unfilled/neutral; destructive outline may use semantic red.
 - Buttons with a label start with a Bootstrap icon followed by
   `me-1`, e.g. `<i class="bi bi-plus-circle me-1"></i> Add Entity`.
 - Title `<h4>` uses `mb-1`; subtitle `<p>` uses `text-muted mb-0 small`.
@@ -491,38 +543,35 @@ hide inside a Bootstrap `.card-header`.
 - ❌ Buttons without an icon, or icon-only buttons without `title=`.
 - ❌ Reordering so the primary CTA is on the left.
 
-### Tabs (`.ob-tabs`) — flat-underline style
+### Tabs (`.ob-tabs`) — square indigo-soft selected style
 
 There is **one** allowed visual treatment for tab navigations
-across the app: the flat-underline `ob-tabs` style. It lives in
-`global/css/components.css` and was extracted from the Ontology
-Designer right-pane tabs (`form-tabs-nav` /
-`form-tab-link` in `static/ontology/css/ontology-shared-panels.css`)
-and unified with the **Ontology > Cohorts** tab strip — the
-canonical reference page for the look.
+across the app: square tabs with an indigo-soft selected fill. It lives in
+`global/css/components.css` and matches Knowledge Graph / Explorer
+right-panel tabs (`.sg-panel-tabs`): **square selected tabs**,
+`--db-primary-light` background on the active item, `--db-primary-darker`
+text, and a 2px `--db-primary` baseline. The strip that holds them is
+rounded on its top corners (see below).
 **Every new tab navigation must use it.** Do not introduce a
 boxed/Bootstrap-default look, a pill style, or a per-page custom
 tab CSS file.
 
-The class bakes in the full visual contract: white background,
-`padding: 0.5rem 1rem 0` (= `px-3 pt-2`), rounded top corners
-(`var(--bs-card-border-radius)`), a 1px grey outline on the top /
-left / right edges, and a 2px grey baseline at the bottom — the
-"underline" — that turns primary-coloured under the active tab.
-The strip therefore looks like a card-header (à la Ontology >
-Information) out of the box, regardless of whether it sits in a
-`.card`, in a `.card-body p-0`, or directly in a section.
+The class bakes in the full visual contract: white/warm background,
+`padding: 0.5rem 1rem 0` (= `px-3 pt-2`), a 1px warm outline on the top /
+left / right edges, **rounded top corners** (`--db-radius-card` on
+top-left / top-right, square at the bottom), and a 2px warm baseline at
+the bottom that turns primary-coloured under the active tab. The strip is
+the *head* of the tabs + body shape: it supplies the outer rounding on
+top, the body supplies it at the bottom, and the seam between them stays
+flush. Note the two radii are different concerns — the **strip** is
+rounded, the **selected tab** inside it is square.
 
 When the strip is **inside** a `.card` / `.card-body` / `.card-header`,
 the parent card already provides the outer outline. The CSS detects
 this via descendant selectors (`.card-body > .nav-tabs.ob-tabs`, …)
 and **drops** the strip's own top / left / right border so you never
-get a double border. The rounded top corners are **kept** — the
-strip is meant to read as a card-header everywhere, including
-nested inside another card (cohorts / dq / business-rules /
-axioms). When the parent card has `overflow: hidden` (Bootstrap
-default), the rounded corners coincide visually with the card's
-own outer radius.
+get a double border. Tab links stay square, and the outer outline comes
+from the parent card.
 
 When the strip is **followed** by a sibling `.card`,
 `.ob-tab-content`, or `.tab-content`, an adjacent-sibling rule
@@ -586,10 +635,12 @@ Ontology > Cohorts header out of the box.
 - Every tab button starts with a Bootstrap icon
   (`<i class="bi bi-<icon> me-1"></i>`) followed by the label.
   Never an icon-less tab.
-- The active state is rendered as a 2px primary-coloured
-  underline. Active colour and weight are owned by `ob-tabs`
-  in `components.css` — **don't override** `.nav-link.active`
-  in a per-area file.
+- The active state is a **square** tab with `--db-primary-light`
+  fill, `--db-primary-darker` text, and a 2px `--db-primary`
+  baseline. Same language as L2 subnav selected items and
+  `.sg-panel-tabs`. Active colour, fill and radius are owned by
+  `ob-tabs` in `components.css` — **don't override**
+  `.nav-link.active` in a per-area file.
 - **Font-size is intentionally inherited.** This is so each page
   keeps its existing sizing — don't set `font-size` on the
   `ob-tabs` selector itself. If a section needs smaller tabs
@@ -687,6 +738,48 @@ Ontology > Cohorts header out of the box.
   that's the legacy fallback. New work goes through
   `.ob-tabs` in `components.css`.
 
+### Split-Panel Canvas Layout (canvas + resizable right panel)
+
+Every screen that pairs a canvas or a browsable list with a contextual
+right-hand panel uses one layout, defined by the Knowledge Graph Explorer
+(`query/css/query-sigmagraph.css`) and shared by Ontology Designer /
+Entities / Relationships (`ontology/css/ontology-shared-panels.css`).
+
+The contract:
+
+- **Flex row with a `0.5rem` gutter.** Content is `flex: 1` with a
+  `min-width` so it can't be crushed; the panel is `flex-shrink: 0`.
+- **Two framed panes, one frameless shell.** The wrapping `.card` carries
+  `ob-split-shell` (transparent, no shadow); each pane carries the framing
+  — `ob-split-pane` for the content side, matched by `.shared-detail-panel`
+  on the right. Both are white with `1px solid var(--db-border)` and
+  `var(--db-radius-card)`. Never frame the shell *and* the panes.
+- **The panel is permanent, not a drawer.** `min-width: 200px`,
+  `max-width: 50%`; the default width is `320px` for a read-only details
+  panel (Explorer) and `420px` where the panel hosts edit forms (Ontology),
+  which is what the 4-tab `.form-tabs-nav` strip needs to stay on one line —
+  that strip is `flex-wrap: nowrap`, so a narrower default clips it.
+  It is created *before* the view renders — canvases read their width once
+  (D3 / Sigma size from `container.clientWidth`), so a panel that appears
+  later leaves the graph centred on the wrong axis.
+- **Empty state instead of collapsing.** With nothing selected the panel
+  body holds a centred placeholder (`bi-cursor` icon at `3rem`,
+  `--db-text-muted`, "Click on an entity or relationship to view
+  details"). Clicking the empty canvas returns to that placeholder — and
+  flushes any pending edit first, since it is the only way out.
+- **No close button.** The panel can't be dismissed, so a cross would be a
+  dead control.
+- **Drag handle**: an `8px` hit area holding a `3px × 40px` bar,
+  `--db-border` at rest and `--db-primary` on hover or while dragging. The
+  drag clamp must span the default width (Ontology: `200px`–`900px`).
+- **Host the panel on the wrapper, not on the canvas.** It is a *sibling*
+  of the content pane; making the canvas container the flex parent means it
+  can no longer be framed as a pane.
+
+❌ Don't reintroduce a `width: 0` + `.panel-open` drawer, a per-area handle
+with its own dimensions or `--bs-primary` blue, or a `gap: 0` seam between
+canvas and panel.
+
 ### Component Naming
 
 | Prefix | Owner | Use |
@@ -729,16 +822,16 @@ These already exist; reuse before reinventing.
   `domain-actions.js`. Do not add a second Save button on a page.
 - **New Domain dialog** — `showNewDomainDialog()` (from `utils.js`). Returns
   `{ name, description, llm_endpoint }` or `null`.
-- **Tabs** — `.nav.nav-tabs.ob-tabs` (flat-underline). One shared
-  visual treatment defined in `components.css`; see
-  *Tabs (`.ob-tabs`) — flat-underline style* above for the canonical
-  skeleton, allowed combinations and anti-patterns. The legacy
+- **Tabs** — `.nav.nav-tabs.ob-tabs` (square, indigo-soft selected fill).
+  One shared visual treatment defined in `components.css`; see
+  *Tabs (`.ob-tabs`) — square indigo-soft selected style* above for the
+  canonical skeleton, allowed combinations and anti-patterns. The legacy
   `.ob-tab-content` is kept only for the rare case where a bordered
   pane is genuinely needed.
 - **Cards** — Bootstrap `.card` / `.card-header`; styling already neutered
-  to project tokens.
+  to project tokens (`14px` radius, one-pixel border, no resting shadow).
 - **Forms** — Bootstrap `.form-control` / `.form-select` / `.form-label`;
-  focus ring is already themed.
+  one-pixel warm borders, white/warm surfaces, `10px` radius, themed focus ring.
 - **Alerts** — Bootstrap `.alert` with `.alert-success` / `.alert-danger`
   using project status background tokens.
 - **Wizard overlay** — `.wizard-form-overlay` for absolute-positioned
@@ -980,6 +1073,8 @@ src/front/static/
 
 - Every interactive icon-only control has a `title=` (and ideally
   `aria-label=`). See navbar bell / hourglass / help icons.
+- Status semantics must include icon + label (and optional tint); color alone
+  is not an acceptable signal.
 - Decorative SVGs (chevrons, spinner glyphs) have `aria-hidden="true"`.
 - Modals use Bootstrap's modal markup so focus trapping and ESC are free.
 - Maintain Bootstrap's contrast: do not lighten text below
@@ -1021,10 +1116,10 @@ src/front/static/
 - ❌ Calling `alert()` / `prompt()` for new-domain input — use
   `showNewDomainDialog()` from `utils.js`.
 - ❌ Bare `<ul class="nav nav-tabs">` (no `ob-tabs`), pill tabs,
-  or per-area redeclaration of `.nav-link` / `.nav-link.active`
-  styles. All tab nav uses the shared `ob-tabs` flat-underline
-  treatment from `components.css` (see *Tabs (`.ob-tabs`) —
-  flat-underline style*).
+  rounded selected tabs, or per-area redeclaration of `.nav-link` /
+  `.nav-link.active` styles. All tab nav uses the shared `ob-tabs`
+  square indigo-soft selected treatment from `components.css` (see
+  *Tabs (`.ob-tabs`) — square indigo-soft selected style*).
 - ❌ A second spinner style. Use the single brand spinner — inline via
   Bootstrap `.spinner-border` (auto-branded) or `.ob-loading-spinner` for
   large/centered cases. No custom keyframes, spinner libraries, emoji/
@@ -1035,9 +1130,20 @@ src/front/static/
 - ❌ Inline `<script>` blocks beyond a single tiny bootstrap call. Move
   to `static/<area>/js/`.
 - ❌ Hard-coded hex/rgb colours when a token exists.
+- ❌ Hard-coding cold-grey values in app-shell UI when a warm `--db-*` token
+  exists for the same role (surface, border, hover, muted text, or separator).
 - ❌ Importing webfonts, FontAwesome, Material Icons, or any
   non-Bootstrap icon font.
-- ❌ Coloured Bootstrap buttons expecting their default look.
+- ❌ Keeping all buttons visually identical/neutral when a section needs a
+  rightmost filled primary action (`.btn-primary`).
+- ❌ Using semantic red as a generic primary accent (reserve it for destructive
+  outline semantics or explicit danger states).
+- ❌ Multiple competing accent hues for app-shell emphasis; use the Clarity
+  indigo token family.
+- ❌ Resting card shadows or two-pixel resting borders on cards/forms/tables.
+- ❌ Leaving configuration or readable forms unbounded/sparse on wide canvases;
+  use a bounded readable width or the shared sidebar/content layout patterns.
+- ❌ Status color as the only signal (missing icon + label text).
 - ❌ Mixing `--db-*` and `--ovz-*` tokens in the same selector.
 - ❌ Loading `permissions.css` anywhere other than last, or
   `permissions.js` anywhere other than first-defer.

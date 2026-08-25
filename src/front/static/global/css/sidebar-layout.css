@@ -62,11 +62,20 @@ body.full-width-layout {
 .sidebar-nav {
     width: 200px;
     min-width: 200px;
-    border-right: 1px solid var(--border-color, rgba(255,255,255,0.1));
+    background: var(--db-surface-warm);
+    /* Framed card floating on the page, same language as the split-panel panes:
+       0.5rem gutter, 1px hairline, --db-radius-card on all four corners. The
+       gutter is what lets every corner be rounded — flush against the viewport
+       a radius would just open a gap. Height accounts for the margins because
+       .sidebar-layout is a fixed-height overflow-hidden box. */
+    margin: 0.5rem;
+    height: calc(100% - 1rem);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
     padding: 0.5rem 0;
     flex-shrink: 0;
     overflow-y: auto;
-    height: 100%;
+    overflow-x: hidden;
     transition: width 0.25s ease, min-width 0.25s ease;
     display: flex;
     flex-direction: column;
@@ -77,7 +86,7 @@ body.full-width-layout {
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: var(--text-muted, #6c757d);
+    color: var(--db-text-muted);
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -88,9 +97,12 @@ body.full-width-layout {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.35rem 1rem;
-    color: #666;
+    padding: 0.35rem 0.65rem;
+    margin: 0 0.35rem;
+    color: var(--db-text-secondary);
+    border-radius: 9px;
     border-left: 3px solid transparent;
+    position: relative;
     transition: all 0.2s ease;
     font-size: 0.82rem;
     text-decoration: none;
@@ -99,13 +111,29 @@ body.full-width-layout {
 }
 
 .sidebar-nav .nav-link:hover {
-    background: rgba(0, 0, 0, 0.1);
-    color: #333;
+    background: var(--db-hover-indigo);
+    color: var(--db-text);
 }
 
 .sidebar-nav .nav-link.active {
-    background: rgba(0, 0, 0, 0.15);
-    color: #000;
+    background: rgba(79, 70, 229, 0.12);
+    color: #4F46E5;
+    font-weight: 650;
+}
+
+.sidebar-nav .nav-link.active::before {
+    content: "";
+    position: absolute;
+    left: -0.35rem;
+    top: 5px;
+    bottom: 5px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--db-primary);
+}
+
+.sidebar-nav .nav-link.active i {
+    color: #4F46E5;
 }
 
 /* Disabled sidebar items (requires domain saved to UC) */
@@ -113,7 +141,7 @@ body.full-width-layout {
     opacity: 0.4;
     pointer-events: none;
     cursor: not-allowed;
-    color: #999;
+    color: var(--db-text-muted);
 }
 
 /* Sync gating: empty triple store — match prior inline pointer-events/opacity */
@@ -124,8 +152,8 @@ body.full-width-layout {
 
 .sidebar-nav .nav-link.sidebar-disabled:hover {
     background: none;
-    color: #999;
-    border-left-color: #333;
+    color: var(--db-text-muted);
+    border-left-color: transparent;
     font-weight: 500;
 }
 
@@ -148,14 +176,14 @@ body.full-width-layout {
     border: none;
     background: transparent;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 9px;
     transition: background 0.15s ease;
     width: calc(100% - 0.8rem);
     overflow: hidden;
 }
 
 .sidebar-toggle:hover {
-    background: transparent;
+    background: var(--db-hover-warm);
 }
 
 .sidebar-toggle i {
@@ -163,13 +191,13 @@ body.full-width-layout {
     min-width: 20px;
     text-align: center;
     flex-shrink: 0;
-    color: #555;
+    color: var(--db-text-muted);
 }
 
 .sidebar-toggle .sidebar-toggle-label {
     font-size: 0.75rem;
     font-weight: 600;
-    color: #555;
+    color: var(--db-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     transition: opacity 0.2s ease;
@@ -354,70 +382,3 @@ body.full-width-layout {
 body:is(.read-only-version, .role-viewer) #design-section #ontology-designer-canvas-wrapper {
     height: calc(100vh - 200px);
 }
-
-/* ==========================================================================
-   Sidebar User / Role Footer
-   Pinned to the bottom of the sidebar via margin-top: auto
-   ========================================================================== */
-.sidebar-user {
-    margin-top: auto;
-    padding-top: 0.4rem;
-    border-top: 1px solid var(--border-color, rgba(0,0,0,0.08));
-    flex-shrink: 0;
-}
-
-.sidebar-user-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 1rem;
-    cursor: default;
-}
-
-.sidebar-user-icon {
-    font-size: 1.15rem;
-    color: #666;
-    min-width: 20px;
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.sidebar-user-details {
-    overflow: hidden;
-    min-width: 0;
-    transition: opacity 0.2s ease;
-}
-
-.sidebar-user-email {
-    font-size: 0.7rem;
-    color: #555;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 130px;
-    font-weight: 500;
-}
-
-.sidebar-user-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.2rem;
-    margin-top: 0.25rem;
-}
-
-.sidebar-role-badge {
-    font-size: 0.6rem;
-    padding: 0.1rem 0.35rem;
-    border-radius: 3px;
-}
-
-/* Collapsed state: icon-only, hide text */
-.sidebar-nav.collapsed .sidebar-user-info {
-    justify-content: center;
-    padding: 0.4rem 0;
-}
-
-.sidebar-nav.collapsed .sidebar-user-details {
-    display: none;
-}
-

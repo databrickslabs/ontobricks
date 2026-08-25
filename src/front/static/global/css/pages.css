@@ -13,11 +13,11 @@
 }
 
 .rich-grid th {
-    background: #ffffff;
+    background: #FCFBFA;
     padding: 0.5rem 0.75rem;
     text-align: left;
     font-weight: 600;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 1px solid var(--db-border);
     position: relative;
     cursor: pointer;
     user-select: none;
@@ -28,7 +28,7 @@
 }
 
 .rich-grid th:hover {
-    background: #ffffff;
+    background: #FCFBFA;
 }
 
 .rich-grid th .sort-icon {
@@ -57,7 +57,7 @@
 
 .rich-grid td {
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--db-border-light);
     max-width: 300px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -86,8 +86,8 @@
     width: 100%;
     height: 550px;
     border: 2px solid var(--db-border-light);
-    border-radius: 12px;
-    background: #ffffff;
+    border-radius: var(--db-radius-card);
+    background: var(--db-surface-warm);
     position: relative;
     overflow: hidden;
 }
@@ -251,7 +251,7 @@
 .quick-link {
     padding: 0.5rem 1rem;
     background: var(--db-light-gray);
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     font-size: 0.85rem;
     color: var(--db-text);
     text-decoration: none;
@@ -276,12 +276,12 @@
    Home Page - Project Management Panel
    ========================================================================== */
 .domain-panel {
-    background: #ffffff;
-    border-radius: 16px;
+    background: var(--db-surface-warm);
+    border-radius: var(--db-radius-card);
     padding: 1.5rem;
-    border: 2px solid var(--db-border);
+    border: 1px solid var(--db-border);
     margin-bottom: 2rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    box-shadow: none;
 }
 
 .domain-header {
@@ -313,7 +313,7 @@
 .quick-link-sm {
     padding: 0.35rem 0.75rem;
     background: var(--db-light-gray);
-    border-radius: 6px;
+    border-radius: var(--db-radius-control);
     font-size: 0.8rem;
     color: var(--db-text);
     text-decoration: none;
@@ -342,12 +342,12 @@
 .domain-status {
     margin-top: 1rem;
     padding: 0.75rem 1rem;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     font-size: 0.85rem;
     display: flex;
     align-items: center;
     gap: 8px;
-    background: var(--db-light-gray);
+    background: var(--db-surface-warm);
     border: 1px solid var(--db-border);
     color: var(--db-text);
 }
@@ -365,15 +365,15 @@
 }
 
 .domain-status.success {
-    border-left: 3px solid #16a34a;
+    border-left: 3px solid var(--db-status-success);
 }
 
 .domain-status.error {
-    border-left: 3px solid #dc2626;
+    border-left: 3px solid var(--db-status-danger);
 }
 
 .domain-status.warning {
-    border-left: 3px solid #d97706;
+    border-left: 3px solid var(--db-status-warning);
 }
 
 /* ==========================================================================
@@ -444,10 +444,10 @@
 }
 .error-toast-popup {
     pointer-events: auto;
-    background: #dc3545;
+    background: var(--db-status-danger);
     color: #fff;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
     font-size: 0.875rem;
     word-break: break-word;
@@ -459,10 +459,10 @@
 }
 .success-toast-popup {
     pointer-events: auto;
-    background: #198754;
+    background: var(--db-status-success);
     color: #fff;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     box-shadow: 0 6px 20px rgba(25, 135, 84, 0.35);
     font-size: 0.875rem;
     word-break: break-word;
@@ -472,10 +472,10 @@
 .success-toast-popup:not(.show) { opacity: 0; }
 .warning-toast-popup {
     pointer-events: auto;
-    background: #ffc107;
+    background: var(--db-status-warning);
     color: #212529;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
     box-shadow: 0 6px 20px rgba(255, 193, 7, 0.35);
     font-size: 0.875rem;
     word-break: break-word;
@@ -571,25 +571,27 @@
 .custom-tabs .nav-link,
 .custom-tabs .nav-link:link,
 .custom-tabs .nav-link:visited {
-    color: var(--db-text) !important;
-    background-color: var(--db-border);
-    border: 1px solid var(--db-border-light);
-    border-radius: 6px 6px 0 0;
+    color: var(--db-text-secondary) !important;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 0;
     font-weight: 500;
 }
 
 .custom-tabs .nav-link:hover,
 .custom-tabs .nav-link:focus {
     color: var(--db-text) !important;
-    background-color: var(--db-light-gray);
+    background-color: var(--db-hover-warm);
 }
 
 .custom-tabs .nav-link.active,
 .custom-tabs .nav-link.active:hover,
 .custom-tabs .nav-link.active:focus {
-    color: white !important;
-    background-color: var(--db-primary);
-    border-color: var(--db-primary);
+    color: var(--db-primary-darker) !important;
+    background-color: var(--db-primary-light);
+    border-color: transparent;
+    border-bottom-color: var(--db-primary);
+    border-radius: 0;
     font-weight: 600;
 }
 
@@ -611,8 +613,8 @@
     width: 100%;
     height: 600px;
     border: 1px solid var(--db-border-light);
-    border-radius: 8px;
-    background-color: #ffffff;
+    border-radius: var(--db-radius-card);
+    background-color: var(--db-surface-warm);
 }
 
 /* Smaller graph container variant */
@@ -624,7 +626,7 @@
    Status Banners
    ========================================================================== */
 .status-banner {
-    border-radius: 8px;
+    border-radius: var(--db-radius-control);
 }
 
 .status-banner.success {
@@ -755,8 +757,8 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.25rem 0.5rem;
-    background: white;
-    border-radius: 4px;
+    background: var(--db-surface-warm);
+    border-radius: var(--db-radius-control);
     font-size: 0.85rem;
 }
 

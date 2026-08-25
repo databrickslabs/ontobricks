@@ -128,29 +128,31 @@
     min-height: 0;
 }
 
-/* Tabbed panel */
+/* Tabbed panel — same selected language as .ob-tabs / L2 subnav */
 .sg-panel-tabs {
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--db-border);
 }
 
 .sg-panel-tabs .nav-link {
     font-size: 0.78rem;
     padding: 0.45rem 0.7rem;
-    color: #6c757d;
+    color: var(--db-text-secondary);
     border: none;
     border-bottom: 2px solid transparent;
     border-radius: 0;
 }
 
 .sg-panel-tabs .nav-link:hover {
-    color: #495057;
-    border-bottom-color: #dee2e6;
+    color: var(--db-text);
+    background: var(--db-hover-warm);
+    border-bottom-color: var(--db-border);
 }
 
 .sg-panel-tabs .nav-link.active {
-    color: #0d6efd;
-    border-bottom-color: #0d6efd;
-    background: transparent;
+    color: var(--db-primary-darker);
+    border-bottom-color: var(--db-primary);
+    background: var(--db-primary-light);
+    border-radius: 0;
 }
 
 .sg-tab-content {

@@ -700,7 +700,8 @@ async function initOntologyMap() {
         showMapContextMenu(event, d, container);
     });
     
-    // Hide context menu when clicking on SVG background
+    // Clicking the empty canvas drops the selection. Entity and relationship
+    // clicks stop propagation, so only background clicks reach this handler.
     svg.on('click', function() {
         hideMapContextMenu();
         hideMapRelationshipActions();
@@ -710,6 +711,12 @@ async function initOntologyMap() {
             .attr('stroke', '#999')
             .attr('stroke-width', 1.5);
         clearHighlights();
+
+        // Guarded: this is now the only way out of the panel, so a pending
+        // edit must be flushed rather than dropped.
+        if (typeof guardedCloseSharedPanel === 'function') {
+            guardedCloseSharedPanel();
+        }
     });
     
     svg.on('contextmenu', function(event) {
@@ -1752,7 +1759,7 @@ function startMapConnectionMode(sourceEntity, container, type = 'relationship') 
     // CSS class fails to apply for any reason.
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('class', type === 'inheritance' ? 'map-connection-line map-inheritance-line' : 'map-connection-line');
-    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : '#0d6efd');
+    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : '#4F46E5');
     line.setAttribute('stroke-width', '3');
     line.setAttribute('stroke-dasharray', type === 'inheritance' ? '5,5' : '8,4');
     line.setAttribute('stroke-linecap', 'round');

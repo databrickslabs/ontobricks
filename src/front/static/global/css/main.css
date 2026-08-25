@@ -7,29 +7,37 @@
    CSS Custom Properties (Variables)
    ========================================================================== */
 :root {
-    /* Accent color - dark grey (replaces the former Databricks Red accent) */
-    --db-primary: #495057;
-    --db-primary-dark: #3a4046;
-    --db-primary-darker: #2b3035;
-    --db-primary-light: rgba(73, 80, 87, 0.1);
-    --db-primary-rgb: 73, 80, 87;
+    /* Clarity accent */
+    --db-primary: #4F46E5;
+    --db-primary-dark: #4338CA;
+    --db-primary-darker: #3730A3;
+    --db-primary-light: rgba(79, 70, 229, 0.1);
+    --db-primary-rgb: 79, 70, 229;
     
+    /* Warm neutral surfaces */
+    --db-canvas-warm: #FAFAF9;
+    --db-surface-warm: #FFFFFF;
+    --db-line-soft: #F4F2EF;
+    --db-hover-warm: #F3F2F0;
+    /* Nav hover tint — one step lighter than the active fill (0.12) so hover
+       and selected states stay distinguishable on the same surface. */
+    --db-hover-indigo: rgba(79, 70, 229, 0.06);
+
     /* Neutral Colors */
     --db-dark: #1B1C1D;
     --db-dark-rgb: 27, 28, 29;
     --db-gray: #2C2D2E;
-    --db-gray-600: #6c757d;
-    --db-light-gray: #FFFFFF;
-    --db-bg-secondary: #FFFFFF;
-    --db-border: #E0E0E0;
-    --db-border-light: #dee2e6;
+    --db-gray-600: #6B6864;
+    --db-light-gray: var(--db-canvas-warm);
+    --db-bg-secondary: var(--db-surface-warm);
+    --db-border: #ECEAE6;
+    --db-border-light: #F4F2EF;
 
-    /* Navbar / top banner — three-level dark→lighter→white hierarchy:
-       L1 navbar (#ECECEC)  →  L2 subnav (#F4F4F4, lighter)  →  breadcrumb (#ffffff) */
-    --db-navbar-bg: #ECECEC;
-    --db-navbar-border: #D8D8D8;
-    --db-subnav-bg: #F4F4F4;
-    --db-subnav-border: #E4E4E4;
+    /* Chrome hierarchy (structure unchanged) */
+    --db-navbar-bg: #FFFFFF;
+    --db-navbar-border: #ECEAE6;
+    --db-subnav-bg: #F7F6F4;
+    --db-subnav-border: #ECEAE6;
 
     /* Bootstrap `light` surface kept white so `.bg-light` utilities are white.
        NOTE: do NOT override --bs-secondary-bg / --bs-tertiary-bg here — Bootstrap
@@ -39,24 +47,47 @@
     --bs-light-rgb: 255, 255, 255;
     
     /* Text Colors */
-    --db-text: #1E1E1E;
-    --db-text-secondary: #6B6C6D;
-    --db-text-muted: #666666;
+    --db-text: #191817;
+    --db-text-secondary: #6B6864;
+    --db-text-muted: #6F6B65;
     
-    /* Status Colors */
-    --db-success: #28a745;
-    --db-success-bg: #D4EDDA;
-    --db-success-text: #155724;
-    --db-danger-bg: #F8D7DA;
-    --db-danger-text: #721C24;
-    --db-warning: #ffc107;
-    --db-info: #17a2b8;
+    /* Semantic status colors */
+    --db-status-success: #0E9F6E;
+    --db-status-success-soft-bg: #E7F7F0;
+    --db-status-warning: #B45309;
+    --db-status-warning-soft-bg: #FDF3E3;
+    --db-status-danger: #DC2626;
+    --db-status-danger-soft-bg: #FDECEC;
+    --db-status-info: #2563EB;
+    --db-status-info-soft-bg: #EAF0FE;
+    --db-status-draft: #7C3AED;
+    --db-status-draft-soft-bg: #F3EDFE;
+
+    /* Backward-compatible aliases */
+    --db-success: var(--db-status-success);
+    --db-success-bg: var(--db-status-success-soft-bg);
+    --db-success-text: #0A6E4D;
+    --db-danger-bg: var(--db-status-danger-soft-bg);
+    --db-danger-text: #B42318;
+    --db-warning: var(--db-status-warning);
+    --db-info: var(--db-status-info);
+
+    /* Shared radii */
+    --db-radius-sm: 10px;
+    --db-radius-md: 14px;
+    --db-radius-lg: 999px;
+    --db-radius-control: var(--db-radius-sm);
+    --db-radius-card: var(--db-radius-md);
+    --db-radius-chip: var(--db-radius-lg);
+
+    /* Focus ring */
+    --db-focus-ring: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.18);
     
     /* Shadows */
-    --db-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-    --db-shadow-md: 0 4px 15px rgba(0, 0, 0, 0.2);
-    --db-shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.3);
-    --db-shadow-primary: 0 3px 10px rgba(255, 54, 33, 0.2);
+    --db-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.12);
+    --db-shadow-md: 0 12px 34px rgba(15, 23, 42, 0.16);
+    --db-shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.2);
+    --db-shadow-primary: 0 0 0 3px rgba(var(--db-primary-rgb), 0.18);
     
     /* Transitions */
     --db-transition: all 0.2s ease;
@@ -72,6 +103,7 @@ html {
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 13.5px;
     background-color: var(--db-light-gray);
     color: var(--db-text);
 }
@@ -90,57 +122,100 @@ body {
 
 .navbar .dropdown-menu {
     z-index: 1051;
-    background-color: var(--db-navbar-bg);
-    border: 1px solid var(--db-navbar-border);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-    padding: 0.4rem 0;
+    background-color: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    /* Outer radius = item radius + the 0.35rem gutter, so the selected pill
+       stays concentric with the menu corners. */
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-md);
+    padding: 0.5rem 0.35rem;
     min-width: 14rem;
     margin-top: 0.35rem;
+    --bs-dropdown-link-hover-bg: var(--db-hover-indigo);
+    --bs-dropdown-link-hover-color: var(--db-text);
+    --bs-dropdown-link-active-bg: rgba(79, 70, 229, 0.12);
+    --bs-dropdown-link-active-color: #4F46E5;
 }
 
 .navbar .dropdown-menu .dropdown-item {
-    color: var(--db-text);
-    font-size: 0.8125rem;
-    padding: 0.4rem 1rem;
-    transition: background-color 0.15s ease, color 0.15s ease;
-    border-radius: 0.25rem;
-    margin: 0 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--db-text-secondary);
+    font-size: 0.82rem;
+    padding: 0.35rem 0.65rem;
+    margin: 0;
+    border-radius: 9px;
+    transition: all 0.2s ease;
 }
 
 .navbar .dropdown-menu .dropdown-item .bi {
-    opacity: 0.7;
-    margin-right: 0.15rem;
+    font-size: 0.95rem;
+    width: 20px;
+    min-width: 20px;
+    text-align: center;
+    opacity: 1;
+    margin-right: 0;
 }
 
 .navbar .dropdown-menu .dropdown-item:hover,
 .navbar .dropdown-menu .dropdown-item:focus {
-    background-color: var(--db-primary);
-    color: #fff;
-}
-
-.navbar .dropdown-menu .dropdown-item:hover .bi,
-.navbar .dropdown-menu .dropdown-item:focus .bi {
-    opacity: 1;
+    background: var(--db-hover-indigo);
+    color: var(--db-text);
 }
 
 .navbar .dropdown-menu .dropdown-item.active {
-    background-color: var(--db-primary);
-    color: #fff;
+    background: rgba(79, 70, 229, 0.12);
+    color: #4F46E5;
+    font-weight: 650;
+}
+
+.navbar .dropdown-menu .dropdown-item.active .bi {
+    color: #4F46E5;
 }
 
 .navbar .dropdown-menu .dropdown-header {
     color: var(--db-text-muted);
-    font-size: 0.7rem;
-    font-weight: 400;
-    letter-spacing: 0.05em;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 1px;
     text-transform: uppercase;
-    padding: 0.45rem 1rem 0.2rem;
+    padding: 0.3rem 0.65rem 0.35rem;
 }
 
 .navbar .dropdown-menu .dropdown-divider {
     border-color: var(--db-navbar-border);
-    margin: 0.35rem 0.8rem;
+    margin: 0.35rem 0.45rem;
+}
+
+/* Current-user menu — read-only identity card, so no interactive item styling */
+.ob-user-menu {
+    min-width: 200px;
+}
+
+.ob-user-menu .ob-user-menu-identity {
+    padding: 0.2rem 0.65rem;
+    cursor: default;
+}
+
+.ob-user-menu .ob-user-menu-email {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--db-text);
+    word-break: break-all;
+}
+
+.ob-user-menu .ob-user-menu-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
+}
+
+.ob-user-menu .ob-user-menu-badges .badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
 }
 
 /* Hover-activated flyout sub-menus inside navbar dropdowns */
@@ -153,10 +228,11 @@ body {
     left: 100%;
     margin-top: 0;
     margin-left: 0.125rem;
-    background-color: var(--db-navbar-bg);
-    border: 1px solid var(--db-navbar-border);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    background-color: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-md);
+    padding: 0.5rem 0.35rem;
     min-width: 14rem;
 }
 .navbar .dropdown-menu .dropend:hover > .dropdown-menu {
@@ -194,7 +270,8 @@ body {
     white-space: nowrap;
     /* Match the Databricks (apps-v2) top-nav text size: 13px, weight 400. */
     font-size: 0.8125rem;
-    font-weight: 400;
+    font-weight: 500;
+    letter-spacing: 0.01em;
 }
 
 /* Menu labels in the navbar carry Bootstrap's .small (0.875em), which would
@@ -219,17 +296,17 @@ body {
 }
 
 #domainL1Link.active {
-    background-color: var(--db-primary-dark) !important;
-    color: #fff !important;
-    border-radius: 0.35rem;
+    background-color: var(--db-primary-light) !important;
+    color: var(--db-primary-darker) !important;
+    border-radius: 9px;
     padding-left: 0.6rem;
     padding-right: 0.6rem;
-    font-weight: 500;
+    font-weight: 700;
 }
 
 #domainL1Link.active:hover {
-    background-color: var(--db-primary-darker) !important;
-    color: #fff !important;
+    background-color: var(--db-primary-light) !important;
+    color: var(--db-primary-darker) !important;
 }
 
 /* Disabled navigation items (requires domain saved to UC) */
@@ -396,8 +473,9 @@ body {
     color: var(--db-text-secondary);
     text-decoration: none;
     border-bottom: 2px solid transparent;
+    border-radius: 0;
     white-space: nowrap;
-    transition: color 0.15s ease, border-color 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .ob-subnav-link .bi {
@@ -407,13 +485,16 @@ body {
 .ob-subnav-link:hover {
     color: var(--db-text);
     border-bottom-color: var(--db-border);
+    background: var(--db-hover-warm);
     text-decoration: none;
 }
 
 .ob-subnav-link.active {
-    color: var(--db-text);
-    font-weight: 500;
+    color: var(--db-primary-darker);
+    font-weight: 600;
     border-bottom-color: var(--db-primary);
+    background: var(--db-primary-light);
+    border-radius: 0;
 }
 
 .ob-subnav-link.nav-disabled {
@@ -427,61 +508,79 @@ body {
     margin-left: 0.2rem;
 }
 
-/* Subnav uses the same dropdown style as the main navbar */
+/* L2 dropdowns mirror the left sidebar panel (indigo-soft hover + fill). */
 .ob-subnav .dropdown-menu {
     z-index: 1051;
-    background-color: var(--db-subnav-bg);
-    border: 1px solid var(--db-subnav-border);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-    padding: 0.4rem 0;
-    min-width: 14rem;
+    background-color: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    box-shadow: var(--db-shadow-md);
+    padding: 0.5rem 0.35rem;
+    min-width: 200px;
     margin-top: 0.15rem;
 }
 
 .ob-subnav .dropdown-menu .dropdown-item {
-    color: var(--db-text);
-    font-size: 0.8125rem;
-    padding: 0.4rem 1rem;
-    transition: background-color 0.15s ease, color 0.15s ease;
-    border-radius: 0.25rem;
-    margin: 0 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--db-text-secondary);
+    font-size: 0.82rem;
+    padding: 0.35rem 0.65rem;
+    margin: 0;
+    border-radius: 9px;
+    transition: all 0.2s ease;
 }
 
 .ob-subnav .dropdown-menu .dropdown-item .bi {
-    opacity: 0.7;
-    margin-right: 0.15rem;
+    font-size: 0.95rem;
+    width: 20px;
+    min-width: 20px;
+    text-align: center;
+    opacity: 1;
+    margin-right: 0;
 }
 
 .ob-subnav .dropdown-menu .dropdown-item:hover,
 .ob-subnav .dropdown-menu .dropdown-item:focus {
-    background-color: var(--db-primary);
-    color: #fff;
+    background: var(--db-hover-indigo);
+    color: var(--db-text);
 }
 
-.ob-subnav .dropdown-menu .dropdown-item:hover .bi,
-.ob-subnav .dropdown-menu .dropdown-item:focus .bi {
-    opacity: 1;
+.ob-subnav .dropdown-menu .dropdown-item.active {
+    background: rgba(79, 70, 229, 0.12);
+    color: #4F46E5;
+    font-weight: 650;
+}
+
+.ob-subnav .dropdown-menu .dropdown-item.active .bi {
+    color: #4F46E5;
 }
 
 .ob-subnav .dropdown-menu .dropdown-item.disabled,
 .ob-subnav .dropdown-menu .dropdown-item.dropdown-requires-domain.disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     pointer-events: none;
+    cursor: not-allowed;
+    color: var(--db-text-muted);
 }
 
 .ob-subnav .dropdown-menu .dropdown-header {
     color: var(--db-text-muted);
-    font-size: 0.7rem;
-    font-weight: 400;
-    letter-spacing: 0.05em;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 1px;
     text-transform: uppercase;
-    padding: 0.45rem 1rem 0.2rem;
+    padding: 0.3rem 0.65rem 0.35rem;
 }
 
 .ob-subnav .dropdown-menu .dropdown-divider {
-    border-color: var(--db-subnav-border);
-    margin: 0.35rem 0.8rem;
+    border-color: var(--db-border);
+    margin: 0.5rem 0.45rem;
+}
+
+.ob-subnav-link.active.dropdown-toggle::after {
+    display: none;
 }
 
 /* Vertical separator between tabs and Domain dropdown */
@@ -523,9 +622,9 @@ body {
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: var(--db-text);
-    background-color: var(--db-navbar-bg);        /* one shade darker = button stands out on L2 */
+    background-color: var(--db-surface-warm);
     border: 1px solid var(--db-navbar-border);
-    border-radius: 0.3rem;
+    border-radius: var(--db-radius-control);
     text-decoration: none;
     white-space: nowrap;
     transition: background-color 0.15s ease, color 0.15s ease;
@@ -552,9 +651,9 @@ body {
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: var(--db-text);
-    background-color: var(--db-navbar-bg);
+    background-color: var(--db-surface-warm);
     border: 1px solid var(--db-navbar-border);
-    border-radius: 0.3rem;
+    border-radius: var(--db-radius-control);
     text-decoration: none;
     white-space: nowrap;
     transition: background-color 0.15s ease, color 0.15s ease;
@@ -581,9 +680,9 @@ body {
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
     color: var(--db-text);
-    background-color: var(--db-navbar-bg);
+    background-color: var(--db-surface-warm);
     border: 1px solid var(--db-navbar-border);
-    border-radius: 0.3rem;
+    border-radius: var(--db-radius-control);
     text-decoration: none;
     white-space: nowrap;
     transition: background-color 0.15s ease, color 0.15s ease;
@@ -652,13 +751,14 @@ body {
    ========================================================================== */
 .card {
     border: 1px solid var(--db-border);
-    border-radius: 8px;
-    box-shadow: var(--db-shadow-sm);
+    border-radius: var(--db-radius-card);
+    box-shadow: none;
+    background: var(--db-surface-warm);
 }
 
 .card-header {
-    background-color: white;
-    border-bottom: 2px solid var(--db-border);
+    background-color: var(--db-surface-warm);
+    border-bottom: 1px solid var(--db-border);
     font-weight: 600;
     padding: 1rem 1.25rem;
 }
@@ -675,21 +775,23 @@ body {
 .form-control,
 .form-select {
     border: 1px solid var(--db-border);
-    border-radius: 4px;
+    border-radius: var(--db-radius-control);
+    background: var(--db-surface-warm);
+    color: var(--db-text);
 }
 
 .form-control:focus,
 .form-select:focus {
     border-color: var(--db-primary);
-    box-shadow: 0 0 0 0.2rem rgba(var(--db-primary-rgb), 0.25);
+    box-shadow: var(--db-focus-ring);
 }
 
 /* ==========================================================================
    Alerts
    ========================================================================== */
 .alert {
-    border-radius: 4px;
-    border: none;
+    border-radius: var(--db-radius-control);
+    border: 1px solid var(--db-border);
 }
 
 .alert-success {
@@ -723,7 +825,7 @@ body {
     background: transparent;
     border: 1px solid transparent;
     border-bottom: none;
-    border-radius: 6px 6px 0 0;
+    border-radius: 0;
     padding: 0.5rem 1rem;
     font-weight: 500;
     transition: var(--db-transition);
@@ -731,25 +833,26 @@ body {
 
 .nav-tabs .nav-link:hover {
     color: var(--db-text);
-    background: var(--db-border-light);
+    background: var(--db-hover-warm);
     border-color: var(--db-border-light);
 }
 
 .nav-tabs .nav-link.active {
-    background-color: #fff !important;
-    color: var(--db-text) !important;
-    border: 1px solid var(--db-border) !important;
-    border-bottom-color: #fff !important;
+    background-color: var(--db-primary-light) !important;
+    color: var(--db-primary-darker) !important;
+    border: 1px solid transparent !important;
+    border-bottom-color: var(--db-primary) !important;
+    border-radius: 0;
     margin-bottom: -1px;
     font-weight: 600;
 }
 
 /* Bordered tab-content pane (use .ob-tab-content on the tab-content div) */
 .ob-tab-content {
-    background: #fff;
+    background: var(--db-surface-warm);
     border: 1px solid var(--db-border);
     border-top: none;
-    border-radius: 0 0 6px 6px;
+    border-radius: 0 0 var(--db-radius-card) var(--db-radius-card);
     padding: 1.25rem;
     margin-right: 12px;
 }
@@ -783,7 +886,8 @@ body {
 
 .page-header h1 {
     font-size: 2rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--db-text);
     margin: 0;
 }
@@ -797,8 +901,9 @@ body {
    Badges
    ========================================================================== */
 .badge {
-    font-weight: 500;
+    font-weight: 600;
     padding: 0.35em 0.65em;
+    border-radius: var(--db-radius-chip);
 }
 
 .badge-primary,
@@ -829,12 +934,13 @@ code {
    Tables
    ========================================================================== */
 .table {
-    background-color: white;
+    background-color: var(--db-surface-warm);
+    border-color: var(--db-border-light);
 }
 
 .table thead th {
-    background-color: var(--db-light-gray);
-    border-bottom: 2px solid var(--db-border);
+    background-color: #FCFBFA;
+    border-bottom: 1px solid var(--db-border);
     font-weight: 600;
 }
 

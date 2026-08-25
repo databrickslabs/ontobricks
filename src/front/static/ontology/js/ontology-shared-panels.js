@@ -94,7 +94,7 @@ let _relPanelActiveTab = 'details';
 
 // Panel resize state
 let isResizing = false;
-let panelStartWidth = 380;
+let panelStartWidth = 420;
 
 /**
  * Get or create the detail panel in the current active section
@@ -128,8 +128,10 @@ function getOrCreateDetailPanel() {
     
     // Use the specific container for each section
     let panelContainer = activeSection;
+    // The panel is a sibling of the content pane, not a child of it, so the
+    // Designer hosts it on the wrapper rather than on the canvas itself.
     const containerMap = {
-        'map-section': 'ontology-map-container',
+        'map-section': 'ontology-map-wrapper',
         'entities-section': 'ontology-entities-container',
         'relationships-section': 'ontology-relationships-container'
     };
@@ -150,46 +152,85 @@ function getOrCreateDetailPanel() {
         return panel;
     }
     
+    return createDetailPanel(panelContainer);
+}
+
+/**
+ * Build the handle + panel pair inside a container and wire it up.
+ * Returns the existing panel if the container already has one.
+ */
+function createDetailPanel(panelContainer) {
+    const existing = panelContainer.querySelector('.shared-detail-panel');
+    if (existing) return existing;
+
     console.log('[SharedPanel] Creating new panel');
-    
+
     // Create resize handle
     const resizeHandle = document.createElement('div');
     resizeHandle.className = 'detail-panel-resize-handle';
-    resizeHandle.innerHTML = '<div class="resize-bar"></div>';
-    
+    resizeHandle.title = 'Drag to resize panels';
+    resizeHandle.innerHTML = '<div class="resize-handle-bar"></div>';
+
     // Create panel
     const panelDiv = document.createElement('div');
     panelDiv.className = 'shared-detail-panel';
-    
+
     panelDiv.innerHTML = `
         <div class="panel-header">
             <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Edit</span></h6>
-            <button type="button" class="btn btn-outline-secondary btn-sm panel-close-btn" id="sharedClosePanelBtn" title="Close">
-                <i class="bi bi-x-lg"></i>
-            </button>
         </div>
         <div class="panel-body" id="sharedPanelBody"></div>
     `;
-    
-    // Append to container (either section or ontology-map-container for Map)
+
+    // Append to container (either section or ontology-map-wrapper for Map)
     panelContainer.appendChild(resizeHandle);
     panelContainer.appendChild(panelDiv);
-    
+
     // Add the class to enable split layout
     panelContainer.classList.add('has-detail-panel');
-    
-    // Setup event listeners for this panel instance
-    setupPanelListeners(panelContainer);
+
     setupResizeHandle(panelContainer);
-    
+
+    renderPanelPlaceholder(panelDiv);
+
     return panelDiv;
 }
 
 /**
- * Setup panel event listeners
+ * Create the panel in every section that hosts one, before the views render.
+ * D3 sizes the Designer canvas from `container.clientWidth` exactly once, so a
+ * panel appearing later would leave the graph centred on the wrong axis.
  */
-function setupPanelListeners(section) {
-    section.querySelector('#sharedClosePanelBtn')?.addEventListener('click', guardedCloseSharedPanel);
+function ensureDetailPanels() {
+    ['ontology-map-wrapper',
+     'ontology-entities-container',
+     'ontology-relationships-container'].forEach(id => {
+        const container = document.getElementById(id);
+        if (container) createDetailPanel(container);
+    });
+}
+
+/**
+ * Reset a panel to its "nothing selected" state.
+ */
+function renderPanelPlaceholder(panel) {
+    const target = panel || sharedPanelElement;
+    if (!target) return;
+
+    target.classList.add('is-empty');
+
+    const title = target.querySelector('#sharedPanelItemName');
+    if (title) title.textContent = 'Details';
+
+    const body = target.querySelector('#sharedPanelBody');
+    if (body) {
+        body.innerHTML = `
+            <div class="panel-placeholder">
+                <i class="bi bi-cursor"></i>
+                <p class="small mb-0">Click on an entity or<br>relationship to view details</p>
+            </div>
+        `;
+    }
 }
 
 /**
@@ -271,9 +312,8 @@ function setupResizeHandle(section) {
         
         const sectionRect = section.getBoundingClientRect();
         const newWidth = sectionRect.right - e.clientX;
-        
-        // Clamp width between min and max
-        const clampedWidth = Math.max(280, Math.min(500, newWidth));
+
+        const clampedWidth = Math.max(200, Math.min(900, newWidth));
         panel.style.width = clampedWidth + 'px';
     });
     
@@ -323,32 +363,24 @@ function openSharedPanel() {
     
     // Store reference to the current panel element for scoped queries
     sharedPanelElement = panel;
-    
-    // Get the container (either section or map-container for Map section)
-    const container = panel.parentElement;
-    const effectiveContainer = panel.closest('.has-detail-panel') || container;
-    console.log('[SharedPanel] Adding panel-open class to container:', effectiveContainer?.id || effectiveContainer?.className);
-    effectiveContainer?.classList.add('panel-open');
+
+    panel.classList.remove('is-empty');
+
+    // Callers set the header synchronously but render the body in an async
+    // step. Drop the placeholder now so it can't sit under a populated header.
+    panel.querySelector('.panel-placeholder')?.remove();
 }
 
 /**
  * Close the shared panel
  */
 function closeSharedPanel() {
-    // Find all containers that might have the panel-open class
-    const containers = [
-        sharedPanelCurrentSection,
-        document.getElementById('ontology-map-container'),
-        document.getElementById('ontology-entities-container'),
-        document.getElementById('ontology-relationships-container')
-    ];
-    
-    containers.forEach(container => {
-        if (container) {
-            container.classList.remove('panel-open');
-        }
+    // The panel stays in the layout, so "close" means drop the selection and
+    // fall back to the placeholder.
+    document.querySelectorAll('.shared-detail-panel').forEach(panel => {
+        renderPanelPlaceholder(panel);
     });
-    
+
     // Reset state
     sharedPanelEditType = null;
     sharedPanelEditIndex = -1;
@@ -638,7 +670,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="addSharedEntityAttribute()" title="Add manually"><i class="bi bi-plus"></i></button>
                     ` : ''}
                 </div>
-                <div id="sharedEntityAttributes" class="border rounded p-2 panel-box panel-box-scroll"></div>
+                <div id="sharedEntityAttributes" class="border rounded p-2 panel-box"></div>
                 <div class="mt-3">
                     <label class="form-label d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-magic me-1"></i>Virtual Attributes</span>
@@ -3466,6 +3498,10 @@ function flushSharedPanelOnUnload() {
 window.addEventListener('beforeunload', flushSharedPanelOnUnload);
 window.addEventListener('pagehide', flushSharedPanelOnUnload);
 window.flushSharedPanelOnUnload = flushSharedPanelOnUnload;
+
+document.addEventListener('DOMContentLoaded', () => {
+    ensureDetailPanels();
+});
 
 // =====================================================
 // COMPATIBILITY FUNCTIONS

@@ -5,13 +5,18 @@
 
 /* ============================================================
    SPLIT PANEL STYLES
+
+   Same layout as the Knowledge Graph Explorer (query-sigmagraph.css):
+   content | 8px drag handle | permanently visible 320px panel, separated
+   by a 0.5rem gutter. The panel is part of the layout, not a drawer — it
+   shows a placeholder until something is selected.
    ============================================================ */
 
 /* Make sidebar-section a flex container for split layout */
 .sidebar-section.has-detail-panel.active {
     display: flex !important;
     flex-direction: row !important;
-    gap: 0;
+    gap: 0.5rem;
     height: 100%;
 }
 
@@ -36,20 +41,27 @@
 }
 
 /* Section Containers - special handling for panel inside each section */
-#ontology-map-container.has-detail-panel,
+#ontology-map-wrapper.has-detail-panel,
 #ontology-entities-container.has-detail-panel,
 #ontology-relationships-container.has-detail-panel {
     display: flex !important;
     flex-direction: row !important;
-    gap: 0;
+    gap: 0.5rem;
 }
 
-/* Map container - SVG fills remaining space */
-#ontology-map-container.has-detail-panel > svg {
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-    order: 1;  /* Main content first (left) */
+/* The card wrapping a split layout is a frameless shell — the two panes carry
+   the framing, like the Explorer's two side-by-side cards. */
+.ob-split-shell {
+    background: transparent;
+    box-shadow: none;
+}
+
+/* Content pane — same framing as .shared-detail-panel */
+.ob-split-pane {
+    background: #fff;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    overflow: hidden;
 }
 
 /* Entities/Relationships containers - content wrapper fills remaining space */
@@ -64,108 +76,53 @@
 }
 
 /* All other direct children of containers should be ordered before panel */
-#ontology-map-container.has-detail-panel > *:not(.shared-detail-panel):not(.detail-panel-resize-handle),
+#ontology-map-wrapper.has-detail-panel > *:not(.shared-detail-panel):not(.detail-panel-resize-handle),
 #ontology-entities-container.has-detail-panel > *:not(.shared-detail-panel):not(.detail-panel-resize-handle),
 #ontology-relationships-container.has-detail-panel > *:not(.shared-detail-panel):not(.detail-panel-resize-handle) {
     order: 1;
 }
 
-/* Loading overlay needs to be positioned absolutely within the flex container */
-#ontology-map-container.has-detail-panel > #ontologyMapLoading {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10;
-}
-
-/* Resize Handle (vertical divider) */
+/* Resize Handle (vertical divider) — mirrors #sgResizeHandle */
 .detail-panel-resize-handle {
-    position: relative;
-    width: 11px;
+    width: 8px;
     cursor: col-resize;
-    background: transparent;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     -webkit-user-select: none;
     user-select: none;
+    order: 998;
 }
 
-/* Full-height hairline divider — gives the border clean top & bottom ends */
-.detail-panel-resize-handle::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: 1px;
-    transform: translateX(-50%);
-    background: #e2e8f0;
-    transition: width 0.15s ease, background-color 0.15s ease;
+.detail-panel-resize-handle .resize-handle-bar {
+    width: 3px;
+    height: 40px;
+    background: var(--db-border);
+    border-radius: 2px;
+    transition: background 0.15s ease;
 }
 
-.detail-panel-resize-handle:hover::before,
-.detail-panel-resize-handle.active::before {
-    width: 2px;
-    background: var(--bs-primary, #0d6efd);
+.detail-panel-resize-handle:hover .resize-handle-bar,
+.detail-panel-resize-handle.active .resize-handle-bar {
+    background: var(--db-primary);
 }
 
-/* Centered grip pill with rounded ends */
-.detail-panel-resize-handle .resize-bar {
-    position: relative;
-    width: 5px;
-    height: 46px;
-    background: #cbd5e1;
-    border-radius: 999px;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.15);
-    transition: background-color 0.15s ease, height 0.15s ease, box-shadow 0.15s ease;
-}
-
-.detail-panel-resize-handle:hover .resize-bar,
-.detail-panel-resize-handle.active .resize-bar {
-    background: var(--bs-primary, #0d6efd);
-    height: 64px;
-    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.35);
-}
-
-/* Show resize handle when panel is open */
-.sidebar-section.has-detail-panel.panel-open .detail-panel-resize-handle,
-#ontology-map-container.has-detail-panel.panel-open .detail-panel-resize-handle,
-#ontology-entities-container.has-detail-panel.panel-open .detail-panel-resize-handle,
-#ontology-relationships-container.has-detail-panel.panel-open .detail-panel-resize-handle {
-    display: flex;
-}
-
-/* Detail Panel (right side) - always last in flex order */
+/* Detail Panel (right side) - always last in flex order.
+   Wider default than the Explorer's 320px read-only panel: enough to keep the
+   entity form's 4-tab strip (374px of content) on a single line, no more. */
 .shared-detail-panel {
-    width: 0;
-    min-width: 0;
-    max-width: 500px;
+    width: 420px;
+    min-width: 200px;
+    max-width: 50%;
     background: #fff;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     order: 999;  /* Always position last (rightmost) in flex container */
     flex-shrink: 0;
-}
-
-/* Resize handle ordering - always second to last in the flex container */
-.sidebar-section .detail-panel-resize-handle,
-#ontology-map-container .detail-panel-resize-handle,
-#ontology-entities-container .detail-panel-resize-handle,
-#ontology-relationships-container .detail-panel-resize-handle {
-    order: 998;
-}
-
-.sidebar-section.has-detail-panel.panel-open .shared-detail-panel,
-#ontology-map-container.has-detail-panel.panel-open .shared-detail-panel,
-#ontology-entities-container.has-detail-panel.panel-open .shared-detail-panel,
-#ontology-relationships-container.has-detail-panel.panel-open .shared-detail-panel {
-    width: 380px;
-    min-width: 280px;
 }
 
 /* Panel Header */
@@ -175,7 +132,7 @@
     align-items: center;
     padding: 0.6rem 0.75rem;
     background: #ffffff;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--db-border);
     flex-shrink: 0;
 }
 
@@ -183,17 +140,10 @@
     margin: 0;
     font-size: 0.9rem;
     font-weight: 600;
-    color: #1e293b;
+    color: var(--db-text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.shared-detail-panel .panel-close-btn {
-    padding: 0.2rem 0.4rem;
-    font-size: 0.75rem;
-    line-height: 1;
-    flex-shrink: 0;
 }
 
 /* Panel Body */
@@ -205,13 +155,30 @@
     flex-direction: column;
 }
 
-/* Entity / Relationship forms - fill the panel body */
+/* Empty state, same language as the Explorer .entity-details-placeholder */
+.shared-detail-panel .panel-placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--db-text-muted);
+}
+
+.shared-detail-panel .panel-placeholder i {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Entity / Relationship forms fill the panel body, and grow past it rather than
+   shrinking: .panel-body is the panel's only scroller, so no inner box may
+   scroll on its own (that produced a second scrollbar on the Attributes tab). */
 .shared-detail-panel .panel-body #sharedEntityForm,
 .shared-detail-panel .panel-body #sharedRelationshipForm {
     display: flex;
     flex-direction: column;
-    flex: 1;
-    min-height: 0;
+    flex: 1 0 auto;
 }
 
 .shared-detail-panel .panel-body #sharedEntityAttributes {
@@ -223,10 +190,6 @@
    bridges, virtual attributes). Replaces per-box inline backgrounds. */
 .shared-detail-panel .panel-box {
     background: var(--db-bg-secondary);
-}
-
-.shared-detail-panel .panel-box-scroll {
-    overflow-y: auto;
 }
 
 /* ---- Virtual attributes ---- */
@@ -267,20 +230,24 @@
     padding: 0.35rem 0.6rem;
     font-size: 0.75rem;
     font-weight: 500;
-    color: #6c757d;
+    color: var(--db-text-secondary);
     text-decoration: none;
     border-bottom: 2px solid transparent;
-    transition: color 0.15s, border-color 0.15s;
+    border-radius: 0;
+    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
     white-space: nowrap;
 }
 
 .form-tab-link:hover {
-    color: #1e293b;
+    color: var(--db-text);
+    background: var(--db-hover-warm);
 }
 
 .form-tab-link.active {
-    color: var(--bs-primary, #0d6efd);
-    border-bottom-color: var(--bs-primary, #0d6efd);
+    color: var(--db-primary-darker);
+    background: var(--db-primary-light);
+    border-bottom-color: var(--db-primary);
+    border-radius: 0;
     font-weight: 600;
 }
 

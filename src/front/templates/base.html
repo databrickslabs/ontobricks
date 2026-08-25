@@ -215,6 +215,32 @@
                     </li>
                     {% endif %}
                     {% endfor %}
+                    <!-- Current user — last item, so it anchors the right edge -->
+                    {% set _email = get_user_email() %}
+                    {% set _app_role = get_user_role() or 'user' %}
+                    {% set _domain_role = get_user_domain_role() %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link" href="#" id="userMenuDropdown" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false"
+                           title="{{ _email }}" aria-label="Current user">
+                            <i class="bi bi-person-circle"></i>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end ob-user-menu" aria-labelledby="userMenuDropdown">
+                            <li class="ob-user-menu-identity">
+                                <div class="ob-user-menu-email">{{ _email }}</div>
+                                <div class="ob-user-menu-badges">
+                                    {% if _app_role == 'admin' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Admin</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border">{{ _app_role|title }}</span>
+                                    {% endif %}
+                                    {% if _domain_role and _domain_role != 'none' and _domain_role != _app_role %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ _domain_role|title }}</span>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        </ul>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -236,8 +262,9 @@
             <ul class="ob-subnav-nav">
                 {% if domain_m.v %}
                 <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle" href="#" id="subnavDomainDropdown" role="button"
-                       data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="ob-subnav-link dropdown-toggle" href="{{ domain_m.v.route }}" id="subnavDomainDropdown" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false"
+                       data-subnav-route="{{ domain_m.v.route }}">
                         <i class="bi {{ domain_m.v.icon }}"></i> Domain
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavDomainDropdown" id="subnavDomainDropdownMenu">

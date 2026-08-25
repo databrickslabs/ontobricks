@@ -3,14 +3,18 @@
  * Extracted from ontology templates per code_instructions.txt
  */
 
-/* Map section: full-height canvas, no page scroll */
+/* Map section: full-height canvas, no page scroll. Insets mirror the Knowledge
+   Graph Explorer (query-sigmagraph.css) so both canvases sit the same distance
+   from the sidebar: flush wrapper, 1rem on the section, none at the bottom. */
 .sidebar-content:has(#map-section.active) {
     overflow: hidden;
-    padding: 0.5rem;
+    padding: 0;
 }
 
 #map-section.active {
     overflow: hidden;
+    padding: 1rem;
+    padding-bottom: 0;
 }
 
 #map-section .section-header {
@@ -95,8 +99,8 @@
 }
 
 .map-node.selected .map-node-hitarea {
-    fill: rgba(108, 117, 125, 0.15);
-    stroke: rgba(73, 80, 87, 0.5);
+    fill: rgba(var(--db-primary-rgb), 0.18);
+    stroke: var(--db-primary);
     stroke-width: 2px;
 }
 
@@ -105,7 +109,7 @@
 }
 
 .map-node.selected .map-node-icon {
-    filter: drop-shadow(0 0 12px rgba(73, 80, 87, 0.9));
+    filter: drop-shadow(0 0 12px rgba(var(--db-primary-rgb), 0.9));
 }
 
 /* Relationship links */
@@ -316,19 +320,20 @@
     opacity: 0.15;
 }
 
-/* Neighbor nodes get a soft glow ring */
+/* Neighbor nodes get a soft glow ring — same indigo as the selection, one
+   step lighter so the selected node still reads as the focus. */
 .map-node.neighbor .map-node-hitarea {
-    fill: rgba(13, 110, 253, 0.08);
-    stroke: rgba(13, 110, 253, 0.35);
+    fill: rgba(var(--db-primary-rgb), 0.08);
+    stroke: rgba(var(--db-primary-rgb), 0.35);
     stroke-width: 2px;
 }
 .map-node.neighbor .map-node-icon {
-    filter: drop-shadow(0 0 8px rgba(13, 110, 253, 0.5));
+    filter: drop-shadow(0 0 8px rgba(var(--db-primary-rgb), 0.5));
 }
 
 /* Highlighted links (connected to selected node) */
 .map-link.highlighted {
-    stroke: #0d6efd;
+    stroke: var(--db-primary);
     stroke-opacity: 1;
     stroke-width: 2.5px;
 }
@@ -342,7 +347,7 @@
 
 /* Link labels */
 .map-link-label.highlighted {
-    fill: #0d6efd;
+    fill: var(--db-primary);
     font-weight: 700;
     opacity: 1;
 }
@@ -352,8 +357,8 @@
 
 /* Hitarea dots */
 .map-link-hitarea.highlighted {
-    fill: #cfe2ff !important;
-    stroke: #0d6efd !important;
+    fill: rgba(var(--db-primary-rgb), 0.2) !important;
+    stroke: var(--db-primary) !important;
     stroke-width: 2px !important;
 }
 .map-link-hitarea.dimmed {
@@ -368,7 +373,7 @@
 }
 
 .map-connection-line {
-    stroke: #0d6efd;
+    stroke: var(--db-primary);
     stroke-width: 3px;
     stroke-dasharray: 8, 4;
     stroke-linecap: round;
@@ -383,13 +388,13 @@
 }
 
 .map-node.connection-source .map-node-hitarea {
-    fill: rgba(13, 110, 253, 0.2);
-    stroke: #0d6efd;
+    fill: rgba(var(--db-primary-rgb), 0.2);
+    stroke: var(--db-primary);
     stroke-width: 3px;
 }
 
 .map-node.connection-source .map-node-icon {
-    filter: drop-shadow(0 0 12px rgba(13, 110, 253, 0.8));
+    filter: drop-shadow(0 0 12px rgba(var(--db-primary-rgb), 0.8));
 }
 
 .map-node.connection-target .map-node-hitarea {

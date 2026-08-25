@@ -737,3 +737,225 @@ Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5276 passed, 5
 failed, 281 skipped, 6 deselected, 1 xfailed. Failures are the untracked
 TDD file `tests/units/front/test_clarity_design_contract.py` (Clarity UI
 refresh, not yet implemented); unrelated to this gitignore change.
+
+## Align navbar dropdown hover with the left sidebar
+
+Context: L1 navbar dropdowns still inverted the hovered row to solid indigo
+and white text. That read as a different control family from the left
+sidebar, whose hover is a warm well (`--db-hover-warm`, 9px radius). Dropdown
+items now share that hover (and the indigo-soft active stripe), L1 and L2.
+
+Changes:
+
+1. `src/front/static/global/css/main.css`
+   Navbar and L2 dropdown items use sidebar hover (`--db-hover-warm`) and
+   9px wells; selected items use the same indigo-soft fill as `.sidebar-nav
+   .nav-link.active`. Dropped the solid-primary invert.
+
+2. `.cursor/11-frontend-design.mdc`
+   Documented that L1/L2 dropdown hover matches the left sidebar, not a
+   solid invert.
+
+3. `tests/units/front/test_clarity_design_contract.py`
+   Contract that navbar and L2 dropdown hover uses `--db-hover-warm` and
+   `9px` radius, matching `.sidebar-nav .nav-link:hover`.
+
+Modified files:
+- `src/front/static/global/css/main.css`
+- `.cursor/11-frontend-design.mdc`
+- `tests/units/front/test_clarity_design_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5287 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 36.64s.
+
+## Explorer-parity split panel for Ontology Designer / Entities / Relationships
+
+Context: the three ontology sections shared a right-hand detail panel built as
+a drawer — `width: 0` until a `.panel-open` class widened it to 380px, injected
+*inside* the canvas container, with an 11px handle painted in Bootstrap blue
+(`#0d6efd`). The Knowledge Graph Explorer next door already had the layout we
+want: canvas and panel as two framed cards side by side, 0.5rem gutter, slim
+drag handle, panel permanently visible with a placeholder. Aligned the three
+ontology sections on it, then adjusted the tab frame and the canvas selection
+colour.
+
+Changes:
+
+1. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Panel is permanent: `420px` default (fits the 4-tab form strip on one
+   line), `min-width: 200px`, `max-width: 50%`; dropped the `width: 0` +
+   `.panel-open` drawer. Handle rebuilt as the Explorer's 8px hit area with a
+   3px x 40px bar, `--db-border` at rest and `--db-primary` on hover/drag.
+   Added `ob-split-shell` (frameless wrapper) and `ob-split-pane` (framed
+   content side) so both panes carry the same border and radius as the panel.
+   Added the `.panel-placeholder` empty state; removed the close-button rules.
+
+2. `src/front/static/ontology/js/ontology-shared-panels.js`
+   `ensureDetailPanels()` creates the panel on DOMContentLoaded — D3 sizes the
+   canvas from `container.clientWidth` once, so a panel appearing later left
+   the graph centred on the wrong axis. Panel now hosted on
+   `ontology-map-wrapper` instead of `ontology-map-container`, making it a
+   sibling of the canvas so the canvas can be framed as a pane. Closing
+   renders the placeholder instead of collapsing; resize clamps to 200-900px.
+   Removed the close button and `setupPanelListeners`.
+
+3. `src/front/static/ontology/js/ontology-map.js`
+   Clicking the empty canvas clears the panel via `guardedCloseSharedPanel`,
+   which is now the only exit and so must flush a pending edit. Connection
+   line stroke moved off Bootstrap blue.
+
+4. `src/front/static/ontology/css/ontology-map.css`
+   Entity / relationship selection, neighbour rings, highlighted links and
+   labels, hitarea dots and connection-source states use `--db-primary` /
+   `--db-primary-rgb` instead of `#0d6efd`. The selected node itself was grey;
+   it is now the strongest indigo, with neighbours one step lighter.
+
+5. `src/front/static/ontology/js/ontology-assistant.js`
+   The FAB offset watcher keyed off `panel-open` (now always absent) and only
+   attached its ResizeObserver from the childList callback — with the panel
+   created before the watcher, that callback never fired and the offset stayed
+   at 0. It now measures the panel directly and watches it from init.
+
+6. `src/front/templates/partials/ontology/_ontology_{map,entities,relationships}.html`
+   Outer card becomes `ob-split-shell` (dropped `shadow-sm`); the content side
+   gets `ob-split-pane`.
+
+7. `src/front/static/global/css/components.css`
+   `.ob-tabs` strip rounds its two top corners with `--db-radius-card` so the
+   tabs + body read as one frame, and dropped its `0.5rem 1rem 0` padding so
+   the selected tab's indigo fill spans the full strip height and reaches the
+   left / right border. Edge tabs round the matching outer corner; interior
+   tabs stay square.
+
+8. `.cursor/11-frontend-design.mdc`
+   New *Split-Panel Canvas Layout* section (geometry, two framed panes and one
+   frameless shell, empty state, no close button, host on the wrapper).
+   Rewrote the tabs section for the rounded strip and the padding removal.
+
+9. `tests/units/front/test_ontology_split_panel_layout.py` (new)
+   Contract for the layout: permanent panel, default width vs the tab strip
+   budget, gutter, handle geometry, framed panes vs frameless shell, eager
+   creation, placeholder on close, no close button, canvas-background clear,
+   no `--bs-primary`. Guards the Explorer reference values it is copied from.
+
+10. `tests/units/front/test_clarity_design_contract.py`
+    Strip now asserts rounded top corners instead of `border-radius: 0`; new
+    test that the Designer canvas selection uses Clarity indigo.
+
+Modified files:
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/ontology/css/ontology-map.css`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/js/ontology-map.js`
+- `src/front/static/ontology/js/ontology-assistant.js`
+- `src/front/static/global/css/components.css`
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `src/front/templates/partials/ontology/_ontology_entities.html`
+- `src/front/templates/partials/ontology/_ontology_relationships.html`
+- `.cursor/11-frontend-design.mdc`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5307 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 36.23s.
+
+Browser verification (Playwright, 1600x1000, domain Cust360Auto v4): the three
+sections report an identical layout — gutter 8px, handle 8px with a 3px x 40px
+bar, panel 420px framed with `1px var(--db-border)` and a 14px radius, matching
+the Explorer reference (gap 8px, handle 8px, bar 3x40). Drag 420 -> 556px with
+the FAB offset following at 564px. Selecting an entity renders the form and
+clicking the empty canvas restores the placeholder. Tab strip measured at 14px
+top corners, 0px bottom, seam gap 0 against the body card, active tab filled
+`rgba(79, 70, 229, 0.1)`.
+
+## Sidebar as a framed card, user moved to the navbar, and one panel scrollbar
+
+Context: follow-up pass on the chrome. The left sidebar was a flush rail with a
+single `border-right` hairline; rounding its inner top corner was tried both
+convex and concave and neither read well, so the sidebar was aligned on the
+card language used everywhere else instead. Along the way, an unbalanced `</div>`
+in the ontology wizard partial turned out to be the reason the Designer canvas
+sat further from the sidebar than the Knowledge Graph Explorer one.
+
+Changes:
+
+1. `src/front/static/global/css/sidebar-layout.css`
+   The sidebar is now a framed card: `0.5rem` margin, `1px solid
+   var(--db-border)`, `var(--db-radius-card)` on all four corners, and
+   `height: calc(100% - 1rem)` because `.sidebar-layout` is a fixed-height
+   overflow-hidden box. The gutter is what makes the rounding possible — flush
+   against the viewport a radius only opens a gap. Removed the dead
+   `.sidebar-user` footer rules.
+
+2. `src/front/templates/base.html`, `partials/layout/_sidebar_nav.html`
+   The current-user block (icon, email, role badges) moved out of the sidebar
+   footer into the navbar as the last item of the right-aligned group, so it
+   anchors the right edge. It is a read-only identity card in a dropdown rather
+   than an always-visible row.
+
+3. `src/front/static/global/css/main.css`
+   Styling for the new `.ob-user-menu` identity card.
+
+4. `src/front/templates/partials/ontology/_ontology_wizard.html`
+   Removed a stray `</div>` that closed `.sidebar-content` after its first
+   child, leaving every other ontology section a sibling of the wrapper instead
+   of a child. The orphaned wrapper still occupied its own `1rem` padding as a
+   flex item, which is where the extra 32px to the left of the Designer canvas
+   came from.
+
+5. `src/front/static/ontology/css/ontology-map.css`
+   Designer insets now mirror the Explorer (`query-sigmagraph.css`): flush
+   wrapper, `1rem` on the section, none at the bottom.
+
+6. `src/front/static/ontology/css/ontology-shared-panels.css`,
+   `src/front/static/ontology/js/ontology-shared-panels.js`
+   The Attributes box had its own `overflow-y: auto`, so the panel showed two
+   vertical scrollbars. Dropped `panel-box-scroll` and let the form grow past
+   the body (`flex: 1 0 auto`) so `.panel-body` is the panel's only scroller.
+
+7. `src/front/static/global/ontoviz/css/ontoviz.css`
+   Business Views entity headers were tinted light red (`#fdeaea`); they now use
+   `--db-primary-light`, with a literal fallback for ontoviz's standalone demo
+   page which doesn't load `main.css`.
+
+8. `.cursor/11-frontend-design.mdc`
+   Documented the sidebar-as-a-card contract.
+
+9. `tests/units/front/test_clarity_design_contract.py`
+   New tests: the sidebar is a framed card; the user identity lives in the
+   navbar and not the sidebar; ontoviz entity headers use indigo-soft.
+
+10. `tests/units/front/test_ontology_split_panel_layout.py`
+    New tests: `.panel-body` is the only scroller, and the Designer insets match
+    the Explorer.
+
+Modified files:
+- `src/front/static/global/css/sidebar-layout.css`
+- `src/front/static/global/css/main.css`
+- `src/front/static/global/ontoviz/css/ontoviz.css`
+- `src/front/static/ontology/css/ontology-map.css`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/templates/base.html`
+- `src/front/templates/partials/layout/_sidebar_nav.html`
+- `src/front/templates/partials/ontology/_ontology_wizard.html`
+- `.cursor/11-frontend-design.mdc`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5312 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 36.68s.
+
+Browser verification (Playwright, 1600x1000, domain Cust360Auto v4): sidebar
+measures `margin 8px`, `border-radius 14px`, `1px rgb(236, 234, 230)`, height
+899px inside a 1000px layout (8px clear top and bottom). The user control is the
+last navbar item, right edge at 1561px of 1600px, and its dropdown shows the
+email plus the Admin badge; no `.sidebar-user` node remains. Designer and
+Explorer now report an identical sidebar-to-canvas gap of 24px with the canvas
+left edge at 80px on both. Attributes tab on Customer at a 620px viewport
+reports exactly one scroller, `#sharedPanelBody` (696px of content in 405px),
+with the attributes box at `overflow-y: visible`. Business Views entity headers
+computed at `rgba(79, 70, 229, 0.1)`.

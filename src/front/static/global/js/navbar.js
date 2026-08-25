@@ -58,9 +58,28 @@ function initSubnavActiveState() {
         const route = link.getAttribute('data-subnav-route');
         if (route && path.startsWith(route)) {
             link.classList.add('active');
+            disableCurrentSubnavDropdown(link);
         }
     });
+}
 
+/**
+ * The current L2 area (Domain / Ontology / Mapping / KG) already has its
+ * sections in the left sidebar, so the matching L2 dropdown is redundant.
+ * Drop Bootstrap dropdown wiring and the menu, keep a static active tab.
+ */
+function disableCurrentSubnavDropdown(toggle) {
+    const item = toggle.closest('.ob-subnav-item');
+    const menu = item ? item.querySelector(':scope > .dropdown-menu') : null;
+    toggle.classList.remove('dropdown-toggle');
+    toggle.removeAttribute('data-bs-toggle');
+    toggle.removeAttribute('aria-expanded');
+    toggle.removeAttribute('role');
+    if (item) {
+        item.classList.remove('dropdown');
+        item.classList.add('is-current');
+    }
+    if (menu) menu.remove();
 }
 
 /**

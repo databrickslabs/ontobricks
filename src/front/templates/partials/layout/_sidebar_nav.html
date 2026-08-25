@@ -28,26 +28,5 @@
 </nav>
 {% endfor %}
 
-{# --- User / role footer pinned at the bottom of the sidebar --- #}
-{% set _email = get_user_email() %}
-{% set _app_role = get_user_role() or 'user' %}
-{% set _domain_role = get_user_domain_role() %}
-<div class="sidebar-user" title="{{ _email }}">
-    <div class="sidebar-user-info">
-        <i class="bi bi-person-circle sidebar-user-icon"></i>
-        <div class="sidebar-user-details">
-            <div class="sidebar-user-email">{{ _email }}</div>
-            <div class="sidebar-user-badges">
-                {% if _app_role == 'admin' %}
-                <span class="badge bg-danger-subtle text-danger border border-danger-subtle sidebar-role-badge">Admin</span>
-                {% else %}
-                <span class="badge bg-secondary-subtle text-secondary border sidebar-role-badge">{{ _app_role|title }}</span>
-                {% endif %}
-                {% if _domain_role and _domain_role != 'none' and _domain_role != _app_role %}
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle sidebar-role-badge">{{ _domain_role|title }}</span>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
+{# The user / role block lives in the navbar (see base.html), not here. #}
 {% endif %}
