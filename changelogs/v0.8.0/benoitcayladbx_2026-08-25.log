@@ -714,3 +714,26 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5275 passed, 281
 skipped, 6 deselected, 1 xfailed, 0 failed in 40.54s (+5 new tests).
+
+## Keep .planning/ui-refresh local
+
+Context: `.planning/` on GitHub is the AI-feature gate (SPECs, eval datasets,
+ROADMAP). The UI-refresh mockups, screenshots and implementation plan are
+local design exploration and do not belong on the remote. The unpushed mockup
+commit was dropped; `.gitignore` now excludes that folder so it cannot be
+re-added by accident.
+
+Changes:
+
+1. `.gitignore`
+   Ignore `.planning/ui-refresh/` in addition to image captures under
+   `.planning/`. SPECs and ROADMAP stay tracked.
+
+Modified files:
+- `.gitignore`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5276 passed, 5
+failed, 281 skipped, 6 deselected, 1 xfailed. Failures are the untracked
+TDD file `tests/units/front/test_clarity_design_contract.py` (Clarity UI
+refresh, not yet implemented); unrelated to this gitignore change.
