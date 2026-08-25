@@ -62,6 +62,12 @@
                 <i class="bi bi-lightning-charge me-1"></i> Knowledge Graph
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-mcp" data-bs-toggle="tab" data-bs-target="#panel-mcp"
+                    type="button" role="tab" aria-controls="panel-mcp" aria-selected="false">
+                <i class="bi bi-plug me-1"></i> MCP
+            </button>
+        </li>
     </ul>
 
     <div class="card">
@@ -288,6 +294,87 @@
                                 registry's <strong>catalog.schema</strong>.  Its name is derived from the domain
                                 name and version (<code>triplestore_&lt;domain&gt;_V&lt;version&gt;</code>).
                             </small>
+                        </div>
+                    </div>
+
+                    <!-- ======== MCP Tab ======== -->
+                    <div class="tab-pane fade" id="panel-mcp" role="tabpanel" aria-labelledby="tab-mcp">
+
+                        <div class="alert alert-light border small mb-4">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Controls what an MCP client (Databricks Playground, Claude, an agent) sees
+                            when it selects this domain. Settings apply as soon as the client calls
+                            <code>select_domain</code> &mdash; no MCP server restart. They have no effect
+                            on this authoring UI, which always shows the full ontology.
+                        </div>
+
+                        <!-- Exposed tools -->
+                        <div class="mb-4">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <label class="form-label fw-semibold mb-0">
+                                    <i class="bi bi-tools me-1"></i> Exposed Tools
+                                </label>
+                                <div class="form-check mb-0">
+                                    <input class="form-check-input domain-editable" type="checkbox" id="mcpToolsSelectAll">
+                                    <label class="form-check-label small text-muted" for="mcpToolsSelectAll">Select all</label>
+                                </div>
+                            </div>
+                            <div class="row" id="mcpToolsList">
+                                {% for tool in domain.mcp_domain_tools %}
+                                <div class="col-md-6 mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input domain-editable js-mcp-tool" type="checkbox"
+                                               id="mcpTool_{{ tool.name }}" data-tool-name="{{ tool.name }}"
+                                               {% if tool.name not in (domain.mcp_policy.get('disabled_tools') or []) %}checked{% endif %}>
+                                        <label class="form-check-label" for="mcpTool_{{ tool.name }}">
+                                            {{ tool.label }}
+                                            <code class="small text-muted ms-1">{{ tool.name }}</code>
+                                            <span class="d-block small text-muted">{{ tool.description }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                <i class="bi bi-shield-lock me-1"></i>Always exposed (they run before a domain
+                                is selected, so no per-domain policy can hide them):
+                                {% for name in domain.mcp_registry_tools %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+                            </small>
+                        </div>
+
+                        <!-- Ontology context -->
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-diagram-3 me-1"></i> Ontology Context
+                            </label>
+                            <p class="small text-muted">
+                                How the ontology attachments are surfaced to the model.
+                                <strong>Preferred</strong> turns the hint into a directive instruction;
+                                <strong>Disabled</strong> withholds the element from every MCP response.
+                            </p>
+                            {% for feature in domain.mcp_context_features %}
+                            <div class="row align-items-center mb-2">
+                                <div class="col-md-8">
+                                    <label class="form-label mb-0" for="mcpContext_{{ feature.name }}">{{ feature.label }}</label>
+                                    <span class="d-block small text-muted">{{ feature.description }}</span>
+                                </div>
+                                <div class="col-md-4">
+                                    {% set mode = (domain.mcp_policy.get('context') or {}).get(feature.name, 'normal') %}
+                                    <select class="form-select form-select-sm domain-editable js-mcp-context"
+                                            id="mcpContext_{{ feature.name }}" data-feature-name="{{ feature.name }}">
+                                        <option value="preferred" {% if mode == 'preferred' %}selected{% endif %}>Preferred</option>
+                                        <option value="normal" {% if mode == 'normal' %}selected{% endif %}>Normal</option>
+                                        <option value="disabled" {% if mode == 'disabled' %}selected{% endif %}>Disabled</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="alert alert-warning border small mt-3 py-2 mb-0">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Disabling <strong>Actions</strong> also refuses <code>invoke_entity_action</code>
+                            calls, even when that tool stays checked above.
                         </div>
                     </div>
 

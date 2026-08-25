@@ -45,7 +45,14 @@ from contextlib import asynccontextmanager
 from typing import Callable, Optional
 
 import httpx
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
+
+# Tools usable before a domain is selected. A per-domain policy cannot govern
+# them, so they are never hidden. Mirrors ``MCP_REGISTRY_TOOLS`` in
+# ``back/core/mcp_tools.py`` — this process cannot import the app package.
+REGISTRY_TOOLS = frozenset(
+    {"list_domains", "select_domain", "list_domain_versions", "get_design_status"}
+)
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +170,26 @@ def _format_entity_block(
     return "\n".join(lines)
 
 
-def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
+def _preferred(context_policy: Optional[dict], feature: str) -> bool:
+    """True when the domain marked *feature* as preferred.
+
+    Preferred only changes the wording of the follow-up hint the model reads:
+    a neutral "you may" mention becomes a directive instruction. Section
+    order and payload content are untouched.
+    """
+    return bool(context_policy) and context_policy.get(feature) == "preferred"
+
+
+def _hint(
+    context_policy: Optional[dict], feature: str, *, directive: str, neutral: str
+) -> str:
+    """Pick the wording of a follow-up hint for *feature*."""
+    return directive if _preferred(context_policy, feature) else neutral
+
+
+def _format_class_context_block(
+    local_id: str, cls_actions: dict, context_policy: Optional[dict] = None
+) -> str:
     """Append a [Context] block for a node's class Actions metadata."""
     dataset = cls_actions.get("dataset")
     bridges = cls_actions.get("bridges") or []
@@ -179,7 +205,16 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
         if key_col:
             lines.append(f"  Dataset: {dataset['fullName']}  (key: {key_col} = '{local_id}')")
             lines.append(
-                "    → call get_entity_context(fetch_dataset_rows=True) to retrieve rows"
+                _hint(
+                    context_policy,
+                    "dataset",
+                    directive="    → ALWAYS call get_entity_context("
+                    "fetch_dataset_rows=True) to retrieve the rows before "
+                    "answering — this dataset is the authoritative source for "
+                    "this entity",
+                    neutral="    → call get_entity_context(fetch_dataset_rows=True) "
+                    "to retrieve rows",
+                )
             )
         else:
             lines.append(f"  Dataset: {dataset['fullName']}  (key_column not configured)")
@@ -198,9 +233,19 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
             if target_desc:
                 lines.append(f"      Target domain: {target_desc}")
         lines.append(
-            "    → to query the target domain, call select_domain(<target_domain>) "
-            "then re-run describe_entity or GraphQL there. "
-            "get_entity_context(follow_bridges=True) only peeks — it does NOT switch the session."
+            _hint(
+                context_policy,
+                "bridges",
+                directive="    → ALWAYS follow these bridges before concluding: "
+                "the answer likely spans the target domain. Call "
+                "select_domain(<target_domain>) then re-run describe_entity or "
+                "GraphQL there. get_entity_context(follow_bridges=True) only "
+                "peeks — it does NOT switch the session.",
+                neutral="    → to query the target domain, call "
+                "select_domain(<target_domain>) then re-run describe_entity or "
+                "GraphQL there. get_entity_context(follow_bridges=True) only "
+                "peeks — it does NOT switch the session.",
+            )
         )
 
     if actions:
@@ -208,13 +253,22 @@ def _format_class_context_block(local_id: str, cls_actions: dict) -> str:
         for a in actions:
             lines.append(f"    → {a.get('fullName', '')}: {a.get('description', '')}")
         lines.append(
-            "    → call invoke_entity_action(entity_uri, action) to run one"
+            _hint(
+                context_policy,
+                "actions",
+                directive="    → PREFER invoke_entity_action(entity_uri, action) "
+                "over answering from the graph alone — these actions return "
+                "live, authoritative results",
+                neutral="    → call invoke_entity_action(entity_uri, action) to run one",
+            )
         )
 
     return "\n".join(lines)
 
 
-def _format_node_context_response(data: dict) -> str:
+def _format_node_context_response(
+    data: dict, context_policy: Optional[dict] = None
+) -> str:
     """Format the /nodes/context JSON response as LLM-friendly text."""
     if not data.get("success"):
         return data.get("message", "Could not retrieve node context.")
@@ -264,9 +318,17 @@ def _format_node_context_response(data: dict) -> str:
                 for e in entities:
                     lines.append(f"      • {_local_name(e.get('uri', ''))}  {e.get('predicate', '')} → {e.get('object', '')}")
         lines.append(
-            "  → to actually query one of these targets, "
-            "call select_domain(<target_domain>) then describe_entity / GraphQL there. "
-            "follow_bridges only peeks; it does not switch the session."
+            _hint(
+                context_policy,
+                "bridges",
+                directive="  → ALWAYS follow these bridges before concluding: "
+                "call select_domain(<target_domain>) then describe_entity / "
+                "GraphQL there. follow_bridges only peeks; it does not switch "
+                "the session.",
+                neutral="  → to actually query one of these targets, call "
+                "select_domain(<target_domain>) then describe_entity / GraphQL "
+                "there. follow_bridges only peeks; it does not switch the session.",
+            )
         )
         lines.append("")
 
@@ -279,7 +341,15 @@ def _format_node_context_response(data: dict) -> str:
             if desc:
                 lines.append(f"    Description: {desc}")
         lines.append(
-            f"  → call invoke_entity_action(entity_uri, action) with the entity's ID ('{local_id}')"
+            _hint(
+                context_policy,
+                "actions",
+                directive="  → PREFER running one of these actions over answering "
+                "from the graph alone — call invoke_entity_action(entity_uri, "
+                f"action) with the entity's ID ('{local_id}')",
+                neutral="  → call invoke_entity_action(entity_uri, action) with "
+                f"the entity's ID ('{local_id}')",
+            )
         )
         lines.append("")
 
@@ -345,6 +415,7 @@ def _format_find_response(
     data: dict,
     label_or_local: "Callable[[str], str] | None" = None,
     class_actions: "dict | None" = None,
+    context_policy: Optional[dict] = None,
 ) -> str:
     """Convert a /triples/find JSON response into a full-text description."""
     if not data.get("success"):
@@ -397,7 +468,9 @@ def _format_find_response(
             type_uris = [t["object"] for t in triples_for_uri if t["predicate"] == RDF_TYPE]
             for type_uri in type_uris:
                 if type_uri in class_actions:
-                    ctx = _format_class_context_block(_local_name(uri), class_actions[type_uri])
+                    ctx = _format_class_context_block(
+                        _local_name(uri), class_actions[type_uri], context_policy
+                    )
                     if ctx:
                         parts.append(ctx)
                     break
@@ -734,6 +807,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     )
 
     _selected_domain: dict = {"name": None}
+    # Per-domain MCP policy, keyed by domain name, as published by
+    # ``GET /api/v1/domains``. Filled by ``list_domains`` and lazily by
+    # ``_ensure_domain_policies``.
+    _domain_policy: dict[str, dict] = {}
     _ontology_labels: dict[str, str] = {}   # uri/name (lower) → display label
     _class_actions: dict[str, dict] = {}    # class URI → {"dataset": {...}, "bridges": [...]}
     _registry: dict = {
@@ -900,6 +977,78 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         ),
     )
 
+    async def _ensure_domain_policies() -> dict[str, dict]:
+        """Populate the policy cache if a tool ran before ``list_domains``.
+
+        Well-behaved clients call ``list_domains`` first, but nothing forces
+        them to, and ``select_domain`` must know the policy to compute the
+        tool set. Failures are swallowed: an empty policy means "everything
+        exposed", which is the safe pre-policy behaviour.
+        """
+        if _domain_policy:
+            return _domain_policy
+        try:
+            await _ensure_registry()
+            async with _client() as client:
+                data = await _get(client, API_V1_DOMAINS, params=_registry_params())
+            for d in data.get("domains", []) or []:
+                if d.get("name"):
+                    _domain_policy[d["name"]] = d.get("mcp_policy") or {}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("could not preload domain MCP policies: %s", exc)
+        return _domain_policy
+
+    def _active_policy() -> dict:
+        """Policy of the currently selected domain (empty when none)."""
+        name = _selected_domain.get("name")
+        return _domain_policy.get(name, {}) if name else {}
+
+    def _active_context_policy() -> dict:
+        """``{feature: mode}`` mapping for the selected domain."""
+        return _active_policy().get("context") or {}
+
+    def _disabled_tools(policy: dict) -> set[str]:
+        """Configurable tools the policy hides, registry tools excluded."""
+        raw = policy.get("disabled_tools")
+        if not isinstance(raw, list):
+            return set()
+        return {t for t in raw if isinstance(t, str)} - REGISTRY_TOOLS
+
+    def _ensure_tool_allowed(tool_name: str) -> Optional[str]:
+        """Return a refusal message when *tool_name* is disabled, else None.
+
+        Hiding a tool from ``tools/list`` is only a hint: a client that
+        ignores ``ToolListChangedNotification`` (or cached an older list) can
+        still call it. The policy is therefore re-checked on every call.
+        """
+        if tool_name not in _disabled_tools(_active_policy()):
+            return None
+        return (
+            f"The tool '{tool_name}' is not available for domain "
+            f"'{_selected_domain.get('name')}' — its MCP policy does not expose it."
+        )
+
+    def _require_domain(tool_name: str) -> Optional[str]:
+        """Single entry guard for every domain-scoped tool.
+
+        Returns the message to hand back to the model, or None to proceed.
+        """
+        if not _selected_domain["name"]:
+            return (
+                "No domain selected. Call list_domains first, "
+                "then select_domain to choose one."
+            )
+        return _ensure_tool_allowed(tool_name)
+
+    def _ensure_context_allowed(feature: str, label: str) -> Optional[str]:
+        """Return a refusal message when *feature* is disabled, else None."""
+        if _active_context_policy().get(feature) != "disabled":
+            return None
+        return (
+            f"{label} are disabled for domain '{_selected_domain.get('name')}' "
+            "by its MCP policy."
+        )
+
     # ── Tools — Domain selection ──────────────────────────────────────
 
     @mcp.tool()
@@ -930,6 +1079,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         domains = data.get("domains", [])
         if not domains:
             return "No domains found in the registry."
+
+        _domain_policy.clear()
+        for d in domains:
+            if d.get("name"):
+                _domain_policy[d["name"]] = d.get("mcp_policy") or {}
 
         lines: list[str] = []
         lines.append(f"Available Domains ({len(domains)})")
@@ -1046,7 +1200,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def select_domain(domain_name: str) -> str:
+    async def select_domain(domain_name: str, ctx: Context) -> str:
         """Select a domain (knowledge graph) to work with.
 
         After calling ``list_domains`` to see what is available, call
@@ -1054,10 +1208,15 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         ``list_entity_types``, ``describe_entity``, and ``get_status``
         will operate on this domain's Knowledge Graph.
 
+        Each domain publishes its own set of tools, so the tool list is
+        recomputed here: tools the domain does not expose disappear for this
+        session, and previously hidden ones come back.
+
         Args:
             domain_name: Exact domain name as shown by ``list_domains``.
         """
         await _ensure_registry()
+        await _ensure_domain_policies()
 
         params = _registry_params()
         params["domain_name"] = domain_name
@@ -1096,18 +1255,38 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             except Exception as exc:
                 logger.warning("select_domain: could not load class Actions: %s", exc)
 
+        # Recompute the session tool set for the new domain. reset_visibility
+        # first, otherwise rules accumulate and a tool hidden by a previously
+        # selected domain would stay hidden here.
+        hidden = _disabled_tools(_domain_policy.get(domain_name, {}))
+        try:
+            await ctx.reset_visibility()
+            if hidden:
+                await ctx.disable_components(names=hidden, components={"tool"})
+        except Exception as exc:  # noqa: BLE001
+            # Visibility is a presentation concern; _ensure_tool_allowed still
+            # refuses the calls, so a failure here must not break selection.
+            logger.warning("select_domain: could not apply tool visibility: %s", exc)
+
         has_data = data.get("has_data", False)
         count = data.get("count", 0)
         graph_name = data.get("graph_name", "N/A")
         view_table = data.get("view_table", "N/A")
 
-        return (
-            f"Domain '{domain_name}' selected.\n"
-            f"View:  {view_table}\n"
-            f"Graph: {graph_name}\n"
-            f"Data:  {'Yes' if has_data else 'No'} ({count:,} triples)\n\n"
-            f"You can now use list_entity_types and describe_entity."
-        )
+        lines = [
+            f"Domain '{domain_name}' selected.",
+            f"View:  {view_table}",
+            f"Graph: {graph_name}",
+            f"Data:  {'Yes' if has_data else 'No'} ({count:,} triples)",
+            "",
+        ]
+        if hidden:
+            lines.append(
+                "Not available for this domain: " + ", ".join(sorted(hidden))
+            )
+            lines.append("")
+        lines.append("You can now use list_entity_types and describe_entity.")
+        return "\n".join(lines)
 
     # ── Tools — Knowledge graph queries ───────────────────────────────
 
@@ -1124,11 +1303,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
         A domain must be selected first via ``select_domain``.
         """
-        if not _selected_domain["name"]:
-            return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
-            )
+        blocked = _require_domain("list_entity_types")
+        if blocked:
+            return blocked
 
         async with _client() as client:
             data = await _get(client, API_V1_DT_STATS, params=_domain_params())
@@ -1233,11 +1410,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             A full-text description of the matching entities, their
             attributes, and their relationships, organized hop by hop.
         """
-        if not _selected_domain["name"]:
-            return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
-            )
+        blocked = _require_domain("describe_entity")
+        if blocked:
+            return blocked
         if not search and not entity_type:
             return "Please provide at least a search term or an entity type."
 
@@ -1260,7 +1435,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         async with _client() as client:
             data = await _get(client, API_V1_DT_TRIPLES_FIND, params=params)
 
-        return _format_find_response(data, _label_or_local, class_actions=_class_actions)
+        return _format_find_response(
+            data,
+            _label_or_local,
+            class_actions=_class_actions,
+            context_policy=_active_context_policy(),
+        )
 
     @mcp.tool()
     async def get_status() -> str:
@@ -1271,11 +1451,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
         A domain must be selected first via ``select_domain``.
         """
-        if not _selected_domain["name"]:
-            return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
-            )
+        blocked = _require_domain("get_status")
+        if blocked:
+            return blocked
 
         async with _client() as client:
             data = await _get(client, API_V1_DT_STATUS, params=_domain_params())
@@ -1305,11 +1483,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
         A domain must be selected first via ``select_domain``.
         """
-        if not _selected_domain["name"]:
-            return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
-            )
+        blocked = _require_domain("get_graphql_schema")
+        if blocked:
+            return blocked
 
         domain_name = _selected_domain["name"]
         try:
@@ -1379,11 +1555,9 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         Returns:
             The query result as formatted text, or an error message.
         """
-        if not _selected_domain["name"]:
-            return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
-            )
+        blocked = _require_domain("query_graphql")
+        if blocked:
+            return blocked
 
         domain_name = _selected_domain["name"]
 
@@ -1448,11 +1622,20 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                 does NOT change the selected domain). Prefer ``select_domain``
                 for a real hop.
         """
-        if not _selected_domain["name"]:
-            return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
-            )
+        blocked = _require_domain("get_entity_context")
+        if blocked:
+            return blocked
+
+        # Refuse the argument rather than silently returning nothing, so the
+        # model learns the element is off instead of retrying the same call.
+        if fetch_dataset_rows:
+            blocked = _ensure_context_allowed("dataset", "Datasets")
+            if blocked:
+                return blocked
+        if follow_bridges:
+            blocked = _ensure_context_allowed("bridges", "Bridges")
+            if blocked:
+                return blocked
 
         params = _domain_params(
             {
@@ -1466,7 +1649,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         async with _client() as client:
             data = await _get(client, API_V1_DT_NODE_CONTEXT, params=params)
 
-        return _format_node_context_response(data)
+        return _format_node_context_response(data, _active_context_policy())
 
     @mcp.tool()
     async def invoke_entity_action(entity_uri: str, action: str) -> str:
@@ -1483,11 +1666,14 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
             action: Fully qualified function name (catalog.schema.function).
         """
-        if not _selected_domain["name"]:
-            return (
-                "No domain selected. Call list_domains first, "
-                "then select_domain to choose one."
-            )
+        blocked = _require_domain("invoke_entity_action")
+        if blocked:
+            return blocked
+        # Disabling the actions element also stops invocation, even when the
+        # tool itself is still exposed.
+        blocked = _ensure_context_allowed("actions", "Actions")
+        if blocked:
+            return blocked
 
         body: dict = {"entity_uri": entity_uri, "action_full_name": action}
         body.update(_registry_params())

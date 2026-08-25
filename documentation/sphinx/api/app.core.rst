@@ -30,6 +30,14 @@ Task Manager
    :undoc-members:
    :show-inheritance:
 
+MCP Tool Catalog
+----------------
+
+.. automodule:: back.core.mcp_tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Subpackages
 -----------
 

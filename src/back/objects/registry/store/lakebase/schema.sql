@@ -48,6 +48,13 @@ CREATE TABLE IF NOT EXISTS domains (
     -- required before an IN-REVIEW version can be published. Always >= 1.
     review_quorum   integer NOT NULL DEFAULT 1
                     CHECK (review_quorum >= 1),
+    -- Per-domain MCP policy: which MCP tools the domain publishes and how
+    -- datasets / bridges / actions are surfaced. Shape:
+    --   {"disabled_tools": [...],
+    --    "context": {"dataset"|"bridges"|"actions": "preferred"|"disabled"}}
+    -- The empty blob means "all tools exposed, every attachment normal", so
+    -- pre-existing domains keep today's behaviour without a backfill.
+    mcp_policy      jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
     UNIQUE (registry_id, folder)

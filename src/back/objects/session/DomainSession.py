@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.mcp_tools import coerce_mcp_policy
 from shared.config.constants import (
     DEFAULT_BASE_URI,
     DEFAULT_GRAPH_NAME,
@@ -79,6 +80,9 @@ def get_empty_domain() -> Dict[str, Any]:
                 "mcp_enabled": False,
                 "status": "DRAFT",
                 "review_quorum": 1,
+                # Per-domain MCP surface policy (tools + dataset/bridges/
+                # actions handling). Empty means "everything exposed".
+                "mcp_policy": {},
                 # Mandatory per-domain graph backend: lakebase | databricks | neo4j.
                 "graph_backend": "lakebase",
                 # Named Neo4j connection from Settings → Neo4j (required when
@@ -1348,6 +1352,9 @@ class DomainSession:
             "review_quorum": max(
                 1, int(self._data["domain"]["info"].get("review_quorum") or 1)
             ),
+            "mcp_policy": coerce_mcp_policy(
+                self._data["domain"]["info"].get("mcp_policy")
+            ),
             "graph_backend": normalize_graph_backend(
                 self._data["domain"]["info"].get("graph_backend")
             ),
@@ -1461,6 +1468,9 @@ class DomainSession:
             self._data["domain"]["info"]["status"] = info.get("status", "DRAFT")
             self._data["domain"]["info"]["review_quorum"] = max(
                 1, int(info.get("review_quorum") or 1)
+            )
+            self._data["domain"]["info"]["mcp_policy"] = coerce_mcp_policy(
+                info.get("mcp_policy")
             )
             self._data["domain"]["info"]["graph_backend"] = normalize_graph_backend(
                 info.get("graph_backend")

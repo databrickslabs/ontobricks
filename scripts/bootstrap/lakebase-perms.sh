@@ -360,6 +360,10 @@ CREATE INDEX IF NOT EXISTS idx_domain_versions_status
 ALTER TABLE "${SCHEMA}".domains
     ADD COLUMN IF NOT EXISTS review_quorum integer NOT NULL DEFAULT 1;
 
+-- domains.mcp_policy (per-domain MCP tool + context policy added in v0.8)
+ALTER TABLE "${SCHEMA}".domains
+    ADD COLUMN IF NOT EXISTS mcp_policy jsonb NOT NULL DEFAULT '{}'::jsonb;
+
 -- build_runs (build history table added after initial release)
 CREATE TABLE IF NOT EXISTS "${SCHEMA}".build_runs (
     id                  bigserial PRIMARY KEY,
@@ -595,7 +599,7 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
     );
 SQL
     then
-        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
+        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
     else
         echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
     fi

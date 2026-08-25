@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.mcp_tools import coerce_mcp_policy
 from back.core.databricks import VolumeFileService
 from back.objects.registry.registry_cache import (
     registry_cache_key,
@@ -658,13 +659,13 @@ class RegistryService:
 
     def list_mcp_domains(
         self, require_ontology: bool = False
-    ) -> Tuple[bool, List[Dict[str, str]], str]:
+    ) -> Tuple[bool, List[Dict[str, Any]], str]:
         """List domains that have an MCP-enabled version.
 
         Returns ``(ok, domains, message)`` where each domain is
-        ``{"name": ..., "description": ...}``.  When *require_ontology* is
-        ``True`` only domains whose MCP version has a non-empty ``classes``
-        list are included.
+        ``{"name": ..., "description": ..., "mcp_policy": {...}}``.  When
+        *require_ontology* is ``True`` only domains whose MCP version has a
+        non-empty ``classes`` list are included.
         """
         # Fast path: the cached two-query metadata listing already carries
         # per-version ``status`` + description, so a domain's PUBLISHED
@@ -674,7 +675,7 @@ class RegistryService:
         if not ok:
             return False, [], msg
 
-        result: List[Dict[str, str]] = []
+        result: List[Dict[str, Any]] = []
         for d in details:
             name = d.get("name", "")
             has_published = any(
@@ -698,7 +699,13 @@ class RegistryService:
                 except Exception:
                     logger.debug("Could not inspect ontology for domain %s", name)
                     continue
-            result.append({"name": name, "description": d.get("description", "")})
+            result.append(
+                {
+                    "name": name,
+                    "description": d.get("description", ""),
+                    "mcp_policy": coerce_mcp_policy(d.get("mcp_policy")),
+                }
+            )
         return True, result, ""
 
     def delete_domain(self, folder: str) -> List[str]:

@@ -21,6 +21,7 @@ from back.core.helpers import (
     sql_escape,
 )
 from back.core.logging import get_logger
+from back.core.mcp_tools import MCP_CONTEXT_MODE_DEFAULT, coerce_mcp_policy
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 
 logger = get_logger(__name__)
@@ -36,6 +37,28 @@ class NodeContextService:
     SAFE_SQL_IDENT = _SAFE_SQL_IDENT
     SAFE_COL_IDENT = _SAFE_COL_IDENT
     RDF_TYPE = _RDF_TYPE
+
+    @staticmethod
+    def resolve_context_policy(domain: Any) -> Dict[str, str]:
+        """Return the domain's ``{feature: mode}`` context policy.
+
+        Reads the per-domain MCP policy the ontology designer edited in
+        Domain → Information → MCP. Missing or malformed policies yield an
+        empty mapping, which every consumer reads as "all normal".
+        """
+        info = getattr(domain, "info", None) or {}
+        if not isinstance(info, dict):
+            return {}
+        return coerce_mcp_policy(info.get("mcp_policy")).get("context", {})
+
+    @staticmethod
+    def context_feature_disabled(
+        context_policy: Optional[Dict[str, str]], feature: str
+    ) -> bool:
+        """True when *feature* must be withheld from external consumers."""
+        if not context_policy:
+            return False
+        return context_policy.get(feature, MCP_CONTEXT_MODE_DEFAULT) == "disabled"
 
     @staticmethod
     def match_ontology_class(
@@ -254,8 +277,16 @@ class NodeContextService:
         registry_catalog: Optional[str] = None,
         registry_schema: Optional[str] = None,
         registry_volume: Optional[str] = None,
+        context_policy: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Build the node-context payload for *entity_uri*.
+
+        *context_policy* is the domain's ``{feature: mode}`` MCP context
+        policy (see :meth:`resolve_context_policy`). Disabled features are
+        withheld from the payload and the work needed to produce them is
+        skipped entirely. ``None`` — the default, used by the internal
+        authoring routes — surfaces everything, mirroring
+        ``enrich_bridge_targets(drop_unavailable=False)``.
 
         Raises:
             ValidationError: invalid dataset identifiers or bridge_depth.
@@ -282,33 +313,43 @@ class NodeContextService:
                 "entity_local_id": local_id,
             }
 
+        disabled = NodeContextService.context_feature_disabled
         class_name = matched_cls.get("name", "")
         raw_dataset = matched_cls.get("dataset") or None
         raw_bridges = matched_cls.get("bridges") or []
-        actions_out = NodeContextService.class_action_entries(matched_cls)
-
-        dataset_out, fetch_error = await NodeContextService._resolve_dataset(
-            domain,
-            settings,
-            raw_dataset=raw_dataset,
-            local_id=local_id,
-            entity_uri=entity_uri,
-            fetch_dataset_rows=fetch_dataset_rows,
-            dataset_row_limit=dataset_row_limit,
+        actions_out = (
+            []
+            if disabled(context_policy, "actions")
+            else NodeContextService.class_action_entries(matched_cls)
         )
 
-        bridges_out = await NodeContextService._resolve_bridges(
-            matched_cls=matched_cls,
-            raw_bridges=raw_bridges,
-            local_id=local_id,
-            follow_bridges=follow_bridges,
-            bridge_depth=bridge_depth,
-            session_mgr=session_mgr,
-            settings=settings,
-            registry_catalog=registry_catalog,
-            registry_schema=registry_schema,
-            registry_volume=registry_volume,
-        )
+        dataset_out: Optional[Dict[str, Any]] = None
+        fetch_error: Optional[str] = None
+        if not disabled(context_policy, "dataset"):
+            dataset_out, fetch_error = await NodeContextService._resolve_dataset(
+                domain,
+                settings,
+                raw_dataset=raw_dataset,
+                local_id=local_id,
+                entity_uri=entity_uri,
+                fetch_dataset_rows=fetch_dataset_rows,
+                dataset_row_limit=dataset_row_limit,
+            )
+
+        bridges_out: List[Dict[str, Any]] = []
+        if not disabled(context_policy, "bridges"):
+            bridges_out = await NodeContextService._resolve_bridges(
+                matched_cls=matched_cls,
+                raw_bridges=raw_bridges,
+                local_id=local_id,
+                follow_bridges=follow_bridges,
+                bridge_depth=bridge_depth,
+                session_mgr=session_mgr,
+                settings=settings,
+                registry_catalog=registry_catalog,
+                registry_schema=registry_schema,
+                registry_volume=registry_volume,
+            )
 
         logger.info(
             "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d actions=%d",
@@ -338,14 +379,26 @@ class NodeContextService:
         *,
         entity_uri: str,
         action_full_name: str,
+        context_policy: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Invoke a class-declared Unity Catalog function for *entity_uri*.
 
+        A domain that disabled the ``actions`` context element refuses every
+        invocation, independently of whether the ``invoke_entity_action`` MCP
+        tool is still exposed: hiding the actions must also stop them being
+        run by a caller that already knows their names.
+
         Raises:
             NotFoundError: no ontology class matches the entity.
-            ValidationError: action not on the class allow-list.
+            ValidationError: actions disabled for the domain, or action not on
+                the class allow-list.
             InfrastructureError: Databricks client missing or SQL execution failed.
         """
+        if NodeContextService.context_feature_disabled(context_policy, "actions"):
+            raise ValidationError(
+                "Actions are disabled for this domain by its MCP policy"
+            )
+
         local_id = DigitalTwin.extract_local_id(entity_uri)
         dname = domain.domain_folder or (domain.info or {}).get("name", "")
 

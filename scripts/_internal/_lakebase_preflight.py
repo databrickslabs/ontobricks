@@ -21,11 +21,13 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 # Registry objects provisioned by bootstrap-lakebase-perms.sh Step 2b and the
-# upgrade_0.4_to_0.5.sql / upgrade_0.5_to_0.6.sql / upgrade_0.6_to_0.7.sql
-# scripts.
+# upgrade_0.4_to_0.5.sql / upgrade_0.5_to_0.6.sql / upgrade_0.6_to_0.7.sql /
+# upgrade_0.7_to_0.8.sql scripts.
 EXPECTED_COLUMNS: tuple[tuple[str, str], ...] = (
     ("domain_versions", "status"),
     ("domains", "review_quorum"),
+    # v0.8 per-domain MCP policy (see upgrade_0.7_to_0.8.sql).
+    ("domains", "mcp_policy"),
     # v0.7 generic scheduled-task shape (see upgrade_0.6_to_0.7.sql).
     ("schedules", "task_type"),
     ("schedules", "target_key"),

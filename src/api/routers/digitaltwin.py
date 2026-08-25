@@ -1666,6 +1666,7 @@ async def dt_nodes_context(
         registry_catalog=registry_catalog,
         registry_schema=registry_schema,
         registry_volume=registry_volume,
+        context_policy=NodeContextService.resolve_context_policy(domain),
     )
     return NodeContextResponse(**payload)
 
@@ -1700,5 +1701,6 @@ async def dt_nodes_action(
         settings,
         entity_uri=payload.entity_uri,
         action_full_name=payload.action_full_name,
+        context_policy=NodeContextService.resolve_context_policy(domain),
     )
     return NodeActionResponse(**result)

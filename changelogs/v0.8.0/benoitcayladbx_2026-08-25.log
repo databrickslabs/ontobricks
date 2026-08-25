@@ -1,0 +1,314 @@
+## Per-domain MCP policy: configurable tool set and ontology context
+
+Context: the MCP surface was uniform — every MCP-enabled domain published all
+11 tools and every ontology attachment, whatever its shape. A domain with no
+Unity Catalog functions still advertised `invoke_entity_action` (prompt budget
+spent on a wrong-tool branch), and a domain whose value is its cross-domain
+bridges had no way to say so, since the bridge hint read like every other
+hint. Each domain now decides, from a new MCP tab in Domain / Information,
+which tools it publishes and how its datasets, bridges and actions are
+surfaced. An unconfigured domain reproduces the pre-0.8 behaviour exactly: the
+policy defaults to the empty blob, disabled tools are stored rather than
+enabled ones, and a missing context key reads as `normal` — so no backfill.
+
+Falls under the AI feature lifecycle gate (`.cursor/12`): SPEC.md and an eval
+dataset ship with the change.
+
+Changes:
+
+1. `src/back/core/mcp_tools.py` (new)
+   Single source of truth for the configurable surface: `MCP_REGISTRY_TOOLS`
+   (the 4 always-on tools), `MCP_DOMAIN_TOOLS` (the 7 configurable ones),
+   `MCP_CONTEXT_FEATURES`, `MCP_CONTEXT_MODES`, and `coerce_mcp_policy`, which
+   drops unknown tools, registry tools, unknown features and bad modes rather
+   than raising, so a hand-edited registry row cannot break domain loading.
+2. `src/back/objects/registry/store/lakebase/schema.sql`
+   Added `domains.mcp_policy jsonb NOT NULL DEFAULT '{}'::jsonb`.
+3. `src/back/objects/registry/store/lakebase/store.py`
+   Added `_ensure_domains_mcp_policy_column` lazy self-heal (same
+   ownership-aware pattern as `review_quorum`), wired at `initialize` plus the
+   three runtime paths, and promoted the column through the `domains` UPSERT,
+   `read_version` and `list_domains_with_metadata`.
+4. `src/back/objects/registry/store/base.py`
+   `DomainSummary` carries `mcp_policy`.
+5. `scripts/migrations/upgrade_0.7_to_0.8.sql` (new)
+   Explicit, idempotent one-shot migration with an `ON_ERROR_STOP` guard and a
+   sanity block that fails loudly if the column is missing afterwards.
+6. `scripts/_internal/_lakebase_preflight.py`, `scripts/_internal/_deploy-preflight.sh`,
+   `scripts/bootstrap/lakebase-perms.sh`
+   Declared the column in preflight expectations, required the migration file
+   before deploy, and provisioned it as the schema owner in Step 2b.
+7. `src/back/objects/session/DomainSession.py`, `src/back/objects/domain/Domain.py`
+   Seeded `mcp_policy` in the empty domain, coerced it on save, and exposed it
+   plus the render catalog (`mcp_domain_tools`, `mcp_registry_tools`,
+   `mcp_context_features`) in the template data, so the Jinja template never
+   restates the tool list.
+8. `src/back/objects/registry/RegistryService.py`, `src/api/routers/domains.py`
+   `list_mcp_domains` returns the policy and `DomainInfo` publishes it —
+   FastAPI filters on `response_model`, so the field had to be added in both
+   the model and its construction.
+9. `src/back/objects/digitaltwin/NodeContextService.py`
+   Added `resolve_context_policy` / `context_feature_disabled` and an optional
+   `context_policy` parameter on `resolve_context` and `invoke_action`.
+   Disabled elements are withheld and the work to produce them is skipped
+   entirely. `None` — the internal authoring default — surfaces everything,
+   mirroring `enrich_bridge_targets(drop_unavailable=False)`.
+10. `src/api/routers/digitaltwin.py`, `src/api/routers/domains.py`
+    Both external surfaces resolve and pass the policy; `nodes/action` refuses
+    invocation when the actions element is off. The internal `/dtwin` routes
+    deliberately pass nothing.
+11. `src/front/templates/partials/domain/_domain_information.html`
+    Fourth sub-tab: a checkbox per configurable tool with a tri-state select
+    all, the 4 registry tools listed read-only, and a preferred / normal /
+    disabled selector per context element.
+12. `src/front/static/global/js/navbar.js`, `src/front/static/domain/js/domain.js`
+    `buildDomainInfoPayload` carries `mcp_policy` (emitting only non-default
+    entries, mirroring the server-side coercion); returns `undefined` when the
+    tab is absent so a partial form cannot wipe a stored policy. Added the
+    select-all tri-state and a re-render on `/domain/info` reload.
+13. `src/mcp-server/server/app.py`
+    Added the `_domain_policy` cache (filled by `list_domains`, lazily by
+    `_ensure_domain_policies`). `select_domain` now takes a `Context`, calls
+    `reset_visibility` then `disable_components` — reset first, otherwise
+    rules accumulate and a tool hidden by a previously selected domain stays
+    hidden — and names the unavailable tools in its response. Registry tools
+    are defensively subtracted from the disabled set. Factored the seven
+    duplicated "no domain selected" guards into `_require_domain`, which also
+    re-checks the policy, since hiding a tool from `tools/list` is only a hint
+    to a client that may have cached an older list. `get_entity_context`
+    refuses `fetch_dataset_rows` / `follow_bridges` for disabled elements
+    rather than silently returning nothing, and `invoke_entity_action` refuses
+    when the actions element is off even though the tool is exposed. Preferred
+    elements get a directive hint variant in the formatters.
+14. `.planning/mcp-domain-policy/SPEC.md` (new)
+    Policy contract, the three enforcement layers, success criteria, failure
+    modes and the eval dimensions table the CI gate parses.
+15. `tests/eval/datasets/mcp/domain_policy.jsonl` (new)
+    10 rows — the material-change floor — covering tool gating, registry-tool
+    protection, each context element disabled, preferred emphasis, and the
+    tool-vs-element overlap on actions.
+16. `tests/units/core/test_mcp_tools_policy.py` (new, 9 tests)
+    Coercion: empty policy is the default, malformed input degrades to `{}`,
+    registry tools cannot be disabled, defaults are not persisted, idempotent.
+17. `tests/units/api/test_mcp_domain_policy.py` (new, 10 tests)
+    Policy resolution, each element withheld from `/nodes/context` and
+    `/domain/classes`, `invoke_action` refused when actions are disabled, and
+    the policy surviving on `/api/v1/domains`.
+18. `tests/units/mcp/test_domain_policy_formatting.py` (new, 12 tests)
+    Hints stay neutral without a policy, become directive when preferred,
+    preferring one element leaves the others neutral, emphasis does not
+    reorder sections, and the MCP-side registry tool list matches the app
+    catalog (the two packages cannot import each other).
+19. `tests/units/registry/test_mcp_policy_column.py` (new, 8 tests)
+    Pins all six migration points — canonical schema, lazy self-heal and its
+    call sites, migration script, bootstrap DDL, deploy preflight,
+    `DomainSummary` — since the realistic failure is forgetting one, not bad
+    SQL.
+20. `tests/units/mcp/test_domain_policy_gating.py` (new, 21 tests)
+    The gating itself, driven through a real FastMCP server with only the HTTP
+    layer stubbed: `select_domain` resets visibility before disabling, disabled
+    tools are hidden and refuse at call time without reaching the backend,
+    registry tools survive a hostile policy, switching domains restores tools,
+    and `get_entity_context` refuses `fetch_dataset_rows` / `follow_bridges`
+    when the matching element is off. Each guard was mutation-checked: removing
+    it fails these tests.
+21. `tests/units/scripts/test_lakebase_preflight.py`
+    Asserted the new column in the bootstrap-alignment test.
+22. `documentation/mcp.md`, `documentation/DEPLOY_CHECKLIST.md`
+    Documented the MCP tab, the always-on tools, the three context states, the
+    tool-vs-element overlap, the hot tool-set switch on `select_domain`, and
+    the 0.7 → 0.8 registry migration. Added the `select_domain` sample output
+    that reports the tools withheld for the domain.
+23. `documentation/user-guide.md`
+    New **MCP Tab** subsection under Domain Information — the two tool tiers,
+    the three attachment states, the Actions overlap, and when to reach for
+    *Preferred* vs *Disabled*. Cross-linked from the Global tab's API/MCP row
+    and from the MCP Server chapter, which gained a "Tailoring what a domain
+    publishes" step next to the existing exposure toggle.
+24. `documentation/features.md`, `README.md`
+    Feature-level entries for the per-domain policy and the session-scoped
+    hot tool-set switch.
+25. `documentation/api.md`
+    Documented the `mcp_policy` field on `GET /api/v1/domains` with a response
+    sample, and **added the previously undocumented `GET
+    /api/v1/domain/classes`** endpoint. Policy-filtering notes on
+    `/domain/classes`, `/digitaltwin/nodes/context` (disabled attachments are
+    withheld and their flags ignored rather than raising) and
+    `/digitaltwin/nodes/action` (refused when Actions are disabled).
+26. `documentation/data-access.md`
+    Added the two missing rows to the MCP tool → endpoint map
+    (`get_entity_context`, `invoke_entity_action`), noted that `select_domain`
+    also fetches `/domain/classes`, and explained that enforcement lives in
+    the endpoints rather than in the proxy.
+27. `documentation/architecture.md`
+    `mcp_policy` on the `domains` row and in the export format. Fixed two
+    pre-existing inaccuracies found while editing: the Lakebase layout claimed
+    "eight relational tables" while listing fourteen (the schema declares
+    fifteen), and `domain_edit_locks` was missing from the list.
+28. `documentation/code_organization.md`
+    Described `back/core/mcp_tools.py` in the core tree — why it is a flat
+    module, and why the MCP server package deliberately does not import it.
+    Added `/domain/classes` to the endpoint table and a per-domain policy
+    bullet to the MCP concerns.
+29. `documentation/import-export.md`
+    The policy travels inside `V{n}.json` and is re-validated on both ends, so
+    bundles stay forward- and backward-compatible.
+30. `documentation/sphinx/api/app.core.rst`
+    Exposed `back.core.mcp_tools` in the generated API reference.
+
+Modified files:
+- `src/back/core/mcp_tools.py` (new)
+- `src/back/objects/registry/store/lakebase/schema.sql`
+- `src/back/objects/registry/store/lakebase/store.py`
+- `src/back/objects/registry/store/base.py`
+- `src/back/objects/registry/RegistryService.py`
+- `src/back/objects/session/DomainSession.py`
+- `src/back/objects/domain/Domain.py`
+- `src/back/objects/digitaltwin/NodeContextService.py`
+- `src/api/routers/domains.py`
+- `src/api/routers/digitaltwin.py`
+- `src/mcp-server/server/app.py`
+- `src/front/templates/partials/domain/_domain_information.html`
+- `src/front/static/global/js/navbar.js`
+- `src/front/static/domain/js/domain.js`
+- `scripts/migrations/upgrade_0.7_to_0.8.sql` (new)
+- `scripts/_internal/_lakebase_preflight.py`
+- `scripts/_internal/_deploy-preflight.sh`
+- `scripts/bootstrap/lakebase-perms.sh`
+- `.planning/mcp-domain-policy/SPEC.md` (new)
+- `tests/eval/datasets/mcp/domain_policy.jsonl` (new)
+- `tests/units/core/test_mcp_tools_policy.py` (new)
+- `tests/units/api/test_mcp_domain_policy.py` (new)
+- `tests/units/mcp/test_domain_policy_formatting.py` (new)
+- `tests/units/mcp/test_domain_policy_gating.py` (new)
+- `tests/units/registry/test_mcp_policy_column.py` (new)
+- `tests/units/scripts/test_lakebase_preflight.py`
+- `documentation/mcp.md`
+- `documentation/DEPLOY_CHECKLIST.md`
+- `documentation/user-guide.md`
+- `documentation/features.md`
+- `documentation/api.md`
+- `documentation/data-access.md`
+- `documentation/architecture.md`
+- `documentation/code_organization.md`
+- `documentation/import-export.md`
+- `documentation/sphinx/api/app.core.rst`
+- `README.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log` (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5188 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 41.44s (+60 new tests).
+Docs: full `sphinx-build -a -E -b html` succeeds. The 15 warnings it emits are
+all pre-existing (dangling xrefs to paths outside the doc tree, ambiguous
+Python cross-references); none come from the new content, and the new
+`back.core.mcp_tools` automodule imports cleanly. Every new cross-document
+anchor was checked in the rendered HTML.
+
+Asana: https://app.asana.com/1/8808412813448/project/1217637563677287/task/1217819474931376
+
+================================================================================
+Code review — MCP per-domain policy (post-implementation pass)
+================================================================================
+
+Context: full code review of the per-domain MCP policy feature against
+`.cursorrules` (rule compliance, duplication, dead code, session-data audit),
+followed by the unit suite and the opt-in live scenario campaign. Four findings
+were actioned; the rest of the diff was found compliant.
+
+Changes:
+
+1. `src/back/core/mcp_tools.py` — removed `disabled_tools()` and
+   `context_mode()`. Both were dead: the MCP server cannot import the app
+   package and rolls its own `_disabled_tools`, while `NodeContextService`
+   reads the already-extracted context sub-dict via
+   `context_feature_disabled()`. Neither helper had a production call site;
+   only their own unit test exercised them. Dropped the now-unused `List`
+   import.
+
+2. `tests/units/core/test_mcp_tools_policy.py` — rewrote the two assertions
+   that used the removed helpers so the behavioural coverage is preserved:
+   the default lookups are now asserted directly on the coerced policy, which
+   is what every real consumer does.
+
+3. `src/mcp-server/server/app.py` — Extract Function `_hint()` for the five
+   preferred/neutral wording choices. They were multi-line conditional
+   expressions buried inside `lines.append(...)`, with the `if/else` trailing
+   several lines of string literal. `_preferred()` is kept (it is asserted
+   directly by the formatting suite) and `_hint()` sits on top of it.
+
+4. `src/front/static/global/js/navbar.js` — moved `buildMcpPolicy()` above the
+   `buildDomainInfoPayload()` JSDoc block. The new function had been inserted
+   between that block and the function it documents, leaving
+   `buildDomainInfoPayload()` undocumented and the block attached to the wrong
+   function.
+
+5. `documentation/mcp.md`, `documentation/features.md`,
+   `documentation/code_organization.md`, `README.md`,
+   `.planning/mcp-domain-policy/SPEC.md` — corrected an inaccurate isolation
+   claim. The docs stated there was "no leakage between concurrent clients that
+   selected different domains". Only the FastMCP *visibility rules* are
+   session-scoped: `create_mcp_server()` runs once per process, so
+   `_selected_domain` / `_domain_policy` / `_class_actions` are closures shared
+   by every session and the last `select_domain` wins for all of them. The
+   call-time guard follows that shared selection. This predates the policy (the
+   same closure already routed queries) and is now documented as a known
+   limitation, with a failure-mode row in the SPEC.
+
+6. `tests/e2e/scenarios/test_scenario_03_rules_analysis.py` — raised the
+   default `_DQ_TIMEOUT_S` from 300s to 600s, aligned with `_RULES_TIMEOUT_S`.
+   The campaign failed on this budget while the run was at 99%; the app log
+   shows `dataquality_checks` completing normally in 5m37s (96 passed, 20
+   failed, 1 warning). SHACL resolves property URIs one at a time, so the cost
+   scales with the 107 shapes, not the triple count. The budget was the
+   outlier among the scenario's five long-running steps.
+
+Reviewed and left unchanged (findings recorded, no edit):
+
+- `Domain.py` repeats `coerce_mcp_policy(self._s.info.get("mcp_policy"))` in
+  four methods. This is the file's established idiom — `review_quorum`,
+  `graph_backend` and `lakehouse_materialization` are repeated the same way.
+  Extracting only the new field would break the local symmetry; the four
+  should be extracted together in a separate pass.
+- `REGISTRY_TOOLS` is duplicated between `src/mcp-server/server/app.py` and
+  `back/core/mcp_tools.py`. Deliberate — the MCP process cannot import the app
+  package — and `test_domain_policy_formatting.py` asserts the two stay equal.
+- Broad `except Exception` in `_ensure_domains_mcp_policy_column` and in the
+  MCP visibility/preload paths. Matches the sibling self-heal methods and is
+  commented; the fallback is the pre-policy behaviour.
+
+Session-data audit (`DomainSession.get_empty_domain()["domain"]["info"]`):
+
+| field | used? | derivable? | recommendation |
+|---|---|---|---|
+| `mcp_policy` | yes — 13 src files | no | keep (new, persisted, drives the MCP surface) |
+| `mcp_enabled` | yes | no — it is the stored active-version flag | keep |
+| `review_quorum` | yes — 9 src files | no | keep |
+| `graph_backend` | yes | no | keep |
+| `neo4j_connection` | yes — 10 src files | no | keep |
+| `lakehouse_materialization` | yes — 7 src files | no | keep |
+| `status` | yes | no | keep |
+| `is_active_version` (domain level) | yes — set from `is_latest` | yes, derivable | pre-existing cache, out of this review's scope |
+
+No session field was added beyond `mcp_policy`, and none became unused.
+
+Modified files:
+- `src/back/core/mcp_tools.py`
+- `src/mcp-server/server/app.py`
+- `src/front/static/global/js/navbar.js`
+- `tests/units/core/test_mcp_tools_policy.py`
+- `tests/e2e/scenarios/test_scenario_03_rules_analysis.py`
+- `documentation/mcp.md`
+- `documentation/features.md`
+- `documentation/code_organization.md`
+- `README.md`
+- `.planning/mcp-domain-policy/SPEC.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5188 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 35.46s. No lint errors.
+Scenarios: `make scenario-campaign` (live, opt-in) -> 4 passed, 2 skipped in
+25m14s after the timeout fix; the validation report records 13 passed, 0
+failed, 2 info. The 2 skips are environmental and pre-existing — the pytest
+process itself has no `DATABRICKS_HOST` / `DATABRICKS_TOKEN` /
+`DATABRICKS_SQL_WAREHOUSE_ID`, so `test_full_lifecycle.py` and
+`test_scenario_04_metadata_integrity.py` opt out.

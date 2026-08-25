@@ -63,6 +63,7 @@ from back.core.databricks.lakebase import require_psycopg as _shared_require_psy
 from back.core.databricks.lakebase.constants import APPLICATION_NAME_REGISTRY
 from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
+from back.core.mcp_tools import coerce_mcp_policy
 from back.objects.registry.registry_cache import invalidate_registry_cache
 
 from ..base import (
@@ -314,6 +315,11 @@ class LakebaseRegistryStore(RegistryStore):
         # per-domain sign-off quorum existed (same pattern as
         # ``_status_column_ready``).
         self._quorum_column_ready = False
+        # Guards the lazy ``ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+        # mcp_policy`` used to self-heal deployments created before the
+        # per-domain MCP policy existed (same pattern as
+        # ``_quorum_column_ready``).
+        self._mcp_policy_column_ready = False
         # Guards the lazy ``CREATE TABLE IF NOT EXISTS domain_review_events``
         # used to self-heal deployments created before the review/validation
         # audit log existed (same pattern as ``_build_runs_ready``).
@@ -676,6 +682,7 @@ class LakebaseRegistryStore(RegistryStore):
             # than waiting for the first runtime call that needs the column.
             self._ensure_domain_versions_status_column()
             self._ensure_domains_review_quorum_column()
+            self._ensure_domains_mcp_policy_column()
             self._ensure_schedule_task_columns()
             self._import_legacy_cohort_schedules()
             with self._connect() as conn, conn.cursor() as cur:
@@ -815,13 +822,14 @@ class LakebaseRegistryStore(RegistryStore):
         try:
             self._ensure_domain_versions_status_column()
             self._ensure_domains_review_quorum_column()
+            self._ensure_domains_mcp_policy_column()
             psycopg, dict_row = _require_psycopg()
             with self._connect() as conn:
                 with conn.cursor(row_factory=dict_row) as cur:
                     cur.execute(
                         f"""
                         SELECT d.id, d.folder, d.description, d.base_uri,
-                               d.review_quorum
+                               d.review_quorum, d.mcp_policy
                         FROM {self._q(self._schema)}.domains d
                         WHERE d.registry_id = %s
                         ORDER BY d.folder
@@ -873,6 +881,7 @@ class LakebaseRegistryStore(RegistryStore):
                         "graph_backend": graph_backend,
                         "neo4j_connection": neo4j_connection,
                         "review_quorum": max(1, int(d.get("review_quorum") or 1)),
+                        "mcp_policy": coerce_mcp_policy(d.get("mcp_policy")),
                         "versions": [
                             {
                                 "version": v["version"],
@@ -964,6 +973,7 @@ class LakebaseRegistryStore(RegistryStore):
         try:
             self._ensure_domain_versions_status_column()
             self._ensure_domains_review_quorum_column()
+            self._ensure_domains_mcp_policy_column()
             psycopg, dict_row = _require_psycopg()
             with self._connect() as conn, conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
@@ -971,7 +981,7 @@ class LakebaseRegistryStore(RegistryStore):
                     SELECT v.info, v.ontology, v.assignment, v.design_layout,
                            v.metadata, v.version, v.mcp_enabled, v.status,
                            v.last_update, v.last_build, d.review_quorum,
-                           d.base_uri AS domain_base_uri
+                           d.mcp_policy, d.base_uri AS domain_base_uri
                     FROM {self._q(self._schema)}.domain_versions v
                     JOIN {self._q(self._schema)}.domains d ON d.id = v.domain_id
                     WHERE d.registry_id = %s AND d.folder = %s AND v.version = %s
@@ -984,6 +994,7 @@ class LakebaseRegistryStore(RegistryStore):
             info = row["info"] or {}
             info.setdefault("mcp_enabled", bool(row["mcp_enabled"]))
             info["review_quorum"] = max(1, int(row.get("review_quorum") or 1))
+            info["mcp_policy"] = coerce_mcp_policy(row.get("mcp_policy"))
             info["status"] = row["status"] or "DRAFT"
             if row["last_update"]:
                 info["last_update"] = row["last_update"]
@@ -1017,6 +1028,7 @@ class LakebaseRegistryStore(RegistryStore):
         try:
             self._ensure_domain_versions_status_column()
             self._ensure_domains_review_quorum_column()
+            self._ensure_domains_mcp_policy_column()
             info = data.get("info", {}) or {}
             ver_blob = (data.get("versions") or {}).get(version, {}) or {}
             ontology = ver_blob.get("ontology", data.get("ontology", {})) or {}
@@ -1030,14 +1042,15 @@ class LakebaseRegistryStore(RegistryStore):
             description = info.get("description", "") or ""
             base_uri = ontology.get("base_uri", "") or ""
             review_quorum = max(1, int(info.get("review_quorum") or 1))
+            mcp_policy = coerce_mcp_policy(info.get("mcp_policy"))
 
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     f"""
                     INSERT INTO {self._q(self._schema)}.domains
                         (registry_id, folder, description, base_uri,
-                         review_quorum)
-                    VALUES (%s, %s, %s, %s, %s)
+                         review_quorum, mcp_policy)
+                    VALUES (%s, %s, %s, %s, %s, %s::jsonb)
                     ON CONFLICT (registry_id, folder)
                     DO UPDATE SET description   = EXCLUDED.description,
                                   base_uri      = CASE
@@ -1046,6 +1059,7 @@ class LakebaseRegistryStore(RegistryStore):
                                                     ELSE {self._q(self._schema)}.domains.base_uri
                                                   END,
                                   review_quorum = EXCLUDED.review_quorum,
+                                  mcp_policy    = EXCLUDED.mcp_policy,
                                   updated_at    = now()
                     RETURNING id
                     """,
@@ -1055,6 +1069,7 @@ class LakebaseRegistryStore(RegistryStore):
                         description,
                         base_uri,
                         review_quorum,
+                        json.dumps(mcp_policy),
                     ),
                 )
                 domain_id = cur.fetchone()[0]
@@ -1657,6 +1672,47 @@ class LakebaseRegistryStore(RegistryStore):
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 "could not add domains.review_quorum column — "
+                "run `make bootstrap-lakebase` (or scripts/bootstrap-lakebase-perms.sh) "
+                "as the schema owner to apply the migration: %s",
+                exc,
+            )
+            return False
+
+    def _ensure_domains_mcp_policy_column(self) -> bool:
+        """Lazily add ``domains.mcp_policy`` if missing.
+
+        Self-heals deployments created before the per-domain MCP policy
+        existed. Same idempotent, ownership-aware pattern as
+        :meth:`_ensure_domains_review_quorum_column`. Best-effort: on failure
+        it logs and returns ``False`` so callers fall back to the empty
+        policy, which is exactly the pre-policy behaviour.
+        """
+        if self._mcp_policy_column_ready:
+            return True
+        try:
+            sch = self._q(self._schema)
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = 'domains' "
+                    "AND column_name = 'mcp_policy'",
+                    (self._schema,),
+                )
+                if cur.fetchone():
+                    self._mcp_policy_column_ready = True
+                    return True
+                cur.execute(
+                    f"""
+                    ALTER TABLE {sch}.domains
+                        ADD COLUMN IF NOT EXISTS mcp_policy jsonb
+                        NOT NULL DEFAULT '{{}}'::jsonb
+                    """
+                )
+            self._mcp_policy_column_ready = True
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "could not add domains.mcp_policy column — "
                 "run `make bootstrap-lakebase` (or scripts/bootstrap-lakebase-perms.sh) "
                 "as the schema owner to apply the migration: %s",
                 exc,

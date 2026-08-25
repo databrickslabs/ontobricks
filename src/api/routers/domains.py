@@ -3,7 +3,7 @@
 Mounted at ``/api/v1/domains`` and ``/api/v1/domain/...`` (prefix ``/v1`` on the sub-app).
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -63,6 +63,9 @@ class SparkSQLResponse(BaseModel):
 class DomainInfo(BaseModel):
     name: str
     description: str = ""
+    # Per-domain MCP surface policy. Empty means "every tool exposed, every
+    # ontology attachment surfaced normally".
+    mcp_policy: Dict[str, Any] = Field(default_factory=dict)
 
 
 class DomainsResponse(BaseModel):
@@ -181,7 +184,12 @@ async def list_registry_domains(
     return DomainsResponse(
         success=True,
         domains=[
-            DomainInfo(name=p["name"], description=p["description"]) for p in items
+            DomainInfo(
+                name=p["name"],
+                description=p["description"],
+                mcp_policy=p.get("mcp_policy") or {},
+            )
+            for p in items
         ],
     )
 
@@ -490,18 +498,27 @@ async def get_domain_classes(
     dname = _raw_dname if isinstance(_raw_dname, str) else ""
     raw_classes = domain.get_classes() or []
 
+    # External surface: honour the domain's MCP context policy so a disabled
+    # attachment is never handed to an MCP client.
+    policy = NodeContextService.resolve_context_policy(domain)
+    disabled = NodeContextService.context_feature_disabled
+
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
-        dataset = cls.get("dataset") or None
-        bridges = NodeContextService.enrich_bridge_targets(
-            cls.get("bridges") or [],
-            session_mgr=session_mgr,
-            settings=settings,
-            registry_catalog=registry_catalog,
-            registry_schema=registry_schema,
-            registry_volume=registry_volume,
+        dataset = None if disabled(policy, "dataset") else cls.get("dataset") or None
+        bridges = (
+            []
+            if disabled(policy, "bridges")
+            else NodeContextService.enrich_bridge_targets(
+                cls.get("bridges") or [],
+                session_mgr=session_mgr,
+                settings=settings,
+                registry_catalog=registry_catalog,
+                registry_schema=registry_schema,
+                registry_volume=registry_volume,
+            )
         )
-        actions = cls.get("actions") or []
+        actions = [] if disabled(policy, "actions") else cls.get("actions") or []
         items.append(
             ClassActionsItem(
                 name=cls.get("name", ""),

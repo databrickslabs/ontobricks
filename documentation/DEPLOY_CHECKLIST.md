@@ -122,7 +122,7 @@ existing Databricks app*.
 
 ---
 
-## 6. Registry DB upgrades (0.4 → 0.5 → 0.6 → 0.7)
+## 6. Registry DB upgrades (0.4 → 0.5 → 0.6 → 0.7 → 0.8)
 
 For **in-place upgrades** of an existing Lakebase registry, schema DDL must be applied **as the schema owner**. OntoBricks applies the same objects in four ways (pick one):
 
@@ -130,6 +130,7 @@ For **in-place upgrades** of an existing Lakebase registry, schema DDL must be a
 2. **`scripts/migrations/upgrade_0.4_to_0.5.sql`** — adds `domain_versions.status` + backfill from `mcp_enabled`
 3. **`scripts/migrations/upgrade_0.5_to_0.6.sql`** — collaborative tables, graph analytics, edit locks, change events
 4. **`scripts/migrations/upgrade_0.6_to_0.7.sql`** — generic scheduled-task columns on `schedules` / `schedule_runs` + unique-constraint swap
+5. **`scripts/migrations/upgrade_0.7_to_0.8.sql`** — `domains.mcp_policy` (per-domain MCP tool + context policy). No backfill: the `{}` default reproduces pre-0.8 behaviour
 
 Preflight reports **pending** or **stale** migration objects before deploy:
 
@@ -141,12 +142,12 @@ python3 scripts/_internal/_lakebase_preflight.py \
   --schema "$LAKEBASE_SCHEMA"
 ```
 
-Manual upgrade example (0.6 → 0.7):
+Manual upgrade example (0.7 → 0.8):
 
 ```bash
 psql "host=<endpoint> dbname=<datname> sslmode=require user=<you>" \
   -v reg_schema=<schema> \
-  -f scripts/migrations/upgrade_0.6_to_0.7.sql
+  -f scripts/migrations/upgrade_0.7_to_0.8.sql
 ```
 
 ---
@@ -207,3 +208,4 @@ make bootstrap-perms
 | `scripts/migrations/upgrade_0.4_to_0.5.sql` | Explicit 0.4→0.5 lifecycle migration |
 | `scripts/migrations/upgrade_0.5_to_0.6.sql` | Explicit 0.5→0.6 collaborative / analytics migration |
 | `scripts/migrations/upgrade_0.6_to_0.7.sql` | Explicit 0.6→0.7 generic scheduled-task migration |
+| `scripts/migrations/upgrade_0.7_to_0.8.sql` | Explicit 0.7→0.8 per-domain MCP policy migration |

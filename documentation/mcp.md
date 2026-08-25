@@ -48,6 +48,10 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 | `get_graphql_schema` | Returns the auto-generated GraphQL schema (SDL) for the selected domain — shows types, fields, and relationships |
 | `query_graphql` | Executes a GraphQL query against the selected domain's graph viewer with structured, nested results |
 
+The first four tools are **registry-level**: they run before a domain is
+resolved, so they are always exposed. The other seven are **domain-scoped**
+and can be switched off per domain — see [Per-domain MCP policy](#per-domain-mcp-policy).
+
 ### Tool Details
 
 #### `list_domains`
@@ -85,7 +89,21 @@ Returns a confirmation with domain status:
 Domain 'customer360' selected.
 View:  catalog.schema.triplestore
 Graph: customer360_graph
-Data:    Yes (12,030 triples)
+Data:  Yes (12,030 triples)
+
+You can now use list_entity_types and describe_entity.
+```
+
+When the domain's MCP policy switches tools off, selecting it also reports
+what will not be there — the client's tool list is updated at the same time:
+
+```
+Domain 'customer360' selected.
+View:  catalog.schema.triplestore
+Graph: customer360_graph
+Data:  Yes (12,030 triples)
+
+Not available for this domain: invoke_entity_action, query_graphql
 
 You can now use list_entity_types and describe_entity.
 ```
@@ -313,6 +331,91 @@ but `_selected_domain` is unchanged. Any subsequent `describe_entity`,
 GraphQL, or `list_entity_types` still runs on the origin domain. Prefer
 `select_domain(<target>)` whenever the user's question requires more
 than a lookup.
+
+## Per-domain MCP policy
+
+Each domain decides what it publishes over MCP, from **Domain → Information
+→ MCP**. A domain that has never been configured behaves exactly as before
+0.8: every tool exposed, every attachment surfaced normally.
+
+### Exposed tools
+
+The seven domain-scoped tools have one checkbox each. Unchecking one removes
+it from `tools/list` for any session that selects the domain, and refuses the
+call if a client tries it anyway.
+
+The four registry-level tools (`list_domains`, `select_domain`,
+`list_domain_versions`, `get_design_status`) are shown read-only. They run
+before a domain is resolved, so no per-domain policy can govern them —
+hiding `select_domain` would make the domain unusable *and* unrecoverable.
+
+### Ontology context
+
+`Datasets`, `Bridges` and `Actions` each take one of three states:
+
+| State | Effect |
+|---|---|
+| **Preferred** | The follow-up hint becomes a directive instruction ("ALWAYS follow these bridges…") instead of a neutral mention. Nothing is reordered and no payload changes |
+| **Normal** | Today's behaviour |
+| **Disabled** | The element is withheld from every MCP and external REST response |
+
+Disabling is enforced server-side, not by the MCP process: the element never
+leaves `/api/v1/digitaltwin/nodes/context` or `/api/v1/domain/classes`. The
+authoring UI is unaffected and always shows the ontology designer everything.
+
+> **Overlap to know about.** The `invoke_entity_action` **tool** and the
+> `Actions` **context element** are separate switches over the same feature.
+> Disabling the element also refuses invocation, even when the tool is still
+> checked — otherwise a client that already knew a function name could run it
+> after the names were hidden.
+
+### Switching domains switches the tool set
+
+The tool list is recomputed inside `select_domain`, using FastMCP's
+session-scoped component visibility, and the client receives a
+`ToolListChangedNotification` — no MCP server restart. Selecting a second
+domain resets the previous domain's rules first, so a tool hidden by domain A
+comes back in domain B.
+
+> **Concurrency limitation.** Visibility rules are per-session, but the
+> *selected domain* is not: `create_mcp_server()` runs once per process and
+> holds the selection in a module-level closure shared by every connection. If
+> two clients select different domains at the same time, the last
+> `select_domain` wins for both — and the call-time policy check follows that
+> same selection. This predates the policy and affects query results
+> identically, so it is not new, but it does mean the policy is only reliable
+> for one concurrent client per process. Single-client use (Playground,
+> Cursor, Claude Desktop) is unaffected.
+
+Clients that ignore the notification (or replay a cached list) can still emit
+a call for a hidden tool. Every domain-scoped tool therefore re-checks the
+policy on entry and returns a refusal naming the domain.
+
+### Storage
+
+The policy lives in the registry, in the `domains.mcp_policy` JSONB column,
+and is published on `GET /api/v1/domains`:
+
+```json
+{
+  "name": "customer360",
+  "description": "Customer 360 ontology",
+  "mcp_policy": {
+    "disabled_tools": ["query_graphql"],
+    "context": {"bridges": "preferred", "actions": "disabled"}
+  }
+}
+```
+
+Only non-default entries are stored, so an unconfigured domain is `{}`. The
+column sits on `domains`, not `domain_versions`: the policy is a property of
+the domain and applies to all of its versions.
+
+Upgrading an existing registry needs
+`scripts/migrations/upgrade_0.7_to_0.8.sql` (or `make bootstrap-lakebase`);
+the app also self-heals the column lazily.
+
+---
 
 ## Available Resources
 

@@ -90,6 +90,8 @@
 - **Project Selection**: Two-step workflow — `list_domains` to browse available graph viewers, `select_domain` to activate one.
 - **Entity Discovery**: `list_entity_types` and `describe_entity` provide human-readable text descriptions with BFS traversal.
 - **GraphQL via MCP**: `get_graphql_schema` and `query_graphql` tools let LLM agents introspect and query the typed GraphQL API.
+- **Per-Domain MCP Policy**: Each domain picks, in **Domain → Information → MCP**, which of the seven domain-scoped tools it publishes and how its ontology attachments (Datasets, Bridges, Actions) are surfaced — **Preferred** (the hint becomes a directive instruction), **Normal**, or **Disabled** (withheld from every MCP *and* external REST response). The four registry-level tools stay always-on, since they run before a domain is resolved. An unconfigured domain behaves exactly as before.
+- **Hot Tool-Set Switch**: The tool list is recomputed inside `select_domain` using FastMCP session-scoped visibility, so policy changes land without an MCP restart. Tools also re-check the policy on entry, so a stale cached tool list gets a refusal rather than a result. Note that the *selected domain* itself remains process-global in the MCP proxy (a pre-existing limitation), so the policy is reliable for one concurrent client per process.
 - **Databricks Playground**: Deployed as `mcp-ontobricks`, auto-discoverable by LLM agents in the Databricks Playground.
 - **Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client.
 

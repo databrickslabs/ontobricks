@@ -84,7 +84,12 @@ pytestmark = [
 _DOMAIN_NAME = os.environ.get("ONTOBRICKS_SCENARIO_DOMAIN", "testscenario1")
 _BUILD_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_BUILD_TIMEOUT", "420"))
 _RULES_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_RULES_TIMEOUT", "600"))
-_DQ_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_DQ_TIMEOUT", "300"))
+# SHACL validation resolves property URIs one at a time against the graph
+# (`SHACLService.resolve_prop_uri`), so the budget scales with the shape count,
+# not the triple count. The scenario's 117 checks measured 5m37s end to end,
+# which overran the former 300s budget while the run was at 99% — the task
+# itself completed normally. Aligned with `_RULES_TIMEOUT_S` for headroom.
+_DQ_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_DQ_TIMEOUT", "600"))
 _REASONING_TIMEOUT_S = int(os.environ.get("ONTOBRICKS_SCENARIO_REASONING_TIMEOUT", "420"))
 # Graph analysis is the only step that delegates to a Databricks Lakeflow job
 # (`ontobricks-<instance>-graph-analytics`), so its budget must cover cluster

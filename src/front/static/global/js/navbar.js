@@ -507,6 +507,32 @@ async function domainSave() {
 }
 
 /**
+ * Read the MCP tab into the persisted policy shape.
+ *
+ * Returns undefined when the tab is absent so a partial form cannot wipe a
+ * stored policy. Only non-default entries are emitted, mirroring the
+ * server-side coercion in back/core/mcp_tools.py.
+ */
+function buildMcpPolicy() {
+    const toolEls = document.querySelectorAll('.js-mcp-tool');
+    const contextEls = document.querySelectorAll('.js-mcp-context');
+    if (!toolEls.length && !contextEls.length) return undefined;
+
+    const policy = {};
+    const disabled = Array.from(toolEls)
+        .filter(el => !el.checked)
+        .map(el => el.dataset.toolName);
+    if (disabled.length) policy.disabled_tools = disabled;
+
+    const context = {};
+    contextEls.forEach(el => {
+        if (el.value && el.value !== 'normal') context[el.dataset.featureName] = el.value;
+    });
+    if (Object.keys(context).length) policy.context = context;
+    return policy;
+}
+
+/**
  * Build the ``/domain/info`` payload from the Information form.
  *
  * Single source of truth for both save entry points (the Information form's
@@ -547,6 +573,7 @@ function buildDomainInfoPayload() {
                 ? materializationEl.value : 'table')
             : undefined,
         version: versionEl ? versionEl.value : undefined,
+        mcp_policy: buildMcpPolicy(),
     };
 
     // Drop absent fields so a page without the full form cannot clobber

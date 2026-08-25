@@ -692,16 +692,17 @@ Unity Catalog
 
 ### Lakebase layout
 
-The Postgres schema (default `ontobricks_registry`) holds eight
+The Postgres schema (default `ontobricks_registry`) holds fifteen
 relational tables:
 
 | Table | Purpose |
 |---|---|
 | `registries` | One row per `(catalog, schema, volume)` triplet — scopes everything else |
 | `global_config` | Instance-wide settings (warehouse, emoji, base URI, …) as JSONB |
-| `domains` | Stable per-domain identity (UUID, name, base URI, description) |
+| `domains` | Stable per-domain identity (UUID, name, base URI, description) plus `mcp_policy` — a JSONB blob holding the [per-domain MCP policy](mcp.md#per-domain-mcp-policy) (which tools the domain publishes, how its ontology attachments are surfaced). Defaults to `{}`, which reproduces pre-0.8 behaviour, so no backfill is needed |
 | `domain_versions` | Per-version JSONB document; mirrors what `V{N}.json` used to hold |
 | `domain_permissions` | Per-domain ACL (replaces `.domain_permissions.json`) |
+| `domain_edit_locks` | Advisory per-domain edit locks for collaborative editing |
 | `schedules` | Active scheduled-build configuration |
 | `schedule_runs` | Ring-buffered run history per domain |
 | `build_runs` | Append-only build-run trace (all paths) keyed by `(domain_id, version)` for analytics; active build = latest successful run |
@@ -734,7 +735,8 @@ Domains are exported in a versioned JSON format:
     "info": { 
         "name": "My Domain", 
         "description": "...", 
-        "author": "..." 
+        "author": "...",
+        "mcp_policy": { /* per-domain MCP tool + context policy; {} when unconfigured */ }
     },
     "versions": {
         "1": {
@@ -745,6 +747,12 @@ Domains are exported in a versioned JSON format:
     }
 }
 ```
+
+`info` also carries the domain-level flags the registry needs to serve the
+domain: `mcp_enabled`, `status`, `review_quorum`, `graph_backend`,
+`lakehouse_materialization` and `mcp_policy`. The policy is re-validated on
+both export and import, so a hand-edited or older bundle can never inject an
+unknown tool name — unrecognised entries are dropped rather than rejected.
 
 ### What is NOT Saved
 

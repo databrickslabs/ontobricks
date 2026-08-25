@@ -18,6 +18,7 @@ def test_registry_migration_expectations_cover_bootstrap_ddl() -> None:
     """Keep preflight objects aligned with bootstrap-lakebase-perms Step 2b."""
     assert ("domain_versions", "status") in EXPECTED_COLUMNS
     assert ("domains", "review_quorum") in EXPECTED_COLUMNS
+    assert ("domains", "mcp_policy") in EXPECTED_COLUMNS
     assert ("schedules", "task_type") in EXPECTED_COLUMNS
     assert ("schedules", "target_key") in EXPECTED_COLUMNS
     assert ("schedules", "config") in EXPECTED_COLUMNS

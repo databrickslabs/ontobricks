@@ -551,12 +551,89 @@ Returns the domain registry location (catalog, schema, volume).
 
 List all domains that have at least one **PUBLISHED** version in the registry.
 
+**Response:**
+```json
+{
+    "success": true,
+    "domains": [
+        {
+            "name": "customer360",
+            "description": "Customer 360 ontology",
+            "mcp_policy": {
+                "disabled_tools": ["query_graphql"],
+                "context": {"bridges": "preferred", "actions": "disabled"}
+            }
+        },
+        {
+            "name": "finance",
+            "description": "Contracts and payments",
+            "mcp_policy": {}
+        }
+    ]
+}
+```
+
+`mcp_policy` is the domain's [per-domain MCP policy](mcp.md#per-domain-mcp-policy),
+authored in **Domain → Information → MCP**. Only non-default entries are
+stored, so `{}` means "every tool exposed, every ontology attachment surfaced
+normally" — the pre-0.8 behaviour. `disabled_tools` never contains a
+registry-level tool, and a missing `context` key defaults to `normal`.
+
+The MCP server reads this field to decide which tools to publish for the
+session; it is informational for other clients, since the disabling itself is
+also enforced server-side on the endpoints below.
+
 > **Lifecycle & API access.** Each domain version has a lifecycle status —
 > `DRAFT` → `IN-REVIEW` → `PUBLISHED`. The external API and MCP only serve data
 > for **PUBLISHED** versions; when no version is requested the **numeric-latest
 > PUBLISHED** version is used. Requesting a non-PUBLISHED version explicitly
 > (e.g. `domain_version=2`) returns an error. Multiple PUBLISHED versions may
 > coexist.
+
+---
+
+### Class attachments
+
+#### `GET /api/v1/domain/classes`
+
+Return per-class **dataset**, **bridge** and Unity Catalog **action** metadata
+for every class in the domain's published ontology, without loading the full
+OWL. This is what the MCP server caches on `select_domain` to build its
+`[Context]` blocks. Only non-empty values are included.
+
+**Parameters:**
+- `domain_name` (query, optional): Domain name in the registry (session domain if omitted)
+- `domain_version` (query, optional): Version to load (latest if omitted)
+- `registry_catalog` / `registry_schema` / `registry_volume` (query, optional): Registry overrides
+
+**Response:**
+```json
+{
+    "success": true,
+    "domain_name": "customer360",
+    "classes": [
+        {
+            "name": "Customer",
+            "uri": "https://ontobricks.com/ontology#Customer",
+            "dataset": {"fullName": "main.crm.customers", "key_column": "customer_id"},
+            "bridges": [
+                {"target_domain": "finance", "target_class_name": "Contract",
+                 "label": "Owns contracts",
+                 "target_domain_description": "Contracts and payments"}
+            ],
+            "actions": [
+                {"fullName": "main.crm.churn_score", "description": "Churn risk"}
+            ]
+        }
+    ]
+}
+```
+
+> **Policy filtering.** Attachments set to **Disabled** in the domain's MCP
+> policy are withheld here: `dataset` comes back `null`, `bridges` and
+> `actions` come back empty. Bridges are additionally filtered to targets that
+> are themselves API/MCP-visible. The authoring UI does not go through this
+> endpoint and always sees the full ontology.
 
 ---
 
@@ -700,6 +777,12 @@ function is executed here.
 - `dataset_row_limit` (query, optional): Max rows to return, 1–20 (default: 5)
 - `follow_bridges` (query, optional): Traverse bridge target domains
 
+> **Policy filtering.** Each attachment set to **Disabled** in the domain's
+> [MCP policy](mcp.md#per-domain-mcp-policy) is withheld from the response, and
+> the work behind it is skipped: a disabled dataset is not queried even with
+> `fetch_dataset_rows=true`, and disabled bridges are not traversed even with
+> `follow_bridges=true`. The flags are simply ignored rather than raising.
+
 #### `POST /api/v1/digitaltwin/nodes/action`
 
 Invoke one of the class's Unity Catalog function actions on a node. The function
@@ -716,6 +799,12 @@ the ontology is the allow-list. Requests for any other function are rejected
 with `success: false` and nothing is executed. Table-valued functions run as
 `SELECT * FROM fn('<id>')`; scalar functions run as
 `SELECT fn('<id>') AS result`.
+
+> **Policy filtering.** If the domain sets **Actions** to **Disabled**, every
+> invocation is refused here, whatever the function name — a caller that
+> learned a name before the attachment was disabled cannot keep using it. This
+> is deliberately independent of whether the `invoke_entity_action` MCP tool is
+> still published.
 
 ---
 
@@ -2300,7 +2389,18 @@ GET /api/v1/domains
 
 List all domains that have at least one PUBLISHED version in the registry. The
 API/MCP serves the numeric-latest PUBLISHED version (see the lifecycle note
-above).
+above). Each entry carries the domain's `mcp_policy`.
+
+#### Class attachments
+
+```http
+GET /api/v1/domain/classes
+```
+
+**Query Parameters:** `domain_name`, `domain_version` (both optional)
+
+Per-class dataset, bridge and UC action metadata, filtered by the domain's MCP
+context policy.
 
 #### Versions
 

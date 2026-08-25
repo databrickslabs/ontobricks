@@ -76,7 +76,7 @@ domains/<folder>/V2/V2.json
 
 | File | Included? | Reason |
 |------|-----------|--------|
-| `V{n}.json` | Yes | Ontology, mappings, design layout, metadata |
+| `V{n}.json` | Yes | Ontology, mappings, design layout, metadata — including the domain's `mcp_policy` (see below) |
 | `V{n}/documents/**` | Yes | User-uploaded files attached to the version |
 | `.domain_permissions.json` | Optional (`--include-permissions`) | Role assignments for the domain |
 | `manifest.json` | Yes | Schema version, source env, per-domain/version inventory |
@@ -88,6 +88,18 @@ The resulting archive is named:
 ```
 ontobricks-registry-<source_catalog>.<source_schema>.<source_volume>-<YYYYMMDD-HHMMSS>.zip
 ```
+
+> **MCP policy travels with the domain.** The `info` block of each `V{n}.json`
+> carries `mcp_policy`, so a domain keeps the tools and ontology attachments it
+> publishes when promoted to another environment. It is **domain-level**, not
+> per-version — it is written to the `domains` row, so importing several
+> versions of one domain leaves the last one written in effect. It is
+> re-validated on both export and import: unknown tool names, registry-level
+> tools and unknown context features are dropped rather than rejected, so a
+> bundle produced by a newer OntoBricks still imports cleanly into an older
+> one. A bundle from before 0.8 has no `mcp_policy` and imports as `{}` —
+> every tool exposed, every attachment normal. See
+> [Per-domain MCP policy](mcp.md#per-domain-mcp-policy).
 
 ## Authentication
 

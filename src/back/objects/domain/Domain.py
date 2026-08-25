@@ -44,6 +44,12 @@ from back.core.helpers import (
     run_blocking,
 )
 from back.core.logging import get_logger
+from back.core.mcp_tools import (
+    MCP_CONTEXT_FEATURES,
+    MCP_DOMAIN_TOOLS,
+    MCP_REGISTRY_TOOLS,
+    coerce_mcp_policy,
+)
 from back.objects.registry import RegistryService
 from back.objects.registry.registry_cache import invalidate_registry_cache
 from back.objects.registry.version_lifecycle import is_editable
@@ -238,6 +244,7 @@ class Domain:
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "status": self._s.info.get("status", "DRAFT"),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
@@ -374,6 +381,12 @@ class Domain:
                         self._s.info.get("review_quorum", 1),
                     )
                 ),
+                "mcp_policy": coerce_mcp_policy(
+                    data.get(
+                        "mcp_policy",
+                        self._s.info.get("mcp_policy", {}),
+                    )
+                ),
                 "graph_backend": self._coerce_graph_backend(
                     data.get(
                         "graph_backend",
@@ -434,6 +447,7 @@ class Domain:
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
@@ -545,6 +559,7 @@ class Domain:
             "llm_endpoint": self._s.info.get("llm_endpoint", ""),
             "mcp_enabled": self._s.info.get("mcp_enabled", False),
             "review_quorum": self._s.info.get("review_quorum", 1),
+            "mcp_policy": coerce_mcp_policy(self._s.info.get("mcp_policy")),
             "graph_backend": self._coerce_graph_backend(
                 self._s.info.get("graph_backend")
             ),
@@ -552,6 +567,11 @@ class Domain:
             "lakehouse_materialization": self._coerce_lakehouse_materialization(
                 self._s.info.get("lakehouse_materialization")
             ),
+            # Catalog for the MCP tab, so the template never restates the
+            # tool / context lists that live in back.core.mcp_tools.
+            "mcp_domain_tools": list(MCP_DOMAIN_TOOLS),
+            "mcp_registry_tools": sorted(MCP_REGISTRY_TOOLS),
+            "mcp_context_features": list(MCP_CONTEXT_FEATURES),
             "delta": delta,
             "has_ontology": len(self._s.get_classes()) > 0,
             "has_mapping": len(self._s.get_entity_mappings()) > 0,

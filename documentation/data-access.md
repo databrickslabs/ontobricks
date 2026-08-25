@@ -168,13 +168,25 @@ App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 | `list_domains` | `GET /api/v1/domains` | REST | UC Volume listing |
 | `list_domain_versions` | `GET /api/v1/domain/versions` | REST | UC Volume listing |
 | `get_design_status` | `GET /api/v1/domain/design-status` | REST | Python aggregator |
-| `select_domain` | `GET /api/v1/digitaltwin/status` | REST | DeltaFlatStore status (Spark SQL) or GraphDB status |
+| `select_domain` | `GET /api/v1/digitaltwin/status` + `GET /api/v1/domain/classes` | REST | DeltaFlatStore status (Spark SQL) or GraphDB status; class attachments cached for `[Context]` blocks |
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |
+| `get_entity_context` | `GET /api/v1/digitaltwin/nodes/context` | REST | Class resolution + optional **Spark SQL** dataset read and bridge traversal |
+| `invoke_entity_action` | `POST /api/v1/digitaltwin/nodes/action` | REST | **Unity Catalog function** call via SQL warehouse |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
 | `get_graphql_schema` | `GET /graphql/{domain}/schema` | **GraphQL** | `GraphQLSchemaBuilder` (no DB hit; SDL only) |
 | `query_graphql` | `POST /graphql/{domain}` | **GraphQL** | Resolvers → SPARQL → **Spark SQL** |
 | `ontobricks://*` resources | various | REST / GraphQL | Same as the equivalent tools |
+
+> **Per-domain policy.** The first three tools are registry-level and always
+> available. The rest are domain-scoped: a domain can hide any of them from
+> **Domain → Information → MCP**, and can set its dataset / bridges / actions
+> attachments to *disabled*. Because the MCP server is a proxy, the disabling
+> is enforced **at the endpoints above**, not in the proxy — `nodes/context`
+> and `domain/classes` omit the element, and `nodes/action` refuses. Hiding a
+> tool is presentation on top of that, so a stale client that calls a hidden
+> tool anyway gets a refusal instead of data. See
+> [Per-domain MCP policy](mcp.md#per-domain-mcp-policy).
 
 > **Note.** MCP and the external REST/GraphQL API only see versions whose
 > lifecycle status is **PUBLISHED** — they default to the numeric-latest

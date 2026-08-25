@@ -76,6 +76,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load initial data
     loadDomainInfo();
 
+    initMcpPolicyTab();
+
     var domainFileInput = document.getElementById('domainFileInput');
     if (domainFileInput) {
         domainFileInput.addEventListener('change', function () {
@@ -108,6 +110,7 @@ async function loadDomainInfo() {
             if (descEl) descEl.value = data.info.description || '';
             if (authorEl) authorEl.value = data.info.author || '';
             if (quorumEl) quorumEl.value = data.info.review_quorum || 1;
+            applyMcpPolicy(data.info.mcp_policy);
             
             if (authorEl && !authorEl.value) {
                 loadCurrentUserAsAuthor(authorEl);
@@ -508,6 +511,54 @@ async function saveDomainFromSettings() {
         await saveDomainInfo();
         showNotification('Domain info saved. Use the menu "Save Domain" to persist to Unity Catalog.', 'info', 4000);
     }
+}
+
+/**
+ * Wire the MCP tab's "select all" checkbox to the per-tool checkboxes.
+ *
+ * The checkboxes themselves are rendered server-side from the catalog in
+ * back/core/mcp_tools.py; only the tri-state summary is computed here.
+ */
+function initMcpPolicyTab() {
+    const selectAll = document.getElementById('mcpToolsSelectAll');
+    const tools = Array.from(document.querySelectorAll('.js-mcp-tool'));
+    if (!selectAll || !tools.length) return;
+
+    selectAll.addEventListener('change', () => {
+        tools.forEach(el => { el.checked = selectAll.checked; });
+        selectAll.indeterminate = false;
+    });
+    tools.forEach(el => el.addEventListener('change', syncMcpSelectAll));
+    syncMcpSelectAll();
+}
+
+/** Refresh the "select all" tri-state from the individual tool checkboxes. */
+function syncMcpSelectAll() {
+    const selectAll = document.getElementById('mcpToolsSelectAll');
+    const tools = Array.from(document.querySelectorAll('.js-mcp-tool'));
+    if (!selectAll || !tools.length) return;
+    const checked = tools.filter(el => el.checked).length;
+    selectAll.checked = checked === tools.length;
+    selectAll.indeterminate = checked > 0 && checked < tools.length;
+}
+
+/**
+ * Render a persisted MCP policy into the tab.
+ *
+ * Keeps the tab in sync with the session domain after /domain/info reloads
+ * (e.g. switching domains), which would otherwise leave the server-rendered
+ * markup showing the previous domain's policy.
+ */
+function applyMcpPolicy(policy) {
+    const disabled = (policy && policy.disabled_tools) || [];
+    const context = (policy && policy.context) || {};
+    document.querySelectorAll('.js-mcp-tool').forEach(el => {
+        el.checked = !disabled.includes(el.dataset.toolName);
+    });
+    document.querySelectorAll('.js-mcp-context').forEach(el => {
+        el.value = context[el.dataset.featureName] || 'normal';
+    });
+    syncMcpSelectAll();
 }
 
 /**

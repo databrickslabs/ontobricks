@@ -252,6 +252,15 @@ The **Ontology Designer** view (**Ontology → Designer**) includes a floating A
 
 OntoBricks exposes the graph viewer to LLM agents via the [Model Context Protocol](https://modelcontextprotocol.io/). Deploy the companion `mcp-ontobricks` app and connect from Cursor, Claude Desktop, or the Databricks Playground.
 
+Each domain then decides **what it publishes**, from **Domain → Information →
+MCP**: which of the seven domain-scoped tools it exposes, and whether its
+datasets, bridges and class actions are *preferred* (the hint the model reads
+becomes a directive), *normal*, or *disabled* (withheld from every MCP and
+external REST response). Registry-level tools stay always-on, the tool set is
+recomputed when the agent calls `select_domain` (no restart), and an
+unconfigured domain behaves exactly as before. See
+[`documentation/mcp.md`](documentation/mcp.md#per-domain-mcp-policy).
+
 ### Registry OBX Export / Import (UI)
 
 Export one or more domains directly from **Registry → Browse** to a portable

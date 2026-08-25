@@ -812,7 +812,7 @@ The **Global** tab in the Domain Information section contains the main domain se
 | **Base URI** | The base namespace for all ontology entities. By default, auto-generated from `Settings → Default Base URI Domain / DomainName#`. Toggle the **Custom** switch to enter a custom URI. |
 | **Description** | Free-text description of the domain. |
 | **Author** | Automatically pre-filled with the current Databricks user email. Editable. |
-| **API / MCP** | Toggle **Expose via API & MCP** to make this domain visible through the REST API (`/api/v1/domains`) and the MCP server. Disabled by default. |
+| **API / MCP** | Toggle **Expose via API & MCP** to make this domain visible through the REST API (`/api/v1/domains`) and the MCP server. Disabled by default. Once exposed, the [MCP tab](#mcp-tab) narrows down which tools and ontology attachments the domain actually publishes. |
 
 #### Triple Store Tab
 
@@ -878,6 +878,62 @@ per query than rebuild, or when duplicating the triples is not acceptable for
 governance or cost reasons. Keep the default when the graph is queried
 interactively — Explorer, GraphQL and reasoning all read through `…_graph`, and
 each of those reads inherits the mapping query's cost in view-only mode.
+
+#### MCP Tab
+
+Controls what an MCP client sees **after it selects this domain**. The **API /
+MCP** toggle on the Global tab decides *whether* the domain is reachable at
+all; this tab decides *how much of it* is published once it is. Nothing here
+affects the authoring UI, which always shows the full ontology.
+
+A domain that has never been configured keeps the pre-0.8 behaviour: every
+tool exposed, every attachment surfaced normally.
+
+**Exposed Tools** — one checkbox per domain-scoped tool (`list_entity_types`,
+`describe_entity`, `get_status`, `get_graphql_schema`, `query_graphql`,
+`get_entity_context`, `invoke_entity_action`), with a **Select all** master
+checkbox. Unchecking a tool removes it from the client's tool list for any
+session on this domain, and refuses the call if a client tries it from a
+stale, cached list.
+
+The four registry-level tools (`list_domains`, `select_domain`,
+`list_domain_versions`, `get_design_status`) are listed read-only underneath.
+They run *before* a domain is resolved, so no per-domain policy can govern
+them — hiding `select_domain` would make the domain both unusable and
+unrecoverable.
+
+**Ontology Context** — the three attachments each take one of three states:
+
+| State | Effect |
+|-------|--------|
+| **Preferred** | The follow-up hint the model reads becomes a directive instruction (*"ALWAYS follow these bridges…"*) instead of a neutral mention. Nothing is reordered and no payload changes. |
+| **Normal** | Default behaviour. |
+| **Disabled** | The element is withheld from every MCP and external REST response. |
+
+| Attachment | What it covers |
+|------------|----------------|
+| **Datasets** | The Unity Catalog table or view linked to a class. |
+| **Bridges** | Cross-domain links declared between ontology classes. |
+| **Actions** | Unity Catalog functions declared on a class. |
+
+> **The Actions overlap.** The `invoke_entity_action` *tool* and the
+> **Actions** *context element* are two switches over the same feature.
+> Setting the element to **Disabled** also refuses invocation, even when the
+> tool stays checked — otherwise a client that already learned a function name
+> could keep running it after the names stopped being advertised.
+
+Use **Preferred** to steer an agent that under-uses a genuinely useful
+attachment, and **Disabled** to keep a sensitive dataset, a private bridge
+target, or a side-effecting function out of the model's reach entirely.
+Disabling is enforced server-side, so it holds for direct REST callers too,
+not only for the MCP process.
+
+The policy is a **domain-level** setting, not a per-version one: like the
+review quorum, it lives on the domain itself and applies to every one of its
+versions. Editing it while V2 is loaded also changes what V1 publishes, and
+saving any version persists it. It travels with the domain through exports and
+imports. See [Per-domain MCP policy](mcp.md#per-domain-mcp-policy) for the
+wire format.
 
 ### Saving Domains
 
@@ -1181,6 +1237,10 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 | `query_graphql` | Execute a GraphQL query with structured results |
 | `get_status` | Triple store diagnostic (view, graph, count) |
 
+The first four are **registry-level** — they run before a domain is resolved,
+so they are always available. The other seven are **domain-scoped** and each
+domain chooses which of them to publish, from its [MCP tab](#mcp-tab).
+
 ### Using in Databricks Playground
 
 1. Deploy the MCP server as `mcp-ontobricks` (see [Deployment Guide](deployment.md))
@@ -1196,7 +1256,17 @@ Domains must have the **API / MCP** flag enabled to be visible through the MCP s
 2. Toggle **Expose via API & MCP** to ON
 3. Save the domain
 
-See the [MCP Server documentation](mcp.md) for full details including local usage and client configuration.
+### Tailoring what a domain publishes
+
+Exposure is all-or-nothing; what happens next is not. Open **Domain >
+Information > MCP** to choose which of the seven domain-scoped tools the
+domain publishes, and whether datasets, bridges and actions are **Preferred**,
+**Normal** or **Disabled**. The tool list is recomputed when the client calls
+`select_domain`, so changes land without restarting the MCP server, and a tool
+hidden by one domain comes back when the agent hops to another.
+
+See the [MCP tab](#mcp-tab) for the full description of each control, and the
+[MCP Server documentation](mcp.md) for local usage and client configuration.
 
 ---
 

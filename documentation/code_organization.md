@@ -114,8 +114,23 @@ back/core/
 ├── industry/         <- Standard industry ontology importers (CDISC, FIBO, IOF)
 ├── graph_analysis/   <- Community detection (NetworkX backend)
 ├── reasoning/        <- OWL 2 RL, SWRL, decision tables, SPARQL rules, aggregates
-└── sqlwizard/        <- LLM-assisted SQL generation
+├── sqlwizard/        <- LLM-assisted SQL generation
+├── mcp_tools.py      <- Catalog of the configurable MCP surface + policy coercion
+└── query_limits.py   <- Shared query/row caps
 ```
+
+The two flat modules are deliberately not packages: they hold constants and
+pure functions with no state and no subcomponents.
+
+**`mcp_tools.py`** owns the single definition of what a domain can configure
+over MCP — the registry-level tools that are always exposed, the domain-scoped
+tools that are not, the three ontology attachments, and their modes — plus
+`coerce_mcp_policy()`, which normalizes any persisted or user-submitted blob
+(dropping unknown or registry-level entries, never raising). The Domain
+Information MCP tab, the domain service and the external REST contract all
+resolve the surface here so they cannot drift. The MCP server process
+deliberately does **not** import it: it only ever applies a policy it received
+over REST, and the two packages cannot import each other.
 
 ### 2.6 API layer (`src/api/`)
 
@@ -241,7 +256,8 @@ Defined in `api/routers/domains.py`. Representative paths:
 
 | Method | Path | Purpose (summary) |
 |--------|------|-------------------|
-| GET | `/api/v1/domains` | List MCP-exposed registry domains |
+| GET | `/api/v1/domains` | List MCP-exposed registry domains, each with its `mcp_policy` |
+| GET | `/api/v1/domain/classes` | Per-class dataset / bridge / action metadata, filtered by the domain's MCP context policy |
 | GET | `/api/v1/domain/versions`, `/domain/design-status` | Versions and design readiness |
 | GET | `/api/v1/domain/ontology`, `/api/v1/domain/r2rml`, `/api/v1/domain/sparksql` | Serialized design artifacts |
 
@@ -331,6 +347,8 @@ MCP has **no Jinja routes**; "navigation" is **tool choice** (e.g. `list_domains
 - **Auth alignment:** In Databricks mode, MCP identity may differ from an end-user browser session; registry and domain visibility follow **OAuth M2M / SP** permissions on UC objects.  
 - **Configuration:** Registry location must match the main app's bound volume expectations to avoid 404s or stale paths (see registry helpers in the main codebase).  
 - **Health:** `combined_app` exposes a small **`GET /`** JSON health object (service name, `ontobricks_url`, warehouse, registry display).
+- **Per-domain policy:** each domain's `mcp_policy` arrives on `GET /api/v1/domains` and is cached per domain name. `select_domain` calls `ctx.reset_visibility()` then `ctx.disable_components()`, so the *visibility rules* are session-scoped and no restart is needed. Because the proxy holds no authority, every domain-scoped tool also re-checks the policy on entry, and the real withholding happens in the main app's endpoints.
+- **Process-global selection (limitation):** `create_mcp_server()` is called once per process, so `_selected_domain`, `_domain_policy` and `_class_actions` are closures shared by every session. Concurrent clients on different domains therefore share one selection — pre-existing behaviour that affects query routing as much as the policy check. Making the selection session-scoped is the prerequisite for true multi-client isolation.
 
 ---
 
