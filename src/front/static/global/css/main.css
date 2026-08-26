@@ -442,8 +442,8 @@ body {
    Knowledge Graph tabs plus the Domain dropdown.
    ========================================================================== */
 .ob-subnav {
-    background-color: var(--db-subnav-bg);
-    border-bottom: 1px solid var(--db-subnav-border);
+    background: transparent;
+    border-bottom: 0;
     padding: 0;
     position: relative;
     z-index: 1040;
@@ -456,30 +456,47 @@ body {
 
 .ob-subnav-nav {
     display: flex;
-    align-items: stretch;
+    align-items: center;
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 0.35rem 0;
     gap: 0;
+}
+
+.ob-subnav-workspaces {
+    display: flex;
+    align-items: center;
+}
+
+.ob-subnav-workspace-list {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    margin: 0;
+    padding: 0.2rem;
+    gap: 0.125rem;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
 }
 
 .ob-subnav-item {
     display: flex;
-    align-items: stretch;
+    align-items: center;
 }
 
 .ob-subnav-link {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.45rem 0.85rem;
+    padding: 0.3rem 0.7rem;
     font-size: 0.8125rem;
     color: var(--db-text-secondary);
     text-decoration: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
+    border: 0;
+    border-radius: calc(var(--db-radius-control) - 2px);
     white-space: nowrap;
-    transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .ob-subnav-link .bi {
@@ -488,17 +505,22 @@ body {
 
 .ob-subnav-link:hover {
     color: var(--db-text);
-    border-bottom-color: var(--db-border);
-    background: var(--db-hover-warm);
+    background: var(--db-hover-indigo);
     text-decoration: none;
+}
+
+.ob-subnav-link:focus-visible {
+    color: var(--db-text);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: var(--db-focus-ring);
 }
 
 .ob-subnav-link.active {
     color: var(--db-primary-darker);
-    font-weight: 600;
-    border-bottom-color: var(--db-primary);
+    font-weight: 700;
     background: var(--db-primary-light);
-    border-radius: 0;
+    border-radius: calc(var(--db-radius-control) - 2px);
 }
 
 .ob-subnav-link.nav-disabled {
@@ -587,12 +609,13 @@ body {
     display: none;
 }
 
-/* Vertical separator between tabs and Domain dropdown */
+/* Separator between Domain context and the remaining workspace targets. */
 .ob-subnav-divider {
     width: 1px;
+    height: 1rem;
     background-color: var(--db-border);
-    margin: 0.3rem 0.4rem;
-    align-self: stretch;
+    margin: 0 0.3rem;
+    align-self: center;
 }
 
 /* Resume Editing button — L2 subnav, left of Save, when the edit lease expired */
@@ -625,9 +648,9 @@ body {
     gap: 0.3rem;
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
-    color: var(--db-text);
-    background-color: var(--db-surface-warm);
-    border: 1px solid var(--db-navbar-border);
+    color: var(--db-on-primary);
+    background-color: var(--db-primary);
+    border: 1px solid var(--db-primary);
     border-radius: var(--db-radius-control);
     text-decoration: none;
     white-space: nowrap;
@@ -635,8 +658,9 @@ body {
 }
 
 .ob-subnav-save-btn:hover {
-    background-color: var(--db-primary);
-    color: #fff;
+    background-color: var(--db-primary-dark);
+    border-color: var(--db-primary-dark);
+    color: var(--db-on-primary);
     text-decoration: none;
 }
 
@@ -664,8 +688,8 @@ body {
 }
 
 .ob-subnav-switch-btn:hover {
-    background-color: var(--db-primary);
-    color: #fff;
+    background-color: var(--db-hover-indigo);
+    color: var(--db-text);
     text-decoration: none;
 }
 
@@ -683,7 +707,7 @@ body {
     margin-left: 0.4rem;
     padding: 0.25rem 0.7rem;
     font-size: 0.8rem;
-    color: var(--db-text);
+    color: var(--db-status-danger);
     background-color: var(--db-surface-warm);
     border: 1px solid var(--db-navbar-border);
     border-radius: var(--db-radius-control);
@@ -693,8 +717,9 @@ body {
 }
 
 .ob-subnav-close-btn:hover {
-    background-color: var(--bs-danger, #dc3545);
-    color: #fff;
+    background-color: var(--db-status-danger-soft-bg);
+    border-color: var(--db-status-danger);
+    color: var(--db-status-danger);
     text-decoration: none;
 }
 

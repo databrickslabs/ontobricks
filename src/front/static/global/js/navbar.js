@@ -75,6 +75,8 @@ function disableCurrentSubnavDropdown(toggle) {
     toggle.removeAttribute('data-bs-toggle');
     toggle.removeAttribute('aria-expanded');
     toggle.removeAttribute('role');
+    toggle.setAttribute('aria-current', 'page');
+    toggle.addEventListener('click', event => event.preventDefault());
     if (item) {
         item.classList.remove('dropdown');
         item.classList.add('is-current');

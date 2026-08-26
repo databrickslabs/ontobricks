@@ -428,16 +428,15 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 - Revealed by `updateDomainMenuVisibility(true)` in `navbar.js` when
   `hasDomain` becomes true (domain has a name or content in session).
 - Layout (left → right inside `.ob-subnav-nav`):
-  1. **Domain dropdown** (`#subnavDomainDropdown`) — all domain sub-sections.
-  2. A `.ob-subnav-divider`.
-  3. **Ontology dropdown** (`#subnavOntologyDropdown`).
-  4. **Mapping dropdown** (`#subnavMappingDropdown`).
-  5. **Knowledge Graph dropdown** (`#subnavKgDropdown`).
-  6. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
-  7. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
-  8. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
-  9. **Switch Version button** (`.ob-subnav-switch-btn`).
-  10. **Close Domain button** (`.ob-subnav-close-btn`).
+  1. **Workspace segmented control** (`.ob-subnav-workspaces` containing
+     `.ob-subnav-workspace-list`): Domain, divider, Ontology, Mapping, and
+     Knowledge Graph. The current workspace is a static `aria-current="page"`
+     target; only the other workspace targets retain Bootstrap dropdowns.
+  2. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
+  3. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
+  4. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
+  5. **Switch Version button** (`.ob-subnav-switch-btn`).
+  6. **Close Domain button** (`.ob-subnav-close-btn`).
 - The three tab toggles (Ontology/Mapping/KG) do **not** carry
   `nav-requires-domain`. They are enabled whenever the subnav is
   visible. Specific dropdown items that truly need a UC-saved domain
@@ -445,9 +444,12 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 - `--ob-chrome-height` = navbar height + subnav height (subnav already
   contains the breadcrumb). Updated by `_updateChromeHeight()` in
   `breadcrumb.js` and called from `updateDomainMenuVisibility`.
-- Visual contract: warm L2 surface, square selected L2 tabs (no rounded
-  corners) with `--db-primary-light` fill and indigo text, matching
-  Knowledge Graph / Explorer right-panel tabs. L1 and L2 dropdown items
+- Visual contract: the L2 row is transparent with no full-width bottom
+  border. Domain / Ontology / Mapping / Knowledge Graph sit in one compact
+  white segmented control (`--db-surface-warm`, one-pixel `--db-border`,
+  `--db-radius-control`). The selected workspace uses
+  `--db-primary-light` fill, `--db-primary-darker` text, and no dropdown;
+  non-selected workspaces retain their dropdowns. L1 and L2 dropdown items
   use the same hover as the left sidebar (`--db-hover-indigo` well,
   `9px` radius) — not a solid indigo invert, not a grey well. L1/L2
   structure, order, and ownership are immutable.
@@ -464,7 +466,7 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 | Level | Token | Value |
 |-------|-------|-------|
 | L1 navbar background | `--db-navbar-bg` | `#FFFFFF` |
-| L2 subnav background | `--db-subnav-bg` | `#F7F6F4` |
+| L2 workspace control | `--db-surface-warm` + `--db-border` | white segmented surface on the transparent row |
 | Breadcrumb strip | `.ob-subnav-breadcrumb-wrap` | muted text + one-pixel left separator |
 
 **New Domain flow**

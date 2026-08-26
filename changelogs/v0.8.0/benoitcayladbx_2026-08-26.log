@@ -1031,3 +1031,48 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5441 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
 
+## Segment the level 2 workspace navigation
+
+Context: The level 2 navigation used a full-width warm strip and baseline that
+felt disconnected from the application's compact Clarity controls. The
+approved treatment exposes the page canvas and groups workspace navigation
+inside a self-contained segmented control.
+
+Changes:
+
+1. `src/front/templates/base.html`
+   Grouped Domain, Ontology, Mapping, and Knowledge Graph in a semantic
+   workspace list while preserving breadcrumb and domain action order.
+2. `src/front/static/global/css/main.css`
+   Removed the L2 row background and bottom border, added the white segmented
+   workspace control, and aligned selected, focus, Save, and Close states with
+   shared design tokens.
+3. `src/front/static/global/js/navbar.js`
+   Made the active workspace non-navigating and exposed `aria-current="page"`
+   while retaining dropdown behavior on inactive workspaces.
+4. `tests/units/front/test_segmented_subnav_contract.py`
+   Added contracts for transparent chrome, segmented structure, inactive
+   dropdown preservation, active dropdown removal, and mobile overflow safety.
+5. `tests/units/front/test_clarity_design_contract.py`
+   Updated the L2 active-state contract for the rounded segmented treatment.
+6. `.cursor/11-frontend-design.mdc`
+   Documented the transparent L2 row, segmented workspace control, and
+   dropdown behavior.
+7. `documentation/superpowers/plans/2026-08-26-level-2-navbar-segmented.md`
+   Recorded the TDD implementation and verification plan.
+
+Modified files:
+- `src/front/templates/base.html`
+- `src/front/static/global/css/main.css`
+- `src/front/static/global/js/navbar.js`
+- `tests/units/front/test_segmented_subnav_contract.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `.cursor/11-frontend-design.mdc`
+- `documentation/superpowers/plans/2026-08-26-level-2-navbar-segmented.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py::test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection tests/units/front/test_clarity_design_contract.py::test_navbar_dropdown_hover_matches_sidebar` → 13 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5448 passed, 289 skipped, 6 deselected, 1 xfailed, 3 failed. The failures are pre-existing worktree contracts for unfinished sidebar/ontology viewport and inset changes, outside this L2 navigation change.
+- Browser verification at 1600×1000 and 390×844 → passed; inactive dropdowns overlay content, the active workspace does not open a dropdown, and mobile has no horizontal overflow.
+

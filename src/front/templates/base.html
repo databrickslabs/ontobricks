@@ -262,6 +262,8 @@
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
         <div class="container-fluid">
             <ul class="ob-subnav-nav">
+                <li class="ob-subnav-workspaces">
+                    <ul class="ob-subnav-workspace-list">
                 {% if domain_m.v %}
                 <li class="ob-subnav-item dropdown">
                     <a class="ob-subnav-link dropdown-toggle" href="{{ domain_m.v.route }}" id="subnavDomainDropdown" role="button"
@@ -365,6 +367,8 @@
                     </ul>
                 </li>
                 {% endif %}
+                    </ul>
+                </li>
                 <!-- Flex spacer — always pushes breadcrumb + Save button to the right -->
                 <li class="ob-subnav-flex-spacer" aria-hidden="true"></li>
 

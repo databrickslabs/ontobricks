@@ -208,12 +208,12 @@ def test_designer_canvas_selection_uses_clarity_indigo():
         assert any("--db-primary" in block for block in blocks), selector
 
 
-def test_main_css_l2_and_nav_tabs_use_square_indigo_soft_selection():
+def test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection():
     css = _read(MAIN_CSS)
     assert re.search(
         r"\.ob-subnav-link\.active\s*\{"
         r"[^}]*background\s*:\s*var\(--db-primary-light\)\s*;"
-        r"[^}]*border-radius\s*:\s*0\s*;",
+        r"[^}]*border-radius\s*:\s*calc\(var\(--db-radius-control\)\s*-\s*2px\)\s*;",
         css,
         flags=re.DOTALL,
     )
