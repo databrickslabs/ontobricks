@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <!-- Mapping page specific styles -->
+<link rel="stylesheet" href="{{ url_for('static', filename='ontology/css/ontology-shared-panels.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/mapping.css') }}?v={{ asset_version }}">
 <!-- Mapping module styles (extracted from partials) -->
 <link rel="stylesheet" href="{{ url_for('static', filename='mapping/css/mapping-design.css') }}?v={{ asset_version }}">

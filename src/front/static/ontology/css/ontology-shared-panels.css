@@ -56,6 +56,14 @@
     box-shadow: none;
 }
 
+/* Vertical split shell variant for Mapping Designer (canvas over detail panel) */
+.ob-split-shell--column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0;
+}
+
 /* Content pane — same framing as .shared-detail-panel */
 .ob-split-pane {
     background: #fff;
@@ -101,6 +109,20 @@
     background: var(--db-border);
     border-radius: 2px;
     transition: background 0.15s ease;
+}
+
+.ob-split-shell--column > .detail-panel-resize-handle {
+    width: 100%;
+    height: 8px;
+    cursor: row-resize;
+    /* Override the row-split handle's order:998 so DOM order wins:
+       canvas, handle, panel. */
+    order: 0;
+}
+
+.ob-split-shell--column > .detail-panel-resize-handle .resize-handle-bar {
+    width: 40px;
+    height: 3px;
 }
 
 .detail-panel-resize-handle:hover .resize-handle-bar,
@@ -249,6 +271,26 @@
     border-bottom-color: var(--db-primary);
     border-radius: 0;
     font-weight: 600;
+}
+
+/* Square tabs inside the framed split pane — the card already carries
+   `--db-radius-card`. Edge rounding from `.ob-tabs` would double-round. */
+.shared-detail-panel .form-tab-link,
+.shared-detail-panel .form-tab-link.active {
+    border-radius: 0;
+}
+
+.shared-detail-panel .nav-tabs.ob-tabs,
+.mapping-right-panel .nav-tabs.ob-tabs {
+    border-radius: 0;
+}
+
+.shared-detail-panel .nav-tabs.ob-tabs .nav-item:first-child .nav-link.active,
+.shared-detail-panel .nav-tabs.ob-tabs .nav-item:last-child .nav-link.active,
+.mapping-right-panel .nav-tabs.ob-tabs .nav-item:first-child .nav-link.active,
+.mapping-right-panel .nav-tabs.ob-tabs .nav-item:last-child .nav-link.active {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
 }
 
 .form-tab-pane {

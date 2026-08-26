@@ -29,6 +29,9 @@
                 <button class="btn btn-outline-secondary" id="mappingMapResetView" title="Reset View" aria-label="Reset view">
                     <i class="bi bi-arrows-fullscreen"></i>
                 </button>
+                <button class="btn btn-outline-secondary active" id="mappingMapToggleGrid" title="Hide dot grid" aria-label="Show or hide the canvas dot grid" aria-pressed="true">
+                    <i class="bi bi-grid-3x3-gap"></i>
+                </button>
             </div>
             <div class="btn-group btn-group-sm" role="group" aria-label="Layout">
                 <button class="btn btn-outline-secondary" id="mappingMapResetLayout" title="Reset Layout" aria-label="Reset layout">
@@ -54,12 +57,12 @@
         </div>
     </div>
     
-    <!-- Canvas Container with Sliding Right Panel -->
-    <div class="mapping-designer-container" id="mappingDesignerContainer">
+    <!-- Canvas Container with always-visible bottom panel -->
+    <div class="mapping-designer-container ob-split-shell ob-split-shell--column" id="mappingDesignerContainer">
         <!-- D3.js Designer Canvas -->
-        <div class="card border-0 shadow-sm" id="mappingMapCard">
-            <div class="card-body p-0 mapping-design-map-card-body">
-                <div id="mapping-map-container">
+        <div class="ob-split-pane" id="mappingMapCard">
+            <div class="mapping-design-map-card-body">
+                <div id="mapping-map-container" class="mapping-grid-visible">
                     <!-- Loading Overlay -->
                     <div id="mappingDesignerLoading" class="designer-loading-overlay">
                         <div class="ob-loading-spinner">
@@ -90,14 +93,21 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Right Sliding Panel for Mapping -->
-        <div class="mapping-right-panel" id="mappingRightPanel">
+
+        <div class="detail-panel-resize-handle" title="Drag to resize panels">
+            <div class="resize-handle-bar"></div>
+        </div>
+
+        <!-- Bottom panel for Mapping -->
+        <div class="mapping-right-panel ob-split-pane" id="mappingRightPanel">
             <div class="panel-header">
                 <h6 id="panelTitle"><i class="bi bi-box"></i> <span id="panelItemName">Select Item</span></h6>
             </div>
             <div class="panel-body" id="panelBody">
-                <!-- Panel content will be loaded dynamically -->
+                <div class="panel-placeholder">
+                    <i class="bi bi-cursor"></i>
+                    <p class="mb-0">Click on an entity or relationship to configure its mapping.</p>
+                </div>
             </div>
             <div class="panel-footer" id="panelFooter">
                 <div class="d-flex flex-column justify-content-between h-100">

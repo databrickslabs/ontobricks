@@ -875,3 +875,159 @@ Modified files:
 - documentation/features.md
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5423 passed, 281 skipped, 6 deselected, 1 xfailed in 44.47s. Browser: toggle on Designer (`/ontology/?section=map`) shows/hides `map-grid-visible` and the radial-gradient.
+
+================================================================================
+Implement Mapping Designer split layout (Tasks 1-2)
+================================================================================
+
+Context
+-------
+Mapping Designer still used a drawer-style bottom panel (`height: 0` plus
+`.panel-open`) and a shadowed single-card wrapper, which drifted from the
+Ontology Designer split-card contract. This change applies the planned
+column split shell with always-visible bottom detail panel, horizontal resize
+handle, and persisted panel height while keeping Manual Mapping behavior
+unchanged.
+
+Changes
+-------
+1. `tests/units/front/test_mapping_designer_split_layout.py`
+   Added contract coverage for Mapping split markup, shared split CSS wiring,
+   panel sizing rules, drawer-rule removal, always-open JS behavior, resize
+   persistence key (`mappingDesignerPanelHeight`), and guarded canvas-clear path.
+2. `src/front/templates/partials/mapping/_mapping_design.html`
+   Reworked Designer markup to `ob-split-shell ob-split-shell--column` with
+   two `ob-split-pane` cards plus `.detail-panel-resize-handle`, removed
+   `shadow-sm`, and added a default panel placeholder.
+3. `src/front/templates/mapping.html`
+   Linked `ontology/css/ontology-shared-panels.css` in page `extra_css` so
+   Mapping can reuse the same split-panel chrome as Ontology.
+4. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Added `.ob-split-shell--column` and row-resize handle variant rules
+   (`height: 8px`, bar `40px x 3px`) using shared split tokens.
+5. `src/front/static/global/css/mapping.css`
+   Removed Mapping Designer drawer mechanics (`height: 0`, `.panel-open` split),
+   set always-visible panel defaults (`320px`, min `200px`, max `50%`), and
+   aligned design-section insets with Ontology split layout expectations.
+6. `src/front/static/mapping/js/mapping-design.js`
+   Switched panel behavior from show/hide to hydrate/clear, restored placeholder
+   on close, kept canvas background click on `guardedCloseMappingPanel`, added
+   horizontal drag-resize setup, and persisted/restored panel height from
+   `sessionStorage` via `mappingDesignerPanelHeight`.
+7. `.cursor/11-frontend-design.mdc`
+   Documented that Mapping Designer uses the same split cards as Ontology with
+   column orientation and always-visible bottom detail panel.
+
+Modified files:
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/templates/mapping.html`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/global/css/mapping.css`
+- `src/front/static/mapping/js/mapping-design.js`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED (Task 1 contracts before implementation):
+  - `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py`
+  -> 6 failed, 1 passed.
+- RED (Task 2 JS contracts before implementation):
+  - `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py`
+  -> 4 failed, 8 passed.
+- GREEN (focused):
+  - `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py tests/units/front/test_manual_mapping_panel_host.py`
+  -> 25 passed.
+- GREEN (full required suite):
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5435 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.00s.
+
+## Keep the Mapping Designer resize handle between the two cards
+
+Context: The column-split handle inherited `order: 998` from the Ontology
+right-panel handle, so it rendered below the bottom card instead of between
+canvas and panel.
+
+Changes:
+
+1. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Set `.ob-split-shell--column > .detail-panel-resize-handle { order: 0 }` so
+   DOM order (canvas, handle, panel) wins.
+2. `tests/units/front/test_mapping_designer_split_layout.py`
+   Assert the column handle `order` is `0`.
+
+Modified files:
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py tests/units/front/test_manual_mapping_panel_host.py` → 25 passed.
+
+## Make Mapping Designer resizing explicitly manual and add the dot grid
+
+Context: The resize interaction must never continue when the primary mouse
+button is no longer held. Mapping Designer also needs the same default-visible,
+session-persisted dotted grid and accessible toolbar toggle as Ontology
+Designer.
+
+Changes:
+
+1. `src/front/static/mapping/js/mapping-design.js`
+   Restricted resize start to the primary button, aborts stale drag state when
+   mouse movement reports no primary button, and added the persisted Mapping
+   grid toggle.
+2. `src/front/templates/partials/mapping/_mapping_design.html`
+   Added the active grid toolbar button and default grid-visible canvas class.
+3. `src/front/static/mapping/css/mapping-design.css`
+   Added the token-based 24px dotted grid matching Ontology Designer.
+4. `tests/units/front/test_mapping_designer_split_layout.py`
+   Added regression contracts for manual-only resizing and grid parity.
+5. `documentation/superpowers/specs/2026-08-26-mapping-designer-split-layout-design.md`
+   Added the approved grid behavior to the design contract.
+6. `documentation/superpowers/plans/2026-08-26-mapping-designer-split-layout.md`
+   Added the grid implementation and verification steps.
+
+Modified files:
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/static/mapping/css/mapping-design.css`
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `documentation/superpowers/specs/2026-08-26-mapping-designer-split-layout-design.md`
+- `documentation/superpowers/plans/2026-08-26-mapping-designer-split-layout.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py tests/units/front/test_manual_mapping_panel_host.py` → 29 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5439 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+## Align Ontology Designer empty-panel title and square panel tabs
+
+Context: Clicking the Ontology Designer canvas left the right panel titled
+"Details", unlike Mapping Designer ("Select Item"). Form tabs inside the
+split pane also needed an explicit square treatment so selected fills do
+not pick up card-edge rounding from `.ob-tabs`.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Empty-state title is now "Select Item" on first paint and on canvas clear.
+2. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Forced `border-radius: 0` on form tabs and on `.ob-tabs` nested in a
+   split-pane panel.
+3. `src/front/static/global/css/mapping.css`
+   Flattened leftover `.panel-tabs` top radii inside mapping/manual panels.
+4. `tests/units/front/test_ontology_split_panel_layout.py`
+   Contract for the empty title and square form tabs.
+5. `.cursor/11-frontend-design.mdc`
+   Documented the Select Item empty title and square in-panel tabs.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/global/css/mapping.css`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5441 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+

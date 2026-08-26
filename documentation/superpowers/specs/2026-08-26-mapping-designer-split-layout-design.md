@@ -26,6 +26,8 @@ and behaves unlike Ontology's always-visible, resizable, two-card split.
 - Manual Mapping (its own bottom panel) is out of scope.
 - Internal Mapping form tabs (Information / Mapping / SQL) and the existing
   vertical panel header stay; this change is layout chrome, not a form redesign.
+- The canvas uses the same 24px dotted grid and toolbar toggle as Ontology /
+  Designer. It is visible by default and persisted for the browser session.
 - No Mapping-specific mobile breakpoint beyond the existing section-header wrap.
 
 ## Layout
@@ -65,6 +67,7 @@ Shared chrome (same tokens as Ontology / Designer and KG Explorer):
 | Persist size | Last height stored in `sessionStorage` under `mappingDesignerPanelHeight`, same pattern as Ontology panel width. |
 | Save mapping in the panel | Content updates; panel stays open. |
 | Empty ontology / loading | Existing loading overlay on the canvas; panel stays as placeholder. |
+| Toggle dot grid | Add/remove `mapping-grid-visible`; persist under `mappingMapGridVisible`. |
 
 `openMappingPanel()` hydrates content. It must not toggle visibility.
 `closeMappingPanel()` (and equivalent cancel/unmap-complete paths) clear
@@ -91,6 +94,7 @@ Reuse Ontology split chrome rather than duplicating Mapping-only drawer CSS.
    - horizontal resize observer/drag mirroring Ontology's handle, calling
      `resizeMapSvg()`;
    - sessionStorage for height.
+   - initialize the grid toggle on every Designer init, defaulting to visible.
 4. Load Mapping Designer CSS/JS so the Ontology shared-panel stylesheet is
    available on the Mapping page if it is not already.
 
@@ -109,6 +113,8 @@ Add a front-end contract test (pattern of
 - `closeMappingPanel` / canvas-clear paths do not rely on `.panel-open` to
   show the panel;
 - handle uses `row-resize`.
+- grid button, `aria-pressed`, 24px dotted background and session persistence
+  match Ontology / Designer.
 
 Update `tests/units/front/test_manual_mapping_panel_host.py` only if selectors
 would otherwise break; Manual Mapping behaviour must still pass.

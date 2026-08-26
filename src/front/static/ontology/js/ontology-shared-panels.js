@@ -177,7 +177,7 @@ function createDetailPanel(panelContainer) {
 
     panelDiv.innerHTML = `
         <div class="panel-header">
-            <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Edit</span></h6>
+            <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Select Item</span></h6>
         </div>
         <div class="panel-body" id="sharedPanelBody"></div>
     `;
@@ -220,7 +220,7 @@ function renderPanelPlaceholder(panel) {
     target.classList.add('is-empty');
 
     const title = target.querySelector('#sharedPanelItemName');
-    if (title) title.textContent = 'Details';
+    if (title) title.textContent = 'Select Item';
 
     const body = target.querySelector('#sharedPanelBody');
     if (body) {

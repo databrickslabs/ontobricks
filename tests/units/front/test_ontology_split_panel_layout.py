@@ -269,3 +269,32 @@ def test_frontend_rule_documents_the_split_layout():
 
     assert "split-panel" in rule.lower()
     assert PANEL_WIDTH in rule
+
+
+def test_empty_panel_title_is_select_item():
+    """Canvas click restores the same empty-state title as Mapping Designer."""
+    js = _read(PANELS_JS)
+    placeholder = re.search(
+        r"function renderPanelPlaceholder\([^)]*\)\s*\{([\s\S]*?)\n\}",
+        js,
+    )
+    assert placeholder, "renderPanelPlaceholder() must exist"
+    body = placeholder.group(1)
+    assert "Select Item" in body
+    assert "title.textContent = 'Details'" not in body
+    assert re.search(
+        r'id="sharedPanelItemName">Select Item<',
+        js,
+    )
+
+
+def test_form_tabs_inside_the_right_panel_are_square():
+    """Selected fill stays square; the panel card already carries the radius."""
+    css = _read(PANELS_CSS)
+    link = _block(css, ".form-tab-link")
+    active = _block(css, ".form-tab-link.active")
+    assert _declaration(link, "border-radius") == "0"
+    assert _declaration(active, "border-radius") == "0"
+
+    scoped = _block(css, ".shared-detail-panel .form-tab-link")
+    assert _declaration(scoped, "border-radius") == "0"

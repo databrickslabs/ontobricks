@@ -13,6 +13,44 @@ let mappingMapSvg = null;
 let mappingMapSimulation = null;
 let mappingMapZoom = null;
 let mappingMapNodes = [];
+let isMappingResizing = false;
+
+const MAPPING_PANEL_DEFAULT_HEIGHT = 320;
+const MAPPING_PANEL_MIN_HEIGHT = 200;
+const MAPPING_PANEL_HEIGHT_STORAGE_KEY = 'mappingDesignerPanelHeight';
+const MAPPING_MAP_GRID_STORAGE_KEY = 'mappingMapGridVisible';
+
+function isMappingMapGridVisible() {
+    return sessionStorage.getItem(MAPPING_MAP_GRID_STORAGE_KEY) !== 'false';
+}
+
+function applyMappingMapGridVisibility() {
+    const container = document.getElementById('mapping-map-container');
+    const btn = document.getElementById('mappingMapToggleGrid');
+    const visible = isMappingMapGridVisible();
+    if (container) {
+        container.classList.toggle('mapping-grid-visible', visible);
+    }
+    if (btn) {
+        btn.classList.toggle('active', visible);
+        btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        btn.title = visible ? 'Hide dot grid' : 'Show dot grid';
+    }
+}
+
+function initMappingMapGridToggle() {
+    const btn = document.getElementById('mappingMapToggleGrid');
+    applyMappingMapGridVisibility();
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.onclick = () => {
+        sessionStorage.setItem(
+            MAPPING_MAP_GRID_STORAGE_KEY,
+            String(!isMappingMapGridVisible())
+        );
+        applyMappingMapGridVisibility();
+    };
+}
 
 /**
  * Bound columns that no longer exist in their source table, keyed by entity
@@ -87,6 +125,10 @@ async function loadMapLayout() {
  */
 async function initMappingDesigner() {
     showMappingDesignerLoading(true);
+    initMappingMapGridToggle();
+    setupMappingDesignerResizeHandle();
+    restoreMappingDesignerPanelHeight();
+    ensureMappingDesignerPlaceholder();
     
     // Wait for MappingState initialization (ontology + mappings fetched)
     if (!MappingState.initialized) {
@@ -1046,11 +1088,7 @@ function openRelationshipMappingFromDesign(rel) {
  * Open the mapping panel
  */
 function openMappingPanel() {
-    const container = document.getElementById('mappingDesignerContainer');
-    container.classList.add('panel-open');
-    
-    // Resize SVG after transition completes
-    setTimeout(resizeMapSvg, 250);
+    setTimeout(resizeMapSvg, 0);
 }
 
 /**
@@ -1105,19 +1143,22 @@ function closeActiveMappingPanel() {
  * Close the mapping panel
  */
 function closeMappingPanel() {
-    const container = document.getElementById('mappingDesignerContainer');
-    if (container) container.classList.remove('panel-open');
     releaseMappingPanel();
     
     const panelBody = document.getElementById('panelBody');
-    if (panelBody) panelBody.innerHTML = '';
+    if (panelBody) {
+        panelBody.innerHTML = renderMappingPanelPlaceholder();
+    }
+    const panelTitle = document.getElementById('panelTitle');
+    if (panelTitle) {
+        panelTitle.innerHTML = '<i class="bi bi-box"></i> <span id="panelItemName">Select Item</span>';
+    }
     
     // Clear selections on map
     d3.selectAll('.mapping-map-node').classed('selected', false);
     d3.selectAll('.mapping-map-link-hitarea').classed('selected', false);
     
-    // Resize SVG after transition completes
-    setTimeout(resizeMapSvg, 250);
+    setTimeout(resizeMapSvg, 0);
 }
 
 /**
@@ -1158,6 +1199,91 @@ function resizeMapSvg() {
             centerForce.x(width / 2).y(height / 2);
         }
     }
+}
+
+function renderMappingPanelPlaceholder() {
+    return `
+        <div class="panel-placeholder">
+            <i class="bi bi-cursor"></i>
+            <p class="mb-0">Click on an entity or relationship to configure its mapping.</p>
+        </div>
+    `;
+}
+
+function ensureMappingDesignerPlaceholder() {
+    const panelBody = document.getElementById('panelBody');
+    if (!panelBody) return;
+    if (panelBody.children.length > 0) return;
+    panelBody.innerHTML = renderMappingPanelPlaceholder();
+}
+
+function restoreMappingDesignerPanelHeight() {
+    const panel = document.getElementById('mappingRightPanel');
+    const container = document.getElementById('mappingDesignerContainer');
+    if (!panel || !container) return;
+
+    const maxHeight = Math.max(MAPPING_PANEL_MIN_HEIGHT, Math.floor(container.clientHeight * 0.5));
+    const persistedHeight = Number.parseInt(
+        window.sessionStorage.getItem(MAPPING_PANEL_HEIGHT_STORAGE_KEY) || '',
+        10
+    );
+    const safeHeight = Number.isFinite(persistedHeight)
+        ? Math.max(MAPPING_PANEL_MIN_HEIGHT, Math.min(maxHeight, persistedHeight))
+        : Math.max(MAPPING_PANEL_MIN_HEIGHT, Math.min(maxHeight, MAPPING_PANEL_DEFAULT_HEIGHT));
+    panel.style.height = `${safeHeight}px`;
+}
+
+function setupMappingDesignerResizeHandle() {
+    const container = document.getElementById('mappingDesignerContainer');
+    const panel = document.getElementById('mappingRightPanel');
+    const handle = container?.querySelector('.detail-panel-resize-handle');
+    if (!container || !panel || !handle) return;
+    if (handle.dataset.mappingResizeBound === 'true') return;
+
+    handle.style.cursor = 'row-resize';
+
+    const onMouseMove = (event) => {
+        if (!isMappingResizing) return;
+        if ((event.buttons & 1) !== 1) {
+            onMouseUp();
+            return;
+        }
+        const containerRect = container.getBoundingClientRect();
+        const maxHeight = Math.max(
+            MAPPING_PANEL_MIN_HEIGHT,
+            Math.floor(containerRect.height * 0.5)
+        );
+        const nextHeight = Math.round(containerRect.bottom - event.clientY);
+        const clampedHeight = Math.max(
+            MAPPING_PANEL_MIN_HEIGHT,
+            Math.min(maxHeight, nextHeight)
+        );
+        panel.style.height = `${clampedHeight}px`;
+        window.sessionStorage.setItem(MAPPING_PANEL_HEIGHT_STORAGE_KEY, String(clampedHeight));
+    };
+
+    const onMouseUp = () => {
+        if (!isMappingResizing) return;
+        isMappingResizing = false;
+        handle.classList.remove('active');
+        document.body.classList.remove('resizing-panel');
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        resizeMapSvg();
+    };
+
+    handle.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        isMappingResizing = true;
+        handle.classList.add('active');
+        document.body.classList.add('resizing-panel');
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+
+    handle.dataset.mappingResizeBound = 'true';
 }
 
 /**

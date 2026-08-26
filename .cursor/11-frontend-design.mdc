@@ -878,10 +878,13 @@ The contract:
   (D3 / Sigma size from `container.clientWidth`), so a panel that appears
   later leaves the graph centred on the wrong axis.
 - **Empty state instead of collapsing.** With nothing selected the panel
-  body holds a centred placeholder (`bi-cursor` icon at `3rem`,
+  title is **Select Item** (same copy as Mapping Designer) and the body
+  holds a centred placeholder (`bi-cursor` icon at `3rem`,
   `--db-text-muted`, "Click on an entity or relationship to view
   details"). Clicking the empty canvas returns to that placeholder — and
   flushes any pending edit first, since it is the only way out.
+  Tabs inside the panel stay square (`border-radius: 0`); the pane card
+  already carries `--db-radius-card`.
 - **No close button.** The panel can't be dismissed, so a cross would be a
   dead control.
 - **Drag handle**: an `8px` hit area holding a `3px × 40px` bar,
@@ -890,6 +893,9 @@ The contract:
 - **Host the panel on the wrapper, not on the canvas.** It is a *sibling*
   of the content pane; making the canvas container the flex parent means it
   can no longer be framed as a pane.
+- **Mapping Designer uses the same split cards as Ontology**, but in
+  `.ob-split-shell--column`: content pane on top and an always-visible bottom
+  detail panel with the shared `detail-panel-resize-handle`.
 
 ❌ Don't reintroduce a `width: 0` + `.panel-open` drawer, a per-area handle
 with its own dimensions or `--bs-primary` blue, or a `gap: 0` seam between
