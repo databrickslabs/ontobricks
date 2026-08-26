@@ -25,6 +25,9 @@
             <button class="btn btn-outline-secondary active" id="mapToggleInheritance" title="Show/hide inheritance links" aria-label="Show or hide inheritance links" aria-pressed="true">
                 <i class="bi bi-diagram-3"></i>
             </button>
+            <button class="btn btn-outline-secondary active" id="mapToggleGrid" title="Hide dot grid" aria-label="Show or hide the canvas dot grid" aria-pressed="true">
+                <i class="bi bi-grid-3x3-gap"></i>
+            </button>
             <button class="btn btn-outline-secondary" id="mapSearchBtn" title="Search entity" aria-label="Search entity">
                 <i class="bi bi-search"></i>
             </button>
@@ -47,7 +50,7 @@
     <div class="card-body p-0 position-relative">
         <div id="ontology-map-wrapper" class="ontology-map-wrapper">
             <!-- Main map container -->
-            <div id="ontology-map-container" class="ob-split-pane">
+            <div id="ontology-map-container" class="ob-split-pane map-grid-visible">
                 <!-- Loading Overlay -->
                 <div id="ontologyMapLoading" class="designer-loading-overlay">
                     <div class="ob-loading-spinner">

@@ -40,8 +40,18 @@
     min-width: 0;
     height: 100%;
     overflow: hidden;
-    background: #ffffff;
+    background-color: var(--db-surface-warm);
     position: relative;
+}
+
+/* Viewport-fixed dotted grid, matching OntoViz `.ovz-canvas` (24px / 1px dots). */
+#ontology-map-container.map-grid-visible {
+    background-image: radial-gradient(
+        circle at 1px 1px,
+        color-mix(in srgb, var(--db-text) 18%, transparent) 1px,
+        transparent 0
+    );
+    background-size: 24px 24px;
 }
 
 #ontology-map-container svg {

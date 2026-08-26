@@ -10,6 +10,7 @@ let ontologyMapSvg = null;
 let ontologyMapSimulation = null;
 let ontologyMapZoom = null;
 let mapAutoSaveTimeout = null;
+const MAP_GRID_STORAGE_KEY = 'mapGridVisible';
 let mapConnectionMode = null; // { sourceEntity: {...}, lineElement: <line>, type: 'relationship'|'inheritance' }
 let _mapInitGeneration = 0;   // guards against concurrent initOntologyMap() calls
 let ontologyMapLinks  = [];   // live reference to link data (set by initOntologyMap)
@@ -103,12 +104,53 @@ function scheduleMapAutoSave(nodes) {
 }
 
 /**
+ * Whether the Designer canvas dotted grid is shown (default: on, like OntoViz).
+ * @returns {boolean}
+ */
+function isMapGridVisible() {
+    return sessionStorage.getItem(MAP_GRID_STORAGE_KEY) !== 'false';
+}
+
+/**
+ * Apply persisted grid visibility to the canvas and toggle button.
+ */
+function applyMapGridVisibility() {
+    const container = document.getElementById('ontology-map-container');
+    const btn = document.getElementById('mapToggleGrid');
+    const visible = isMapGridVisible();
+    if (container) {
+        container.classList.toggle('map-grid-visible', visible);
+    }
+    if (btn) {
+        btn.classList.toggle('active', visible);
+        btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        btn.title = visible ? 'Hide dot grid' : 'Show dot grid';
+    }
+}
+
+/**
+ * Bind the header grid toggle once. Safe to call from every map init
+ * (including the empty-ontology early return).
+ */
+function initMapGridToggle() {
+    const btn = document.getElementById('mapToggleGrid');
+    applyMapGridVisibility();
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.onclick = () => {
+        sessionStorage.setItem(MAP_GRID_STORAGE_KEY, String(!isMapGridVisible()));
+        applyMapGridVisibility();
+    };
+}
+
+/**
  * Initialize the Ontology Designer visualization
  */
 async function initOntologyMap() {
     // Increment generation counter to cancel any previous in-flight init
     const thisGeneration = ++_mapInitGeneration;
 
+    initMapGridToggle();
     showOntologyMapLoading(true);
     
     const container = document.getElementById('ontology-map-container');

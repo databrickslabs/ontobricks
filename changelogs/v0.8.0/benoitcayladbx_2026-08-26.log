@@ -849,3 +849,29 @@ Test result:
   uv run --frozen pytest -q -m "not scenario"
   -> 5422 passed, 281 skipped, 6 deselected, 1 xfailed, 23 warnings, 0 failed.
 - IDE lints on changed core files: no errors.
+
+## Add a togglable dotted grid on Ontology Designer
+
+Context: Ontology → Designer (the D3 force-directed graph) sat on a plain white canvas. OntoViz already uses a 24px radial-gradient dot grid; users wanted the same visual on Designer, with an explicit show/hide control in the header.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   Added `mapToggleGrid` in the layout/display button cluster and defaulted the canvas to `map-grid-visible`.
+2. src/front/static/ontology/css/ontology-map.css
+   OntoViz-matching 24px dotted background on `#ontology-map-container.map-grid-visible`, using `--db-*` tokens.
+3. src/front/static/ontology/js/ontology-map.js
+   Toggle applies/removes the class, updates `aria-pressed` / title, and persists in `sessionStorage` (`mapGridVisible`), same pattern as inheritance visibility.
+4. tests/units/front/test_button_design_contract.py
+   Contract that the grid toggle lives in the joined display cluster and that the CSS uses the 24px radial-gradient.
+5. documentation/features.md
+   Documented the persisted grid toggle on the Designer D3 graph.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_button_design_contract.py
+- documentation/features.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5423 passed, 281 skipped, 6 deselected, 1 xfailed in 44.47s. Browser: toggle on Designer (`/ontology/?section=map`) shows/hides `map-grid-visible` and the radial-gradient.

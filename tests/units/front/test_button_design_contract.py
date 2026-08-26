@@ -155,6 +155,22 @@ def test_ontology_assistant_has_no_floating_action_button():
     assert "btn btn-sm btn-outline-secondary" in partial
 
 
+def test_ontology_designer_grid_toggle_is_in_the_display_cluster():
+    """Dot-grid visibility is a display toggle, same cluster as inheritance."""
+    partial = _read(MAP_PARTIAL)
+    css = _read(REPO_ROOT / "src/front/static/ontology/css/ontology-map.css")
+
+    assert 'id="mapToggleGrid"' in partial
+    groups = re.findall(r'<div class="btn-group[^"]*"[^>]*>(.*?)</div>', partial, re.DOTALL)
+    grouped = "".join(groups)
+    assert 'id="mapToggleGrid"' in grouped
+    assert 'id="ontology-map-container"' in partial
+    assert "map-grid-visible" in partial
+    assert "#ontology-map-container.map-grid-visible" in css
+    assert "radial-gradient" in css
+    assert "background-size: 24px 24px" in css
+
+
 def test_permission_hidden_buttons_stay_out_of_joined_groups():
     """`permissions.css` hides these outright for viewers; inside a group a
     hidden member leaves its neighbour with a squared edge."""
