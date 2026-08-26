@@ -174,6 +174,7 @@ App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 | `list_domains` | `GET /api/v1/domains` | REST | UC Volume listing |
 | `list_domain_versions` | `GET /api/v1/domain/versions` | REST | UC Volume listing |
 | `get_design_status` | `GET /api/v1/domain/design-status` | REST | Python aggregator |
+| `describe_ontology` | `GET /api/v1/domain/ontology` + `GET /api/v1/domain/classes` | REST | Ontology schema only (no graph): structured class summary + raw OWL/Turtle |
 | `select_domain` | `GET /api/v1/digitaltwin/status` + `GET /api/v1/domain/classes` | REST | DeltaFlatStore status (Spark SQL) or GraphDB status; class attachments cached for `[Context]` blocks |
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |
@@ -194,6 +195,14 @@ App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 > tool is presentation on top of that, so a stale client that calls a hidden
 > tool anyway gets a refusal instead of data. See
 > [Per-domain MCP policy](mcp.md#per-domain-mcp-policy).
+
+> **Ontology-only domains.** A domain can be published with an ontology but
+> no Knowledge Graph build (no mapping, no graph). `GET /api/v1/domains`
+> flags it with `has_graph: false`; on `select_domain` the MCP server hides
+> every graph tool and exposes `describe_ontology` alone (plus the four
+> registry-level tools). `describe_ontology` needs no graph — it serves the
+> ontology schema — so it is always available and the call-time guard refuses
+> the graph tools for such a domain even if a stale client calls them.
 
 > **Note.** MCP and the external REST/GraphQL API only see versions whose
 > lifecycle status is **PUBLISHED** — they default to the numeric-latest

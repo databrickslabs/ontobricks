@@ -54,6 +54,23 @@ REGISTRY_TOOLS = frozenset(
     {"list_domains", "select_domain", "list_domain_versions", "get_design_status"}
 )
 
+# Domain-scoped tools that need a built graph. A domain published with only an
+# ontology (no build) hides every one of these and exposes ``describe_ontology``
+# alone. Mirrors ``MCP_DOMAIN_TOOLS`` minus ``describe_ontology`` in
+# ``back/core/mcp_tools.py`` — this process cannot import the app package.
+GRAPH_TOOLS = frozenset(
+    {
+        "list_entity_types",
+        "describe_entity",
+        "get_status",
+        "get_graphql_schema",
+        "query_graphql",
+        "get_entity_context",
+        "invoke_entity_action",
+        "compute_virtual_attributes",
+    }
+)
+
 logger = logging.getLogger(__name__)
 
 _USER_AGENT = "ontobricks"
@@ -71,6 +88,7 @@ API_V1_DT_STATUS = "/api/v1/digitaltwin/status"
 API_V1_DT_STATS = "/api/v1/digitaltwin/stats"
 API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
 API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
+API_V1_DOMAIN_ONTOLOGY = "/api/v1/domain/ontology"
 API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"
 API_V1_DT_NODE_ACTION = "/api/v1/digitaltwin/nodes/action"
 API_V1_DT_NODE_VIRTUAL_ATTRIBUTES = "/api/v1/digitaltwin/nodes/virtual-attributes"
@@ -919,6 +937,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     # ``GET /api/v1/domains``. Filled by ``list_domains`` and lazily by
     # ``_ensure_domain_policies``.
     _domain_policy: dict[str, dict] = {}
+    # Per-domain "has a built graph" flag, same provenance as ``_domain_policy``.
+    # A domain absent from this map (or mapped True) keeps the full surface; a
+    # False value hides every ``GRAPH_TOOLS`` entry for that domain.
+    _domain_has_graph: dict[str, bool] = {}
     _ontology_labels: dict[str, str] = {}   # uri/name (lower) → display label
     _class_actions: dict[str, dict] = {}    # class URI → {"dataset": {...}, "bridges": [...]}
     _registry: dict = {
@@ -1051,7 +1073,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             "3. Call 'select_domain' with the domain name that best matches "
             "the user's question.\n"
             "4. Use 'list_entity_types' and 'describe_entity' for exploration, "
-            "or GraphQL tools for typed queries.\n\n"
+            "or GraphQL tools for typed queries.\n"
+            "   Use 'describe_ontology' to read the domain's ontology structure "
+            "(classes, attributes, relationships, OWL). It needs no graph, so a "
+            "domain published with only an ontology exposes 'describe_ontology' "
+            "as its sole domain tool.\n\n"
             "DATA SOURCES — three tools, three different scopes:\n"
             "- 'describe_entity': GROUND TRUTH. Queries the raw triple store "
             "(union of synced data AND inferred/materialised triples). Returns "
@@ -1102,6 +1128,7 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             for d in data.get("domains", []) or []:
                 if d.get("name"):
                     _domain_policy[d["name"]] = d.get("mcp_policy") or {}
+                    _domain_has_graph[d["name"]] = bool(d.get("has_graph", True))
         except Exception as exc:  # noqa: BLE001
             logger.warning("could not preload domain MCP policies: %s", exc)
         return _domain_policy
@@ -1122,6 +1149,21 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             return set()
         return {t for t in raw if isinstance(t, str)} - REGISTRY_TOOLS
 
+    def _has_graph(name: Optional[str]) -> bool:
+        """Whether *name* serves a built graph (default True when unknown)."""
+        return _domain_has_graph.get(name, True) if name else True
+
+    def _graph_hidden_for(name: Optional[str]) -> set[str]:
+        """Graph tools to hide for *name* — all of them when it has no graph."""
+        return set(GRAPH_TOOLS) if not _has_graph(name) else set()
+
+    def _hidden_for(name: Optional[str]) -> set[str]:
+        """Full hidden set for *name*: policy-disabled tools + graph tools when
+        the domain is ontology-only."""
+        return _disabled_tools(_domain_policy.get(name, {})) | _graph_hidden_for(
+            name
+        )
+
     def _ensure_tool_allowed(tool_name: str) -> Optional[str]:
         """Return a refusal message when *tool_name* is disabled, else None.
 
@@ -1129,12 +1171,19 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         ignores ``ToolListChangedNotification`` (or cached an older list) can
         still call it. The policy is therefore re-checked on every call.
         """
-        if tool_name not in _disabled_tools(_active_policy()):
-            return None
-        return (
-            f"The tool '{tool_name}' is not available for domain "
-            f"'{_selected_domain.get('name')}' — its MCP policy does not expose it."
-        )
+        name = _selected_domain.get("name")
+        if tool_name in _disabled_tools(_active_policy()):
+            return (
+                f"The tool '{tool_name}' is not available for domain "
+                f"'{name}' — its MCP policy does not expose it."
+            )
+        if tool_name in _graph_hidden_for(name):
+            return (
+                f"The tool '{tool_name}' is not available for domain "
+                f"'{name}' — it is published with an ontology only (no graph). "
+                "Use describe_ontology to read its structure."
+            )
+        return None
 
     def _require_domain(tool_name: str) -> Optional[str]:
         """Single entry guard for every domain-scoped tool.
@@ -1189,9 +1238,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             return "No domains found in the registry."
 
         _domain_policy.clear()
+        _domain_has_graph.clear()
         for d in domains:
             if d.get("name"):
                 _domain_policy[d["name"]] = d.get("mcp_policy") or {}
+                _domain_has_graph[d["name"]] = bool(d.get("has_graph", True))
 
         lines: list[str] = []
         lines.append(f"Available Domains ({len(domains)})")
@@ -1199,7 +1250,8 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         for d in domains:
             name = d.get("name", "")
             desc = d.get("description", "")
-            lines.append(f"  • {name}")
+            tag = "" if d.get("has_graph", True) else "  (ontology-only)"
+            lines.append(f"  • {name}{tag}")
             if desc:
                 lines.append(f"    {desc}")
         lines.append("")
@@ -1366,8 +1418,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
 
         # Recompute the session tool set for the new domain. reset_visibility
         # first, otherwise rules accumulate and a tool hidden by a previously
-        # selected domain would stay hidden here.
-        hidden = _disabled_tools(_domain_policy.get(domain_name, {}))
+        # selected domain would stay hidden here. An ontology-only domain (no
+        # built graph) additionally hides every GRAPH_TOOLS entry, leaving
+        # describe_ontology as its sole domain tool.
+        hidden = _hidden_for(domain_name)
         try:
             await ctx.reset_visibility()
             if hidden:
@@ -1394,7 +1448,100 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
                 "Not available for this domain: " + ", ".join(sorted(hidden))
             )
             lines.append("")
-        lines.append("You can now use list_entity_types and describe_entity.")
+        if not _has_graph(domain_name):
+            lines.append(
+                "This domain is published with an ontology only (no graph). "
+                "Use describe_ontology to read its structure."
+            )
+        else:
+            lines.append(
+                "You can now use list_entity_types and describe_entity."
+            )
+        return "\n".join(lines)
+
+    # ── Tools — Ontology structure ────────────────────────────────────
+
+    @mcp.tool()
+    async def describe_ontology(domain_name: Optional[str] = None) -> str:
+        """Describe the selected domain's ontology structure.
+
+        Returns a structured summary (classes and their attachments) plus the
+        raw OWL/Turtle document, which carries the full class, attribute and
+        relationship (domain/range) detail. This is the ground truth for the
+        ontology *schema* — it does not touch the graph store, so it works even
+        for an ontology-only domain that has never been built. For such a
+        domain this is the only tool available.
+
+        Args:
+            domain_name: Registry domain name, or omit to use the selected one.
+        """
+        name = domain_name or _selected_domain["name"]
+        if not name:
+            return (
+                "No domain selected. Call list_domains first, then "
+                "select_domain to choose one (or pass domain_name)."
+            )
+
+        await _ensure_registry()
+        await _ensure_domain_policies()
+        # describe_ontology is never gated by has_graph (it is the fallback for
+        # ontology-only domains), but a domain can still hide it via policy.
+        if "describe_ontology" in _disabled_tools(_domain_policy.get(name, {})):
+            return (
+                f"The tool 'describe_ontology' is not available for domain "
+                f"'{name}' — its MCP policy does not expose it."
+            )
+        params = {**_registry_params(), "domain_name": name}
+
+        async with _client() as client:
+            owl_data = await _get(client, API_V1_DOMAIN_ONTOLOGY, params=params)
+            classes_data = await _get(
+                client, API_V1_DOMAIN_CLASSES, params=params
+            )
+
+        if not owl_data.get("success"):
+            return owl_data.get("message", "Could not load the ontology.")
+
+        base_uri = owl_data.get("base_uri") or "N/A"
+        class_count = owl_data.get("class_count", 0)
+        property_count = owl_data.get("property_count", 0)
+        owl_content = owl_data.get("content", "")
+
+        lines: list[str] = [
+            f"Ontology — {name}",
+            "=" * 50,
+            f"Base URI:   {base_uri}",
+            f"Classes:    {class_count}",
+            f"Properties: {property_count}",
+            "",
+        ]
+
+        classes = classes_data.get("classes", []) if isinstance(classes_data, dict) else []
+        if classes:
+            lines.append("Classes")
+            lines.append("-" * 50)
+            for cls in classes:
+                cls_name = cls.get("name") or _local_name(cls.get("uri", ""))
+                tags: list[str] = []
+                if cls.get("dataset"):
+                    tags.append("dataset")
+                if cls.get("bridges"):
+                    tags.append(f"{len(cls['bridges'])} bridge(s)")
+                if cls.get("actions"):
+                    tags.append(f"{len(cls['actions'])} action(s)")
+                if cls.get("virtualAttributes"):
+                    tags.append(f"{len(cls['virtualAttributes'])} virtual attr")
+                suffix = f"  [{', '.join(tags)}]" if tags else ""
+                lines.append(f"  • {cls_name}{suffix}")
+            lines.append("")
+
+        if owl_content:
+            lines.append("OWL (Turtle)")
+            lines.append("-" * 50)
+            lines.append(owl_content)
+        else:
+            lines.append("(OWL document unavailable.)")
+
         return "\n".join(lines)
 
     # ── Tools — Knowledge graph queries ───────────────────────────────

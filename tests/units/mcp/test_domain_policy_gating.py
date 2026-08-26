@@ -134,9 +134,10 @@ async def _select(tools, domain: str, ctx: FakeContext | None = None) -> str:
 # Registration contract
 
 
-def test_all_twelve_tools_are_registered(mcp_env) -> None:
+def test_all_registered_tools_are_counted(mcp_env) -> None:
     tools, _ = mcp_env
-    assert len(tools) == 12
+    assert len(tools) == 13
+    assert "describe_ontology" in tools
 
 
 def test_select_domain_does_not_leak_ctx_into_the_client_schema(mcp_env) -> None:

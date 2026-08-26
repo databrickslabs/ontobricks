@@ -44,6 +44,14 @@ MCP_REGISTRY_TOOLS: frozenset[str] = frozenset(
 # Domain-scoped tools, in the order the MCP tab renders them.
 MCP_DOMAIN_TOOLS: tuple[Dict[str, str], ...] = (
     {
+        "name": "describe_ontology",
+        "label": "Describe ontology",
+        "description": "Ontology structure: classes, attributes, "
+        "relationships (domain/range) and the raw OWL. Works without a "
+        "built graph, so it is the sole tool an ontology-only domain "
+        "exposes.",
+    },
+    {
         "name": "list_entity_types",
         "label": "List entity types",
         "description": "Graph overview: entity types with instance counts and "

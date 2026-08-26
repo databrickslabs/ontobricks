@@ -40,6 +40,7 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 | `select_domain` | Activates a domain by name — all subsequent queries operate on this domain's triple store |
 | `list_domain_versions` | Lists registry versions for a named domain (latest first) |
 | `get_design_status` | Design pipeline readiness (ontology, metadata, assignment, build_ready) for a domain |
+| `describe_ontology` | Returns the selected domain's ontology **structure** — a class inventory (with dataset/bridge/action/virtual-attribute tags) plus the raw OWL/Turtle that carries the full attribute and relationship (domain/range) detail. Reads the ontology schema only, so it works without a built graph and is the sole domain tool an ontology-only domain exposes |
 | `list_entity_types` | Returns a human-readable overview of the selected domain's graph viewer: total triples, distinct entities, every entity type with instance count, and predicate usage breakdown |
 | `describe_entity` | Searches for an entity by name/type and returns a **full-text description** — identity, attributes, relationships, and related entities discovered hop-by-hop (BFS traversal) |
 | `get_entity_context` | Returns a node's external context: linked Unity Catalog dataset (optionally with rows), cross-domain bridges, the Unity Catalog function **actions** configured on its class, and its **virtual attributes** (declared always; values via `compute_virtual_attributes` or the inline `compute_virtual_attributes=True` flag) |
@@ -50,8 +51,11 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 | `query_graphql` | Executes a GraphQL query against the selected domain's graph viewer with structured, nested results |
 
 The first four tools are **registry-level**: they run before a domain is
-resolved, so they are always exposed. The other eight are **domain-scoped**
+resolved, so they are always exposed. The other nine are **domain-scoped**
 and can be switched off per domain — see [Per-domain MCP policy](#per-domain-mcp-policy).
+A domain published with an ontology but no Knowledge Graph build exposes only
+`describe_ontology` among the domain-scoped tools — see
+[Ontology-only domains](#ontology-only-domains).
 
 ### Tool Details
 
@@ -341,7 +345,7 @@ Each domain decides what it publishes over MCP, from **Domain → Information
 
 ### Exposed tools
 
-The eight domain-scoped tools have one checkbox each. Unchecking one removes
+The nine domain-scoped tools have one checkbox each. Unchecking one removes
 it from `tools/list` for any session that selects the domain, and refuses the
 call if a client tries it anyway.
 
@@ -395,6 +399,26 @@ comes back in domain B.
 Clients that ignore the notification (or replay a cached list) can still emit
 a call for a hidden tool. Every domain-scoped tool therefore re-checks the
 policy on entry and returns a refusal naming the domain.
+
+### Ontology-only domains
+
+A domain can be published with an ontology but **no Knowledge Graph build**
+(no mapping, no graph). The lifecycle allows it: `DRAFT → IN-REVIEW` now
+requires *either* a build *or* a valid ontology, so an ontology-only version
+goes through the same `DRAFT → IN-REVIEW → PUBLISHED` workflow.
+
+`GET /api/v1/domains` flags such a domain with `has_graph: false` (the
+numeric-latest PUBLISHED version has never been built). When a client selects
+it, the MCP server hides **every** graph tool and leaves `describe_ontology`
+as the only domain-scoped tool — on top of, and independent from, the
+per-domain policy. `describe_ontology` reads the ontology schema (not the
+graph), so it is always usable; the call-time guard refuses the graph tools
+for that domain even if a stale client calls them. `list_domains` marks these
+domains `(ontology-only)`.
+
+This restriction is computed from `has_graph`, not stored in `mcp_policy`: a
+domain automatically regains its graph tools once its published version is
+built.
 
 ### Storage
 
