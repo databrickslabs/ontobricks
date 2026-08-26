@@ -10,12 +10,12 @@
 }
 
 #sigmagraph-section.active {
-    height: 100%;
-    max-height: 100%;
+    flex: 1 1 0;
+    min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 1rem;
+    padding: 0.5rem;
     padding-bottom: 0;
 }
 
@@ -32,6 +32,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
     min-width: 300px;
 }
 
@@ -48,6 +49,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
     margin-bottom: 0;
 }
 
@@ -66,7 +68,8 @@
 
 #sgContainer {
     flex: 1 1 0%;
-    min-height: 300px;
+    min-height: 0;
+    overflow: hidden;
     position: relative;
 }
 
@@ -108,6 +111,7 @@
     width: 320px;
     min-width: 200px;
     max-width: 50%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -118,6 +122,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-height: 0;
     margin-bottom: 0;
 }
 
@@ -128,31 +133,9 @@
     min-height: 0;
 }
 
-/* Tabbed panel — same selected language as .ob-tabs / L2 subnav */
+/* The shared compact tab rail owns all visual states. */
 .sg-panel-tabs {
-    border-bottom: 1px solid var(--db-border);
-}
-
-.sg-panel-tabs .nav-link {
-    font-size: 0.78rem;
-    padding: 0.45rem 0.7rem;
-    color: var(--db-text-secondary);
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-}
-
-.sg-panel-tabs .nav-link:hover {
-    color: var(--db-text);
-    background: var(--db-hover-warm);
-    border-bottom-color: var(--db-border);
-}
-
-.sg-panel-tabs .nav-link.active {
-    color: var(--db-primary-darker);
-    border-bottom-color: var(--db-primary);
-    background: var(--db-primary-light);
-    border-radius: 0;
+    flex-shrink: 0;
 }
 
 .sg-tab-content {
@@ -492,4 +475,42 @@
     color: #6c757d;
     font-weight: 600;
     pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    .sidebar-content:has(#sigmagraph-section.active),
+    #sigmagraph-section.active {
+        overflow: visible;
+    }
+
+    #sigmagraph-section.active {
+        flex: none;
+    }
+
+    #sigmagraph-section > .visualization-layout {
+        flex: none;
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    #sigmagraph-section .graph-wrapper {
+        min-width: 0;
+        overflow: visible;
+    }
+
+    #sigmagraph-section .graph-panel,
+    #sgContainer {
+        min-height: 400px;
+    }
+
+    #sigmagraph-section .resize-handle {
+        display: none;
+    }
+
+    #sigmagraph-section .details-panel {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        min-height: 320px;
+    }
 }

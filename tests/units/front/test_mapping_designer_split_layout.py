@@ -176,6 +176,11 @@ def test_close_mapping_panel_does_not_hide_panel_and_restores_placeholder():
     assert "renderMappingPanelPlaceholder()" in body
     assert "panel-placeholder" in js
     assert "releaseMappingPanel()" in body
+    assert re.search(
+        r"panelTitle\.innerHTML\s*=\s*'<span id=\"panelItemName\">Select Item</span>'",
+        body,
+    )
+    assert "<i " not in body
 
 
 def test_mapping_panel_resize_persistence_key_and_row_resize_cursor_exist():

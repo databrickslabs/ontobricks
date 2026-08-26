@@ -4,7 +4,8 @@
    ----------------------------------------------------------------- */
 
 .teams-matrix-wrapper {
-    max-height: calc(100vh - 280px);
+    flex: 1;
+    min-height: 0;
     overflow: auto;
     border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 0.375rem;

@@ -1031,6 +1031,44 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5441 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
 
+## Standardize in-panel tabs and drop the empty-state title icon
+
+Context: Clicking the Designer canvas left the entity/relationship icon in
+the panel header. The Details / Attributes / References / Constraints
+strip was a custom `.form-tab-link` control whose edges did not match
+`.ob-tabs`, including the rounded first/last fill from the card-strip
+variant.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Empty header is now "Select Item" with no icon. Entity and relationship
+   forms render `nav nav-tabs ob-tabs`.
+2. `src/front/static/ontology/css/ontology-shared-panels.css`
+   In-panel `.ob-tabs` are square (`border-radius: 0`) with compact padding
+   so the 4-tab strip still fits the 420px default.
+3. `src/front/static/mapping/js/mapping-design.js`
+   Canvas-clear title is "Select Item" with no cube icon.
+4. `src/front/templates/partials/mapping/_mapping_design.html`
+   Matching empty-state markup on first paint.
+5. `tests/units/front/test_ontology_split_panel_layout.py`
+   `tests/units/front/test_mapping_designer_split_layout.py`
+   Contracts for icon-free empty title and square in-panel ob-tabs.
+6. `.cursor/11-frontend-design.mdc`
+   Documented icon-free Select Item and square in-panel `.ob-tabs`.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5441 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
 ## Segment the level 2 workspace navigation
 
 Context: The level 2 navigation used a full-width warm strip and baseline that
@@ -1075,4 +1113,472 @@ Tests:
 - `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py::test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection tests/units/front/test_clarity_design_contract.py::test_navbar_dropdown_hover_matches_sidebar` → 13 passed.
 - `uv run --frozen pytest -q -m "not scenario"` → 5448 passed, 289 skipped, 6 deselected, 1 xfailed, 3 failed. The failures are pre-existing worktree contracts for unfinished sidebar/ontology viewport and inset changes, outside this L2 navigation change.
 - Browser verification at 1600×1000 and 390×844 → passed; inactive dropdowns overlay content, the active workspace does not open a dropdown, and mobile has no horizontal overflow.
+
+## Replace sidebar magic heights with flex sizing
+
+Context: Sidebar-owned panes duplicated viewport arithmetic and bottom padding,
+causing canvas, list, and GraphQL sections to overflow or stop above the shared
+shell boundary. The root sidebar shell is now the sole viewport-height owner.
+
+Changes:
+
+1. `src/front/static/global/css/ontology.css`
+   Replaced the OWL card, Entities, Relationships, and Visual Designer
+   (`#ontology-designer-canvas-wrapper`) magic heights with flex sizing and
+   scoped mobile natural-flow resets, and dropped the stale `#ontologyGraph`
+   viewport-height rule. The OWL card keeps its native textarea scroller (no
+   overflow clamp) so long Turtle content is not clipped.
+2. `src/front/static/ontology/css/ontology-map.css`
+   Reduced the Designer section inset to 0.5rem with no bottom inset and added
+   the matching mobile overflow reset.
+3. `src/front/static/global/css/mapping.css`
+   Removed stale entity/relationship and read-only height overrides, converted
+   the Designer pane to shared flex sizing, and preserved mobile natural flow.
+4. `src/front/static/global/css/query.css`
+   Converted result, grouped-list, context, and GraphQL panes to flex sizing
+   with internal overflow and aligned GraphQL to the shell bottom.
+5. `src/front/static/query/css/query-sigmagraph.css`
+   Converted Graph Explorer and its nested canvas/panel chain to min-height-safe
+   flex sizing, corrected its inset, and added a stacked mobile reset.
+
+Modified files:
+- `src/front/static/global/css/ontology.css`
+- `src/front/static/ontology/css/ontology-map.css`
+- `src/front/static/global/css/mapping.css`
+- `src/front/static/global/css/query.css`
+- `src/front/static/query/css/query-sigmagraph.css`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py tests/units/front/test_ontology_split_panel_layout.py` → 47 passed.
+- `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/navigation/test_sidebar_bottom_alignment.py` → 8 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5451 passed, 289 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+## Align level 2 navigation with the sidebar
+
+Context: The segmented level 2 workspace control started flush against the
+viewport while the framed sidebar uses the shared 0.5rem shell gutter. A
+later-loaded full-width layout rule also reset nested container padding with
+`!important`, so matching values alone did not produce runtime alignment.
+
+Changes:
+
+1. `src/front/static/global/css/main.css`
+   Applied the 0.5rem L2 left gutter through the higher-specificity
+   `#obSubnav .container-fluid` selector and preserved the independent desktop
+   and mobile right gutters.
+2. `tests/units/front/test_segmented_subnav_contract.py`
+   Added a regression contract tying the L2 left edge to the sidebar shell
+   gutter and locking the required specificity.
+3. `tests/units/front/test_mobile_subnav_contract.py`
+   Updated the mobile contract for the canonical `#obSubnav` selector.
+4. `.cursor/11-frontend-design.mdc`
+   Documented the alignment, specificity requirement, ownership, and
+   anti-pattern.
+
+Modified files:
+- `src/front/static/global/css/main.css`
+- `tests/units/front/test_segmented_subnav_contract.py`
+- `tests/units/front/test_mobile_subnav_contract.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py` → 12 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5543 passed, 289 skipped, 6 deselected, 1 xfailed, 0 failed.
+- Browser verification at 1600×1000 → L2 workspace x=8px, sidebar x=8px, delta=0px; inactive dropdown passed.
+
+## Normalize sidebar content stretch roots
+
+Context: Several Domain, Ontology, and Mapping section partials bypassed the
+shared `.content-section` flex chain, leaving their primary surfaces shorter
+than the sidebar. The normalized roots preserve modal siblings and scoped
+internal-scroll variants.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added a complete sidebar-section inventory, root stretch assertions,
+   balanced-markup checks, explicit internal-scroll variants, and modal-sibling
+   contracts.
+2. `src/front/templates/partials/domain/_domain_metadata.html`
+   Wrapped the primary Data Sources surface while leaving its modals as siblings.
+3. `src/front/templates/partials/domain/_domain_documents.html`
+   Added the shared root around the complete long-form documents surface.
+4. `src/front/templates/partials/domain/_domain_owl_content.html`
+   Added the shared root around the OWL header and editor card.
+5. `src/front/templates/partials/domain/_domain_r2rml.html`
+   Added the shared root around the R2RML header and editor card.
+6. `src/front/templates/partials/ontology/_ontology_information.html`
+   Added the shared root around the information header and card.
+7. `src/front/templates/partials/ontology/_ontology_entities.html`
+   Added the shared root around the hierarchy header and split panel.
+8. `src/front/templates/partials/ontology/_ontology_relationships.html`
+   Added the shared root around the relationships header and split panel.
+9. `src/front/templates/partials/ontology/_ontology_groups.html`
+   Wrapped the primary groups surface while keeping the editor modal outside.
+10. `src/front/templates/partials/ontology/_ontology_business_rules.html`
+    Wrapped the rules surface while preserving modal and context-menu siblings.
+11. `src/front/templates/partials/ontology/_ontology_axioms.html`
+    Wrapped the primary axioms surface while keeping its modal outside.
+12. `src/front/templates/partials/ontology/_ontology_owl_content.html`
+    Added the shared root around the ontology OWL editor.
+13. `src/front/templates/partials/ontology/_pitfalls.html`
+    Added the shared root around the full analysis surface and attribution.
+14. `src/front/templates/partials/mapping/_mapping_information.html`
+    Wrapped the loading and loaded summary states in one shared root.
+15. `src/front/templates/partials/mapping/_mapping_manual.html`
+    Added the shared root around the manual mapping split surface.
+16. `src/front/templates/partials/mapping/_mapping_autoassign.html`
+    Added the shared root around the complete auto-map surface.
+17. `src/front/templates/partials/mapping/_mapping_diagnostics.html`
+    Added the shared root around all diagnostics states and results.
+18. `src/front/templates/partials/mapping/_mapping_r2rml.html`
+    Wrapped the loading state, header, and R2RML editor together.
+19. `src/front/templates/partials/mapping/_mapping_sparksql.html`
+    Wrapped the primary Spark SQL surface while leaving its script sibling intact.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `src/front/templates/partials/domain/_domain_metadata.html`
+- `src/front/templates/partials/domain/_domain_documents.html`
+- `src/front/templates/partials/domain/_domain_owl_content.html`
+- `src/front/templates/partials/domain/_domain_r2rml.html`
+- `src/front/templates/partials/ontology/_ontology_information.html`
+- `src/front/templates/partials/ontology/_ontology_entities.html`
+- `src/front/templates/partials/ontology/_ontology_relationships.html`
+- `src/front/templates/partials/ontology/_ontology_groups.html`
+- `src/front/templates/partials/ontology/_ontology_business_rules.html`
+- `src/front/templates/partials/ontology/_ontology_axioms.html`
+- `src/front/templates/partials/ontology/_ontology_owl_content.html`
+- `src/front/templates/partials/ontology/_pitfalls.html`
+- `src/front/templates/partials/mapping/_mapping_information.html`
+- `src/front/templates/partials/mapping/_mapping_manual.html`
+- `src/front/templates/partials/mapping/_mapping_autoassign.html`
+- `src/front/templates/partials/mapping/_mapping_diagnostics.html`
+- `src/front/templates/partials/mapping/_mapping_r2rml.html`
+- `src/front/templates/partials/mapping/_mapping_sparksql.html`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 24 failed, 25 passed.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 90 passed.
+- `uv run --frozen pytest -q tests/units/front` → 874 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5543 passed, 289 skipped, 6 deselected, 1 xfailed.
+- Rendered 1600×1000 changed-section matrix → 20 passed with zero bottom delta and no horizontal overflow; four modal open/close checks and forced-overflow document scrolling passed.
+
+## Close sidebar internal-scroll height gaps
+
+Context: Review identified viewport-relative pane heights beneath the shared
+sidebar shell and a direct-card stretch collision on Domain Documents. The
+affected sections now rely on bounded flex chains, with one scoped scroll owner
+per component and natural document-page scrolling.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Replaced marker-only scroll checks with selector-specific flex, min-height,
+   and overflow assertions; added the document stack and all-modal sibling
+   contracts.
+2. `tests/units/front/test_clarity_design_contract.py`
+   Expanded the pane-level `100vh` prohibition to the five sidebar-loaded
+   component styles identified by review.
+3. `src/front/templates/partials/domain/_domain_documents.html`
+   Added a neutral inner stack so both cards remain in natural page flow.
+4. `src/front/templates/partials/ontology/_ontology_dataquality.html`
+   Added the shared stretch root while preserving all four modals as siblings.
+5. `src/front/static/ontology/css/ontology-wizard.css`
+   Made tab content the bounded scroll owner and removed viewport arithmetic
+   from the metadata table.
+6. `src/front/static/ontology/css/ontology-pitfalls.css`
+   Moved overflow ownership to the min-height-safe tab content.
+7. `src/front/static/ontology/css/ontology-dataquality.css`
+   Added the card-to-tab flex chain and removed viewport-relative list sizing.
+8. `src/front/static/ontology/css/ontology-business-rules.css`
+   Added the card-to-tab flex chain and routed all rule-list overflow through it.
+9. `src/front/static/registry/css/registry-teams.css`
+   Converted the matrix wrapper to a flexing, min-height-safe scroll owner.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `src/front/templates/partials/domain/_domain_documents.html`
+- `src/front/templates/partials/ontology/_ontology_dataquality.html`
+- `src/front/static/ontology/css/ontology-wizard.css`
+- `src/front/static/ontology/css/ontology-pitfalls.css`
+- `src/front/static/ontology/css/ontology-dataquality.css`
+- `src/front/static/ontology/css/ontology-business-rules.css`
+- `src/front/static/registry/css/registry-teams.css`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py tests/units/front/test_clarity_design_contract.py::test_only_the_root_shell_owns_viewport_height` → 12 failed, 121 passed.
+- GREEN: same focused command → 133 passed.
+- `uv run --frozen pytest -q tests/units/front` → 917 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5585 passed, 289 skipped, 6 deselected, 1 xfailed.
+- Rendered 1600×1000 checks → wizard, pitfalls, ontology data quality, business rules, and settings teams retained zero bottom delta, no horizontal overflow, and functional scoped scrolling; Domain Documents retained natural pane scrolling with two stacked cards; Data Quality and Business Rules modals opened and dismissed.
+
+## Restore standard rounding on Designer panel tabs
+
+Context: The Ontology Designer right-panel tabs explicitly removed every
+standard `.ob-tabs` radius and border, leaving Details, Attributes, References,
+and Constraints visually square while the rest of the application uses a
+rounded tab-strip header.
+
+Changes:
+
+1. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Removed panel-specific radius and border overrides so form tabs inherit the
+   shared rounded strip and edge-tab treatment while retaining compact sizing.
+2. `tests/units/front/test_ontology_split_panel_layout.py`
+   Replaced the square-tab contract with assertions that panel tabs inherit the
+   canonical `.ob-tabs` rounding and keep all four labels on one line.
+3. `.cursor/11-frontend-design.mdc`
+   Updated the split-panel directive to require standard `.ob-tabs` rounding
+   without local border or radius overrides.
+
+Modified files:
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_ontology_split_panel_layout.py tests/units/front/test_mapping_designer_split_layout.py` → 38 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5585 passed, 289 skipped, 6 deselected, 1 xfailed, 0 failed.
+- Browser verification at the 420px default panel → strip radius `14px 14px 0 0`, active Details top-left radius `14px`, all four labels fit without overflow, and tab switching passed.
+
+## Align fixed-height data quality and logs panes
+
+Context: Rendered verification at 1600×1000 found an extra 8px bottom inset
+on Ontology Data Quality, Knowledge Graph Data Quality, and Settings Logs.
+The fixed-height shells now preserve their top and side spacing without
+shortening the primary pane relative to the sidebar.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added exact static contracts requiring zero bottom padding for the shared
+   Data Quality shell and the Settings Logs section.
+2. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Added rendered bottom-alignment coverage for the three affected routes.
+3. `src/front/static/global/css/sidebar-layout.css`
+   Removed only the bottom padding from the fixed-height Data Quality and Logs
+   shells while retaining their existing top, side, overflow, and mobile rules.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `src/front/static/global/css/sidebar-layout.css`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: focused static padding contract → 1 failed with the previous `0.5rem` Data Quality padding.
+- RED: fake-credential rendered 1600×1000 contracts → all three routes reproduced an 8px bottom delta.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 133 passed.
+- GREEN: fake-credential rendered alignment contracts for Ontology Data Quality, Knowledge Graph Data Quality, and Settings Logs → 3 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5586 passed, 292 skipped, 6 deselected, 1 xfailed.
+- `git diff --check` → passed.
+
+## Harden mobile data quality and logs layout contracts
+
+Context: Review found that the Knowledge Graph Data Quality desktop override
+could still defeat shared mobile natural flow, while Settings Logs kept its
+scroll ownership inline. The rendered contracts also needed to measure the
+visible Data Quality card and exercise real page scrolling on mobile.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added an exact mobile override contract, a CSS-owned Logs console scrolling
+   contract, and winning-declaration checks for fixed-height shell padding.
+2. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Changed the Knowledge Graph desktop measurement to the visible Data Quality
+   card and added real wheel/window-scroll checks for mobile Data Quality and
+   Settings Logs, including horizontal-overflow assertions.
+3. `src/front/static/query/css/query-dataquality.css`
+   Restored auto height and visible overflow for the active Data Quality
+   section at mobile widths after its desktop rule.
+4. `src/front/static/global/css/config.css`
+   Made the Logs console the explicit flexing internal scroll owner.
+5. `src/front/templates/partials/settings/_settings_logs.html`
+   Removed only the Logs console flex, minimum-height, and overflow inline
+   declarations.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `src/front/static/query/css/query-dataquality.css`
+- `src/front/static/global/css/config.css`
+- `src/front/templates/partials/settings/_settings_logs.html`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: focused static contracts → 2 failed for the missing exact mobile override and missing CSS-owned Logs scroll rule.
+- RED: focused rendered contracts → Knowledge Graph Data Quality reported computed mobile overflow `hidden`; the desktop visual-card and Settings Logs mobile checks passed.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 135 passed.
+- GREEN: fake-credential desktop and mobile rendered contracts → 5 passed.
+- `uv run --frozen pytest -q tests/units/front` → 920 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5588 passed, 294 skipped, 6 deselected, 1 xfailed.
+
+## Document sidebar bottom-alignment contract
+
+Context: Documentation close-out only. Code and tests for the sidebar shell,
+flex chain, and ≤1px bottom invariant are already recorded in earlier
+sections of this log. This section writes the approved contract into the
+design spec and frontend rule, replacing the old nav `margin` /
+`calc(100% - 1rem)` language. Knowledge Graph (`dtwin`) stretch partials
+were already conforming and were not edited here.
+
+Changes:
+
+1. `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+   New English spec for the five page families, `--ob-chrome-height` shell,
+   0.5rem shell gutter, nav `margin: 0` / `height: 100%`, content
+   `0.5rem 0.5rem 0` (1rem top/left/right, no added bottom), flex/min-height
+   chain, long-form vs fixed-pane scroll ownership, DQ/Logs zero bottom
+   padding, mobile document flow, no pane-level `100vh`, ≤1px invariant,
+   route/testing notes, and Home/About/Access Denied plus true-modal
+   exclusions.
+2. `.cursor/11-frontend-design.mdc`
+   Replaced the contradictory sidebar margin/`calc(100% - 1rem)` contract
+   with shell-owned gutter, bottom alignment, flex chain, scroll ownership,
+   DQ/Logs no-bottom padding, and mobile natural flow. Aligned the Tabs
+   full-height phrases with the shared shell bottom (0.5rem viewport
+   gutter). Left L2 navigation and panel-tab rules otherwise unchanged.
+3. `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+   This documentation close-out section.
+
+Modified files:
+- `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- Docs close-out (this section): `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py tests/units/front/test_clarity_design_contract.py` → 160 passed; `git diff --check` on the three files above → passed.
+- Implementation close-out (already recorded in earlier sections of this log, not produced by these doc files): `uv run --frozen pytest -q tests/units/front` → 920 passed; `uv run --frozen pytest -q -m "not scenario"` → 5588 passed, 294 skipped, 6 deselected, 1 xfailed; `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/navigation/test_sidebar_bottom_alignment.py` → 13 passed. Manual browser verification → 46/46 accessible desktop sidebar routes, 7/7 mobile spot checks, 5/5 true modals; permission-gated sections that did not render a pane were not treated as failures.
+
+## Unify application tabs as underline rails
+
+Context: Application tabs used a heavy rounded container and filled active
+state, while KG Explorer and generated side panels maintained separate visual
+implementations. The redesign establishes one lightweight, responsive tab
+language for page, card, modal, and constrained panel contexts.
+
+Changes:
+
+1. `src/front/static/global/css/components.css`
+   Replaced the fused rounded `.ob-tabs` treatment with a transparent,
+   horizontally scrollable underline rail and added the shared compact density.
+2. `src/front/static/global/css/main.css`
+   Aligned legacy Bootstrap tab fallbacks and restored `.ob-tab-content` as a
+   complete independent bordered surface.
+3. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Applied the shared compact density to generated Ontology form tabs.
+4. `src/front/static/mapping/js/mapping-design.js`
+   Applied the shared compact density to generated Mapping Designer panels.
+5. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Migrated KG Explorer panel navigation to the canonical compact tab classes.
+6. `src/front/static/query/css/query-sigmagraph.css`
+   Removed duplicated tab visual states and retained only panel layout ownership.
+7. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Removed local compact typography and spacing now owned by the shared modifier.
+8. `src/front/templates/partials/ontology/_ontology_cohorts.html`
+   Renamed the non-tab cohort card wrapper to reflect its actual role.
+9. `src/front/templates/partials/dtwin/_query_cohorts.html`
+   Renamed the non-tab cohort card wrapper to reflect its actual role.
+10. `src/front/static/query/css/query-cohorts.css`
+    Updated the cohort card selector after the semantic rename.
+11. `src/front/static/global/css/pages.css`
+    Removed the unused `.custom-tabs` implementation.
+12. `src/front/static/global/css/mapping.css`
+    Removed orphan panel and mapping-modal tab implementations.
+13. `tests/units/front/test_clarity_design_contract.py`
+    Replaced rounded/fill contracts with underline, focus, density, overflow,
+    migration, semantic naming, and dead-style assertions.
+14. `tests/units/front/test_ontology_split_panel_layout.py`
+    Updated the panel contract to require the shared compact rail without local
+    typography or spacing overrides.
+15. `.cursor/11-frontend-design.mdc`
+    Documented the global underline rail, independent content surfaces, two
+    densities, responsive overflow, focus state, and anti-patterns.
+16. `.planning/ui-refresh/mockups/tabs-underline-rail.html`
+    Added the approved interactive design mockup covering standard, compact,
+    and constrained mobile contexts.
+17. `.planning/ui-refresh/mockups/renders/tabs-underline-rail.png`
+    Added the rendered design reference.
+
+Modified files:
+- `src/front/static/global/css/components.css`
+- `src/front/static/global/css/main.css`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/static/query/css/query-sigmagraph.css`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/templates/partials/ontology/_ontology_cohorts.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/static/query/css/query-cohorts.css`
+- `src/front/static/global/css/pages.css`
+- `src/front/static/global/css/mapping.css`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `.planning/ui-refresh/mockups/tabs-underline-rail.html`
+- `.planning/ui-refresh/mockups/renders/tabs-underline-rail.png`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: new tab-contract tests failed for the previous filled, rounded,
+  non-scrollable component and unmigrated variants.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py tests/units/front/test_ontology_split_panel_layout.py tests/units/front/test_analytics_dashboard.py tests/units/front/test_mapping_designer_split_layout.py` → 166 passed, 1 warning.
+
+## Restore Graph Chat mobile natural flow
+
+Context: The desktop Graph Chat pane intentionally used a bounded flex layout
+with one internal message scroller, but its active-pane overflow clamp also won
+at 390x844. This prevented the mobile sidebar page from using natural window
+scrolling.
+
+Changes:
+
+1. `tests/units/front/test_clarity_design_contract.py`
+   Added Graph Chat, Knowledge Graph Data Quality, and Settings configuration
+   stylesheets to the pane-level `100vh` prohibition scan.
+2. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Added rendered Graph Chat coverage for desktop flex ownership and the
+   internal message scroller, plus mobile visible overflow, zero horizontal
+   overflow, document growth, and real window scrolling at 390x844.
+3. `src/front/static/query/css/query-chat.css`
+   Removed the redundant desktop `height: 100%` declaration and added a later
+   equal-specificity mobile reset with `height: auto` and `overflow: visible`.
+   The inner chat flex chain and desktop message scroller remain unchanged.
+4. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added an exact-selector mobile media-query contract requiring
+   `#chat-section.sidebar-section.active` to restore `height: auto` and
+   `overflow: visible`, parallel to the Knowledge Graph Data Quality contract.
+5. `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+   Named the Graph Chat same-selector reset in the mobile natural-flow and
+   static-testing contracts.
+6. `.cursor/11-frontend-design.mdc`
+   Added Graph Chat to the canonical mobile sidebar reset rule alongside
+   Knowledge Graph Data Quality.
+
+Modified files:
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `src/front/static/query/css/query-chat.css`
+- `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED static scan: `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py::test_only_the_root_shell_owns_viewport_height` → 1 passed; the newly scanned files contained no pane-level `100vh`.
+- RED rendered mobile Graph Chat: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/navigation/test_sidebar_bottom_alignment.py -k 'mobile and kg-chat'` → 1 failed, 13 deselected; computed active-pane overflow was `hidden` instead of `visible`.
+- GREEN focused static contracts (Data Quality exact reset, Graph Chat exact reset, pane-level `100vh` scan) → 3 passed.
+- Fake-credential full alignment E2E → 15 passed, including desktop Graph Chat bottom alignment/internal `overflow-y: auto` and mobile window-scroll coverage.
+- Mandatory full non-scenario suite → 5595 passed, 296 skipped, 6 deselected, 1 xfailed, 23 warnings, 0 failed in 45.10s.
+- IDE lints on the changed code/test/documentation files → no errors.
+- `git diff --check` → passed.
 

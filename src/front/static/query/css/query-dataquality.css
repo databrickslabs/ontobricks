@@ -91,3 +91,10 @@
 .dq-violations-actions-col {
     width: 40px;
 }
+
+@media (max-width: 768px) {
+    #dataquality-section.active {
+        height: auto;
+        overflow: visible;
+    }
+}

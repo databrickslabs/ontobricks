@@ -52,7 +52,7 @@ other tokens are **fixed** — they are not overridden at runtime.
 | On-primary foreground *(configurable)* | `--db-on-primary` | `#FFFFFF` |
 | Selected text *(configurable)* | `--db-primary-selected-text` | derived dark variant |
 | Warm canvas / surface / line *(fixed)* | `--db-canvas-warm`, `--db-surface-warm`, `--db-line-soft` | `#FAFAF9`, `#FFFFFF`, `#F4F2EF` |
-| App chrome surfaces *(fixed)* | `--db-navbar-bg`, `--db-subnav-bg` | `#FFFFFF`, `#F7F6F4` |
+| App chrome/control surfaces *(fixed)* | `--db-navbar-bg`, `--db-surface-warm` | `#FFFFFF`, `#FFFFFF` |
 | Borders *(fixed)* | `--db-border`, `--db-border-light` | `#ECEAE6`, `#F4F2EF` |
 | Text *(fixed)* | `--db-text`, `--db-text-secondary`, `--db-text-muted` | `#191817`, `#6B6864`, `#6F6B65` |
 | Semantic tinted status *(fixed)* | `--db-status-success/warning/danger/info/draft` + `*-soft-bg` | success / warning / danger / info / draft on soft backgrounds |
@@ -85,6 +85,9 @@ Configuration → UI**. The runtime theme system follows these rules:
 All `--db-status-*`, `--db-*-bg`, `--db-text-*`, `--db-border-*`,
 `--db-navbar-bg`, `--db-subnav-bg`, radii, shadows, and transitions are **not
 overridable** via the branding feature. They remain as defined in `main.css :root`.
+`--db-subnav-bg` is retained as a compatibility token but is not the L2 row
+surface: `#obSubnav` is transparent and its segmented workspace control uses
+`--db-surface-warm`.
 `--ovz-*` tokens are fully isolated and are never touched by runtime branding.
 
 **First-paint rules**
@@ -198,7 +201,7 @@ the entire app chrome — never duplicate or substitute any of it:
 | Element | Provided by `base.html` | Don't reimplement |
 |---------|-------------------------|-------------------|
 | L1 navbar (top) | `<nav class="navbar navbar-expand-lg navbar-light">` driven by `menu_config.json` | a custom top bar |
-| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains Domain / Ontology / Mapping / KG dropdowns + breadcrumb + Save Domain button | a second nav element |
+| L2 subnav | `<nav id="obSubnav" class="ob-subnav">` — hidden until a domain is loaded (`hasDomain`), contains the segmented Domain / Ontology / Mapping / KG workspace control, breadcrumb, Save, Switch Version and Close actions | a second nav element |
 | Breadcrumb | `#obBreadcrumb` inside `#obBreadcrumbWrap` (`<li>` in the L2 subnav row), populated by `breadcrumb.js` | a per-page breadcrumb |
 | Save Domain button | `#menuSaveDomain` (`.ob-subnav-save-btn`) in the right side of the L2 subnav | a per-page save button |
 | Domain loading overlay | `#domainLoadingOverlay` / `.domain-loading-overlay` | another full-page spinner |
@@ -235,9 +238,10 @@ Pick one, do not invent a third.
 
 #### Layout 1 — Sidebar layout (default for app pages)
 
-Used by `ontology.html`, `mapping.html`, `dtwin.html`, `registry.html`,
-`domain.html`, `settings.html`. This is the default for any page that
-exposes more than one functional section.
+Used by the five sidebar page families: `domain.html`, `ontology.html`,
+`mapping.html`, `dtwin.html`, `settings.html`. This is the default for any
+page that exposes more than one functional section. Registry browse is a
+modal, not a sixth sidebar family.
 
 ```html
 <div class="container-fluid px-0">
@@ -277,8 +281,10 @@ Rules for sidebar pages:
   never inline the section bodies.
 - `.content-wrapper` constraints are intentionally overridden when a
   `.sidebar-layout` is present (see `sidebar-layout.css`) — full width,
-  full viewport height minus chrome. Do not re-add `padding` or
-  `max-width` on the wrapper.
+  zero wrapper padding. Desktop viewport height is owned by
+  `.sidebar-layout` via `--ob-chrome-height`. Do not re-add `padding` or
+  `max-width` on the wrapper, and do not give descendant panes their own
+  `100vh` arithmetic.
 
 #### Layout 2 — Standalone content (single-purpose pages only)
 
@@ -351,12 +357,13 @@ keyboard handling.
 
 - Sidebar width: `200px` expanded, `48px` collapsed (driven by
   `.sidebar-nav.collapsed`). Do not override per page.
-- The sidebar is a **framed card**, not a flush rail: `0.5rem` margin,
-  `1px solid var(--db-border)`, `var(--db-radius-card)` on all four
-  corners, `height: calc(100% - 1rem)` — same language as the
-  split-panel panes. The gutter is what makes the rounding possible, so
-  don't drop the margin and keep a radius, and don't reintroduce the
-  `border-right`-only hairline.
+- The sidebar is a **framed card**, not a flush rail: `1px solid
+  var(--db-border)`, `var(--db-radius-card)` on all four corners,
+  `margin: 0`, `height: 100%`. The **shell** owns the 0.5rem outer
+  gutter (`.sidebar-layout { padding: 0.5rem; gap: 0.5rem; }`); do not
+  put a 0.5rem margin on `.sidebar-nav` or size it with
+  `calc(100% - 1rem)`. Don't reintroduce the `border-right`-only
+  hairline. See *Desktop geometry, scroll, and bottom alignment*.
 - Nav-link visual: `0.82rem`, left-border accent of `3px transparent`
   slot with rounded row targets and indigo-soft hover
   (`--db-hover-indigo`). Active state uses a stronger indigo-soft
@@ -389,6 +396,61 @@ keyboard handling.
   `localStorage` key for the whole app.
 - ❌ Adjusting `--ob-chrome-height` from page code — the breadcrumb
   computes it.
+- ❌ Pane-level `100vh` / `calc(100vh - Npx)` on canvases, lists, or
+  consoles. Only `.sidebar-layout` keys height off the viewport.
+- ❌ Extra bottom padding on `.sidebar-content` or a fixed pane that
+  shortens the surface relative to the menu.
+
+### Desktop geometry, scroll, and bottom alignment
+
+Canonical source: `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+and `global/css/sidebar-layout.css`.
+
+**Shell.** On desktop, `.sidebar-layout` is
+`height` / `max-height: calc(100vh - var(--ob-chrome-height, 60px))`,
+`padding: 0.5rem`, `gap: 0.5rem`, `box-sizing: border-box`,
+`overflow: hidden`. `--ob-chrome-height` remains navbar + L2, written only
+by `breadcrumb.js`.
+
+**Gutter.** `.sidebar-nav` fills that shell (`margin: 0; height: 100%`).
+`.sidebar-content` uses `padding: 0.5rem 0.5rem 0`. Combined with the
+shell, that is a 0.5rem outer gutter, **1rem** top/left/right on the
+content, and **no added bottom inset** (the shell padding already supplies
+the bottom gutter). Data Quality
+(`.sidebar-content:has(#dataquality-section.active)`) and Logs
+(`#logs-section.active`) keep the same zero-bottom padding (`0.5rem 0.5rem 0`
+and `0.5rem 1rem 0`). Do not restore a bottom padding that recreates the
+8px inset.
+
+**Flex chain.** `.sidebar-content` is a column flex container with
+`min-height: 0`. `.sidebar-section.active` is `flex: 1 1 0; min-height: 0`.
+Direct-child `.content-section` continues the chain (`flex: 1; min-height: 0`).
+Primary surfaces (cards, split shells, tab wraps) stretch through that
+chain. True modals stay siblings of the stretch root.
+
+**Scroll ownership.** Default / long-form pages scroll in
+`.sidebar-content` (`overflow-y: auto`). Fixed-height panes (Explorer,
+Query, Data Quality, Logs) hide overflow on the content shell and scroll
+inside a dedicated owner (canvas, GraphiQL, DQ tab body,
+`#logsConsoleWrap` in `config.css` — not inline style). Alignment is the
+main surface vs the menu, not stuffing every form field into one viewport.
+
+**Rendered invariant.** At 1600×1000, `.sidebar-nav` and the visible
+primary pane share `getBoundingClientRect().bottom` within **1px**.
+Fixed-height routes must not grow the document past the viewport by more
+than 1px.
+
+**Mobile.** Below `768px` the shell returns to normal document flow:
+`height: auto`, `max-height: none`, `overflow: visible`, including
+specificity-matched `:has()` resets. Do not keep a pane at `100vh` or
+`overflow: hidden` on narrow viewports. Knowledge Graph Data Quality must
+reset `#dataquality-section.active` to `height: auto; overflow: visible`
+after its desktop rule. Graph Chat must likewise reset the same desktop
+selector, `#chat-section.sidebar-section.active`, to
+`height: auto; overflow: visible` in a later mobile rule.
+
+**Excluded.** Home, About, and Access Denied stay on Layout 2. True
+modals are not the measured pane.
 
 ### Two-Level Navigation (L1 + L2 subnav)
 
@@ -444,6 +506,15 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 - `--ob-chrome-height` = navbar height + subnav height (subnav already
   contains the breadcrumb). Updated by `_updateChromeHeight()` in
   `breadcrumb.js` and called from `updateDomainMenuVisibility`.
+- Active-state behavior is owned by `initSubnavActiveState()` and
+  `disableCurrentSubnavDropdown()` in `navbar.js`. The route-prefix match adds
+  `.active`, removes Bootstrap dropdown wiring and the matching menu, sets
+  `aria-current="page"`, and prevents navigation. Do not hard-code the active
+  workspace in Jinja and do not duplicate this behavior in page scripts.
+- Every non-active workspace keeps its original `.dropdown`,
+  `.dropdown-toggle`, `data-bs-toggle="dropdown"`, route and menu. A click opens
+  the existing Bootstrap menu; selecting an item navigates to its existing
+  route/section.
 - Visual contract: the L2 row is transparent with no full-width bottom
   border. Domain / Ontology / Mapping / Knowledge Graph sit in one compact
   white segmented control (`--db-surface-warm`, one-pixel `--db-border`,
@@ -453,6 +524,27 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
   use the same hover as the left sidebar (`--db-hover-indigo` well,
   `9px` radius) — not a solid indigo invert, not a grey well. L1/L2
   structure, order, and ownership are immutable.
+- The segmented control's left edge aligns exactly with the framed sidebar
+  panel's left edge. Both use the shell's `0.5rem` outer gutter:
+  `.sidebar-layout { padding: 0.5rem; }` and
+  `#obSubnav .container-fluid { padding-left: 0.5rem !important; }`. The ID
+  specificity and priority are required because the later-loaded legacy
+  full-width body rule zeroes nested `.container-fluid` padding with
+  `!important`. Keep the L2 right padding independent at `1rem` (`0.5rem` on
+  mobile).
+- The selected segment is rounded inside the outer control
+  (`calc(var(--db-radius-control) - 2px)`), not a square tab and not an
+  underlined tab. Keyboard focus uses `--db-focus-ring` plus a transparent
+  outline for forced-colour support.
+- Domain-action hierarchy is fixed: Save is the only filled primary control
+  (`--db-primary` / `--db-on-primary`); Switch Version remains a neutral white
+  outline with an indigo-soft hover; Close remains a neutral white outline
+  with danger text and a soft-danger hover. Preserve their existing IDs,
+  permission classes, action handlers and order.
+- Shared ownership: L2 markup stays in `templates/base.html`, styling stays in
+  `static/global/css/main.css`, active behavior stays in
+  `static/global/js/navbar.js`, and menu contents stay driven by
+  `menu_config.json`. Never add per-page L2 CSS or JS.
 - Mobile contract (below `768px`): keep all four workspace targets plus
   Save / Switch Version / Close, but show them as titled icons by hiding
   only their `.ob-subnav-label`. Hide the redundant inline breadcrumb and
@@ -488,6 +580,18 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
 - ❌ Adding `nav-requires-domain` to the L2 tab toggles — the subnav
   itself being hidden is the gate. Use `dropdown-requires-domain` on
   items inside a dropdown that need UC.
+- ❌ Restoring a full-width L2 background, bottom border, active underline,
+  square selected tab or horizontally scrollable strip.
+- ❌ Removing dropdowns from inactive workspaces, or restoring dropdown or
+  navigation behavior on the active workspace.
+- ❌ Splitting the four workspaces into independent unframed controls; they
+  stay inside `.ob-subnav-workspaces > .ob-subnav-workspace-list`.
+- ❌ Giving L2 a different left gutter from `.sidebar-layout`; the segmented
+  control and sidebar panel must remain vertically aligned.
+- ❌ Filling Switch Version or Close with the primary colour. Save is the only
+  filled primary action in L2.
+- ❌ Hard-coding `.active`, `aria-current`, dropdown removal, or route-prefix
+  checks in `base.html` or page code — `navbar.js` owns that state.
 - ❌ Moving the Save Domain button out of the L2 subnav.
 - ❌ Manually setting `--ob-chrome-height` from page code.
 
@@ -660,48 +764,30 @@ so `main.css` re-pins `.form-control-sm`, `.form-select-sm` and every
 `.input-group-sm > *` to the token — otherwise small joined controls silently
 fall back to Bootstrap's legacy 4px next to their full-size siblings.
 
-### Tabs (`.ob-tabs`) — square indigo-soft selected style
+### Tabs (`.ob-tabs`) — transparent underline rail
 
-There is **one** allowed visual treatment for tab navigations
-across the app: square tabs with an indigo-soft selected fill. It lives in
-`global/css/components.css` and matches Knowledge Graph / Explorer
-right-panel tabs (`.sg-panel-tabs`): **square selected tabs**,
-`--db-primary-light` background on the active item, `--db-primary-darker`
-text, and a 2px `--db-primary` baseline. The strip that holds them is
-rounded on its top corners (see below).
-**Every new tab navigation must use it.** Do not introduce a
-boxed/Bootstrap-default look, a pill style, or a per-page custom
-tab CSS file.
+There is **one** tab-navigation treatment across the application. It lives in
+`global/css/components.css`: a transparent, square rail with a 1px warm
+baseline. The active item keeps a transparent background, uses
+`--db-primary-darker` text at weight 600, and draws a 2px
+`--db-primary` underline. The rail has no outer fill, card outline, shadow, or
+radius, so it remains subordinate to the L2 workspace control and surrounding
+content surfaces.
 
-The class bakes in the full visual contract: white/warm background,
-`padding: 0.5rem 1rem 0` (= `px-3 pt-2`), a 1px warm outline on the top /
-left / right edges, **rounded top corners** (`--db-radius-card` on
-top-left / top-right, square at the bottom), and a 2px warm baseline at
-the bottom that turns primary-coloured under the active tab. The strip is
-the *head* of the tabs + body shape: it supplies the outer rounding on
-top, the body supplies it at the bottom, and the seam between them stays
-flush. Note the two radii are different concerns — the **strip** is
-rounded, the **selected tab** inside it is square.
+Every tab navigation must carry `nav nav-tabs ob-tabs`. Use
+`ob-tabs--compact` only for constrained right-hand panels. Do not introduce
+boxed Bootstrap tabs, pills, active fills, rounded selected items, or per-area
+visual states.
 
-When the strip is **inside** a `.card` / `.card-body` / `.card-header`,
-the parent card already provides the outer outline. The CSS detects
-this via descendant selectors (`.card-body > .nav-tabs.ob-tabs`, …)
-and **drops** the strip's own top / left / right border so you never
-get a double border. Tab links stay square, and the outer outline comes
-from the parent card.
+The rail owns single-line responsive behaviour: `flex-wrap: nowrap`,
+`white-space: nowrap`, and horizontal overflow. Labels never wrap or truncate;
+users can scroll the rail on narrow screens. Keyboard focus uses a visible 2px
+`--db-primary` inset outline and must never be removed.
 
-When the strip is **followed** by a sibling `.card`,
-`.ob-tab-content`, or `.tab-content`, an adjacent-sibling rule
-(`.nav-tabs.ob-tabs + .card { border-top: none !important; … }`)
-strips the next element's `border-top` and squares its top corners
-so the whole tabs + body unit reads as one continuous bordered
-shape. **Don't** add `border-top-0 rounded-top-0` on the next
-`.card` yourself — it's now redundant (and was the legacy
-work-around for the old boxed tabs).
-
-You should never have to re-apply spacing, background or border
-utilities on the tab `<ul>` — the strip already looks like the
-Ontology > Cohorts header out of the box.
+Tab content is an **independent surface**. `.ob-tabs` does not remove the next
+card's border or square its corners. Use plain `.tab-content` inside a parent
+card, or `.ob-tab-content` when the content itself needs a complete bordered,
+rounded, padded surface.
 
 **Canonical skeleton**
 
@@ -752,54 +838,41 @@ Ontology > Cohorts header out of the box.
 - Every tab button starts with a Bootstrap icon
   (`<i class="bi bi-<icon> me-1"></i>`) followed by the label.
   Never an icon-less tab.
-- The active state is a **square** tab with `--db-primary-light`
-  fill, `--db-primary-darker` text, and a 2px `--db-primary`
-  baseline. Same language as L2 subnav selected items and
-  `.sg-panel-tabs`. Active colour, fill and radius are owned by
-  `ob-tabs` in `components.css` — **don't override**
-  `.nav-link.active` in a per-area file.
-- **Font-size is intentionally inherited.** This is so each page
-  keeps its existing sizing — don't set `font-size` on the
-  `ob-tabs` selector itself. If a section needs smaller tabs
-  (e.g. Data Quality, Business Rules, Inference, Axioms), apply
-  Bootstrap's `.small` to the `<ul>`. If a section needs a
-  one-off size (e.g. Cohort uses `0.9rem`), put **only** that
-  font-size override in the area's CSS file, scoped to the
-  area-specific class — never re-declare colour, padding,
-  border-bottom, or hover/active styles.
-- The only Bootstrap utilities that should sit alongside
-  `ob-tabs` are layout / sizing helpers (`nav-fill`,
-  `flex-shrink-0`, `mb-0`) and the size hint `.small`. The
-  catalogued combinations in the codebase are:
+- The active state has no fill and no radius. Active colour, weight, and
+  underline are owned by `.ob-tabs`; never override `.nav-link.active` in an
+  area stylesheet.
+- Two densities are allowed:
+  - Standard: `.ob-tabs` (`0.9rem`, `0.5rem 0.875rem`) for pages, cards,
+    settings, and modals.
+  - Compact: `.ob-tabs.ob-tabs--compact` (`0.75rem`, `0.35rem 0.6rem`) for
+    narrow right-hand panels and generated panel tabs.
+- Layout helpers (`nav-fill`, `flex-shrink-0`, `mb-0`) may accompany
+  `ob-tabs`. The catalogued combinations are:
   - `nav nav-tabs ob-tabs mb-0` — Domain / Settings.
-  - `nav nav-tabs ob-tabs` — Import / Wizard / Ontology Cohorts.
+  - `nav nav-tabs ob-tabs` — Import / Wizard / Registry modal.
   - `nav nav-tabs ob-tabs nav-fill` — Ontology DQ / Business
     Rules / Axioms.
   - `nav nav-tabs ob-tabs nav-fill flex-shrink-0` —
     DT-DataQuality / DT-Inference (the `flex-shrink-0` keeps the
     tab strip a fixed-size header inside their flex card body).
-  - The `.nav-link` font-size is now baked into `ob-tabs`
-    (`0.9rem`), so the legacy `.small` modifier is no longer
-    needed and has been removed from the dq / business-rules /
-    axioms / dt pages. Don't add it back.
-- Do **not** re-apply spacing utilities on the tab `<ul>`. The
-  padding (`px-3 pt-2` equivalent) and white background are
-  already baked in. Adding `px-3 pt-3` / `pt-2` / `pt-3` /
-  `bg-white` on top double-pads the strip and breaks alignment
-  between sibling pages.
+  - `nav nav-tabs ob-tabs ob-tabs--compact` — Ontology Designer and Mapping
+    Designer generated forms.
+  - `nav nav-tabs ob-tabs ob-tabs--compact sg-panel-tabs` — KG Explorer.
+- Do not add `.small` or per-area font/padding declarations. Select the
+  standard or compact density instead.
+- Do not re-apply spacing or background utilities (`px-3`, `pt-2`, `pt-3`,
+  `bg-white`) on the tab `<ul>`.
 - Do **not** add `style="gap: 2px;"` (or any inline `style`)
   on the tab `<ul>` — the gap of 0 is set by `ob-tabs` and is
   what makes the underline read as one continuous baseline.
-- The tab content can sit inside a Bootstrap `.card` or stand
-  alone. The adjacent-sibling rule
-  (`.nav-tabs.ob-tabs + .card { border-top: none !important; … }`)
-  fuses the strip and the next `.card` / `.ob-tab-content` /
-  `.tab-content` into one bordered shape — **don't** add
-  `border-top-0 rounded-top-0` yourself.
+- The tab content can sit inside a Bootstrap `.card` or stand alone. Never
+  visually fuse the rail to a following card by removing its top border or
+  top radii.
 - **Full-height pattern (preferred for tabbed pages).** Tabs +
   body should fill the page from below the section header to the
-  bottom of the viewport, exactly like the single card on
-  Ontology > Information. Two ways to achieve this:
+  shared sidebar/shell bottom (the 0.5rem viewport gutter),
+  exactly like the single card on Ontology > Information. Two
+  ways to achieve this:
   1. Place the `<ul ob-tabs>` and the body card as **direct
      children of `.content-section`**. The existing
      `sidebar-layout.css` rule
@@ -814,41 +887,34 @@ Ontology > Cohorts header out of the box.
      its child `.tab-content` / `.ob-tab-content` / `.card`.
      When `ob-tabs-wrap` is itself a direct child of
      `.content-section`, it grows to fill the section.
-- The legacy boxed pane `.ob-tab-content` is preserved for
-  pages that still need a bordered content area, but new tabs
-  should default to plain `.tab-content` (no boxed wrapper).
-  Reach for `.ob-tab-content` only when the tab content
-  genuinely needs a bordered/padded surface independent of any
-  parent `.card`.
+- `.ob-tab-content` is an optional independent bordered surface with complete
+  card rounding. New tabs should default to plain `.tab-content` inside their
+  existing parent card.
 
 **Anti-patterns**
 
-- ❌ Bare `<ul class="nav nav-tabs">` without `ob-tabs` — that
-  triggers the legacy boxed look.
+- ❌ Bare `<ul class="nav nav-tabs">` without `ob-tabs`.
 - ❌ Pill tabs (`nav-pills`) anywhere in the app.
 - ❌ Per-area redeclaration of `.nav-link` colour, padding,
   border-bottom, or `.nav-link.active` styling. The whole point
   of `ob-tabs` is one shared treatment.
-- ❌ Re-applying `px-3 pt-2` / `px-3 pt-3` / `bg-white` on the
-  tab `<ul>` — those are baked into `ob-tabs`. Stacking them
-  double-pads the strip.
+- ❌ Active fills, rounded selected items, or an outer rounded/filled tab
+  strip.
+- ❌ Re-applying `px-3 pt-2` / `px-3 pt-3` / `bg-white` on the tab `<ul>`.
 - ❌ Adding Bootstrap's `.small` (or any `font-size` override) on
-  the tab `<ul>` or `.nav-link`. The unified `0.9rem` size is
-  baked into `ob-tabs` so every tab head reads at the same size
-  across the app.
-- ❌ Re-applying `border-top-0 rounded-top-0` on the `.card`
-  that follows `<ul ob-tabs>` — the adjacent-sibling rule
-  already handles it. Leaving the utility there is harmless but
-  noisy.
+  the tab `<ul>` or `.nav-link`; use `ob-tabs--compact`.
+- ❌ Removing the top border/radius from a following card to fuse it with the
+  tab rail.
 - ❌ A short, free-floating tabs-card that doesn't fill the page
   height. Use the *Full-height pattern* above (direct children of
   `.content-section`, or `.ob-tabs-wrap`) so the tabs reach the
-  bottom of the viewport like the Ontology > Information card.
+  shared sidebar/shell bottom (the 0.5rem viewport gutter) like
+  the Ontology > Information card.
 - ❌ Inline `style="gap:…"` or `style="font-size:…"` on the tab
-  `<ul>` — use `.small` or an area class.
-- ❌ Hand-rolled tab JS (clicks toggling `display: none`).
-  Always use Bootstrap's `data-bs-toggle="tab"` so keyboard
-  navigation, ARIA and `shown.bs.tab` events are free.
+  `<ul>`.
+- ❌ New hand-rolled tab engines. Use Bootstrap's `data-bs-toggle="tab"`. The
+  existing Ontology form adapter may remain, but it must emit the shared
+  compact classes and preserve `role`, `aria-selected`, and one active pane.
 - ❌ Tabs without icons or without `aria-selected` /
   `aria-controls`.
 - ❌ Adding tab styles to `main.css`'s `.nav-tabs` block —
@@ -874,19 +940,20 @@ The contract:
 - **The panel is permanent, not a drawer.** `min-width: 200px`,
   `max-width: 50%`; the default width is `320px` for a read-only details
   panel (Explorer) and `420px` where the panel hosts edit forms (Ontology),
-  which is what the 4-tab `.form-tabs-nav` strip needs to stay on one line —
-  that strip is `flex-wrap: nowrap`, so a narrower default clips it.
+  which gives the four compact tabs a comfortable default. The shared rail
+  remains on one line and scrolls horizontally when the panel is narrower.
   It is created *before* the view renders — canvases read their width once
   (D3 / Sigma size from `container.clientWidth`), so a panel that appears
   later leaves the graph centred on the wrong axis.
 - **Empty state instead of collapsing.** With nothing selected the panel
-  title is **Select Item** (same copy as Mapping Designer) and the body
+  title is **Select Item** with no leading icon (same copy as Mapping Designer) and the body
   holds a centred placeholder (`bi-cursor` icon at `3rem`,
   `--db-text-muted`, "Click on an entity or relationship to view
   details"). Clicking the empty canvas returns to that placeholder — and
   flushes any pending edit first, since it is the only way out.
-  Tabs inside the panel stay square (`border-radius: 0`); the pane card
-  already carries `--db-radius-card`.
+  Tabs inside the panel use `.ob-tabs.ob-tabs--compact`; area styles may retain
+  only layout rules such as `flex-shrink`. Typography, spacing, overflow,
+  focus, hover, and active states remain owned by the shared component.
 - **No close button.** The panel can't be dismissed, so a cross would be a
   dead control.
 - **Drag handle**: an `8px` hit area holding a `3px × 40px` bar,
@@ -945,12 +1012,10 @@ These already exist; reuse before reinventing.
   `domain-actions.js`. Do not add a second Save button on a page.
 - **New Domain dialog** — `showNewDomainDialog()` (from `utils.js`). Returns
   `{ name, description, llm_endpoint }` or `null`.
-- **Tabs** — `.nav.nav-tabs.ob-tabs` (square, indigo-soft selected fill).
-  One shared visual treatment defined in `components.css`; see
-  *Tabs (`.ob-tabs`) — square indigo-soft selected style* above for the
-  canonical skeleton, allowed combinations and anti-patterns. The legacy
-  `.ob-tab-content` is kept only for the rare case where a bordered
-  pane is genuinely needed.
+- **Tabs** — `.nav.nav-tabs.ob-tabs` (transparent underline rail).
+  One shared visual treatment and two densities are defined in
+  `components.css`; see *Tabs (`.ob-tabs`) — transparent underline rail*
+  above. `.ob-tab-content` is the optional independent bordered surface.
 - **Cards** — Bootstrap `.card` / `.card-header`; styling already neutered
   to project tokens (`14px` radius, one-pixel border, no resting shadow).
 - **Forms** — Bootstrap `.form-control` / `.form-select` / `.form-label`;
@@ -1230,6 +1295,9 @@ src/front/static/
   the `.active` class via `SidebarNav.switchTo(...)`.
 - ❌ Writing `--ob-chrome-height` from page code — `breadcrumb.js` /
   `updateDomainMenuVisibility` own it.
+- ❌ Pane-level `100vh` on sidebar pages, extra content `padding-bottom`
+  that breaks menu/pane bottom alignment, or restoring
+  `.sidebar-nav { margin: 0.5rem; height: calc(100% - 1rem); }`.
 - ❌ A custom per-page breadcrumb. Extend `_ROUTE_MAP` in
   `breadcrumb.js` instead.
 - ❌ Toggling `#obSubnav` or `#obBreadcrumbWrap` from page code.
@@ -1238,11 +1306,11 @@ src/front/static/
 - ❌ A Save Domain button anywhere outside `#obSubnav`.
 - ❌ Calling `alert()` / `prompt()` for new-domain input — use
   `showNewDomainDialog()` from `utils.js`.
-- ❌ Bare `<ul class="nav nav-tabs">` (no `ob-tabs`), pill tabs,
-  rounded selected tabs, or per-area redeclaration of `.nav-link` /
-  `.nav-link.active` styles. All tab nav uses the shared `ob-tabs`
-  square indigo-soft selected treatment from `components.css` (see
-  *Tabs (`.ob-tabs`) — square indigo-soft selected style*).
+- ❌ Bare `<ul class="nav nav-tabs">` (no `ob-tabs`), pill tabs, active
+  fills, rounded selected tabs, or per-area redeclaration of `.nav-link` /
+  `.nav-link.active` styles. All tab nav uses the transparent underline rail
+  from `components.css` (see *Tabs (`.ob-tabs`) — transparent underline
+  rail*).
 - ❌ A second spinner style. Use the single brand spinner — inline via
   Bootstrap `.spinner-border` (auto-branded) or `.ob-loading-spinner` for
   large/centered cases. No custom keyframes, spinner libraries, emoji/

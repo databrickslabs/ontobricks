@@ -449,9 +449,9 @@ body {
     z-index: 1040;
 }
 
-.ob-subnav .container-fluid {
-    padding-left: 1rem;
-    padding-right: 1rem;
+#obSubnav .container-fluid {
+    padding-left: 0.5rem !important;
+    padding-right: 1rem !important;
 }
 
 .ob-subnav-nav {
@@ -865,18 +865,29 @@ body {
 }
 
 /* ==========================================================================
-   Tabs (Nav Tabs) – neutral standard styling
+   Tabs (Nav Tabs) — transparent underline fallback
+
+   `.ob-tabs` in components.css owns the canonical component. These rules keep
+   third-party or legacy Bootstrap tab markup visually compatible.
    ========================================================================== */
 .nav-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: 0;
+    background: transparent;
+    border: 0;
     border-bottom: 1px solid var(--db-border);
+    border-radius: 0;
     margin-right: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .nav-tabs .nav-link {
     color: var(--db-gray-600);
     background: transparent;
-    border: 1px solid transparent;
-    border-bottom: none;
+    border: none;
+    border-bottom: 2px solid transparent;
     border-radius: 0;
     padding: 0.5rem 1rem;
     font-weight: 500;
@@ -886,25 +897,30 @@ body {
 .nav-tabs .nav-link:hover {
     color: var(--db-text);
     background: var(--db-hover-warm);
-    border-color: var(--db-border-light);
+    border-bottom-color: transparent;
 }
 
 .nav-tabs .nav-link.active {
-    background-color: var(--db-primary-light) !important;
+    background-color: transparent !important;
     color: var(--db-primary-darker) !important;
-    border: 1px solid transparent !important;
+    border: none !important;
     border-bottom-color: var(--db-primary) !important;
     border-radius: 0;
     margin-bottom: -1px;
     font-weight: 600;
 }
 
-/* Bordered tab-content pane (use .ob-tab-content on the tab-content div) */
+.nav-tabs .nav-link:focus-visible {
+    outline: 2px solid var(--db-primary);
+    outline-offset: -3px;
+    box-shadow: none;
+}
+
+/* Optional independent bordered content surface. */
 .ob-tab-content {
     background: var(--db-surface-warm);
     border: 1px solid var(--db-border);
-    border-top: none;
-    border-radius: 0 0 var(--db-radius-card) var(--db-radius-card);
+    border-radius: var(--db-radius-card);
     padding: 1.25rem;
     margin-right: 12px;
 }
@@ -960,8 +976,8 @@ body {
         display: none !important;
     }
 
-    .ob-subnav .container-fluid {
-        padding-inline: 0.5rem;
+    #obSubnav .container-fluid {
+        padding-inline: 0.5rem !important;
     }
 
     .ob-subnav-link,

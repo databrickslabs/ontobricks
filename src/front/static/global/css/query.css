@@ -6,6 +6,19 @@
    EDITOR SECTION - Full height layout
    ========================================================================== */
 
+.sidebar-content:has(#graphql-section.active) {
+    overflow: hidden;
+    padding: 0;
+}
+
+#graphql-section.active {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0.5rem;
+    padding-bottom: 0;
+}
+
 #editor-section > .editor-layout {
     flex: 1;
     display: flex;
@@ -62,8 +75,7 @@
 #results-section.active {
     display: flex !important;
     flex-direction: column !important;
-    height: 100% !important;
-    max-height: 100% !important;
+    flex: 1 1 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
 }
@@ -392,7 +404,8 @@
    ========================================================================== */
 
 .grouped-results {
-    max-height: calc(100vh - 350px);
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
 }
 
@@ -512,7 +525,8 @@
 #context-section.active {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 120px);
+    flex: 1 1 0;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -589,4 +603,25 @@
 
 #graphiql-container .graphiql-container .topBar {
     background: #1b3a4b;
+}
+
+@media (max-width: 768px) {
+    .sidebar-content:has(#graphql-section.active),
+    #graphql-section.active {
+        overflow: visible;
+    }
+
+    #graphql-section.active {
+        flex: none;
+    }
+
+    #results-section.active {
+        flex: none !important;
+        overflow: visible !important;
+    }
+
+    #context-section.active {
+        flex: none;
+        overflow: visible;
+    }
 }

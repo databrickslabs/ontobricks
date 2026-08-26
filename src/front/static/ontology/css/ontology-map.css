@@ -5,7 +5,7 @@
 
 /* Map section: full-height canvas, no page scroll. Insets mirror the Knowledge
    Graph Explorer (query-sigmagraph.css) so both canvases sit the same distance
-   from the sidebar: flush wrapper, 1rem on the section, none at the bottom. */
+   from the sidebar: flush wrapper, 0.5rem on the section, none at the bottom. */
 .sidebar-content:has(#map-section.active) {
     overflow: hidden;
     padding: 0;
@@ -13,7 +13,7 @@
 
 #map-section.active {
     overflow: hidden;
-    padding: 1rem;
+    padding: 0.5rem;
     padding-bottom: 0;
 }
 
@@ -505,4 +505,11 @@
 
 .map-search-popup-body {
     padding: 12px 14px 14px;
+}
+
+@media (max-width: 768px) {
+    .sidebar-content:has(#map-section.active),
+    #map-section.active {
+        overflow: visible;
+    }
 }

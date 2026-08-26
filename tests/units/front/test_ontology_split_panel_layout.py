@@ -16,9 +16,12 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PANELS_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-shared-panels.css"
 PANELS_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-shared-panels.js"
+COMPONENTS_CSS = REPO_ROOT / "src/front/static/global/css/components.css"
 SIGMAGRAPH_CSS = REPO_ROOT / "src/front/static/query/css/query-sigmagraph.css"
 MAP_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-map.js"
 MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
+ONTOLOGY_CSS = REPO_ROOT / "src/front/static/global/css/ontology.css"
+SIDEBAR_LAYOUT_CSS = REPO_ROOT / "src/front/static/global/css/sidebar-layout.css"
 ASSISTANT_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-assistant.js"
 FRONTEND_RULE = REPO_ROOT / ".cursor/11-frontend-design.mdc"
 
@@ -221,7 +224,8 @@ def test_panel_body_is_the_only_scroller():
 
 
 def test_designer_insets_match_the_explorer():
-    """Both canvases must sit the same distance from the sidebar."""
+    """The shell's 0.5rem outer gutter plus this 0.5rem inner inset preserves
+    the existing 1rem top/left/right position and adds no second bottom inset."""
     designer = _read(MAP_CSS)
     explorer = _read(SIGMAGRAPH_CSS)
 
@@ -233,9 +237,41 @@ def test_designer_insets_match_the_explorer():
         explorer_wrapper, "padding"
     ) == "0"
 
+    # Shell now supplies a 0.5rem outer gutter, so each section adds only the
+    # remaining 0.5rem to keep the total top/left/right inset at 1rem. Both
+    # canvases must agree, or one sits deeper than the other.
     section = _block(designer, "#map-section.active")
-    assert _declaration(section, "padding") == "1rem"
+    assert _declaration(section, "padding") == "0.5rem"
     assert _declaration(section, "padding-bottom") == "0"
+
+    explorer_section = _block(explorer, "#sigmagraph-section.active")
+    assert _declaration(explorer_section, "padding") == "0.5rem"
+    assert _declaration(explorer_section, "padding-bottom") == "0"
+
+
+def test_designer_entities_and_relationships_use_the_shared_flex_height():
+    """Primary ontology panes must reach the shell bottom without viewport
+    arithmetic or legacy display:block overrides."""
+    ontology = _read(ONTOLOGY_CSS)
+    sidebar = _read(SIDEBAR_LAYOUT_CSS)
+
+    for selector in ("#entities-section.active", "#relationships-section.active"):
+        block = _block(ontology, selector)
+        assert _declaration(block, "height") is None, (
+            f"{selector} must inherit the shared flex height"
+        )
+        assert _declaration(block, "min-height") == "0"
+        assert _declaration(block, "flex") is not None
+
+    legacy_block = re.search(
+        r"#owl-section\.active,\s*"
+        r"#entities-section\.active,\s*"
+        r"#relationships-section\.active,[^{]*"
+        r"\{[^}]*display\s*:\s*block",
+        sidebar,
+        flags=re.DOTALL,
+    )
+    assert legacy_block is None, "ontology primary panes must stay flex containers"
 
 
 def test_placeholder_shares_the_explorer_empty_state_styling():
@@ -282,19 +318,42 @@ def test_empty_panel_title_is_select_item():
     body = placeholder.group(1)
     assert "Select Item" in body
     assert "title.textContent = 'Details'" not in body
+    heading = re.search(
+        r"heading\.innerHTML\s*=\s*'([^']+)'",
+        body,
+    )
+    assert heading, "renderPanelPlaceholder must reset sharedPanelTitle"
+    assert "Select Item" in heading.group(1)
+    assert "<i " not in heading.group(1)
     assert re.search(
         r'id="sharedPanelItemName">Select Item<',
         js,
     )
+    create = re.search(
+        r'id="sharedPanelTitle">([\s\S]*?)</h6>',
+        js,
+    )
+    assert create, "createDetailPanel must set sharedPanelTitle"
+    assert "<i " not in create.group(1)
 
 
-def test_form_tabs_inside_the_right_panel_are_square():
-    """Selected fill stays square; the panel card already carries the radius."""
+def test_form_tabs_inside_the_right_panel_use_the_shared_compact_rail():
+    js = _read(PANELS_JS)
+    assert 'class="nav nav-tabs ob-tabs ob-tabs--compact form-tabs-nav"' in js
+
     css = _read(PANELS_CSS)
-    link = _block(css, ".form-tab-link")
-    active = _block(css, ".form-tab-link.active")
-    assert _declaration(link, "border-radius") == "0"
-    assert _declaration(active, "border-radius") == "0"
+    strip = _block(css, ".shared-detail-panel .nav-tabs.ob-tabs")
+    assert _declaration(strip, "border-radius") is None
+    assert _declaration(strip, "border-top") is None
+    assert _declaration(strip, "border-left") is None
+    assert _declaration(strip, "border-right") is None
 
-    scoped = _block(css, ".shared-detail-panel .form-tab-link")
-    assert _declaration(scoped, "border-radius") == "0"
+    assert ".shared-detail-panel .nav-tabs.ob-tabs .nav-link" not in css
+    assert ".mapping-right-panel .nav-tabs.ob-tabs .nav-link" not in css
+
+    components = _read(COMPONENTS_CSS)
+    compact_link = _block(
+        components, ".nav-tabs.ob-tabs.ob-tabs--compact .nav-link"
+    )
+    assert _declaration(compact_link, "font-size") == "0.75rem"
+    assert _declaration(compact_link, "padding") == "0.35rem 0.6rem"

@@ -177,7 +177,7 @@ function createDetailPanel(panelContainer) {
 
     panelDiv.innerHTML = `
         <div class="panel-header">
-            <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Select Item</span></h6>
+            <h6 id="sharedPanelTitle"><span id="sharedPanelItemName">Select Item</span></h6>
         </div>
         <div class="panel-body" id="sharedPanelBody"></div>
     `;
@@ -219,8 +219,10 @@ function renderPanelPlaceholder(panel) {
 
     target.classList.add('is-empty');
 
-    const title = target.querySelector('#sharedPanelItemName');
-    if (title) title.textContent = 'Select Item';
+    const heading = target.querySelector('#sharedPanelTitle');
+    if (heading) {
+        heading.innerHTML = '<span id="sharedPanelItemName">Select Item</span>';
+    }
 
     const body = target.querySelector('#sharedPanelBody');
     if (body) {
@@ -231,6 +233,14 @@ function renderPanelPlaceholder(panel) {
             </div>
         `;
     }
+}
+
+function renderFormTabsNav(tabs, activeTab) {
+    const items = tabs.map(({ id, icon, label }) => {
+        const selected = activeTab === id;
+        return `<li class="nav-item" role="presentation"><a class="nav-link form-tab-link${selected ? ' active' : ''}" data-form-tab="${id}" href="#" role="tab" aria-selected="${selected}" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi ${icon} me-1"></i>${label}</a></li>`;
+    }).join('');
+    return `<ul class="nav nav-tabs ob-tabs ob-tabs--compact form-tabs-nav" role="tablist">${items}</ul>`;
 }
 
 /**
@@ -244,7 +254,9 @@ function switchFormTab(tabLink) {
     const tabName = tabLink.dataset.formTab;
 
     form.querySelectorAll('.form-tabs-nav .form-tab-link').forEach(link => {
-        link.classList.toggle('active', link.dataset.formTab === tabName);
+        const selected = link.dataset.formTab === tabName;
+        link.classList.toggle('active', selected);
+        link.setAttribute('aria-selected', selected ? 'true' : 'false');
     });
     form.querySelectorAll('.form-tab-pane').forEach(pane => {
         pane.classList.toggle('active', pane.dataset.formTabContent === tabName);
@@ -616,12 +628,12 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     body.innerHTML = `
         <div id="sharedEntityAssignmentLink"></div>
         <form id="sharedEntityForm">
-            <ul class="form-tabs-nav">
-                <li><a class="form-tab-link ${_eTab === 'details' ? 'active' : ''}" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
-                <li><a class="form-tab-link ${_eTab === 'attributes' ? 'active' : ''}" data-form-tab="attributes" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-tags me-1"></i>Attributes</a></li>
-                <li><a class="form-tab-link ${_eTab === 'actions' ? 'active' : ''}" data-form-tab="actions" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-lightning me-1"></i>References</a></li>
-                <li><a class="form-tab-link ${_eTab === 'constraints' ? 'active' : ''}" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
-            </ul>
+            ${renderFormTabsNav([
+                { id: 'details', icon: 'bi-info-circle', label: 'Details' },
+                { id: 'attributes', icon: 'bi-tags', label: 'Attributes' },
+                { id: 'actions', icon: 'bi-lightning', label: 'References' },
+                { id: 'constraints', icon: 'bi-sliders', label: 'Constraints' },
+            ], _eTab)}
 
             <div class="form-tab-pane ${_eTab === 'details' ? 'active' : ''}" data-form-tab-content="details">
                 <div class="mb-3 p-2 bg-light rounded border">
@@ -3137,10 +3149,10 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     body.innerHTML = `
         <div id="sharedRelAssignmentLink"></div>
         <form id="sharedRelationshipForm">
-            <ul class="form-tabs-nav">
-                <li><a class="form-tab-link ${_rTab === 'details' ? 'active' : ''}" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
-                <li><a class="form-tab-link ${_rTab === 'constraints' ? 'active' : ''}" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
-            </ul>
+            ${renderFormTabsNav([
+                { id: 'details', icon: 'bi-info-circle', label: 'Details' },
+                { id: 'constraints', icon: 'bi-sliders', label: 'Constraints' },
+            ], _rTab)}
 
             <div class="form-tab-pane ${_rTab === 'details' ? 'active' : ''}" data-form-tab-content="details">
                 <div class="mb-3">

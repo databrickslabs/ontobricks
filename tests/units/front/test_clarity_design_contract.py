@@ -14,6 +14,39 @@ COMPONENTS_CSS = REPO_ROOT / "src/front/static/global/css/components.css"
 BASE_HTML = REPO_ROOT / "src/front/templates/base.html"
 SIDEBAR_LAYOUT_CSS = REPO_ROOT / "src/front/static/global/css/sidebar-layout.css"
 ONTOLOGY_MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
+ONTOLOGY_PAGE_CSS = REPO_ROOT / "src/front/static/global/css/ontology.css"
+MAPPING_PAGE_CSS = REPO_ROOT / "src/front/static/global/css/mapping.css"
+MAPPING_DESIGN_JS = REPO_ROOT / "src/front/static/mapping/js/mapping-design.js"
+PAGES_CSS = REPO_ROOT / "src/front/static/global/css/pages.css"
+QUERY_PAGE_CSS = REPO_ROOT / "src/front/static/global/css/query.css"
+SIGMAGRAPH_CSS = REPO_ROOT / "src/front/static/query/css/query-sigmagraph.css"
+QUERY_CHAT_CSS = REPO_ROOT / "src/front/static/query/css/query-chat.css"
+QUERY_DATAQUALITY_CSS = (
+    REPO_ROOT / "src/front/static/query/css/query-dataquality.css"
+)
+CONFIG_CSS = REPO_ROOT / "src/front/static/global/css/config.css"
+SIGMAGRAPH_TEMPLATE = (
+    REPO_ROOT / "src/front/templates/partials/dtwin/_query_sigmagraph.html"
+)
+ONTOLOGY_COHORT_TEMPLATE = (
+    REPO_ROOT / "src/front/templates/partials/ontology/_ontology_cohorts.html"
+)
+QUERY_COHORT_TEMPLATE = (
+    REPO_ROOT / "src/front/templates/partials/dtwin/_query_cohorts.html"
+)
+ONTOLOGY_WIZARD_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-wizard.css"
+ONTOLOGY_PITFALLS_CSS = (
+    REPO_ROOT / "src/front/static/ontology/css/ontology-pitfalls.css"
+)
+ONTOLOGY_DATAQUALITY_CSS = (
+    REPO_ROOT / "src/front/static/ontology/css/ontology-dataquality.css"
+)
+ONTOLOGY_BUSINESS_RULES_CSS = (
+    REPO_ROOT / "src/front/static/ontology/css/ontology-business-rules.css"
+)
+REGISTRY_TEAMS_CSS = (
+    REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
+)
 FRONTEND_RULE = REPO_ROOT / ".cursor/11-frontend-design.mdc"
 MENU_CONFIG = REPO_ROOT / "src/front/config/menu_config.json"
 SIDEBAR_NAV_PARTIAL = (
@@ -34,6 +67,10 @@ def _assert_css_ordered_tokens(css_text: str, tokens: list[str]) -> None:
         cursor += match.end()
 
 
+def _strip_comments(css_text: str) -> str:
+    return re.sub(r"/\*.*?\*/", "", css_text, flags=re.DOTALL)
+
+
 def _iter_rule_blocks(css_text: str) -> list[tuple[str, str]]:
     return re.findall(r"([^{}]+)\{([^{}]*)\}", css_text, flags=re.DOTALL)
 
@@ -48,6 +85,63 @@ def _rule_blocks_for_exact_class(css_text: str, class_selector: str) -> list[str
         if any(class_pattern.search(selector) for selector in selector_list):
             blocks.append(declarations)
     return blocks
+
+
+def _rule_blocks_for_exact_selector(css_text: str, selector: str) -> list[str]:
+    """Declaration blocks whose selector list contains ``selector`` verbatim.
+
+    Unlike :func:`_rule_blocks_for_exact_class`, a combinator or ``:has()``
+    override (e.g. ``.sidebar-content:has(#foo.active)``) does NOT match the
+    base selector, so a base-layout contract cannot be satisfied by a
+    page-specific override.
+    """
+    blocks: list[str] = []
+    for selectors, declarations in _iter_rule_blocks(_strip_comments(css_text)):
+        selector_list = [part.strip() for part in selectors.split(",")]
+        if selector in selector_list:
+            blocks.append(declarations)
+    return blocks
+
+
+def _media_query_body(css_text: str, feature: str = "max-width") -> str | None:
+    """Return the body of the first ``@media`` block whose header mentions
+    ``feature``, extracted with balanced-brace matching (not greedy-to-EOF)."""
+    css_text = _strip_comments(css_text)
+    for match in re.finditer(r"@media[^{]*\{", css_text):
+        if feature not in match.group(0):
+            continue
+        depth = 1
+        index = match.end()
+        while index < len(css_text) and depth:
+            char = css_text[index]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+            index += 1
+        return css_text[match.end() : index - 1]
+    return None
+
+
+def _viewport_height_allowed(selector_parts: list[str], prop: str, value: str) -> bool:
+    """Only the root shell may own viewport-height arithmetic.
+
+    ``.sidebar-layout`` may set ``height`` / ``max-height`` to
+    ``calc(100vh - var(--ob-chrome-height, ...))``; ``.sidebar-content`` may
+    mirror it as ``max-height`` when the approved contract needs it. Every
+    other rule / property / value that references ``100vh`` is a pane-level
+    offender.
+    """
+    chrome_calc = re.compile(
+        r"^calc\(\s*100vh\s*-\s*var\(\s*--ob-chrome-height\b[^)]*\)\s*\)$"
+    )
+    if not chrome_calc.match(value):
+        return False
+    if selector_parts == [".sidebar-layout"] and prop in {"height", "max-height"}:
+        return True
+    if selector_parts == [".sidebar-content"] and prop == "max-height":
+        return True
+    return False
 
 
 def _any_block_has_declaration(
@@ -142,56 +236,111 @@ def test_components_css_keeps_primary_disabled_after_generic_disabled():
     assert primary_disabled_pos > generic_disabled_pos
 
 
-def test_components_css_ob_tabs_active_uses_clarity_primary_tokens():
+def test_components_css_ob_tabs_active_is_transparent_with_primary_underline():
     css = _read(COMPONENTS_CSS)
     assert re.search(
         r"\.nav-tabs\.ob-tabs\s+\.nav-link\.active,\s*"
         r"\.nav-tabs\.ob-tabs\s+\.nav-item\.show\s+\.nav-link\s*\{"
         r"[^}]*color\s*:\s*var\(--db-primary-darker[^;]*;"
-        r"[^}]*background\s*:\s*var\(--db-primary-light[^;]*;"
+        r"[^}]*background\s*:\s*transparent\s*!important;"
         r"[^}]*border-bottom-color\s*:\s*var\(--db-primary[^;]*;"
         r"[^}]*border-radius\s*:\s*0\s*!important;",
         css,
         flags=re.DOTALL,
     )
 
-def test_components_css_ob_tabs_strip_rounds_its_top_corners():
-    """The strip is the head of the tabs + body shape, so it carries the outer
-    rounding on top while the selected tab itself stays square."""
+def test_components_css_ob_tabs_strip_is_a_transparent_scrollable_rail():
     css = _read(COMPONENTS_CSS)
     strip_blocks = _rule_blocks_for_exact_class(css, ".nav-tabs.ob-tabs")
+    for property_name, expected in (
+        (r"background", r"transparent"),
+        (r"border-radius", r"0"),
+        (r"flex-wrap", r"nowrap"),
+        (r"overflow-x", r"auto"),
+        (r"overflow-y", r"hidden"),
+    ):
+        assert _any_block_has_declaration(strip_blocks, property_name, expected)
     assert _any_block_has_declaration(
         strip_blocks,
-        r"border-radius",
-        r"var\(--db-radius-card[^)]*\)\s+var\(--db-radius-card[^)]*\)\s+0\s+0",
-    ), "ob-tabs strip must round only its top-left / top-right corners"
-
-    # The body below stays squared on top so the two form one shape.
-    assert re.search(
-        r"\.nav-tabs\.ob-tabs\s*\+\s*\.card,[^{]*\{"
-        r"[^}]*border-top-left-radius\s*:\s*0\s*!important;"
-        r"[^}]*border-top-right-radius\s*:\s*0\s*!important;",
-        css,
-        flags=re.DOTALL,
+        r"border-bottom",
+        r"1px\s+solid\s+var\(--db-border[^;]*\)",
     )
 
 
-def test_ob_tabs_following_card_shares_the_strip_right_inset():
-    """Domain / Information uses `ul.ob-tabs` + `.card`. The strip is inset
-    12px for the stable scrollbar gutter; `.sidebar-section .card { width:
-    100% }` made the card ignore that inset, so the tab head sat short of
-    the card's top and right borders."""
+def test_components_css_ob_tabs_has_visible_keyboard_focus():
     css = _read(COMPONENTS_CSS)
-    match = re.search(
-        r"\.nav-tabs\.ob-tabs\s*\+\s*\.card,[^{]*\{([^}]+)\}",
-        css,
-        flags=re.DOTALL,
+    focus_blocks = _rule_blocks_for_exact_class(
+        css, ".nav-tabs.ob-tabs .nav-link:focus-visible"
     )
-    assert match, "missing adjacent-sibling rule for ob-tabs + card"
-    block = match.group(1)
-    assert re.search(r"margin-right\s*:\s*12px\s*;", block)
-    assert re.search(r"margin-top\s*:\s*0\s*;", block)
-    assert re.search(r"width\s*:\s*auto\s*;", block)
+    assert focus_blocks, "ob-tabs must expose a keyboard-only focus state"
+    assert _any_block_has_declaration(
+        focus_blocks, r"outline", r"2px\s+solid\s+var\(--db-primary[^;]*\)"
+    )
+    assert _any_block_has_declaration(focus_blocks, r"outline-offset", r"-3px")
+
+
+def test_components_css_ob_tabs_exposes_standard_and_compact_densities():
+    css = _read(COMPONENTS_CSS)
+    standard = _rule_blocks_for_exact_class(css, ".nav-tabs.ob-tabs .nav-link")
+    compact = _rule_blocks_for_exact_class(
+        css, ".nav-tabs.ob-tabs.ob-tabs--compact .nav-link"
+    )
+    assert _any_block_has_declaration(standard, r"font-size", r"0\.9rem")
+    assert _any_block_has_declaration(standard, r"padding", r"0\.5rem\s+0\.875rem")
+    assert _any_block_has_declaration(compact, r"font-size", r"0\.75rem")
+    assert _any_block_has_declaration(compact, r"padding", r"0\.35rem\s+0\.6rem")
+
+
+def test_data_quality_tabs_do_not_override_the_shared_density():
+    css = _read(ONTOLOGY_DATAQUALITY_CSS)
+    assert "#dqTabs .nav-link" not in css
+
+
+def test_ob_tabs_and_content_are_independent_surfaces():
+    components = _read(COMPONENTS_CSS)
+    assert ".nav-tabs.ob-tabs + .card" not in components
+    assert ".nav-tabs.ob-tabs + .ob-tab-content" not in components
+
+    main = _read(MAIN_CSS)
+    content = _rule_blocks_for_exact_class(main, ".ob-tab-content")
+    assert _any_block_has_declaration(
+        content, r"border", r"1px\s+solid\s+var\(--db-border\)"
+    )
+    assert _any_block_has_declaration(
+        content, r"border-radius", r"var\(--db-radius-card\)"
+    )
+
+
+def test_sigmagraph_panel_uses_the_shared_compact_tab_rail():
+    template = _read(SIGMAGRAPH_TEMPLATE)
+    assert (
+        'class="nav nav-tabs ob-tabs ob-tabs--compact sg-panel-tabs"' in template
+    )
+
+    css = _read(SIGMAGRAPH_CSS)
+    assert ".sg-panel-tabs .nav-link" not in css
+
+
+def test_mapping_designer_panels_use_the_shared_compact_tab_rail():
+    script = _read(MAPPING_DESIGN_JS)
+    assert script.count(
+        'class="nav nav-tabs ob-tabs ob-tabs--compact"'
+    ) == 2
+
+
+def test_cohort_cards_do_not_masquerade_as_tab_strips():
+    for template_path in (ONTOLOGY_COHORT_TEMPLATE, QUERY_COHORT_TEMPLATE):
+        template = _read(template_path)
+        assert "cohort-tabs-wrap" not in template
+        assert 'class="cohort-content-card card"' in template
+
+
+def test_orphan_tab_styles_are_removed():
+    pages = _read(PAGES_CSS)
+    mapping = _read(MAPPING_PAGE_CSS)
+    assert ".custom-tabs" not in pages
+    assert ".panel-tabs" not in mapping
+    assert ".rel-mapping-tabs" not in mapping
 
 
 def test_designer_canvas_selection_uses_clarity_indigo():
@@ -331,18 +480,109 @@ def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
 
 
 def test_sidebar_is_a_framed_card_like_the_split_panel_panes():
-    """The gutter is what lets all four corners be rounded — flush against the
-    viewport, a radius would just open a gap."""
+    """The shell supplies the gutter that exposes all four rounded corners."""
     css = _read(SIDEBAR_LAYOUT_CSS)
     blocks = _rule_blocks_for_exact_class(css, ".sidebar-nav")
 
-    assert _any_block_has_declaration(blocks, r"margin", r"0\.5rem")
     assert _any_block_has_declaration(
         blocks, r"border-radius", r"var\(--db-radius-card\)"
     )
     assert _any_block_has_declaration(blocks, r"border", r"1px solid var\(--db-border\)")
-    # Margins eat into a fixed-height, overflow-hidden parent.
-    assert _any_block_has_declaration(blocks, r"height", r"calc\(100% - 1rem\)")
+
+
+def test_sidebar_layout_centralizes_the_shared_outer_gutter():
+    """The shell owns the 0.5rem viewport gutter; another 0.5rem content inset
+    preserves the existing 1rem top/left/right position without shortening the
+    content at the bottom.
+
+    Exact-selector parsing so a ``:has()`` page override cannot satisfy the
+    base-layout contract.
+    """
+    css = _read(SIDEBAR_LAYOUT_CSS)
+    layout = _rule_blocks_for_exact_selector(css, ".sidebar-layout")
+    sidebar = _rule_blocks_for_exact_selector(css, ".sidebar-nav")
+    content = _rule_blocks_for_exact_selector(css, ".sidebar-content")
+
+    assert _any_block_has_declaration(layout, r"gap", r"0\.5rem")
+    assert _any_block_has_declaration(layout, r"padding", r"0\.5rem")
+    assert _any_block_has_declaration(layout, r"box-sizing", r"border-box")
+    assert _any_block_has_declaration(sidebar, r"margin", r"0")
+    assert _any_block_has_declaration(sidebar, r"height", r"100%")
+    assert _any_block_has_declaration(
+        content, r"padding", r"0\.5rem\s+0\.5rem\s+0"
+    )
+
+
+def test_sidebar_layout_has_a_min_height_safe_flex_chain():
+    css = _read(SIDEBAR_LAYOUT_CSS)
+    content = _rule_blocks_for_exact_selector(css, ".sidebar-content")
+    active = _rule_blocks_for_exact_selector(css, ".sidebar-section.active")
+
+    assert _any_block_has_declaration(content, r"display", r"flex")
+    assert _any_block_has_declaration(content, r"flex-direction", r"column")
+    assert _any_block_has_declaration(content, r"min-height", r"0")
+    assert _any_block_has_declaration(active, r"display", r"flex")
+    assert _any_block_has_declaration(active, r"flex", r"1(?:\s+1\s+(?:0|auto))?")
+    assert _any_block_has_declaration(active, r"min-height", r"0")
+
+
+def test_only_the_root_shell_owns_viewport_height():
+    """Tightened contract: any ``100vh`` reference (bare, or inside a ``calc``
+    with any unit/var) is forbidden at pane level. Only ``.sidebar-layout``
+    (and ``.sidebar-content`` for a matching ``max-height``) may key off the
+    viewport, always through ``--ob-chrome-height``."""
+    shell_css = _read(SIDEBAR_LAYOUT_CSS)
+    assert re.search(
+        r"\.sidebar-layout[^{]*\{[^}]*height\s*:\s*calc\(\s*100vh\s*-\s*"
+        r"var\(\s*--ob-chrome-height\b",
+        shell_css,
+        flags=re.DOTALL,
+    ), "sidebar shell must own height via --ob-chrome-height"
+
+    sidebar_page_styles = (
+        SIDEBAR_LAYOUT_CSS,
+        ONTOLOGY_PAGE_CSS,
+        ONTOLOGY_MAP_CSS,
+        MAPPING_PAGE_CSS,
+        QUERY_PAGE_CSS,
+        SIGMAGRAPH_CSS,
+        QUERY_CHAT_CSS,
+        QUERY_DATAQUALITY_CSS,
+        CONFIG_CSS,
+        ONTOLOGY_WIZARD_CSS,
+        ONTOLOGY_PITFALLS_CSS,
+        ONTOLOGY_DATAQUALITY_CSS,
+        ONTOLOGY_BUSINESS_RULES_CSS,
+        REGISTRY_TEAMS_CSS,
+    )
+    offenders: list[tuple[str, str, str]] = []
+    for path in sidebar_page_styles:
+        rel = str(path.relative_to(REPO_ROOT))
+        for selectors, declarations in _iter_rule_blocks(_strip_comments(_read(path))):
+            selector_parts = [part.strip() for part in selectors.split(",")]
+            for declaration in declarations.split(";"):
+                if "100vh" not in declaration:
+                    continue
+                prop, _, value = declaration.partition(":")
+                prop = prop.strip().lower()
+                value = value.strip()
+                if not _viewport_height_allowed(selector_parts, prop, value):
+                    offenders.append((rel, selectors.strip(), declaration.strip()))
+    assert not offenders, f"pane-level viewport arithmetic remains: {offenders}"
+
+
+def test_sidebar_layout_restores_natural_flow_on_mobile():
+    css = _read(SIDEBAR_LAYOUT_CSS)
+    mobile_css = _media_query_body(css, feature="max-width")
+    assert mobile_css, "sidebar layout needs a mobile natural-flow override"
+
+    layout = _rule_blocks_for_exact_selector(mobile_css, ".sidebar-layout")
+    content = _rule_blocks_for_exact_selector(mobile_css, ".sidebar-content")
+    assert _any_block_has_declaration(layout, r"height", r"auto")
+    assert _any_block_has_declaration(layout, r"max-height", r"none")
+    assert _any_block_has_declaration(layout, r"overflow", r"visible")
+    assert _any_block_has_declaration(content, r"max-height", r"none")
+    assert _any_block_has_declaration(content, r"overflow(?:-y)?", r"visible")
 
 
 def test_user_identity_lives_in_the_navbar_not_the_sidebar():

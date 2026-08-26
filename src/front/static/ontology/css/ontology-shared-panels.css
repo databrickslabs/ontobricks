@@ -232,65 +232,18 @@
     border-left: 2px solid var(--db-border-light);
 }
 
-/* ---- Form tabs inside panel body ---- */
+/* ---- Form tabs inside panel body ----
+   The shared `ob-tabs--compact` modifier owns typography and spacing.
+   This file only keeps the generated rail pinned to one line. */
 .form-tabs-nav {
-    display: flex;
-    list-style: none;
-    margin: 0 0 0.6rem;
-    padding: 0;
-    border-bottom: 2px solid var(--bs-border-color, #dee2e6);
-    gap: 0;
+    flex-wrap: nowrap;
     flex-shrink: 0;
-}
-
-.form-tabs-nav li {
-    margin-bottom: -2px;
-}
-
-.form-tab-link {
-    display: inline-block;
-    padding: 0.35rem 0.6rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--db-text-secondary);
-    text-decoration: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0;
-    transition: color 0.15s, border-color 0.15s, background-color 0.15s;
-    white-space: nowrap;
-}
-
-.form-tab-link:hover {
-    color: var(--db-text);
-    background: var(--db-hover-warm);
-}
-
-.form-tab-link.active {
-    color: var(--db-primary-darker);
-    background: var(--db-primary-light);
-    border-bottom-color: var(--db-primary);
-    border-radius: 0;
-    font-weight: 600;
-}
-
-/* Square tabs inside the framed split pane — the card already carries
-   `--db-radius-card`. Edge rounding from `.ob-tabs` would double-round. */
-.shared-detail-panel .form-tab-link,
-.shared-detail-panel .form-tab-link.active {
-    border-radius: 0;
+    margin: 0 0 0.6rem;
 }
 
 .shared-detail-panel .nav-tabs.ob-tabs,
 .mapping-right-panel .nav-tabs.ob-tabs {
-    border-radius: 0;
-}
-
-.shared-detail-panel .nav-tabs.ob-tabs .nav-item:first-child .nav-link.active,
-.shared-detail-panel .nav-tabs.ob-tabs .nav-item:last-child .nav-link.active,
-.mapping-right-panel .nav-tabs.ob-tabs .nav-item:first-child .nav-link.active,
-.mapping-right-panel .nav-tabs.ob-tabs .nav-item:last-child .nav-link.active {
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
+    flex-wrap: nowrap;
 }
 
 .form-tab-pane {

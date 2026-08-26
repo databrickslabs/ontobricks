@@ -12,9 +12,15 @@
 .wizard-step-icon { width: 24px; text-align: center; }
 .wizard-step-icon i { font-size: 1.2rem; transition: all 0.3s ease; }
 
-.wizard-metadata-table-wrap {
-    max-height: calc(100vh - 370px);
+#wizardTabContent {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
+}
+
+.wizard-metadata-table-wrap {
+    max-height: none;
+    overflow-y: visible;
 }
 
 .wizard-metadata-th-check {

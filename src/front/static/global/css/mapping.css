@@ -19,10 +19,8 @@
     flex-direction: column !important;
     flex: 1 1 0 !important;
     min-height: 0 !important;
-    max-height: 100% !important;
-    height: 100% !important;
     overflow: hidden !important;
-    padding: 1rem;
+    padding: 0.5rem;
     padding-bottom: 0;
 }
 
@@ -201,53 +199,6 @@
     justify-content: center;
 }
 
-/* Panel Tabs */
-.mapping-right-panel .panel-tabs,
-.manual-bottom-panel .panel-tabs {
-    background: #ffffff;
-    border-bottom: 1px solid #dee2e6;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem 0;
-    flex-shrink: 0;
-}
-
-.mapping-right-panel .panel-tabs .nav-item,
-.manual-bottom-panel .panel-tabs .nav-item {
-    margin: 0;
-}
-
-.mapping-right-panel .panel-tabs .nav-link,
-.manual-bottom-panel .panel-tabs .nav-link {
-    border: 1px solid transparent;
-    border-radius: 0;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.75rem;
-    color: #6c757d;
-    background: transparent;
-    transition: all 0.15s ease;
-}
-
-.mapping-right-panel .panel-tabs .nav-link:hover:not(:disabled),
-.manual-bottom-panel .panel-tabs .nav-link:hover:not(:disabled) {
-    color: #495057;
-    background: #ffffff;
-    border-color: #dee2e6 #dee2e6 transparent;
-}
-
-.mapping-right-panel .panel-tabs .nav-link.active,
-.manual-bottom-panel .panel-tabs .nav-link.active {
-    color: #212529;
-    background: #fff;
-    border-color: #dee2e6 #dee2e6 #fff;
-    font-weight: 500;
-}
-
-.mapping-right-panel .panel-tabs .nav-link:disabled,
-.manual-bottom-panel .panel-tabs .nav-link:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
 /* Panel Tab Content */
 .mapping-right-panel .tab-content,
 .manual-bottom-panel .tab-content {
@@ -374,11 +325,6 @@
     background-color: #ffffff;
 }
 
-/* Read-only mode adjustments for design section */
-body:is(.read-only-version, .role-viewer) #design-section.active {
-    height: calc(100% - 40px) !important;
-}
-
 /* ==========================================================================
    Summary Detail Lists (entities & relationships in Information tab)
    ========================================================================== */
@@ -482,46 +428,6 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
 
 .mapping-card.border-success {
     border-left-width: 3px;
-}
-
-/* ==========================================================================
-   Entity/Property Section - Full Height Layout (only when active)
-   ========================================================================== */
-#entities-section.active,
-#relationships-section.active {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 120px);
-    min-height: 500px;
-}
-
-#entities-section.active > .row,
-#relationships-section.active > .row {
-    flex: 1;
-    display: flex;
-    min-height: 0;
-}
-
-#entities-section.active > .row > [class*="col-"],
-#relationships-section.active > .row > [class*="col-"] {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-
-#entities-section.active .card,
-#relationships-section.active .card {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-
-#entities-section.active .card-body,
-#relationships-section.active .card-body {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
 }
 
 /* ==========================================================================
@@ -659,59 +565,26 @@ body:is(.read-only-version, .role-viewer) #design-section.active {
     border-radius: 4px;
 }
 
-/* ==========================================================================
-   Mapping Modal - Tabbed Navigation (Entity & Relationship)
-   ========================================================================== */
+@media (max-width: 768px) {
+    .sidebar-content:has(#design-section.active) {
+        overflow: visible;
+    }
 
-/* Greyscale tabs with spacing */
-#addEntityMappingModal .entity-mapping-tabs,
-#addRelationshipMappingModal .rel-mapping-tabs {
-    background: #ffffff;
-    border-bottom: 1px solid #dee2e6;
-    gap: 0.5rem;
-}
+    #design-section.active {
+        flex: none !important;
+        overflow: visible !important;
+    }
 
-#addEntityMappingModal .entity-mapping-tabs .nav-item,
-#addRelationshipMappingModal .rel-mapping-tabs .nav-item {
-    margin: 0;
-}
+    #design-section .content-section {
+        flex: none;
+        height: auto !important;
+    }
 
-#addEntityMappingModal .entity-mapping-tabs .nav-link,
-#addRelationshipMappingModal .rel-mapping-tabs .nav-link {
-    border: 1px solid transparent;
-    border-radius: 0.375rem 0.375rem 0 0;
-    padding: 0.4rem 0.75rem;
-    font-size: 0.85rem;
-    color: #6c757d;
-    background: transparent;
-    transition: all 0.15s ease;
-}
-
-#addEntityMappingModal .entity-mapping-tabs .nav-link:hover:not(:disabled),
-#addRelationshipMappingModal .rel-mapping-tabs .nav-link:hover:not(:disabled) {
-    color: #495057;
-    background: #ffffff;
-    border-color: #dee2e6 #dee2e6 transparent;
-}
-
-#addEntityMappingModal .entity-mapping-tabs .nav-link.active,
-#addRelationshipMappingModal .rel-mapping-tabs .nav-link.active {
-    color: #212529;
-    background: #fff;
-    border-color: #dee2e6 #dee2e6 #fff;
-    font-weight: 500;
-}
-
-#addEntityMappingModal .entity-mapping-tabs .nav-link:disabled,
-#addRelationshipMappingModal .rel-mapping-tabs .nav-link:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-#addEntityMappingModal .entity-mapping-tabs .nav-link .badge,
-#addRelationshipMappingModal .rel-mapping-tabs .nav-link .badge {
-    font-size: 0.7rem;
-    padding: 0.2em 0.45em;
+    .mapping-designer-container {
+        flex: none;
+        height: auto;
+        overflow: visible;
+    }
 }
 
 /* ==========================================================================

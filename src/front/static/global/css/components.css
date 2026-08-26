@@ -868,69 +868,45 @@
 }
 
 /* ==========================================================================
-   ob-tabs — square indigo-soft selected tabs.
-   Same selected language as Knowledge Graph / Explorer right-panel
-   tabs (`.sg-panel-tabs`): square tabs, `--db-primary-light` fill on the
-   active item, indigo text, 2px primary baseline.
+   ob-tabs — transparent underline rail.
 
-   Apply as:  <ul class="nav nav-tabs ob-tabs">
-   Drop-in replacement for Bootstrap nav-tabs. Preserves Bootstrap's
-   data-bs-toggle="tab" behaviour; only the visual treatment changes.
-   The `!important` declarations are necessary to override the default
-   `.nav-tabs` rules in `main.css`.
+   Apply as: <ul class="nav nav-tabs ob-tabs">.
+   Add `ob-tabs--compact` only in constrained panels. The component preserves
+   Bootstrap tab behaviour while owning the complete visual contract.
 
-   The strip is the header of the shape: white background, 1px warm
-   outline on top/left/right rounded at the two top corners with
-   `--db-radius-card`, and a 2px warm baseline at the bottom that turns
-   primary-coloured under the active tab. The next sibling
-   (.card / .ob-tab-content) gets its border-top stripped and top
-   corners squared by the adjacent rules below, so tabs + content form
-   one continuous bordered shape with rounded outer corners — rounded on
-   top from the strip, on the bottom from the body.
-
-   The strip itself carries no padding, so the selected tab's fill spans
-   the full strip height and, on the edge tabs, reaches the left / right
-   border — no grey gutter around it. Spacing lives on the .nav-link.
-   **Do not** add `px-3 pt-2` (or `px-3 pt-3`) to the tab `<ul>`: it
-   reintroduces exactly that gutter.
-
-   Font-size is now also baked in (`0.9rem` on the .nav-link) so every
-   tab head reads at the same size across the app. **Do not** add
-   Bootstrap's `.small` modifier on the `<ul>` (was used on dq /
-   business-rules / axioms / dt pages) — it's redundant.
+   The rail and its content are independent surfaces. The rail therefore has
+   no filled container or rounded outer frame, and the selected item remains
+   transparent with a 2px primary underline. Horizontal overflow keeps labels
+   on one line in narrow panels and on mobile.
    ========================================================================== */
 .nav-tabs.ob-tabs {
-    background: #fff;
-    border: 1px solid var(--db-border, #dee2e6);
-    border-bottom-width: 2px;
-    /* Top corners only: the strip is the head of the tabs + content shape, so
-       it carries the outer rounding while its bottom edge stays flush with the
-       body below. The selected tab itself stays square. */
-    border-radius: var(--db-radius-card, 14px) var(--db-radius-card, 14px) 0 0;
+    display: flex;
+    flex-wrap: nowrap;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--db-border, #dee2e6);
+    border-radius: 0;
     margin-right: 12px;
     gap: 0;
-    /* No strip padding: the selected tab's fill has to reach the strip's top
-       edge, and the first / last tab's the left / right edge. Breathing room
-       comes from the .nav-link padding instead. */
     padding: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--db-border, #dee2e6) transparent;
+    -webkit-overflow-scrolling: touch;
 }
 
-/* When ob-tabs sits inside a Bootstrap card (.card-body / .card-header /
-   directly under .card), the parent card already provides the outer
-   border, so drop the strip's own top / left / right borders to avoid
-   double-bordering. The grey baseline (border-bottom) is preserved —
-   it's the seam the underline draws on. */
+/* A card already supplies its own horizontal inset. */
 .card-body > .nav-tabs.ob-tabs,
 .card-header > .nav-tabs.ob-tabs,
 .card > .nav-tabs.ob-tabs {
-    border-top: none;
-    border-left: none;
-    border-right: none;
     margin-right: 0;
 }
 
 .nav-tabs.ob-tabs .nav-item {
-    margin-bottom: -2px;
+    flex: 0 0 auto;
+    margin-bottom: -1px;
 }
 
 .nav-tabs.ob-tabs .nav-link {
@@ -941,9 +917,10 @@
     color: var(--db-text-secondary, #6c757d) !important;
     font-size: 0.9rem;
     font-weight: 500;
-    padding: 0.4rem 0.85rem;
+    padding: 0.5rem 0.875rem;
     margin: 0;
-    transition: color 0.15s ease, border-color 0.15s ease;
+    transition: color 0.15s ease, background-color 0.15s ease,
+        border-color 0.15s ease;
     white-space: nowrap;
 }
 
@@ -956,51 +933,25 @@
 .nav-tabs.ob-tabs .nav-link.active,
 .nav-tabs.ob-tabs .nav-item.show .nav-link {
     color: var(--db-primary-darker, #3730A3) !important;
-    background: var(--db-primary-light) !important;
+    background: transparent !important;
     border-bottom-color: var(--db-primary) !important;
     border-radius: 0 !important;
     font-weight: 600;
 }
 
-/* The edge tabs follow the strip's rounded corners, so the selected fill has
-   no grey sliver left outside it. Interior tabs stay square. */
-.nav-tabs.ob-tabs .nav-item:first-child .nav-link.active {
-    border-top-left-radius: var(--db-radius-card, 14px) !important;
-}
-
-.nav-tabs.ob-tabs .nav-item:last-child .nav-link.active {
-    border-top-right-radius: var(--db-radius-card, 14px) !important;
-}
-
-.nav-tabs.ob-tabs .nav-link:focus {
-    outline: none;
+.nav-tabs.ob-tabs .nav-link:focus-visible {
+    outline: 2px solid var(--db-primary);
+    outline-offset: -3px;
     box-shadow: none;
 }
 
-/* Adjacent-sibling rules: when ob-tabs is followed by a card or an
-   ob-tab-content, neutralise their top border / radius so the strip
-   and the content body merge into one continuous bordered shape (like
-   the Ontology > Information card, but split into a tab head and
-   body). */
-.nav-tabs.ob-tabs + .card,
-.nav-tabs.ob-tabs + .ob-tab-content,
-.nav-tabs.ob-tabs + .tab-content {
-    border-top: none !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
-    /* Match the strip's 12px scrollbar-gutter inset. Without this, a
-       following .card keeps the sidebar-section full-width card rule and
-       sits 12px wider / a seam below the tab head. */
-    margin-top: 0;
-    margin-right: 12px;
-    width: auto;
+.nav-tabs.ob-tabs.ob-tabs--compact .nav-link {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
 }
 
-/* Standalone full-height pattern: a single .ob-tabs-wrap container
-   holding the strip + the content. Apply to give the whole tabs unit
-   the Ontology > Information feel — fills the remaining height of
-   .content-section, scrolls internally on overflow. The strip stays
-   pinned at the top; only the body scrolls. */
+/* Standalone full-height pattern: the rail stays pinned while its independent
+   content surface scrolls. */
 .ob-tabs-wrap {
     display: flex;
     flex-direction: column;

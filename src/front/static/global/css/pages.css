@@ -557,49 +557,6 @@
 }
 
 /* ==========================================================================
-   Custom Tab Styling (Mapping, Taxonomy, R2RML pages)
-   Override default nav-tabs with black text on gray background
-   ========================================================================== */
-.custom-tabs .nav-item {
-    margin-right: 0.5rem;
-}
-
-.custom-tabs .nav-item:last-child {
-    margin-right: 0;
-}
-
-.custom-tabs .nav-link,
-.custom-tabs .nav-link:link,
-.custom-tabs .nav-link:visited {
-    color: var(--db-text-secondary) !important;
-    background-color: transparent;
-    border: 1px solid transparent;
-    border-radius: 0;
-    font-weight: 500;
-}
-
-.custom-tabs .nav-link:hover,
-.custom-tabs .nav-link:focus {
-    color: var(--db-text) !important;
-    background-color: var(--db-hover-warm);
-}
-
-.custom-tabs .nav-link.active,
-.custom-tabs .nav-link.active:hover,
-.custom-tabs .nav-link.active:focus {
-    color: var(--db-primary-darker) !important;
-    background-color: var(--db-primary-light);
-    border-color: transparent;
-    border-bottom-color: var(--db-primary);
-    border-radius: 0;
-    font-weight: 600;
-}
-
-.custom-tabs .nav-link i {
-    margin-right: 5px;
-}
-
-/* ==========================================================================
    Mapping Page Styles
    ========================================================================== */
 .mapping-card {

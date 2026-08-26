@@ -56,7 +56,7 @@ def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
     css = _mobile_block(_read(MAIN_CSS))
 
     assert re.search(
-        r"\.ob-subnav\s+\.container-fluid\s*\{[^}]*padding-inline:",
+        r"#obSubnav\s+\.container-fluid\s*\{[^}]*padding-inline:",
         css,
         flags=re.DOTALL,
     )

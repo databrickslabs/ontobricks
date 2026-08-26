@@ -1,9 +1,22 @@
 /* Data Quality (SHACL) — Ontology module styles */
 
+#dataquality-section .card-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#dqTabContent {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
 .dq-shapes-list {
     min-height: 60px;
-    max-height: calc(100vh - 320px);
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
     overflow-x: hidden;
 }
 
@@ -33,11 +46,6 @@
     background: var(--bs-gray-100);
     resize: vertical;
     min-height: 22rem;
-}
-
-#dqTabs .nav-link {
-    font-size: 0.78rem;
-    padding: 0.4rem 0.5rem;
 }
 
 #dqTabs .badge {

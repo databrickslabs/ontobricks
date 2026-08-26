@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 BASE_HTML = REPO_ROOT / "src/front/templates/base.html"
 MAIN_CSS = REPO_ROOT / "src/front/static/global/css/main.css"
 NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
+SIDEBAR_LAYOUT_CSS = REPO_ROOT / "src/front/static/global/css/sidebar-layout.css"
 
 
 def _read(path: Path) -> str:
@@ -60,6 +61,19 @@ def test_subnav_surface_is_transparent_and_borderless():
 
     assert re.search(r"background(?:-color)?\s*:\s*transparent", block)
     assert re.search(r"border-bottom\s*:\s*(?:0|none)", block)
+
+
+def test_subnav_left_edge_matches_sidebar_panel_gutter():
+    main_css = _read(MAIN_CSS)
+    sidebar_css = _read(SIDEBAR_LAYOUT_CSS)
+    subnav_container = _rule(main_css, "#obSubnav .container-fluid")
+    sidebar_layout = _rule(sidebar_css, ".sidebar-layout")
+
+    assert re.search(r"padding\s*:\s*0\.5rem\s*;", sidebar_layout)
+    assert re.search(
+        r"padding-left\s*:\s*0\.5rem\s*!important\s*;",
+        subnav_container,
+    )
 
 
 def test_workspace_group_uses_shared_segmented_control_tokens():

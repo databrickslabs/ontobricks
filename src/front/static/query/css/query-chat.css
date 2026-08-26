@@ -19,7 +19,6 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    height: 100%;
     overflow: hidden;
 }
 
@@ -817,6 +816,11 @@
 --------------------------------------------------- */
 
 @media (max-width: 768px) {
+    #chat-section.sidebar-section.active {
+        height: auto;
+        overflow: visible;
+    }
+
     .graph-chat-container { border-radius: 12px; }
     .graph-chat-messages { padding: 0.9rem; }
     .graph-chat-messages .assistant-msg { max-width: 92%; }

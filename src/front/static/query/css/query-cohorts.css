@@ -26,10 +26,8 @@
     .cohort-layout--rail-left { grid-template-columns: 1fr; }
 }
 
-/* Tabs (Describe | Build rule) ---------------------------- */
-/* Visual treatment lives in components.css (.ob-tabs); this file only
-   adds the cohort-specific font-size that we want to preserve. */
-.cohort-tabs-wrap {
+/* Main cohort content card. */
+.cohort-content-card {
     min-width: 0;
 }
 .cohort-tab-content {
