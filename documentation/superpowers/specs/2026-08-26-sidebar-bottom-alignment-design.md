@@ -44,8 +44,9 @@ Five sidebar page families, all using `.sidebar-layout` from
   not grow the document on desktop.
 - Mobile (`max-width: 768px`) uses normal document flow. No pane-level
   `100vh`.
-- Rendered invariant: L1→L2 gap = L2→sidebar gap = 8px ±1px, and the active
-  section header top matches the sidebar top within 1px.
+- Rendered invariant: L1→L2 gap = L2→sidebar gap = 8px ±1px, the active
+  section title box (icon included) matches the sidebar top within 1px, and the
+  subtitle→content gap is 8px ±1px.
 - Rendered invariant: `|sidebar.bottom - pane.bottom| <= 1px` at 1600×1000.
 
 ## Desktop shell
@@ -74,6 +75,7 @@ Geometry:
 | Nav–content gap | Shell `gap: 0.5rem`. |
 | Content top / bottom | Shell 0.5rem only; content vertical padding is **0**. |
 | Content left / right | Shell 0.5rem + content 0.5rem = **1rem** total. |
+| Title / subtitle rhythm | Desktop header top padding is 0; shared header bottom margin is **0.5rem**. |
 
 The shell padding is what exposes the nav card’s four rounded corners. Do not
 restore `margin: 0.5rem` / `height: calc(100% - 1rem)` on `.sidebar-nav`.
@@ -144,8 +146,8 @@ Rendered pytest (`tests/e2e/navigation/test_sidebar_bottom_alignment.py`)
 covers a representative route set, not every sidebar item:
 
 - Desktop 1600×1000: `.sidebar-nav` vs primary pane bottoms, `delta <= 1`.
-- Desktop 1600×1000: equal 8px L1→L2 and L2→sidebar gaps, plus section-header
-  top vs sidebar top, `delta <= 1`.
+- Desktop 1600×1000: equal 8px L1→L2 and L2→sidebar gaps, title-box top vs
+  sidebar top (`delta <= 1`), and 8px subtitle→content spacing.
 - Fixed-height routes: `documentHeight <= viewportHeight + 1`.
 - Mobile 390×844: visible overflow, window scroll, no horizontal overflow.
 

@@ -1601,3 +1601,49 @@ Tests:
 - IDE lints on the changed code/test/documentation files → no errors.
 - `git diff --check` → passed.
 
+## Align sidebar-page vertical rhythm
+
+Context: Sidebar pages used different vertical spacing between L1, L2, page
+headers, subtitles, and primary content. The global section-header inset also
+placed title boxes below the sidebar card, while a temporary optical transform
+could clip title icons beneath the L2 navbar.
+
+Changes:
+
+1. `src/front/static/global/css/sidebar-layout.css`
+   Aligned complete title boxes with the sidebar top without moving icons under
+   L2, and standardized subtitle-to-content spacing at 0.5rem across all
+   sidebar pages.
+2. `tests/units/front/test_clarity_design_contract.py`
+   Added static contracts for equal chrome gutters, title-box alignment, and
+   the shared header-to-content rhythm.
+3. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Added rendered desktop contracts for equal L1/L2/content gaps, icon-safe
+   title alignment, and matching Designer/Business Views spacing.
+4. `.cursor/11-frontend-design.mdc`
+    Documented the canonical 8px vertical rhythm for Cursor and Claude agents;
+    `CLAUDE.md` consumes this canonical rule through its existing import.
+5. `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+    Extended the shared sidebar geometry specification with top alignment and
+    header spacing invariants.
+
+Modified files:
+- `src/front/static/global/css/sidebar-layout.css`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `.cursor/11-frontend-design.mdc`
+- `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: static spacing contracts failed against the previous 0.35rem L2 padding,
+  extra content top inset, global 1rem header padding, and Business Views
+  `mb-4` spacing.
+- GREEN focused static contracts → 3 passed, 1 warning.
+- GREEN rendered spacing contracts → 9 passed, 1 warning.
+- Full rendered sidebar alignment suite → 24 passed, 1 warning.
+- Mandatory full non-scenario suite → 5599 passed, 305 skipped, 6 deselected,
+  1 xfailed, 23 warnings in 46.58s.
+- IDE lints on changed files → no errors.
+- `git diff --check` → passed.
+

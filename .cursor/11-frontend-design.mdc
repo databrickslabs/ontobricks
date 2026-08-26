@@ -420,6 +420,9 @@ workspace rail (`padding: 0.5rem 0 0`); `.sidebar-layout` owns the matching
 0.5rem horizontal inset. Page-specific fixed panes may change horizontal
 padding but must keep a zero top/bottom inset. Do not restore vertical content
 padding that shifts the title below the sidebar or shortens the pane.
+Every `.sidebar-layout .section-header` uses `margin-bottom: 0.5rem !important`
+so title/subtitle-to-content spacing is identical across sections, including
+Ontology Designer and Business Views.
 
 **Flex chain.** `.sidebar-content` is a column flex container with
 `min-height: 0`. `.sidebar-section.active` is `flex: 1 1 0; min-height: 0`.
@@ -436,9 +439,11 @@ main surface vs the menu, not stuffing every form field into one viewport.
 
 **Rendered invariant.** At 1600×1000, `.sidebar-nav` and the visible
 primary pane share `getBoundingClientRect().bottom` within **1px**.
-The visible section `.section-header` (or the primary pane when no title is
-present) shares the sidebar's top edge within **1px**. The visible L1→L2 and
-L2→sidebar gaps are both **8px ±1px**.
+The visible section title box (`.section-header h4`, including its icon) shares
+the sidebar's top edge within **1px**; desktop sidebar headers therefore reset
+the global `padding-top` to zero and must not use a negative transform. The
+visible L1→L2 and L2→sidebar gaps are both **8px ±1px**. The gap from subtitle
+to primary content is **8px ±1px**.
 Fixed-height routes must not grow the document past the viewport by more
 than 1px.
 

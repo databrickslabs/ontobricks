@@ -556,6 +556,36 @@ def test_level_two_rail_and_content_share_the_same_vertical_gutter():
     )
 
 
+def test_desktop_sidebar_titles_remove_the_global_top_inset():
+    css = _read(SIDEBAR_LAYOUT_CSS)
+    desktop_rule = re.search(
+        r"@media\s*\(\s*min-width\s*:\s*769px\s*\)\s*\{"
+        r"(?P<body>.*?)"
+        r"\n\}",
+        css,
+        flags=re.DOTALL,
+    )
+    assert desktop_rule, "Missing desktop sidebar-title alignment rules"
+    body = desktop_rule.group("body")
+    assert re.search(
+        r"\.sidebar-layout\s+\.section-header\s*\{"
+        r"[^}]*padding-top\s*:\s*0\s*;",
+        body,
+        flags=re.DOTALL,
+    )
+    assert "translateY" not in body
+
+    header_blocks = _rule_blocks_for_exact_selector(
+        css,
+        ".sidebar-layout .section-header",
+    )
+    assert _any_block_has_declaration(
+        header_blocks,
+        r"margin-bottom",
+        r"0\.5rem\s*!important",
+    )
+
+
 def test_sidebar_layout_has_a_min_height_safe_flex_chain():
     css = _read(SIDEBAR_LAYOUT_CSS)
     content = _rule_blocks_for_exact_selector(css, ".sidebar-content")

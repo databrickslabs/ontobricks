@@ -63,6 +63,12 @@ def test_desktop_chrome_uses_equal_vertical_gutters(page, live_server, path):
     page.set_viewport_size(DESKTOP_VIEWPORT)
     page.goto(f"{live_server}{path}")
     page.wait_for_load_state("domcontentloaded")
+    page.evaluate(
+        """() => {
+            document.getElementById('obSubnav').classList.remove('d-none');
+            window.OBBreadcrumb?._updateChromeHeight();
+        }"""
+    )
     page.locator("#obSubnav:not(.d-none)").wait_for(state="visible")
 
     geometry = page.evaluate(
@@ -97,7 +103,7 @@ def test_desktop_chrome_uses_equal_vertical_gutters(page, live_server, path):
         pytest.param("/settings", "ui", id="settings-ui"),
     ],
 )
-def test_desktop_page_title_aligns_with_sidebar_top(
+def test_desktop_page_title_box_aligns_with_sidebar_top(
     page,
     live_server,
     path,
@@ -117,14 +123,57 @@ def test_desktop_page_title_aligns_with_sidebar_top(
             const header = document.querySelector(
                 '.sidebar-section.active .section-header'
             );
+            const title = header.querySelector('h4');
             return {
                 sidebarTop: sidebar.getBoundingClientRect().top,
                 headerTop: header.getBoundingClientRect().top,
+                titleTop: title.getBoundingClientRect().top,
             };
         }"""
     )
 
     assert geometry["headerTop"] == pytest.approx(geometry["sidebarTop"], abs=1)
+    assert geometry["titleTop"] == pytest.approx(geometry["sidebarTop"], abs=1)
+
+
+@pytest.mark.parametrize(
+    "section,content_selector",
+    [
+        pytest.param("map", "#map-section > .card", id="ontology-designer"),
+        pytest.param(
+            "design",
+            "#ontology-designer-canvas-wrapper",
+            id="ontology-business-views",
+        ),
+    ],
+)
+def test_desktop_title_to_content_gap_matches_designer_reference(
+    page,
+    live_server,
+    section,
+    content_selector,
+):
+    page.set_viewport_size(DESKTOP_VIEWPORT)
+    page.goto(f"{live_server}/ontology")
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_function("typeof SidebarNav !== 'undefined'")
+    page.evaluate("(sectionName) => SidebarNav.switchTo(sectionName)", section)
+
+    content = page.locator(content_selector)
+    content.wait_for(state="visible")
+    gap = page.evaluate(
+        """(selector) => {
+            const subtitle = document.querySelector(
+                '.sidebar-section.active .section-header p'
+            );
+            const content = document.querySelector(selector);
+            return content.getBoundingClientRect().top
+                - subtitle.getBoundingClientRect().bottom;
+        }""",
+        content_selector,
+    )
+
+    assert gap == pytest.approx(8, abs=1)
 
 
 @pytest.mark.parametrize(

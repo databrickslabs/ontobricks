@@ -363,6 +363,21 @@ body.full-width-layout {
     overflow: hidden !important;
 }
 
+/* One shared title/subtitle-to-content rhythm for every sidebar page. This
+   intentionally overrides template-level Bootstrap `mb-4` utilities. */
+.sidebar-layout .section-header {
+    margin-bottom: 0.5rem !important;
+}
+
+/* Section headers inherit 1rem of global top padding. Remove that structural
+   inset on desktop so the complete title box, including its icon, meets the
+   sidebar card's top border without overlapping the L2 navbar. */
+@media (min-width: 769px) {
+    .sidebar-layout .section-header {
+        padding-top: 0;
+    }
+}
+
 /* Read-only mode no longer steals vertical space — the indicator is
    now a navbar pill (see ``#readOnlyNavBadge``) instead of a sticky
    banner under the navbar. The sidebar therefore shares the same
