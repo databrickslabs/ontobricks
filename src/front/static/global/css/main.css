@@ -786,6 +786,29 @@ body {
     box-shadow: var(--db-focus-ring);
 }
 
+/* Bootstrap's small size ramp sets `border-radius` as a *property* (not just a
+   variable), with enough specificity to beat the rules above — so every small
+   input group and small field fell back to Bootstrap's legacy 4px while its
+   full-size sibling used the 10px control token. Pin the ramp to the token;
+   Bootstrap's own `:not(:first-child)` rules still square the joined edges. */
+.form-control-sm,
+.form-select-sm,
+.input-group-sm > .form-control,
+.input-group-sm > .form-select,
+.input-group-sm > .input-group-text,
+.input-group-sm > .btn {
+    border-radius: var(--db-radius-control);
+}
+
+.form-control-lg,
+.form-select-lg,
+.input-group-lg > .form-control,
+.input-group-lg > .form-select,
+.input-group-lg > .input-group-text,
+.input-group-lg > .btn {
+    border-radius: var(--db-radius-card);
+}
+
 /* ==========================================================================
    Alerts
    ========================================================================== */
@@ -876,6 +899,77 @@ body {
 .section-header {
     padding-top: 1rem;
     padding-right: 12px;
+}
+
+/* Section headers pair a title with a cluster of controls through
+   `d-flex justify-content-between`, which doesn't wrap: below roughly a tablet
+   the cluster pushed its last buttons off-screen, and the ones that stayed
+   stretched to three times their height. Let the header and any flex cluster
+   inside it wrap instead. */
+.section-header.d-flex {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.section-header .d-flex {
+    flex-wrap: wrap;
+}
+
+/* Wrapped rows must not stretch their buttons to the tallest sibling. */
+.section-header .btn {
+    align-self: center;
+}
+
+@media (max-width: 767.98px) {
+    /* The desktop L2 row is intentionally one line, but its four workspace
+       links, breadcrumb and domain actions total about 883px. On a phone the
+       breadcrumb repeats the active L2 state, so remove it and its spacer;
+       keep every navigation/action target as a compact, titled icon. This
+       avoids horizontal scrolling, which would clip Bootstrap dropdowns. */
+    .ob-subnav-breadcrumb-wrap,
+    .ob-subnav-flex-spacer {
+        display: none !important;
+    }
+
+    .ob-subnav .container-fluid {
+        padding-inline: 0.5rem;
+    }
+
+    .ob-subnav-link,
+    .ob-subnav-resume-btn,
+    .ob-subnav-save-btn,
+    .ob-subnav-switch-btn,
+    .ob-subnav-close-btn {
+        justify-content: center;
+        padding-inline: 0.5rem;
+    }
+
+    .ob-subnav-resume-btn,
+    .ob-subnav-switch-btn,
+    .ob-subnav-close-btn {
+        margin-left: 0.25rem;
+        margin-right: 0;
+    }
+
+    .ob-subnav-label {
+        display: none;
+    }
+
+    /* A joined `.btn-group` can't stay joined once it has to wrap: Bootstrap
+       lets its members shrink, which broke labels mid-word into buttons three
+       lines tall. Below tablet the group becomes individually rounded pills at
+       their natural width, flowing onto as many rows as they need. */
+    .section-header .btn-group {
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
+
+    .section-header .btn-group > .btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        border-radius: var(--db-radius-control);
+        margin-left: 0;
+    }
 }
 
 .page-header {

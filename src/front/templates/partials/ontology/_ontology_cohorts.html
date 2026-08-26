@@ -18,17 +18,18 @@
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-sm btn-outline-primary" id="cohortNewBtn"
+            <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                    title="Open the ontology discussion" aria-label="Open the ontology discussion"
+                    onclick="openOntologyDiscussion()">
+                <i class="bi bi-chat-dots"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="cohortNewBtn"
                     onclick="CohortModule.newRule()">
                 <i class="bi bi-plus-lg me-1"></i>New rule
             </button>
             <button class="btn btn-sm btn-primary" id="cohortSaveBtn"
                     onclick="CohortModule.save()">
                 <i class="bi bi-check2 me-1"></i>Save rule
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                    title="Open the ontology discussion" onclick="openOntologyDiscussion()">
-                <i class="bi bi-chat-dots"></i>
             </button>
         </div>
     </div>

@@ -802,7 +802,7 @@ function updateKgReadyIndicators() {
         html = '<span class="kg-not-built d-inline-flex align-items-center gap-2">'
             + '<span class="badge bg-secondary-subtle text-secondary border fw-normal">'
             + '<i class="bi bi-slash-circle me-1"></i>Graph not built</span>'
-            + '<button type="button" class="btn btn-sm btn-primary py-0 px-2 kg-go-build-btn">'
+            + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 kg-go-build-btn">'
             + '<i class="bi bi-fast-forward me-1"></i>Go to Build</button>'
             + '</span>';
     }

@@ -19,35 +19,36 @@
                     <span>Not Mapped</span>
                 </div>
             </div>
-            <button class="btn btn-sm btn-outline-secondary" id="mappingMapZoomIn" title="Zoom In">
-                <i class="bi bi-zoom-in"></i>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Zoom and view">
+                <button class="btn btn-outline-secondary" id="mappingMapZoomIn" title="Zoom In" aria-label="Zoom in">
+                    <i class="bi bi-zoom-in"></i>
+                </button>
+                <button class="btn btn-outline-secondary" id="mappingMapZoomOut" title="Zoom Out" aria-label="Zoom out">
+                    <i class="bi bi-zoom-out"></i>
+                </button>
+                <button class="btn btn-outline-secondary" id="mappingMapResetView" title="Reset View" aria-label="Reset view">
+                    <i class="bi bi-arrows-fullscreen"></i>
+                </button>
+            </div>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Layout">
+                <button class="btn btn-outline-secondary" id="mappingMapResetLayout" title="Reset Layout" aria-label="Reset layout">
+                    <i class="bi bi-shuffle"></i>
+                </button>
+                <button class="btn btn-outline-secondary" id="mappingMapRefresh" title="Refresh Designer" aria-label="Refresh designer" onclick="refreshMappingDesign()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" id="mappingAutoExclude" title="Auto-exclude: orphan entities and entities connected only by inheritance (no object-property relationships)" onclick="autoExcludeAll()">
+                <i class="bi bi-magic me-1"></i> Auto-Exclude
             </button>
-            <button class="btn btn-sm btn-outline-secondary" id="mappingMapZoomOut" title="Zoom Out">
-                <i class="bi bi-zoom-out"></i>
+            <button class="btn btn-sm btn-outline-secondary" id="mappingIncludeExcluded" title="Include all excluded entities and relationships" onclick="includeAllExcluded()">
+                <i class="bi bi-eye me-1"></i> Include excluded
             </button>
-            <button class="btn btn-sm btn-outline-secondary" id="mappingMapResetView" title="Reset View">
-                <i class="bi bi-arrows-fullscreen"></i>
-            </button>
-            <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-secondary" id="mappingMapResetLayout" title="Reset Layout">
-                <i class="bi bi-shuffle"></i>
-            </button>
-            <button class="btn btn-sm btn-outline-secondary" id="mappingMapRefresh" title="Refresh Designer" onclick="refreshMappingDesign()">
-                <i class="bi bi-arrow-clockwise"></i>
-            </button>
-            <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-warning" id="mappingAutoExclude" title="Auto-exclude: orphan entities and entities connected only by inheritance (no object-property relationships)" onclick="autoExcludeAll()">
-                <i class="bi bi-magic"></i> Auto-Exclude
-            </button>
-            <button class="btn btn-sm btn-outline-success" id="mappingIncludeExcluded" title="Include all excluded entities and relationships" onclick="includeAllExcluded()">
-                <i class="bi bi-eye"></i> Include excluded
-            </button>
-            <div class="vr mx-1"></div>
             <button type="button" class="btn btn-sm btn-outline-danger" id="resetMappingsDesignBtn" title="Delete all entity and relationship mappings">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Unmap all
             </button>
             <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                    title="Open the mappings discussion" onclick="openMappingDiscussion()">
+                    title="Open the mappings discussion" aria-label="Open the mappings discussion" onclick="openMappingDiscussion()">
                 <i class="bi bi-chat-dots"></i>
             </button>
         </div>

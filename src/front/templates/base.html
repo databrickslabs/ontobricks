@@ -264,8 +264,10 @@
                 <li class="ob-subnav-item dropdown">
                     <a class="ob-subnav-link dropdown-toggle" href="{{ domain_m.v.route }}" id="subnavDomainDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ domain_m.v.route }}">
-                        <i class="bi {{ domain_m.v.icon }}"></i> Domain
+                       data-subnav-route="{{ domain_m.v.route }}"
+                       title="Domain">
+                        <i class="bi {{ domain_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">Domain</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavDomainDropdown" id="subnavDomainDropdownMenu">
                         {% set ns = namespace(first_group=true) %}
@@ -289,8 +291,10 @@
                        href="{{ ontology_m.v.route }}"
                        id="subnavOntologyDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ ontology_m.v.route }}">
-                        <i class="bi {{ ontology_m.v.icon }}"></i> {{ ontology_m.v.label }}
+                       data-subnav-route="{{ ontology_m.v.route }}"
+                       title="{{ ontology_m.v.label }}">
+                        <i class="bi {{ ontology_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ ontology_m.v.label }}</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavOntologyDropdown">
                         {% set vis = namespace(any=false) %}
@@ -313,8 +317,10 @@
                        href="{{ mapping_m.v.route }}"
                        id="subnavMappingDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ mapping_m.v.route }}">
-                        <i class="bi {{ mapping_m.v.icon }}"></i> {{ mapping_m.v.label }}
+                       data-subnav-route="{{ mapping_m.v.route }}"
+                       title="{{ mapping_m.v.label }}">
+                        <i class="bi {{ mapping_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ mapping_m.v.label }}</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavMappingDropdown">
                         {% set vis = namespace(any=false) %}
@@ -337,8 +343,10 @@
                        href="{{ kg_m.v.route }}"
                        id="subnavKgDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ kg_m.v.route }}">
-                        <i class="bi {{ kg_m.v.icon }}"></i> {{ kg_m.v.label }}
+                       data-subnav-route="{{ kg_m.v.route }}"
+                       title="{{ kg_m.v.label }}">
+                        <i class="bi {{ kg_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ kg_m.v.label }}</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavKgDropdown">
                         {% set vis = namespace(any=false) %}
@@ -375,7 +383,8 @@
                        data-navbar-action="{{ save_action.v.action }}"
                        {% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}
                        title="Save domain to Unity Catalog">
-                        <i class="bi {{ save_action.v.icon }}"></i> {{ save_action.v.label }}
+                        <i class="bi {{ save_action.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ save_action.v.label }}</span>
                     </a>
                     {% endif %}
                     {% if switch_action.v %}
@@ -383,7 +392,8 @@
                        data-navbar-action="{{ switch_action.v.action }}"
                        {% if switch_action.v.element_id %}id="{{ switch_action.v.element_id }}"{% endif %}
                        title="Reload the current domain or switch to another version">
-                        <i class="bi {{ switch_action.v.icon }}"></i> {{ switch_action.v.label }}
+                        <i class="bi {{ switch_action.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ switch_action.v.label }}</span>
                     </a>
                     {% endif %}
                     {% if close_action.v %}
@@ -391,7 +401,8 @@
                        data-navbar-action="{{ close_action.v.action }}"
                        {% if close_action.v.element_id %}id="{{ close_action.v.element_id }}"{% endif %}
                        title="Close the domain and release the edit lock">
-                        <i class="bi {{ close_action.v.icon }}"></i> {{ close_action.v.label }}
+                        <i class="bi {{ close_action.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ close_action.v.label }}</span>
                     </a>
                     {% endif %}
                 </li>

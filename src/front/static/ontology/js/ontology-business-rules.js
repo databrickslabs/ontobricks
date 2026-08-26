@@ -751,7 +751,7 @@ window.BusinessRulesModule = {
         if (errorEl) errorEl.style.display = 'none';
         if (emptyEl) emptyEl.style.display = 'none';
         if (listEl) listEl.style.display = 'none';
-        if (acceptBtn) acceptBtn.style.display = 'none';
+        if (acceptBtn) acceptBtn.classList.add('d-none');
         if (progressEl) progressEl.textContent = 'Generating business rules…';
 
         this._suggestions = { swrl_rules: [], decision_tables: [], sparql_rules: [], aggregate_rules: [] };
@@ -852,7 +852,7 @@ window.BusinessRulesModule = {
             return;
         }
         if (listEl) listEl.style.display = '';
-        if (acceptBtn) acceptBtn.style.display = '';
+        if (acceptBtn) acceptBtn.classList.remove('d-none');
         if (countEl) countEl.textContent = `${total} rule(s) proposed`;
 
         let html = '';

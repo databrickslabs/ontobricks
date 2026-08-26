@@ -260,14 +260,45 @@
     color: var(--db-text);
 }
 
+/* Bootstrap's own `:focus-visible` repaints a button with its *hover* palette,
+   which for these variants is the solid fill we deliberately dropped — so a
+   focused outline button turned solid grey / blue / red. Pin the resting
+   palette and let the ring alone carry the focus. Both `:focus` and
+   `:focus-visible` are listed because Bootstrap uses the latter, and matching
+   its specificity is what makes these win. */
+.btn-secondary:focus,
+.btn-secondary:focus-visible,
+.btn-success:focus,
+.btn-success:focus-visible,
+.btn-danger:focus,
+.btn-danger:focus-visible,
+.btn-warning:focus,
+.btn-warning:focus-visible,
+.btn-info:focus,
+.btn-info:focus-visible,
+.btn-light:focus,
+.btn-light:focus-visible,
+.btn-dark:focus,
+.btn-dark:focus-visible,
 .btn-outline-primary:focus,
+.btn-outline-primary:focus-visible,
 .btn-outline-secondary:focus,
+.btn-outline-secondary:focus-visible,
 .btn-outline-success:focus,
+.btn-outline-success:focus-visible,
 .btn-outline-danger:focus,
+.btn-outline-danger:focus-visible,
 .btn-outline-warning:focus,
+.btn-outline-warning:focus-visible,
 .btn-outline-info:focus,
+.btn-outline-info:focus-visible,
 .btn-outline-light:focus,
-.btn-outline-dark:focus {
+.btn-outline-light:focus-visible,
+.btn-outline-dark:focus,
+.btn-outline-dark:focus-visible {
+    background-color: transparent;
+    border-color: var(--db-border);
+    color: var(--db-text-secondary);
     box-shadow: var(--db-focus-ring);
 }
 
@@ -306,6 +337,13 @@
     color: var(--db-status-danger);
     border-color: var(--db-status-danger);
     background-color: var(--db-status-danger-soft-bg);
+}
+
+/* Danger keeps its red lettering when focused, unlike the neutral variants. */
+.btn-outline-danger:focus,
+.btn-outline-danger:focus-visible {
+    color: var(--db-status-danger);
+    border-color: rgba(220, 38, 38, 0.35);
 }
 
 .btn-outline-danger:active,

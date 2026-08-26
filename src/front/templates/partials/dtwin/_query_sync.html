@@ -44,7 +44,7 @@
             </button>
             {% set _dr = get_user_domain_role() %}
             {% if _dr not in ('viewer', 'editor', 'none') %}
-            <button type="button" class="btn btn-sm btn-outline-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
+            <button type="button" class="btn btn-sm btn-primary" id="syncStartBtn" data-sync-action="start-triple-store-sync" disabled>
                 <i class="bi bi-fast-forward me-1"></i>Build
             </button>
             {% else %}

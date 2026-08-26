@@ -7,35 +7,41 @@
         <p class="text-muted mb-0 small">Interactive force-directed graph of your ontology</p>
     </div>
     <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-sm btn-outline-secondary" id="mapZoomIn" title="Zoom In">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Zoom and view">
+            <button class="btn btn-outline-secondary" id="mapZoomIn" title="Zoom In" aria-label="Zoom in">
                 <i class="bi bi-zoom-in"></i>
             </button>
-            <button class="btn btn-sm btn-outline-secondary" id="mapZoomOut" title="Zoom Out">
+            <button class="btn btn-outline-secondary" id="mapZoomOut" title="Zoom Out" aria-label="Zoom out">
                 <i class="bi bi-zoom-out"></i>
             </button>
-            <button class="btn btn-sm btn-outline-secondary" id="mapResetView" title="Reset View">
+            <button class="btn btn-outline-secondary" id="mapResetView" title="Reset View" aria-label="Reset view">
                 <i class="bi bi-arrows-fullscreen"></i>
             </button>
-            <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-secondary" id="mapResetLayout" title="Reset Layout (Auto-arrange)">
+        </div>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Layout and display">
+            <button class="btn btn-outline-secondary" id="mapResetLayout" title="Reset Layout (Auto-arrange)" aria-label="Reset layout">
                 <i class="bi bi-shuffle"></i>
             </button>
-            <button class="btn btn-sm btn-outline-secondary" id="mapAutoAssignIcons" title="Auto-map icons based on entity names">
-                <i class="bi bi-emoji-smile"></i>
-            </button>
-            <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-secondary active" id="mapToggleInheritance" title="Show/hide inheritance links" aria-pressed="true">
+            <button class="btn btn-outline-secondary active" id="mapToggleInheritance" title="Show/hide inheritance links" aria-label="Show or hide inheritance links" aria-pressed="true">
                 <i class="bi bi-diagram-3"></i>
             </button>
-            <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-secondary" id="mapSearchBtn" title="Search entity">
+            <button class="btn btn-outline-secondary" id="mapSearchBtn" title="Search entity" aria-label="Search entity">
                 <i class="bi bi-search"></i>
             </button>
-            <div class="vr mx-1"></div>
-            <button class="btn btn-sm btn-outline-primary" id="mapDiscuss" title="Open the ontology discussion (optionally tag an entity/relationship)">
-                <i class="bi bi-chat-dots"></i>
-            </button>
         </div>
+        <!-- These two are hidden outright for viewers (permissions.css), so they stay
+             out of the groups above: a hidden member would leave its neighbour with a
+             squared edge. -->
+        <button class="btn btn-sm btn-outline-secondary" id="mapAutoAssignIcons" title="Auto-map icons based on entity names" aria-label="Auto-assign icons">
+            <i class="bi bi-emoji-smile"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" id="mapToggleAssistant" title="Ontology assistant" aria-label="Open the ontology assistant">
+            <i class="bi bi-stars"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-primary" id="mapDiscuss" title="Open the ontology discussion (optionally tag an entity/relationship)" aria-label="Open the ontology discussion">
+            <i class="bi bi-chat-dots"></i>
+        </button>
+    </div>
 </div>
 <div class="card border-0 h-100 ob-split-shell">
     <div class="card-body p-0 position-relative">
@@ -71,16 +77,6 @@
                 </div>
             </div>
         </div>
-        <!-- Floating AI Assistant FAB (bottom-right of canvas) -->
-        <button id="mapToggleAssistant" class="assistant-fab" title="AI Assistant">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" width="28" height="28">
-                <line x1="6" y1="26" x2="22" y2="10" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-                <rect x="20" y="6" width="6" height="6" rx="1" transform="rotate(45 23 9)" fill="#fff"/>
-                <path d="M10 4 l.7-2 .7 2 2 .7-2 .7-.7 2-.7-2-2-.7Z" fill="#fff"/>
-                <path d="M4 14 l.5-1.5.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5Z" fill="#fff" opacity=".7"/>
-                <path d="M18 2 l.4-1.2.4 1.2 1.2.4-1.2.4-.4 1.2-.4-1.2-1.2-.4Z" fill="#fff" opacity=".6"/>
-            </svg>
-        </button>
         <!-- Entity Search Popup -->
         <div id="mapSearchPopup" class="map-search-popup map-search-popup--hidden">
             <div class="map-search-popup-header">

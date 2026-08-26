@@ -10,12 +10,13 @@
         <button type="button" class="btn btn-sm btn-outline-danger" data-meta-action="clear-metadata" title="Clear all data sources">
             <i class="bi bi-trash me-1"></i> Reset
         </button>
-        <button type="button" class="btn btn-sm btn-outline-primary" id="loadMetadataBtn" data-meta-action="show-load-modal">
-            <i class="bi bi-download me-1"></i> Add Data Source
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                title="Open the domain discussion" onclick="openDomainDiscussion()">
+        <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                title="Open the domain discussion" aria-label="Open the domain discussion"
+                onclick="openDomainDiscussion()">
             <i class="bi bi-chat-dots"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-primary" id="loadMetadataBtn" data-meta-action="show-load-modal">
+            <i class="bi bi-download me-1"></i> Add Data Source
         </button>
     </div>
 </div>

@@ -27,19 +27,20 @@
                     title="Configure outputs (graph triples, UC table)">
                 <i class="bi bi-sliders me-1"></i>Outputs
             </button>
-            <button class="btn btn-sm btn-primary"
+            <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                    title="Open the Knowledge Graph discussion" aria-label="Open the Knowledge Graph discussion"
+                    onclick="openTwinDiscussion()">
+                <i class="bi bi-chat-dots"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary"
                     id="cohortPreviewBtn"
                     onclick="CohortModule.preview()" disabled>
                 <i class="bi bi-eye me-1"></i>Preview cohorts
             </button>
-            <button class="btn btn-sm btn-success"
+            <button class="btn btn-sm btn-primary"
                     id="cohortMaterializeBtn"
                     onclick="CohortModule.openMaterializeModal()" disabled>
                 <i class="bi bi-cloud-upload me-1"></i>Materialise
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                    title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
-                <i class="bi bi-chat-dots"></i>
             </button>
         </div>
     </div>

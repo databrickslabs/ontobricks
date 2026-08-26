@@ -959,3 +959,149 @@ left edge at 80px on both. Attributes tab on Customer at a 620px viewport
 reports exactly one scroller, `#sharedPanelBody` (696px of content in 405px),
 with the attributes box at `overflow-y: visible`. Business Views entity headers
 computed at `rgba(79, 70, 229, 0.1)`.
+
+---
+
+## Button design audit — focus regression, responsive headers and two design islands
+
+Context: a systematic audit of every button across the 59 sections (desktop and
+mobile) found that resting states were sound almost everywhere, but that focus
+was globally broken, small joined controls had drifted off the radius token,
+section headers could not wrap, and two surfaces had grown their own button
+languages. This pass fixes all of it.
+
+Changes:
+
+1. `src/front/static/global/css/components.css`
+   Fixed the global focus regression: Bootstrap's `:focus-visible` repaints a
+   button with its *hover* palette, which for the unfilled variants is the solid
+   Bootstrap fill the design drops — so focusing an outline button turned it
+   solid grey, blue or red. Both `:focus` and `:focus-visible` now pin the
+   resting background, border and text for every neutral and outline variant,
+   leaving `--db-focus-ring` to carry the state. `.btn-outline-danger` keeps its
+   red lettering through a follow-up rule.
+
+2. `src/front/static/global/css/main.css`
+   - `.section-header` and any flex cluster inside it now wrap, and below 768px
+     a `.btn-group` in a header becomes individually rounded `nowrap` pills.
+     `justify-content-between` does not wrap, so the control cluster used to
+     push its last buttons off-screen while the survivors stretched to three
+     times their height.
+   - Re-pinned Bootstrap's `-sm` size ramp to `--db-radius-control`
+     (`.form-control-sm`, `.form-select-sm`, `.input-group-sm > *`). Bootstrap
+     sets `border-radius` there as a property with enough specificity to beat
+     the base rule, so small joined controls silently used its legacy 4px.
+
+3. `src/front/templates/partials/ontology/_ontology_map.html`,
+   `src/front/static/ontology/css/ontology-assistant.css`
+   Removed the ontology assistant FAB — a 56px circular button in hard-coded
+   Databricks orange with its own shadows and inline SVG, floating over the
+   canvas against the section-header rule. The assistant now opens from a
+   regular icon button in the header. The popup keeps its bottom-right anchor,
+   moved down to where the FAB used to sit.
+
+4. `src/front/static/query/css/query-chat.css`
+   Removed the Graph Chat design island: every `#FF3621` orange, `#64748b` cold
+   grey and `#B91C1C` red is now a Clarity token, the header action defers to
+   the global button contract instead of redefining pill radii and an orange
+   hover, the input wrapper uses `--db-focus-ring`, and the pending-action
+   buttons use the control radius.
+
+5. Section header toolbars grouped and CTA hierarchy fixed, per the documented
+   order (icon utilities -> secondary CTAs -> primary CTA rightmost):
+   - `partials/ontology/_ontology_map.html`,
+     `partials/mapping/_mapping_design.html`: loose icon buttons separated by
+     `.vr` rules are now `.btn-group.btn-group-sm` clusters, with `aria-label`
+     on each. The two buttons that `permissions.css` *hides* for viewers stay
+     out of the groups: a hidden member would leave its neighbour squared.
+   - `partials/ontology/_ontology_design.html`: grouped the two loose
+     utilities, dropped the `|` text separators.
+   - Promoted the section CTA to `btn-primary` and moved the discussion
+     shortcut ahead of it in `_ontology_entities.html`,
+     `_ontology_relationships.html`, `_ontology_wizard.html`,
+     `_domain_metadata.html`, `_mapping_autoassign.html`,
+     `_mapping_diagnostics.html`, `_pitfalls.html`, `_ontology_cohorts.html`,
+     `_query_cohorts.html` (Materialise is the terminal action, Preview a step)
+     and `_query_sync.html`.
+   - `static/query/js/query-sync.js`: the "Go to Build" shortcut inside the
+     status badge is no longer `btn-primary` — it is a navigation hint, not the
+     section CTA.
+   - Normalised misleading `btn-outline-warning` / `-success` to
+     `-secondary`, which is what the design renders them as anyway.
+
+6. `src/front/templates/settings.html`
+   Added the missing `btn-sm` to the four `.btn-save-settings` and to
+   `#btnOpenProvisionModal`; without it they were 110px tall on a phone.
+
+7. Initial visibility moved from inline styles to `d-none`, with the JS
+   toggling the class: `#btnInitRegistry`, `#btnImportObxConfirm`,
+   `#graphqlOpenNewTab`, `#brSuggestAcceptBtn`, `#dqSuggestAcceptBtn`
+   (the last two were found by the new test, not the audit). The two
+   suggestion-accept buttons also gained `btn-sm` and moved from
+   `btn-success` to `btn-primary`.
+
+8. `.cursor/11-frontend-design.mdc`
+   Documented the button state contract, the responsive header behaviour, the
+   `-sm` radius pinning, and three new anti-patterns (utility after the CTA,
+   inline `display:none`, permission-hidden button inside a group).
+
+9. `tests/units/front/test_button_design_contract.py`
+   New file, 19 tests: unfilled variants stay unfilled when focused (per
+   variant), danger keeps its red text, small joined controls use the token,
+   headers wrap, grouped buttons become pills when wrapping, no FAB exists,
+   permission-hidden buttons stay out of groups, the chat uses tokens, settings
+   headers carry `btn-sm`, no button is hidden with an inline style, and the
+   primary CTA is the rightmost button in ten section headers.
+
+Modified files:
+- `src/front/static/global/css/components.css`
+- `src/front/static/global/css/main.css`
+- `src/front/static/ontology/css/ontology-assistant.css`
+- `src/front/static/query/css/query-chat.css`
+- `src/front/static/query/js/query-sync.js`
+- `src/front/static/registry/js/registry.js`
+- `src/front/static/query/js/query-graphql.js`
+- `src/front/static/ontology/js/ontology-business-rules.js`
+- `src/front/static/ontology/js/ontology-dataquality.js`
+- `src/front/templates/settings.html`
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `src/front/templates/partials/ontology/_ontology_design.html`
+- `src/front/templates/partials/ontology/_ontology_entities.html`
+- `src/front/templates/partials/ontology/_ontology_relationships.html`
+- `src/front/templates/partials/ontology/_ontology_wizard.html`
+- `src/front/templates/partials/ontology/_ontology_cohorts.html`
+- `src/front/templates/partials/ontology/_ontology_business_rules.html`
+- `src/front/templates/partials/ontology/_ontology_dataquality.html`
+- `src/front/templates/partials/ontology/_pitfalls.html`
+- `src/front/templates/partials/domain/_domain_metadata.html`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/templates/partials/mapping/_mapping_autoassign.html`
+- `src/front/templates/partials/mapping/_mapping_diagnostics.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `src/front/templates/partials/dtwin/_query_graphql.html`
+- `src/front/templates/partials/registry/_registry_configuration.html`
+- `src/front/templates/partials/registry/_import_obx_modal.html`
+- `.cursor/11-frontend-design.mdc`
+- `tests/units/front/test_button_design_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-25.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5331 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 37.78s.
+
+Browser verification (Playwright, domain Cust360Auto v4): a focused
+`.btn-outline-secondary` now measures `background rgba(0, 0, 0, 0)` with
+`box-shadow rgba(79, 70, 229, 0.18) 0 0 0 3.2px`, and a focused
+`.btn-outline-danger` the same ring while keeping `color rgb(220, 38, 38)` —
+previously both filled solid. The KG Cohorts Explain control reports
+`10px 0 0 10px` on the input and `0 10px 10px 0` on the button (was 4px). The
+Designer header shows nine button groups all rounded 10px on their outer edges
+with no `.assistant-fab` node in the DOM. At 390x844 the Domain Audit header
+reports zero clipped buttons and a single button height of 31px (was 73px and
+52px with clipping); Settings/Lakebase likewise reports 31px with no horizontal
+overflow. Graph Chat renders the indigo accent bar, a 10px transparent "Clear
+chat" and an indigo send button.
+
+Known, out of scope: at 390px the L2 subnav and breadcrumb strip still overflow
+horizontally (`.ob-subnav-item`, `#obBreadcrumbWrap`) — a navbar layout issue,
+not a button one.

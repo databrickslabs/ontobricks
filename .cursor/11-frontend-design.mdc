@@ -366,6 +366,8 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
   6. A `.ob-subnav-flex-spacer` (`flex: 1`) — always pushes the right group to the edge.
   7. **Breadcrumb** (`#obBreadcrumbWrap`) — hidden until >1 crumb.
   8. **Save Domain button** (`#menuSaveDomain`, `.ob-subnav-save-btn`).
+  9. **Switch Version button** (`.ob-subnav-switch-btn`).
+  10. **Close Domain button** (`.ob-subnav-close-btn`).
 - The three tab toggles (Ontology/Mapping/KG) do **not** carry
   `nav-requires-domain`. They are enabled whenever the subnav is
   visible. Specific dropdown items that truly need a UC-saved domain
@@ -379,6 +381,13 @@ asserts Domain ≠ Knowledge Graph and menu ≡ breadcrumb for `/dtwin/`.
   use the same hover as the left sidebar (`--db-hover-indigo` well,
   `9px` radius) — not a solid indigo invert, not a grey well. L1/L2
   structure, order, and ownership are immutable.
+- Mobile contract (below `768px`): keep all four workspace targets plus
+  Save / Switch Version / Close, but show them as titled icons by hiding
+  only their `.ob-subnav-label`. Hide the redundant inline breadcrumb and
+  flex spacer, and compact horizontal padding. Do not make the subnav
+  horizontally scrollable: Bootstrap dropdowns must remain able to escape
+  the row without clipping. The text stays in the DOM for accessible names,
+  and every workspace target carries a `title` tooltip.
 
 **Tokens**
 
@@ -542,6 +551,42 @@ hide inside a Bootstrap `.card-header`.
 - ❌ Full-size buttons in a section header.
 - ❌ Buttons without an icon, or icon-only buttons without `title=`.
 - ❌ Reordering so the primary CTA is on the left.
+- ❌ A utility shortcut (the `.onto-discuss-btn` chat icon, a refresh) placed
+  *after* the primary CTA. The rightmost slot belongs to the CTA.
+- ❌ `style="display:none"` as the initial state of a button. Use `d-none`
+  and have the JS toggle the class, so the button keeps one styling source.
+- ❌ A button that a permission rule *hides* (`permissions.css`, as opposed to
+  merely neutralising it) placed inside a `.btn-group`: the group rounds its
+  corners structurally, so a hidden member leaves its neighbour squared.
+  Keep those buttons standalone.
+
+**States**
+
+`.btn-primary` is the only variant that fills. Everything else — including
+`.btn-secondary`, `.btn-success` and `.btn-danger`, which the app renders as
+outlines — stays unfilled in **every** state: hover tints the background,
+active deepens it slightly, and focus keeps the resting background and shows
+`--db-focus-ring` alone. Bootstrap's own `:focus-visible` repaints a button
+with its *hover* palette, which for these variants is the solid fill we
+dropped, so `components.css` pins both `:focus` and `:focus-visible`. When you
+add a variant, add it to that list too. `.btn-outline-danger` is the single
+exception that keeps its red lettering when focused.
+
+**Responsive behaviour**
+
+`.section-header` and any flex cluster inside it wrap (`main.css`), and below
+768px a `.btn-group` inside a header stops being joined: its buttons become
+individually rounded, `white-space: nowrap` pills flowing onto as many rows as
+they need. A joined group cannot survive wrapping — Bootstrap lets its members
+shrink instead, which breaks labels mid-word into buttons three lines tall.
+
+**Radii**
+
+Buttons and fields use `--db-radius-control`. Bootstrap's `-sm` size ramp sets
+`border-radius` as a *property* with enough specificity to beat the base rule,
+so `main.css` re-pins `.form-control-sm`, `.form-select-sm` and every
+`.input-group-sm > *` to the token — otherwise small joined controls silently
+fall back to Bootstrap's legacy 4px next to their full-size siblings.
 
 ### Tabs (`.ob-tabs`) — square indigo-soft selected style
 

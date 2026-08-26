@@ -2,43 +2,9 @@
    Ontology Assistant – FAB + Floating Popup (bottom-right)
    ===================================================== */
 
-/* ---- FAB trigger button (bottom-right of canvas) ---- */
-.assistant-fab {
-    position: absolute;
-    bottom: 20px;
-    right: calc(20px + var(--ob-panel-offset, 0px));
-    z-index: 1040;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    border: none;
-    background: #FF3621;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 4px 16px rgba(255, 54, 33, 0.4), 0 2px 6px rgba(0, 0, 0, 0.12);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, right 0.3s ease;
-}
-
-.assistant-fab:hover {
-    transform: scale(1.08);
-    box-shadow: 0 6px 24px rgba(255, 54, 33, 0.5), 0 3px 10px rgba(0, 0, 0, 0.15);
-}
-
-.assistant-fab:active {
-    transform: scale(0.96);
-}
-
-.assistant-fab.active {
-    background: #c42a16;
-    box-shadow: 0 4px 20px rgba(196, 42, 22, 0.5), 0 2px 6px rgba(0, 0, 0, 0.12);
-}
-
-.assistant-fab svg {
-    pointer-events: none;
-}
+/* The assistant is opened from a regular icon button in the section header
+   (`#mapToggleAssistant`), like every other section action — there is no
+   floating action button. */
 
 /* Wrapper: simple flex row for map */
 .ontology-map-wrapper {
@@ -50,12 +16,13 @@
     overflow: hidden;
 }
 
-/* ---- Floating popup container (anchored above the FAB) ---- */
+/* ---- Floating popup container, bottom-right of the canvas, clear of the
+       detail panel via --ob-panel-offset ---- */
 .assistant-popup {
     display: none;
     flex-direction: column;
     position: absolute;
-    bottom: 88px;
+    bottom: 16px;
     right: calc(16px + var(--ob-panel-offset, 0px));
     width: 400px;
     max-width: calc(100% - 32px);
@@ -330,8 +297,6 @@
     font-size: 0.75rem;
     text-decoration: none;
 }
-
-/* ---- Toggle button active state (handled by .assistant-fab.active above) ---- */
 
 /* ---- Markdown content inside bot messages ---- */
 .bot-msg .assistant-msg-body p {
