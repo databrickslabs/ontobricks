@@ -1432,6 +1432,13 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 > principal cannot self-heal the table's FK to `domains`.
 >
 > The lifecycle replaces the old per-version "Active"/`mcp_enabled` toggle.
+>
+> **Ontology-only publish.** The `DRAFT -> IN-REVIEW` precondition accepts
+> *either* a Knowledge Graph build (`last_build`) *or* a valid ontology, so a
+> domain with only an ontology (no mapping, no graph) goes through the normal
+> workflow. `GET /api/v1/domains` then reports `has_graph:false`, and the MCP
+> server exposes `describe_ontology` alone for that domain (see
+> [MCP per-domain policy](mcp.md#ontology-only-domains)).
 
 ### Available Endpoints
 

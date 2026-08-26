@@ -38,6 +38,16 @@ An unconfigured domain reproduces the pre-0.8 behaviour exactly: the policy is
 stored as the empty blob `{}`, disabled tools are listed rather than enabled
 ones, and a missing context key reads as `normal`. No backfill.
 
+**Ontology-only domains (0.8).** A domain can be published with a valid
+ontology but no Knowledge Graph build (no mapping, no graph): the
+`DRAFT -> IN-REVIEW` precondition now accepts *either* a build (`last_build`)
+*or* a valid ontology. `GET /api/v1/domains` carries `has_graph` (the
+numeric-latest PUBLISHED version has been built). When `has_graph` is false the
+MCP server hides every graph tool and exposes `describe_ontology` alone — a
+computed restriction layered on top of the per-domain policy, not persisted in
+`mcp_policy`. The MCP process mirrors the graph-tool set as `GRAPH_TOOLS`
+(it cannot import the app catalog); a drift guard test keeps the two in sync.
+
 ## 2. Identity
 
 | Field | Value |
@@ -59,6 +69,7 @@ and **what their responses contain**.
 | `select_domain` | never hidden | Recomputes the session tool set; response names the tools this domain does not expose |
 | `list_domain_versions` | never hidden | unchanged |
 | `get_design_status` | never hidden | unchanged |
+| `describe_ontology` | yes (but never by `has_graph`) | New tool: serves the ontology schema (class summary + raw OWL) from `GET /api/v1/domain/ontology` + `/domain/classes`. Needs no graph, so it is the sole domain tool an ontology-only domain (`has_graph:false`) exposes |
 | `list_entity_types` | yes | Dataset / action lines follow the context policy (already filtered upstream) |
 | `describe_entity` | yes | `[Context]` block hint wording follows `preferred`; disabled elements absent |
 | `get_status` | yes | unchanged apart from the visibility guard |
@@ -179,9 +190,10 @@ The three contract dimensions (`disabled_tool_absent`,
 ## 7. Eval dataset
 
 - **Baseline file:** [tests/eval/datasets/mcp/domain_policy.jsonl](../../tests/eval/datasets/mcp/domain_policy.jsonl)
-  — 10 examples covering tool gating, registry-tool protection, each of the
-  three context elements disabled, preferred emphasis, and the
-  tool-vs-element overlap on actions. Material-change floor per `.cursor/12`
+  — 11 examples covering tool gating, registry-tool protection, each of the
+  three context elements disabled, preferred emphasis, the tool-vs-element
+  overlap on actions, and an ontology-only domain (`has_graph:false`) that
+  exposes `describe_ontology` alone. Material-change floor per `.cursor/12`
   (≥ 10).
 - **Regression file:** future — every production failure lands under
   `tests/eval/datasets/mcp/regression.jsonl`.

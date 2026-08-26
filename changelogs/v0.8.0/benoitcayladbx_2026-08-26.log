@@ -1869,3 +1869,65 @@ Modified files:
 Tests:
 - GREEN `uv run --frozen pytest -q tests/units/registry/test_review_service.py tests/units/registry/test_review_multiuser.py tests/units/settings/test_settings_version_status.py` → focused review/settings tests passed as part of 123.
 
+## Add describe_ontology for ontology-only MCP domains
+
+Context: A published domain with no graph still needed an MCP schema
+tool. `describe_ontology` reads OWL/classes only; graph tools hide when
+`has_graph` is false.
+
+Changes:
+
+1. `src/back/core/mcp_tools.py`
+   Catalogued `describe_ontology` as a domain-scoped tool.
+2. `src/mcp-server/server/app.py`
+   Implemented the tool and hid graph tools for ontology-only domains.
+3. `tests/units/core/test_mcp_tools_policy.py`
+   Updated the domain-tool count.
+4. `tests/units/mcp/test_domain_policy_gating.py`
+   Counted thirteen registered tools including `describe_ontology`.
+5. `tests/units/mcp/test_graph_tools_mirror.py`
+   Locked GRAPH_TOOLS to domain tools minus `describe_ontology`.
+6. `documentation/mcp.md`
+   Documented the ninth domain tool and ontology-only MCP behaviour.
+7. `documentation/data-access.md`
+   Mapped `describe_ontology` and `has_graph` hiding.
+
+Modified files:
+- `src/back/core/mcp_tools.py`
+- `src/mcp-server/server/app.py`
+- `tests/units/core/test_mcp_tools_policy.py`
+- `tests/units/mcp/test_domain_policy_gating.py`
+- `tests/units/mcp/test_graph_tools_mirror.py`
+- `documentation/mcp.md`
+- `documentation/data-access.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/core/test_mcp_tools_policy.py tests/units/mcp/test_domain_policy_gating.py tests/units/mcp/test_graph_tools_mirror.py` → 40 passed, 1 warning.
+
+## Document ontology-only MCP behaviour
+
+Context: The ontology-only publish path needed the same story in the
+README, architecture, MCP policy SPEC, and eval dataset.
+
+Changes:
+
+1. `README.md`
+   Documented build-or-ontology review and `describe_ontology`.
+2. `documentation/architecture.md`
+   Documented `has_graph` and ontology-only MCP hiding.
+3. `.planning/mcp-domain-policy/SPEC.md`
+   Added ontology-only domains and the 11th eval example.
+4. `tests/eval/datasets/mcp/domain_policy.jsonl`
+   Added the ontology-only `describe_ontology` eval case.
+
+Modified files:
+- `README.md`
+- `documentation/architecture.md`
+- `.planning/mcp-domain-policy/SPEC.md`
+- `tests/eval/datasets/mcp/domain_policy.jsonl`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN eval dataset is additive; MCP unit contracts already passing (40).
+
