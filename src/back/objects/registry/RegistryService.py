@@ -678,12 +678,22 @@ class RegistryService:
         result: List[Dict[str, Any]] = []
         for d in details:
             name = d.get("name", "")
-            has_published = any(
-                (v.get("status") or "").upper() == "PUBLISHED"
+            published = [
+                v
                 for v in d.get("versions", [])
-            )
-            if not has_published:
+                if (v.get("status") or "").upper() == "PUBLISHED"
+            ]
+            if not published:
                 continue
+            # ``has_graph`` reflects the numeric-latest PUBLISHED version (the
+            # one the external API/MCP serves): True once it has been built at
+            # least once. An ontology-only domain publishes with no build, so
+            # this stays False and the MCP surface falls back to the ontology
+            # tool alone.
+            latest_published = max(
+                published, key=RegistryService._version_sort_key
+            )
+            has_graph = bool(latest_published.get("last_build"))
             if require_ontology:
                 # Metadata only carries the latest version's ontology, so
                 # confirm the PUBLISHED version has classes with one targeted
@@ -704,6 +714,7 @@ class RegistryService:
                     "name": name,
                     "description": d.get("description", ""),
                     "mcp_policy": coerce_mcp_policy(d.get("mcp_policy")),
+                    "has_graph": has_graph,
                 }
             )
         return True, result, ""
@@ -768,6 +779,19 @@ class RegistryService:
         """Return version strings (e.g. ``['2', '1']``) for a domain folder."""
         return self._store.list_versions(folder)
 
+    @staticmethod
+    def _version_sort_key(v: Any) -> List[int]:
+        """Numeric sort key for a version string or a version dict.
+
+        Tolerates malformed versions (returns ``[0]``) so a hand-edited row
+        can never break the listing.
+        """
+        raw = v.get("version", "0") if isinstance(v, dict) else v
+        try:
+            return [int(x) for x in str(raw).split(".")]
+        except (ValueError, AttributeError):
+            return [0]
+
     def list_versions_sorted(self, folder: str, *, reverse: bool = True) -> List[str]:
         """Convenience: sorted version list (empty on failure)."""
         ok, versions, _ = self.list_versions(folder)
@@ -784,6 +808,24 @@ class RegistryService:
     def read_version(self, folder: str, version: str) -> Tuple[bool, dict, str]:
         """Read and parse a version document from Lakebase."""
         return self._store.read_version(folder, version)
+
+    @staticmethod
+    def version_document_has_ontology(
+        data: Dict[str, Any], version: str = ""
+    ) -> bool:
+        """True when a version document declares at least one ontology class.
+
+        Tolerates both document shapes seen across stores: a top-level
+        ``ontology`` block and the ``versions[<v>].ontology`` nesting used by
+        :meth:`find_published_version`.
+        """
+        if not isinstance(data, dict):
+            return False
+        classes = ((data.get("ontology") or {}).get("classes")) or []
+        if not classes and version:
+            vdata = (data.get("versions") or {}).get(version) or {}
+            classes = ((vdata.get("ontology") or {}).get("classes")) or []
+        return bool(classes)
 
     def write_version(self, folder: str, version: str, data: str) -> Tuple[bool, str]:
         """Persist a version document.

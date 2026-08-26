@@ -1836,4 +1836,36 @@ Modified files:
 
 Tests:
 - GREEN `uv run --frozen pytest -q tests/units/front/test_purge_inferences_ui.py` → 5 passed, 1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5619 passed, 1 failed
+  (`tests/units/mcp/test_domain_policy_gating.py::test_all_twelve_tools_are_registered`,
+  13 registered tools vs expected 12 — unrelated to this UI placement),
+  305 skipped, 6 deselected, 1 xfailed, 23 warnings in 41.83s.
+
+## Wire ontology-only review through submit paths
+
+Context: The lifecycle gate accepted `has_ontology`, but submit still
+required a Knowledge Graph build. Review and settings now use the same
+build-or-ontology rule, and published listings expose `has_graph` for
+the MCP surface.
+
+Changes:
+
+1. `src/back/objects/registry/RegistryService.py`
+   Added ontology detection and `has_graph` on published domain listings.
+2. `src/back/objects/registry/ReviewService.py`
+   Allowed submit when the version has an ontology even without a build.
+3. `src/back/objects/domain/SettingsService.py`
+   Passed `has_ontology` into the lifecycle check.
+4. `src/api/routers/domains.py`
+   Added `has_graph` on the domains list payload.
+
+Modified files:
+- `src/back/objects/registry/RegistryService.py`
+- `src/back/objects/registry/ReviewService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/domains.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/registry/test_review_service.py tests/units/registry/test_review_multiuser.py tests/units/settings/test_settings_version_status.py` → focused review/settings tests passed as part of 123.
 

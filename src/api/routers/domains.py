@@ -67,6 +67,11 @@ class DomainInfo(BaseModel):
     # Per-domain MCP surface policy. Empty means "every tool exposed, every
     # ontology attachment surfaced normally".
     mcp_policy: Dict[str, Any] = Field(default_factory=dict)
+    # False when the numeric-latest PUBLISHED version has never been built:
+    # the domain is ontology-only, so the MCP surface exposes describe_ontology
+    # (plus the registry tools) and hides every graph tool. Defaults True so a
+    # client that predates the field keeps the full surface.
+    has_graph: bool = True
 
 
 class DomainsResponse(BaseModel):
@@ -190,6 +195,7 @@ async def list_registry_domains(
                 name=p["name"],
                 description=p["description"],
                 mcp_policy=p.get("mcp_policy") or {},
+                has_graph=p.get("has_graph", True),
             )
             for p in items
         ],

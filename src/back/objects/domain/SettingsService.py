@@ -1167,6 +1167,9 @@ class SettingsService:
             info = data.get("info", {})
             current_status = (info.get("status") or "DRAFT").upper()
             last_build = info.get("last_build", "") or ""
+            has_ontology = RegistryService.version_document_has_ontology(
+                data, version
+            )
 
             check_status_transition(
                 current_status,
@@ -1174,6 +1177,7 @@ class SettingsService:
                 user_role=user_role,
                 user_domain_role=user_domain_role,
                 last_build=last_build,
+                has_ontology=has_ontology,
             )
 
             ok, set_msg = svc.set_version_status(domain_name, version, new_status)

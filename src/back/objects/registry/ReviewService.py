@@ -351,10 +351,13 @@ class ReviewService:
             )
         if status != STATUS_DRAFT:
             raise ConflictError(f"Version is {status}, expected DRAFT")
-        if not last_build:
+        if not last_build and not ReviewService._has_ontology(
+            svc, folder, version
+        ):
             raise ValidationError(
-                "Cannot submit for review: this version has never been "
-                "built. Run a Knowledge Graph build first."
+                "Cannot submit for review: this version has neither a "
+                "Knowledge Graph build nor a valid ontology. Define an "
+                "ontology (or run a Knowledge Graph build) first."
             )
 
         ReviewService._set_status(
@@ -584,6 +587,24 @@ class ReviewService:
                 "Failed to read registry version", detail=msg
             )
         return svc, data.get("info", {}) or {}
+
+    @staticmethod
+    def _has_ontology(
+        svc: RegistryService, folder: str, version: str
+    ) -> bool:
+        """True when *version* declares at least one ontology class.
+
+        Best-effort: a read failure reads as "no ontology" so the caller
+        falls back to the ``last_build`` precondition rather than raising.
+        """
+        try:
+            ok, data, _ = svc.read_version(folder, version)
+            if not ok:
+                return False
+            return RegistryService.version_document_has_ontology(data, version)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("_has_ontology(%s/%s) failed: %s", folder, version, exc)
+            return False
 
     @staticmethod
     def _set_status(
