@@ -24,13 +24,22 @@ from back.objects.registry.version_lifecycle import (
 )
 
 
-def _check(current, new, *, user_role="", user_domain_role="", last_build="2026-01-01"):
+def _check(
+    current,
+    new,
+    *,
+    user_role="",
+    user_domain_role="",
+    last_build="2026-01-01",
+    has_ontology=False,
+):
     return check_status_transition(
         current,
         new,
         user_role=user_role,
         user_domain_role=user_domain_role,
         last_build=last_build,
+        has_ontology=has_ontology,
     )
 
 
@@ -116,18 +125,29 @@ def test_unknown_status_is_rejected():
 
 
 # ----------------------------------------------------------------------
-# Precondition: DRAFT -> IN-REVIEW requires a build
+# Precondition: DRAFT -> IN-REVIEW requires a build or ontology
 # ----------------------------------------------------------------------
 
 
-def test_draft_to_review_requires_build():
+def test_draft_to_review_requires_build_or_ontology():
     with pytest.raises(ValidationError):
         _check(
             STATUS_DRAFT,
             STATUS_IN_REVIEW,
             user_role=ROLE_ADMIN,
             last_build="",
+            has_ontology=False,
         )
+
+
+def test_draft_to_review_allowed_with_ontology_and_no_build():
+    _check(
+        STATUS_DRAFT,
+        STATUS_IN_REVIEW,
+        user_role=ROLE_ADMIN,
+        last_build="",
+        has_ontology=True,
+    )
 
 
 def test_review_to_published_does_not_require_build():

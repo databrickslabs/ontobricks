@@ -64,6 +64,7 @@ def check_status_transition(
     user_role: str,
     user_domain_role: str,
     last_build: str,
+    has_ontology: bool = False,
 ) -> None:
     """Validate a lifecycle transition.
 
@@ -71,6 +72,11 @@ def check_status_transition(
     an unmet precondition, and :class:`AuthorizationError` when the caller
     lacks the required role. Returns ``None`` when the transition is
     allowed.
+
+    The ``DRAFT -> IN-REVIEW`` precondition accepts *either* a Knowledge
+    Graph build (``last_build``) *or* a valid ontology (``has_ontology``):
+    an ontology-only domain (no mapping, no graph) is publishable, but a
+    truly empty version — neither build nor ontology — is not.
     """
     current = (current or STATUS_DRAFT).upper()
     new = (new or "").upper()
@@ -101,8 +107,13 @@ def check_status_transition(
                 f"{current} -> {new}"
             )
 
-    if (current, new) == (STATUS_DRAFT, STATUS_IN_REVIEW) and not last_build:
+    if (
+        (current, new) == (STATUS_DRAFT, STATUS_IN_REVIEW)
+        and not last_build
+        and not has_ontology
+    ):
         raise ValidationError(
-            "Cannot submit for review: this version has never been built. "
-            "Run a Knowledge Graph build first."
+            "Cannot submit for review: this version has neither a Knowledge "
+            "Graph build nor a valid ontology. Define an ontology (or run a "
+            "Knowledge Graph build) first."
         )

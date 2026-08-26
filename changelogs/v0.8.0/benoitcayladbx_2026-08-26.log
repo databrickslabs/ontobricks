@@ -1791,3 +1791,25 @@ Tests:
 - IDE lints on changed files → no errors.
 - `git diff --check` → passed.
 
+## Allow ontology-only versions to enter review
+
+Context: A version with a valid ontology but no Knowledge Graph build
+could not be submitted for review. `SettingsService` already computed
+`has_ontology`; the lifecycle gate now accepts either a build or an
+ontology, and still rejects a truly empty version.
+
+Changes:
+
+1. `src/back/objects/registry/version_lifecycle.py`
+   Relaxed DRAFT → IN-REVIEW to require `last_build` or `has_ontology`.
+2. `tests/units/registry/test_version_lifecycle.py`
+   Covered empty rejection and ontology-only acceptance.
+
+Modified files:
+- `src/back/objects/registry/version_lifecycle.py`
+- `tests/units/registry/test_version_lifecycle.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/registry/test_version_lifecycle.py tests/units/settings/test_settings_version_status.py` → 42 passed, 1 warning.
+
