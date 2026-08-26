@@ -172,6 +172,7 @@ App, authenticates with an M2M OAuth token, and uses `httpx.AsyncClient`. It
 | `list_entity_types` | `GET /api/v1/digitaltwin/stats` | REST | **Spark SQL** GROUP BY on the triple view (Delta) or GraphDB MATCH counts |
 | `describe_entity` | `GET /api/v1/digitaltwin/triples/find` | REST | SPARQL-style BFS internally → **Spark SQL** (Delta) or **Cypher** (GraphDB) |
 | `get_entity_context` | `GET /api/v1/digitaltwin/nodes/context` | REST | Class resolution + optional **Spark SQL** dataset read and bridge traversal |
+| `compute_virtual_attributes` | `GET /api/v1/digitaltwin/nodes/virtual-attributes` | REST | **Unity Catalog function** call for declared virtual attributes |
 | `invoke_entity_action` | `POST /api/v1/digitaltwin/nodes/action` | REST | **Unity Catalog function** call via SQL warehouse |
 | `get_status` | `GET /api/v1/digitaltwin/status` | REST | Same as `select_domain` |
 | `get_graphql_schema` | `GET /graphql/{domain}/schema` | **GraphQL** | `GraphQLSchemaBuilder` (no DB hit; SDL only) |

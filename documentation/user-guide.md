@@ -969,7 +969,9 @@ unrecoverable.
 > tool stays checked — otherwise a client that already learned a function name
 > could keep running it after the names stopped being advertised. **Virtual
 > attributes** behaves the same way: disabled, it refuses
-> `compute_virtual_attributes=True` rather than answering with nothing.
+> `compute_virtual_attributes(entity_uri)` (and the inline
+> `compute_virtual_attributes=True` flag on `get_entity_context`) rather than
+> answering with nothing.
 
 Use **Preferred** to steer an agent that under-uses a genuinely useful
 attachment, and **Disabled** to keep a sensitive dataset, a private bridge

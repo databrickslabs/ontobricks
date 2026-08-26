@@ -1,0 +1,49 @@
+================================================================================
+MCP: dedicated compute_virtual_attributes tool for virtual attribute values
+================================================================================
+
+Context
+-------
+Virtual attribute declarations already rode along with `get_entity_context`, and
+values could be obtained with `compute_virtual_attributes=True`, but that flag
+sat on a broad context tool — easy to miss when a user asks "what is the risk
+score of customer C-42?". Actions already had a dedicated verb
+(`invoke_entity_action`); virtual attributes did not.
+
+Changes
+-------
+1. `src/mcp-server/server/app.py` — added `compute_virtual_attributes(entity_uri,
+   function?)` MCP tool calling `GET /api/v1/digitaltwin/nodes/virtual-attributes`.
+   Docstring states explicitly: call this when the user asks about a virtual
+   attribute value. Hints in `describe_entity` and `get_entity_context` now
+   point at this tool instead of the inline flag.
+2. `src/api/routers/digitaltwin.py` — external REST endpoint
+   `GET /api/v1/digitaltwin/nodes/virtual-attributes` (same allow-list and MCP
+   policy enforcement as the internal `/dtwin/nodes/virtual-attributes` route).
+3. `src/back/core/mcp_tools.py` — registered the tool in the domain-scoped MCP
+   catalog (eighth configurable tool).
+4. `.planning/virtual-attributes/SPEC.md`, `tests/eval/datasets/mcp/virtual_attributes.jsonl`,
+   documentation (`mcp.md`, `api.md`, `features.md`, `user-guide.md`,
+   `data-access.md`, `README.md`) — updated tool surface and eval constraints.
+5. Tests — MCP gating, formatting, external API, and MCP catalog guards.
+
+Modified files:
+- `src/mcp-server/server/app.py`
+- `src/api/routers/digitaltwin.py`
+- `src/back/core/mcp_tools.py`
+- `.planning/virtual-attributes/SPEC.md`
+- `tests/eval/datasets/mcp/virtual_attributes.jsonl`
+- `tests/units/mcp/test_domain_policy_gating.py`
+- `tests/units/mcp/test_virtual_attribute_formatting.py`
+- `tests/units/api/test_virtual_attributes_endpoint.py`
+- `tests/units/core/test_mcp_tools_policy.py`
+- `documentation/mcp.md`
+- `documentation/api.md`
+- `documentation/features.md`
+- `documentation/user-guide.md`
+- `documentation/data-access.md`
+- `README.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5343 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 40.04s (+8 new/updated tests).

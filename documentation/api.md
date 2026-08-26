@@ -838,6 +838,29 @@ with `success: false` and nothing is executed. Table-valued functions run as
 > is deliberately independent of whether the `invoke_entity_action` MCP tool is
 > still published.
 
+#### `GET /api/v1/digitaltwin/nodes/virtual-attributes`
+
+Compute the virtual attributes declared on an entity's ontology class by running
+their bound Unity Catalog functions. Each function receives **exactly one
+argument: the entity's local ID**, extracted from `entity_uri`.
+
+**Parameters:**
+- `entity_uri` (query): Full URI of the entity node
+- `function` (query, optional): Fully qualified function name
+  (`catalog.schema.function`). When omitted, every group declared on the class
+  is computed.
+- `domain_name` / `domain_version` (optional): Registry domain and version
+
+Only functions declared in the resolved class's `virtualAttributes` list may be
+invoked — the ontology is the allow-list. The response carries one group per
+function, with `values` populated from the warehouse result. A group whose
+function fails carries an `error` and leaves the others intact.
+
+> **Policy filtering.** If the domain sets **Virtual attributes** to
+> **Disabled**, every computation is refused here, whatever the function name.
+> This is deliberately independent of whether the `compute_virtual_attributes`
+> MCP tool is still published.
+
 ---
 
 ## Example Usage

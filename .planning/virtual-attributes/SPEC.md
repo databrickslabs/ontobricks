@@ -74,13 +74,15 @@ discovers it by writing a query that silently returns nothing.
 
 | Tool | Change |
 |---|---|
-| `get_entity_context` | New `compute_virtual_attributes: bool = False`. Declarations always ride along; values only on request. Refused when the element is `disabled` |
-| `describe_entity` | `[Context]` block gains a `Virtual attributes (N, computed on demand)` line naming them, plus the follow-up hint |
+| `get_entity_context` | Declarations always ride along; optional `compute_virtual_attributes=True` still computes inline for backward compatibility. Refused when the element is `disabled` |
+| `compute_virtual_attributes` | **New.** Runs the class's virtual attribute UC functions and returns their values. Call this when the user asks about a virtual attribute's value. Refused when the element is `disabled` |
+| `describe_entity` | `[Context]` block gains a `Virtual attributes (N, computed on demand)` line naming them, plus the follow-up hint pointing at `compute_virtual_attributes` |
 | `list_entity_types` | Unchanged — the per-class declaration lives in the context block, not the type listing |
 | every other tool | unchanged |
 
-No tool is added. A model that wants a value calls a tool it already knows,
-with one more flag — the cheapest possible contract change.
+The dedicated tool mirrors `invoke_entity_action`: a model that sees a virtual
+attribute question has an obvious verb to call, instead of discovering a flag
+on a broader context tool.
 
 ### 3.1 Declaration contract (authoritative)
 
@@ -264,8 +266,9 @@ Constraint kinds used by this dataset:
 - `va_value_absent` — the named virtual attribute is listed **without** a
   value.
 - `va_value_present` — the named virtual attribute carries a computed value.
-- `va_computed` — the model issued `get_entity_context` with
-  `compute_virtual_attributes=True` before answering.
+- `va_computed` — the model issued `compute_virtual_attributes(entity_uri)`
+  before answering (or `get_entity_context` with
+  `compute_virtual_attributes=True` for backward compatibility).
 - `va_group_error` — the named function's group carries an `error` while the
   response stays successful.
 - `call_refused` — a direct call returns a refusal rather than a result

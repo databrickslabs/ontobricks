@@ -42,10 +42,11 @@ def formatters():
         from server.app import (  # type: ignore[import-not-found]
             _format_class_context_block,
             _format_node_context_response,
+            _format_virtual_attributes_response,
         )
     except ImportError as exc:
         pytest.skip(f"MCP server not importable: {exc}")
-    return _format_class_context_block, _format_node_context_response
+    return _format_class_context_block, _format_node_context_response, _format_virtual_attributes_response
 
 
 def _node(groups, **extra):
@@ -64,41 +65,41 @@ class TestNodeContext:
     def test_declaration_only_names_them_and_asks_for_the_computation(
         self, formatters
     ):
-        _, format_node = formatters
+        _, format_node, _ = formatters
         text = format_node(_node(_DECLARED))
 
         assert "Virtual Attributes (computed on demand):" in text
         assert "risk_score  (DOUBLE)  — not computed" in text
-        assert "compute_virtual_attributes=True" in text
+        assert "compute_virtual_attributes(entity_uri)" in text
 
     def test_computed_values_replace_the_placeholder_and_drop_the_hint(
         self, formatters
     ):
-        _, format_node = formatters
+        _, format_node, _ = formatters
         text = format_node(_node(_computed()))
 
         assert "risk_score = 0.82  (DOUBLE)" in text
         assert "not computed" not in text
         # Repeating the hint would ask the model to redo work it just did.
-        assert "compute_virtual_attributes=True" not in text
+        assert "compute_virtual_attributes(entity_uri)" not in text
 
     def test_failed_group_surfaces_the_error_without_the_hint(self, formatters):
-        _, format_node = formatters
+        _, format_node, _ = formatters
         text = format_node(_node(_computed(values={}, error="PERMISSION_DENIED")))
 
         assert "computation failed: PERMISSION_DENIED" in text
-        assert "compute_virtual_attributes=True" not in text
+        assert "compute_virtual_attributes(entity_uri)" not in text
 
     def test_preferred_policy_uses_the_directive_hint(self, formatters):
-        _, format_node = formatters
+        _, format_node, _ = formatters
         text = format_node(
             _node(_DECLARED), context_policy={"virtual_attributes": "preferred"}
         )
 
-        assert "ALWAYS call get_entity_context" in text
+        assert "ALWAYS call compute_virtual_attributes" in text
 
     def test_absent_block_when_nothing_is_declared(self, formatters):
-        _, format_node = formatters
+        _, format_node, _ = formatters
         text = format_node(_node(None))
 
         assert "Virtual Attributes" not in text
@@ -106,28 +107,28 @@ class TestNodeContext:
 
 class TestClassContext:
     def test_declarations_are_named_with_a_count(self, formatters):
-        format_class, _ = formatters
+        format_class, _, _ = formatters
         text = format_class(
             "CUST1", {"name": "Customer", "virtualAttributes": _DECLARED}
         )
 
         assert "Virtual attributes (2, computed on demand): risk_score, risk_band" in text
-        assert "compute_virtual_attributes=True" in text
+        assert "compute_virtual_attributes(entity_uri)" in text
 
     def test_preferred_policy_uses_the_directive_hint(self, formatters):
-        format_class, _ = formatters
+        format_class, _, _ = formatters
         text = format_class(
             "CUST1",
             {"name": "Customer", "virtualAttributes": _DECLARED},
             context_policy={"virtual_attributes": "preferred"},
         )
 
-        assert "ALWAYS call get_entity_context" in text
+        assert "ALWAYS call compute_virtual_attributes" in text
 
     def test_class_with_only_virtual_attributes_still_renders_a_block(self, formatters):
         """A class with no dataset, bridge or action must not fall through the
         early return that used to guard the three original attachments."""
-        format_class, _ = formatters
+        format_class, _, _ = formatters
         text = format_class(
             "CUST1",
             {"name": "Customer", "dataset": None, "bridges": [], "actions": [],
@@ -135,3 +136,13 @@ class TestClassContext:
         )
 
         assert "risk_score" in text
+
+
+class TestComputeResponse:
+    def test_compute_response_formats_values(self, formatters):
+        _, _, format_compute = formatters
+        text = format_compute(_node(_computed()))
+
+        assert "Virtual Attributes — CUST1  (Customer)" in text
+        assert "risk_score = 0.82  (DOUBLE)" in text
+        assert "compute_virtual_attributes(entity_uri)" not in text

@@ -73,6 +73,7 @@ API_V1_DT_TRIPLES_FIND = "/api/v1/digitaltwin/triples/find"
 API_V1_DOMAIN_CLASSES = "/api/v1/domain/classes"
 API_V1_DT_NODE_CONTEXT = "/api/v1/digitaltwin/nodes/context"
 API_V1_DT_NODE_ACTION = "/api/v1/digitaltwin/nodes/action"
+API_V1_DT_NODE_VIRTUAL_ATTRIBUTES = "/api/v1/digitaltwin/nodes/virtual-attributes"
 
 RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
@@ -278,11 +279,11 @@ def _format_class_context_block(
             _hint(
                 context_policy,
                 "virtual_attributes",
-                directive="    → ALWAYS call get_entity_context("
-                "compute_virtual_attributes=True) before answering — these "
-                "values are not in the graph and are computed live",
-                neutral="    → call get_entity_context("
-                "compute_virtual_attributes=True) to compute their values",
+                directive="    → ALWAYS call compute_virtual_attributes("
+                "entity_uri) before answering — these values are not in the "
+                "graph and are computed live",
+                neutral="    → call compute_virtual_attributes(entity_uri) "
+                "to compute their values",
             )
         )
 
@@ -425,15 +426,42 @@ def _format_virtual_attribute_lines(
             _hint(
                 context_policy,
                 "virtual_attributes",
-                directive="  → ALWAYS call get_entity_context("
-                "compute_virtual_attributes=True) before answering: these "
-                "values are not stored in the graph and only a computation "
-                "can produce them",
-                neutral="  → call get_entity_context("
-                "compute_virtual_attributes=True) to compute these values",
+                directive="  → ALWAYS call compute_virtual_attributes("
+                "entity_uri) before answering: these values are not stored "
+                "in the graph and only a computation can produce them",
+                neutral="  → call compute_virtual_attributes(entity_uri) "
+                "to compute these values",
             )
         )
     return lines
+
+
+def _format_virtual_attributes_response(
+    data: dict, context_policy: Optional[dict] = None
+) -> str:
+    """Format the dedicated virtual-attribute compute endpoint for LLMs."""
+    if not data.get("success"):
+        return (
+            data.get("message")
+            or (data.get("error") if isinstance(data.get("error"), str) else None)
+            or "Could not compute virtual attributes."
+        )
+
+    entity_uri = data.get("entity_uri", "")
+    local_id = data.get("entity_local_id", "") or _local_name(entity_uri)
+    class_name = data.get("class_name", "Unknown")
+
+    lines: list[str] = [
+        f"Virtual Attributes — {local_id}  ({class_name})",
+        f"URI: {entity_uri}",
+        "",
+    ]
+    virtual = data.get("virtual_attributes") or []
+    if virtual:
+        lines.extend(_format_virtual_attribute_lines(virtual, context_policy))
+    else:
+        lines.append("No virtual attributes declared on this class.")
+    return "\n".join(lines)
 
 
 def _format_node_action_response(data: dict) -> str:
@@ -1699,8 +1727,10 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
         Virtual attributes are class attributes that are not stored in the
         graph: a Unity Catalog function computes them on demand. They are
         always *listed* so you know what is available, but their values cost a
-        warehouse round-trip, so ask for them explicitly with
-        ``compute_virtual_attributes=True``.
+        warehouse round-trip. When the user asks for a virtual attribute's
+        value, call ``compute_virtual_attributes(entity_uri)`` — not this tool
+        alone. The ``compute_virtual_attributes=True`` flag here remains for
+        callers that want declarations and values in one response.
 
         Args:
             entity_uri: Full URI of the entity (e.g. from describe_entity).
@@ -1749,6 +1779,68 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             data = await _get(client, API_V1_DT_NODE_CONTEXT, params=params)
 
         return _format_node_context_response(data, _active_context_policy())
+
+    @mcp.tool()
+    async def compute_virtual_attributes(
+        entity_uri: str,
+        function: Optional[str] = None,
+    ) -> str:
+        """Compute one or all virtual attributes declared on an entity's class.
+
+        Requires a domain to be selected first via select_domain. Use this
+        tool whenever the user asks about the **value** of a virtual attribute
+        — risk score, live standing, distance, and so on. Those values are not
+        stored in the knowledge graph; only a Unity Catalog function can
+        produce them.
+
+        Discover what is available with ``describe_entity`` or
+        ``get_entity_context`` (declarations only). Then call this tool to run
+        the bound UC function and read the result. Only functions declared on
+        the entity's ontology class can be invoked.
+
+        The function receives exactly one argument server-side: the entity's
+        local ID, derived from *entity_uri*. Omit *function* to compute every
+        group on the class; pass a fully qualified name
+        (``catalog.schema.function``) to compute one group only.
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+            function: Optional fully qualified UC function name. When omitted,
+                every virtual attribute group declared on the class is computed.
+        """
+        blocked = _require_domain("compute_virtual_attributes")
+        if blocked:
+            return blocked
+        blocked = _ensure_context_allowed(
+            "virtual_attributes", "Virtual attributes"
+        )
+        if blocked:
+            return blocked
+
+        params = _domain_params({"entity_uri": entity_uri})
+        if function:
+            params["function"] = function
+
+        try:
+            async with _client() as client:
+                data = await _get(
+                    client, API_V1_DT_NODE_VIRTUAL_ATTRIBUTES, params=params
+                )
+        except httpx.HTTPStatusError as exc:
+            try:
+                err_body = exc.response.json()
+            except Exception:
+                err_body = {}
+            return (
+                err_body.get("message")
+                or err_body.get("error")
+                or (
+                    f"Could not compute virtual attributes "
+                    f"(HTTP {exc.response.status_code})."
+                )
+            )
+
+        return _format_virtual_attributes_response(data, _active_context_policy())
 
     @mcp.tool()
     async def invoke_entity_action(entity_uri: str, action: str) -> str:

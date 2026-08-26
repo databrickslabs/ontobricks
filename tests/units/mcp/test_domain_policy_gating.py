@@ -74,6 +74,19 @@ def mcp_env(monkeypatch):
             "class_name": "Customer",
             "dataset": {"fullName": "main.crm.customers", "key_column": "id"},
         },
+        "virtual_attributes": {
+            "success": True,
+            "entity_uri": "https://example.com/Customer/CUST001",
+            "entity_local_id": "CUST001",
+            "class_name": "Customer",
+            "virtual_attributes": [
+                {
+                    "fullName": "main.kg.customer_risk",
+                    "attributes": [{"name": "risk_score", "dataType": "DOUBLE"}],
+                    "values": {"risk_score": 0.82},
+                }
+            ],
+        },
         "get_calls": [],
     }
 
@@ -90,6 +103,8 @@ def mcp_env(monkeypatch):
             return {"success": True, "classes": []}
         if path == mcp_app.API_V1_DT_NODE_CONTEXT:
             return state["node_context"]
+        if path == mcp_app.API_V1_DT_NODE_VIRTUAL_ATTRIBUTES:
+            return state["virtual_attributes"]
         return {"success": True}
 
     async def fake_post(client, path, json=None):
@@ -119,9 +134,9 @@ async def _select(tools, domain: str, ctx: FakeContext | None = None) -> str:
 # Registration contract
 
 
-def test_all_eleven_tools_are_registered(mcp_env) -> None:
+def test_all_twelve_tools_are_registered(mcp_env) -> None:
     tools, _ = mcp_env
-    assert len(tools) == 11
+    assert len(tools) == 12
 
 
 def test_select_domain_does_not_leak_ctx_into_the_client_schema(mcp_env) -> None:
@@ -381,3 +396,42 @@ async def test_plain_get_entity_context_still_works_with_a_context_policy(
         entity_uri="https://example.com/Customer/CUST001"
     )
     assert "Node Context" in message
+
+
+async def test_virtual_attributes_disabled_refuses_the_compute_tool(
+    mcp_env,
+) -> None:
+    tools, state = mcp_env
+    state["domains"] = [{"name": "d", "description": "", "mcp_policy": _VIRTUAL_OFF}]
+    await _select(tools, "d")
+
+    message = await tools["compute_virtual_attributes"](
+        entity_uri="https://example.com/Customer/CUST001"
+    )
+    assert "Virtual attributes are disabled" in message
+
+
+async def test_compute_virtual_attributes_reaches_the_backend(mcp_env) -> None:
+    tools, state = mcp_env
+    await _select(tools, "finance")
+    state["get_calls"].clear()
+
+    message = await tools["compute_virtual_attributes"](
+        entity_uri="https://example.com/Customer/CUST001"
+    )
+    from server.app import API_V1_DT_NODE_VIRTUAL_ATTRIBUTES  # type: ignore[import-not-found]
+
+    assert API_V1_DT_NODE_VIRTUAL_ATTRIBUTES in state["get_calls"]
+    assert "risk_score = 0.82" in message
+
+
+async def test_disabled_virtual_attributes_never_reaches_the_backend(mcp_env) -> None:
+    tools, state = mcp_env
+    state["domains"] = [{"name": "d", "description": "", "mcp_policy": _VIRTUAL_OFF}]
+    await _select(tools, "d")
+    state["get_calls"].clear()
+
+    await tools["compute_virtual_attributes"](
+        entity_uri="https://example.com/Customer/CUST001"
+    )
+    assert state["get_calls"] == []

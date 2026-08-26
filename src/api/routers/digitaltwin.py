@@ -1736,3 +1736,61 @@ async def dt_nodes_action(
         context_policy=NodeContextService.resolve_context_policy(domain),
     )
     return NodeActionResponse(**result)
+
+
+# ---------------------------------------------------------------------------
+# GET /nodes/virtual-attributes
+# ---------------------------------------------------------------------------
+
+
+class ComputeVirtualAttributesResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    virtual_attributes: Optional[List[NodeContextVirtualAttributeGroup]] = None
+    message: Optional[str] = None
+
+
+@router.get(
+    "/nodes/virtual-attributes",
+    response_model=ComputeVirtualAttributesResponse,
+    response_model_exclude_none=True,
+    summary="Compute virtual attributes for a node",
+    description="Run the Unity Catalog functions declared as virtual attributes "
+    "on the entity's ontology class. Omit *function* to compute every group; "
+    "pass a fully qualified name to compute one group only. Each function "
+    "receives exactly one argument: the entity's local ID.",
+)
+async def dt_nodes_virtual_attributes(
+    entity_uri: str = Query(..., description="Full URI of the entity node"),
+    function: Optional[str] = Query(
+        None,
+        description="Fully qualified UC function name (catalog.schema.function). "
+        "When omitted, every virtual attribute group on the class is computed.",
+    ),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry",
+    ),
+    domain_version: Optional[str] = Query(None),
+    registry_catalog: Optional[str] = Query(None),
+    registry_schema: Optional[str] = Query(None),
+    registry_volume: Optional[str] = Query(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume,
+        domain_version, read_only=True,
+    )
+    payload = await NodeContextService.compute_virtual_attributes(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        function_full_name=function,
+        context_policy=NodeContextService.resolve_context_policy(domain),
+    )
+    return ComputeVirtualAttributesResponse(**payload)

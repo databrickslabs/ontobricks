@@ -82,6 +82,12 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, str], ...] = (
         "description": "Run a Unity Catalog function declared on the entity's "
         "class.",
     },
+    {
+        "name": "compute_virtual_attributes",
+        "label": "Compute virtual attributes",
+        "description": "Run the Unity Catalog functions that compute an entity's "
+        "virtual attributes and return their live values.",
+    },
 )
 
 MCP_DOMAIN_TOOL_NAMES: frozenset[str] = frozenset(

@@ -93,6 +93,16 @@ def test_virtual_attributes_is_a_configurable_context_element() -> None:
     }
 
 
+def test_every_domain_tool_is_labelled_and_described() -> None:
+    """The MCP settings panel renders the catalog directly."""
+    from back.core.mcp_tools import MCP_DOMAIN_TOOLS
+
+    assert len(MCP_DOMAIN_TOOLS) == 8
+    for tool in MCP_DOMAIN_TOOLS:
+        assert tool["label"].strip()
+        assert tool["description"].strip()
+
+
 def test_every_context_element_is_labelled_and_described() -> None:
     """The MCP settings panel renders the catalog directly, so a new element
     without a label would ship as a blank checkbox."""

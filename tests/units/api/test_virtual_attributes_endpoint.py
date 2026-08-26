@@ -201,3 +201,42 @@ def test_domain_classes_honours_the_policy(client, domain):
 
     assert resp.status_code == 200
     assert resp.json()["classes"][0].get("virtualAttributes", []) == []
+
+
+class TestExternalComputeEndpoint:
+    def test_computes_every_group(self, client, domain, uc_client):
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain", return_value=domain
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/virtual-attributes",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                },
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["class_name"] == "Customer"
+        assert body["virtual_attributes"][0]["values"]["risk_band"] == "B"
+
+    def test_disabled_policy_refuses(self, client, domain, uc_client):
+        domain.info = {
+            "name": "Customer 360",
+            "mcp_policy": {"context": {"virtual_attributes": "disabled"}},
+        }
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain", return_value=domain
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/virtual-attributes",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                },
+            )
+
+        assert resp.status_code == 400
+        uc_client.execute_query.assert_not_called()
