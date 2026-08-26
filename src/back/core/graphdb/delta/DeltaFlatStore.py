@@ -21,6 +21,8 @@ class DeltaFlatStore(GraphDBBackend):
     health probes (the ``"view"`` engine) and direct materialisation.
     """
 
+    supports_materialized_inference_purge = True
+
     def __init__(
         self,
         client: Any,
@@ -204,6 +206,14 @@ class DeltaFlatStore(GraphDBBackend):
             logger.warning(
                 "OPTIMIZE inferred companion failed for %s: %s", table_name, exc
             )
+
+    def purge_materialized_triples(self, table_name: str) -> int:
+        """Truncate the inferred companion and preserve mapped source triples."""
+        inferred = self._writable_table_fqn(table_name)
+        count = self.count_triples(inferred)
+        materialize.truncate_table(self._client, inferred)
+        logger.info("Purged %d materialized triples from %s", count, inferred)
+        return count
 
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         """SELECT all triples."""

@@ -1102,6 +1102,7 @@ class TestDataRefreshNotStatusGated:
         "/dtwin/sync/start",
         "/dtwin/sync/load",
         "/dtwin/reasoning/materialize",
+        "/dtwin/reasoning/inferred",
     ]
 
     @pytest.mark.parametrize("path", DATA_REFRESH_PATHS)

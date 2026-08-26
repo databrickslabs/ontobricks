@@ -1816,21 +1816,58 @@ async def materialize_inferred(
     return result
 
 
-@router.get("/reasoning/inferred")
-async def get_inferred_triples(
-    request: Request,
+@router.delete(
+    "/reasoning/inferred",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def purge_materialized_inferences(
     session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
-    """Backward-compatible stub: reasoning results are not persisted in the session.
-
-    Clients should use the completed task payload from ``/tasks/{task_id}``.
-    """
-    _ = get_domain(session_mgr)
+    """Purge generated graph triples without modifying mapped source data."""
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = effective_graph_name(domain)
+    try:
+        purged_count = await run_blocking(
+            store.purge_materialized_triples,
+            graph_name,
+        )
+    except NotImplementedError as exc:
+        raise InfrastructureError(
+            "The active graph backend cannot safely purge materialized inferences",
+            detail=str(exc),
+        ) from exc
     return {
         "success": True,
+        "graph_name": graph_name,
+        "purged_count": purged_count,
+    }
+
+
+@router.get("/reasoning/inferred")
+async def get_inferred_triples(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return live materialized-inference status without listing triples."""
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = effective_graph_name(domain)
+    supported = bool(store.supports_materialized_inference_purge)
+    inferred_count = (
+        await run_blocking(store.get_inferred_triple_count, graph_name)
+        if supported
+        else None
+    )
+    return {
+        "success": True,
+        "graph_name": graph_name,
+        "materialized_inference_count": inferred_count,
+        "purge_supported": supported,
         "reasoning": {
             "last_run": None,
-            "inferred_count": 0,
+            "inferred_count": inferred_count,
             "inferred_triples": [],
         },
     }

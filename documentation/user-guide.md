@@ -822,6 +822,17 @@ Click **Inference** in the Knowledge Graph sidebar to run the multi-phase reason
 
 Results are displayed as inferred triples and violations. Inferred triples can be **materialized** (written back) to the triple store.
 
+Builders can use **Purge Inferences** from **Build**, **Inference**, or
+**Cohorts** to remove all materialized reasoning and cohort triples from the
+active graph. The confirmation dialog names the active graph and shows the
+combined number of generated triples that will be deleted. The Cockpit
+Knowledge Graph card exposes the same live **Materialized inferences** count;
+it includes both reasoning and cohort output. Purging preserves mapped source
+triples, saved rules, standalone Inference Delta targets, and cohort Unity
+Catalog output tables. Neo4j reports the count as unavailable and does not
+offer this operation because it cannot yet distinguish generated triples from
+source triples safely.
+
 ---
 
 ## Domain Management & Version Control

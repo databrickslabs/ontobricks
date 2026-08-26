@@ -92,6 +92,8 @@ class LakebaseFlatStore(LakebaseBase):
     :class:`GraphDBBackend` helpers resolves correctly.
     """
 
+    supports_materialized_inference_purge = True
+
     def __init__(
         self,
         auth: Any,
@@ -400,6 +402,15 @@ class LakebaseFlatStore(LakebaseBase):
         companion = self.companion_phy(name)
         with self._cursor() as cur:
             _companion_ddl.truncate_companion(cur, companion)
+
+    def purge_materialized_triples(self, table_name: str) -> int:
+        """Truncate the app companion while preserving mapped source triples."""
+        companion = self.companion_phy(table_name)
+        count = self.count_triples(companion)
+        with self._cursor() as cur:
+            _companion_ddl.truncate_companion(cur, companion)
+        logger.info("Purged %d materialized triples from %s", count, companion)
+        return count
 
     def _idx_name(self, phy: str, suffix: str) -> str:
         base = f"g_{phy}_{suffix}".lower()

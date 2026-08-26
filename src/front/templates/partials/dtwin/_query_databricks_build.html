@@ -18,6 +18,7 @@
             <button type="button" class="btn btn-sm btn-outline-secondary" id="dbxBuildRefreshBtn">
                 <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </button>
+            {% include "partials/dtwin/_purge_inferences_button.html" %}
             {% set _dr = get_user_domain_role() %}
             {% if _dr not in ('viewer', 'editor', 'none') %}
             <button type="button" class="btn btn-sm btn-outline-primary" id="dbxBuildStartBtn" disabled>

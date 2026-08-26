@@ -1647,3 +1647,147 @@ Tests:
 - IDE lints on changed files → no errors.
 - `git diff --check` → passed.
 
+## Add source-safe inference purging
+
+Context: Builders needed a direct way to remove materialized reasoning and
+cohort triples without rebuilding the Knowledge Graph or risking mapped source
+data. The shared action now purges only the generated companion used by
+Lakehouse and Lakebase, while unsupported Neo4j graphs fail safely.
+
+Changes:
+
+1. `src/back/core/graphdb/GraphDBBackend.py`
+   Added the backend capability contract with safe rejection by default.
+2. `src/back/core/graphdb/delta/DeltaFlatStore.py`
+   Added counted truncation of the Lakehouse inferred companion.
+3. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Added counted truncation of the Lakebase application companion.
+4. `src/api/routers/internal/dtwin.py`
+   Added the Builder-protected generated-triple purge endpoint.
+5. `src/front/templates/partials/dtwin/_purge_inferences_button.html`
+   Added the shared destructive action used by both Knowledge Graph pages.
+6. `src/front/templates/partials/dtwin/_query_reasoning.html`
+   Added the purge action to the Inference header with consistent action spacing.
+7. `src/front/templates/partials/dtwin/_query_cohorts.html`
+   Added the purge action to the Cohorts header.
+8. `src/front/static/query/js/query-purge-inferences.js`
+   Added permission gating, confirmation, request handling, busy state,
+   notifications, stale-result clearing, and status refresh.
+9. `src/front/templates/dtwin.html`
+   Loaded the shared purge module once for the Knowledge Graph shell.
+10. `tests/units/graphdb/test_materialized_inference_purge.py`
+    Added source-preservation and backend capability tests.
+11. `tests/units/dtwin/test_purge_materialized_inferences.py`
+    Added endpoint success and unsupported-backend tests.
+12. `tests/units/front/test_purge_inferences_ui.py`
+    Added shared template and JavaScript UI contracts.
+13. `tests/units/auth/test_permission_middleware.py`
+    Added the purge endpoint to frozen-version graph-refresh coverage.
+14. `documentation/user-guide.md`
+    Documented purge scope, preserved outputs, and Neo4j safety behavior.
+15. `documentation/data-access.md`
+    Documented the DELETE endpoint and generated-companion semantics.
+16. `documentation/superpowers/specs/2026-08-26-materialized-inference-purge-design.md`
+    Recorded the approved feature design.
+17. `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+    Recorded the test-first implementation plan.
+
+Modified files:
+- `src/back/core/graphdb/GraphDBBackend.py`
+- `src/back/core/graphdb/delta/DeltaFlatStore.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_purge_inferences_button.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/static/query/js/query-purge-inferences.js`
+- `src/front/templates/dtwin.html`
+- `tests/units/graphdb/test_materialized_inference_purge.py`
+- `tests/units/dtwin/test_purge_materialized_inferences.py`
+- `tests/units/front/test_purge_inferences_ui.py`
+- `tests/units/auth/test_permission_middleware.py`
+- `documentation/user-guide.md`
+- `documentation/data-access.md`
+- `documentation/superpowers/specs/2026-08-26-materialized-inference-purge-design.md`
+- `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED backend contracts → 3 expected failures before implementation.
+- GREEN focused purge and regression suite → 78 passed, 1 warning.
+- Frozen-version graph-refresh coverage → 19 passed, 1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5612 passed,
+  305 skipped, 6 deselected, 1 xfailed, 23 warnings in 46.96s.
+- Browser verification at 1600×1000 and 390×844 → both buttons visible,
+  confirmation and cancellation passed, no purge request sent, and no
+  page-specific console errors.
+- IDE lints on changed files → no errors.
+- `git diff --check` → passed.
+
+## Expose live materialized-inference counts
+
+Context: Builders needed the combined reasoning-and-cohort count before
+purging, plus the same live metric on Knowledge Graph → Build and Domain
+Cockpit. GET `/dtwin/reasoning/inferred` now returns a lightweight status
+payload instead of a static zero stub.
+
+Changes:
+
+1. `src/back/core/graphdb/GraphDBBackend.py`
+   Added `supports_materialized_inference_purge` (false by default).
+2. `src/back/core/graphdb/delta/DeltaFlatStore.py`
+   Marked the Lakehouse companion backend as purge-capable.
+3. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Marked the Lakebase companion backend as purge-capable.
+4. `src/api/routers/internal/dtwin.py`
+   Upgraded GET `/dtwin/reasoning/inferred` to return graph name, live
+   count, and purge support without listing triples.
+5. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Added the shared purge action next to Refresh on Build.
+6. `src/front/static/query/js/query-purge-inferences.js`
+   Loaded live status before confirmation and named the combined count.
+7. `src/front/templates/partials/domain/_domain_validation.html`
+   Added the Cockpit Knowledge Graph materialized-inference metric.
+8. `src/front/static/domain/js/domain-validation.js`
+   Loaded the lightweight status on Cockpit refresh.
+9. `tests/units/graphdb/test_materialized_inference_purge.py`
+   Added backend capability assertions.
+10. `tests/units/dtwin/test_purge_materialized_inferences.py`
+    Added live GET status contracts.
+11. `tests/units/front/test_purge_inferences_ui.py`
+    Required the Build include and count-aware confirmation copy.
+12. `tests/units/front/test_cockpit_inference_count.py`
+    Added Cockpit metric and loader contracts.
+13. `documentation/user-guide.md`
+    Documented Build, the confirmation count, and the Cockpit metric.
+14. `documentation/data-access.md`
+    Documented GET status fields and Cockpit consumption.
+15. `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+    Added Tasks 5–8 for status, Build, and Cockpit.
+
+Modified files:
+- `src/back/core/graphdb/GraphDBBackend.py`
+- `src/back/core/graphdb/delta/DeltaFlatStore.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_query_databricks_build.html`
+- `src/front/static/query/js/query-purge-inferences.js`
+- `src/front/templates/partials/domain/_domain_validation.html`
+- `src/front/static/domain/js/domain-validation.js`
+- `tests/units/graphdb/test_materialized_inference_purge.py`
+- `tests/units/dtwin/test_purge_materialized_inferences.py`
+- `tests/units/front/test_purge_inferences_ui.py`
+- `tests/units/front/test_cockpit_inference_count.py`
+- `documentation/user-guide.md`
+- `documentation/data-access.md`
+- `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED capability/status/UI/Cockpit contracts failed before implementation.
+- GREEN focused suite → 16 passed, 1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5619 passed,
+  305 skipped, 6 deselected, 1 xfailed, 23 warnings in 43.77s.
+- IDE lints on changed files → no errors.
+- `git diff --check` → passed.
+

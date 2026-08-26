@@ -144,7 +144,13 @@ storage.
 | **Graph Chat** | `query-chat.js`, agent `agent_dtwin_chat` | `POST /dtwin/assistant/chat`, `GET/DELETE /dtwin/assistant/history` | REST → LLM tool-calling | LLM calls REST + GraphQL + SPARQL tools (see §6) |
 | **Build** (materialize triple store) | `query-sync.js` | `POST /dtwin/sync/start`, `POST /dtwin/sync/load` | REST | `_BuildPipeline` runs the R2RML SQL on the Warehouse (Delta `CREATE OR REPLACE VIEW`) and streams the rows into the active Graph DB engine via `bulk_insert_iter` (`COPY FROM STDIN` on Lakebase) |
 | **Data Quality** (SHACL execution) | `query-dataquality.js` | `POST /dtwin/dataquality/start`, `POST /dtwin/dataquality/execute` | REST | `SHACLService` translates shapes to **SQL** SELECTs that find violations |
-| **Inference (Reasoning)** | `query-reasoning.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** SWRL rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine` |
+| **Inference (Reasoning)** | `query-reasoning.js`, `query-purge-inferences.js` | `POST /dtwin/reasoning/start`, `POST /dtwin/reasoning/materialize`, `GET/DELETE /dtwin/reasoning/inferred` | REST | `ReasoningService`: OWL-RL closure (rdflib) **+** SWRL rules compiled to **SQL** (Spark SQL on Delta, Postgres SQL on Lakebase) **or** `SPARQLRuleEngine`; GET counts the generated companion shared by reasoning and cohorts, while DELETE truncates only that companion |
+| **Cockpit → Knowledge Graph** | `domain-validation.js` | `GET /validate/detailed`, `GET /dtwin/reasoning/inferred` | REST | Displays mapped graph health plus the live combined materialized reasoning-and-cohort count; unsupported source-indistinguishable backends return the count as unavailable |
+
+`GET /dtwin/reasoning/inferred` is a lightweight status call: it returns
+`graph_name`, `materialized_inference_count`, and `purge_supported` without
+serializing inferred triples. The nested `reasoning.inferred_count` and empty
+`reasoning.inferred_triples` fields remain for compatibility.
 
 ### 4.5 Settings / Teams / Help
 

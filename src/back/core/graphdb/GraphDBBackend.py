@@ -33,6 +33,8 @@ class GraphDBBackend(ABC):
     graph-specific abstract methods (``get_connection`` / ``close``).
     """
 
+    supports_materialized_inference_purge = False
+
     # ------------------------------------------------------------------
     # Core abstract methods
     # ------------------------------------------------------------------
@@ -72,6 +74,12 @@ class GraphDBBackend(ABC):
         """
         raise NotImplementedError(
             f"{type(self).__name__} does not support delete_triples"
+        )
+
+    def purge_materialized_triples(self, table_name: str) -> int:
+        """Remove generated triples while preserving mapped source triples."""
+        raise NotImplementedError(
+            f"{type(self).__name__} cannot safely purge generated triples"
         )
 
     def synced_table_name(self, table_name: str) -> str:

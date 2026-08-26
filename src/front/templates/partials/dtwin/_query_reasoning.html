@@ -10,13 +10,16 @@
                 </button>
             </p>
         </div>
-        <button class="btn btn-sm btn-outline-primary me-2" onclick="ReasoningModule.runReasoning()" id="runReasoningBtn">
-            <i class="bi bi-play-fill me-1"></i> Run
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
-            <i class="bi bi-chat-dots"></i>
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-primary" onclick="ReasoningModule.runReasoning()" id="runReasoningBtn">
+                <i class="bi bi-play-fill me-1"></i> Run
+            </button>
+            {% include "partials/dtwin/_purge_inferences_button.html" %}
+            <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
+                    title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
+                <i class="bi bi-chat-dots"></i>
+            </button>
+        </div>
     </div>
     <div class="card">
         <div class="card-body d-flex flex-column p-0">
