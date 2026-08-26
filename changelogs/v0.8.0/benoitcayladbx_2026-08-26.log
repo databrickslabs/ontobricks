@@ -1813,3 +1813,27 @@ Modified files:
 Tests:
 - GREEN `uv run --frozen pytest -q tests/units/registry/test_version_lifecycle.py tests/units/settings/test_settings_version_status.py` → 42 passed, 1 warning.
 
+## Show Purge Inferences on the live Lakebase Build page
+
+Context: Live verification on Cust360Auto V4 showed Purge Inferences only
+in the hidden Databricks Build panel. Lakebase Build (`_query_sync.html`)
+is the visible header and now includes the shared action.
+
+Changes:
+
+1. `src/front/templates/partials/dtwin/_query_sync.html`
+   Added the shared purge button next to Refresh on Lakebase Build.
+2. `tests/units/front/test_purge_inferences_ui.py`
+   Required the include on both Lakebase and Lakehouse Build templates.
+3. `documentation/user-guide.md`
+   Named both Build backends as purge entry points.
+
+Modified files:
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `tests/units/front/test_purge_inferences_ui.py`
+- `documentation/user-guide.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/front/test_purge_inferences_ui.py` → 5 passed, 1 warning.
+

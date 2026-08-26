@@ -822,8 +822,9 @@ Click **Inference** in the Knowledge Graph sidebar to run the multi-phase reason
 
 Results are displayed as inferred triples and violations. Inferred triples can be **materialized** (written back) to the triple store.
 
-Builders can use **Purge Inferences** from **Build**, **Inference**, or
-**Cohorts** to remove all materialized reasoning and cohort triples from the
+Builders can use **Purge Inferences** from **Build** (Lakebase and
+Lakehouse), **Inference**, or **Cohorts** to remove all materialized
+reasoning and cohort triples from the
 active graph. The confirmation dialog names the active graph and shows the
 combined number of generated triples that will be deleted. The Cockpit
 Knowledge Graph card exposes the same live **Materialized inferences** count;

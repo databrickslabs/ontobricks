@@ -13,9 +13,10 @@ def _read(relative: str) -> str:
     return (REPO_ROOT / relative).read_text(encoding="utf-8")
 
 
-def test_shared_purge_button_is_in_all_three_kg_sections():
+def test_shared_purge_button_is_in_all_kg_build_and_inference_sections():
     include = '{% include "partials/dtwin/_purge_inferences_button.html" %}'
     paths = [
+        "src/front/templates/partials/dtwin/_query_sync.html",
         "src/front/templates/partials/dtwin/_query_databricks_build.html",
         "src/front/templates/partials/dtwin/_query_reasoning.html",
         "src/front/templates/partials/dtwin/_query_cohorts.html",
