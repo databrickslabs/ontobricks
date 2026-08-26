@@ -39,10 +39,6 @@
     z-index: 10;
 }
 
-#syncTabs.ob-nav-tabs-gap {
-    gap: 2px;
-}
-
 #syncProgressArea .progress.ob-progress-md {
     height: 20px;
 }

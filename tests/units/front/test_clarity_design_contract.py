@@ -19,6 +19,7 @@ MAPPING_PAGE_CSS = REPO_ROOT / "src/front/static/global/css/mapping.css"
 MAPPING_DESIGN_JS = REPO_ROOT / "src/front/static/mapping/js/mapping-design.js"
 PAGES_CSS = REPO_ROOT / "src/front/static/global/css/pages.css"
 QUERY_PAGE_CSS = REPO_ROOT / "src/front/static/global/css/query.css"
+QUERY_SYNC_CSS = REPO_ROOT / "src/front/static/query/css/query-sync.css"
 SIGMAGRAPH_CSS = REPO_ROOT / "src/front/static/query/css/query-sigmagraph.css"
 QUERY_CHAT_CSS = REPO_ROOT / "src/front/static/query/css/query-chat.css"
 QUERY_DATAQUALITY_CSS = (
@@ -249,6 +250,25 @@ def test_components_css_ob_tabs_active_is_transparent_with_primary_underline():
         flags=re.DOTALL,
     )
 
+
+def test_tab_hover_uses_the_brand_aware_indigo_token():
+    components = _read(COMPONENTS_CSS)
+    component_hover = _rule_blocks_for_exact_class(
+        components, ".nav-tabs.ob-tabs .nav-link:hover:not(.active):not(.disabled)"
+    )
+    assert _any_block_has_declaration(
+        component_hover,
+        r"background",
+        r"var\(--db-hover-indigo[^;]*\)\s*!important",
+    )
+
+    main = _read(MAIN_CSS)
+    fallback_hover = _rule_blocks_for_exact_class(main, ".nav-tabs .nav-link:hover")
+    assert _any_block_has_declaration(
+        fallback_hover, r"background", r"var\(--db-hover-indigo[^;]*\)"
+    )
+
+
 def test_components_css_ob_tabs_strip_is_a_transparent_scrollable_rail():
     css = _read(COMPONENTS_CSS)
     strip_blocks = _rule_blocks_for_exact_class(css, ".nav-tabs.ob-tabs")
@@ -289,6 +309,13 @@ def test_components_css_ob_tabs_exposes_standard_and_compact_densities():
     assert _any_block_has_declaration(standard, r"padding", r"0\.5rem\s+0\.875rem")
     assert _any_block_has_declaration(compact, r"font-size", r"0\.75rem")
     assert _any_block_has_declaration(compact, r"padding", r"0\.35rem\s+0\.6rem")
+
+    main = _read(MAIN_CSS)
+    fallback = _rule_blocks_for_exact_class(main, ".nav-tabs .nav-link")
+    assert _any_block_has_declaration(fallback, r"font-size", r"0\.9rem")
+    assert _any_block_has_declaration(
+        fallback, r"padding", r"0\.5rem\s+0\.875rem"
+    )
 
 
 def test_data_quality_tabs_do_not_override_the_shared_density():
@@ -333,14 +360,19 @@ def test_cohort_cards_do_not_masquerade_as_tab_strips():
         template = _read(template_path)
         assert "cohort-tabs-wrap" not in template
         assert 'class="cohort-content-card card"' in template
+    ontology_template = _read(ONTOLOGY_COHORT_TEMPLATE)
+    assert 'role="tabpanel"' not in ontology_template
+    assert 'class="tab-pane' not in ontology_template
 
 
 def test_orphan_tab_styles_are_removed():
     pages = _read(PAGES_CSS)
     mapping = _read(MAPPING_PAGE_CSS)
+    query_sync = _read(QUERY_SYNC_CSS)
     assert ".custom-tabs" not in pages
     assert ".panel-tabs" not in mapping
     assert ".rel-mapping-tabs" not in mapping
+    assert ".ob-nav-tabs-gap" not in query_sync
 
 
 def test_designer_canvas_selection_uses_clarity_indigo():
@@ -491,9 +523,8 @@ def test_sidebar_is_a_framed_card_like_the_split_panel_panes():
 
 
 def test_sidebar_layout_centralizes_the_shared_outer_gutter():
-    """The shell owns the 0.5rem viewport gutter; another 0.5rem content inset
-    preserves the existing 1rem top/left/right position without shortening the
-    content at the bottom.
+    """The shell owns the 0.5rem viewport gutter and content starts flush with
+    the sidebar top while retaining its horizontal inset.
 
     Exact-selector parsing so a ``:has()`` page override cannot satisfy the
     base-layout contract.
@@ -509,7 +540,19 @@ def test_sidebar_layout_centralizes_the_shared_outer_gutter():
     assert _any_block_has_declaration(sidebar, r"margin", r"0")
     assert _any_block_has_declaration(sidebar, r"height", r"100%")
     assert _any_block_has_declaration(
-        content, r"padding", r"0\.5rem\s+0\.5rem\s+0"
+        content, r"padding", r"0\s+0\.5rem"
+    )
+
+
+def test_level_two_rail_and_content_share_the_same_vertical_gutter():
+    """L2 owns only its top gutter; the shell owns the gutter below it."""
+    main_css = _read(MAIN_CSS)
+    subnav = _rule_blocks_for_exact_selector(main_css, ".ob-subnav-nav")
+
+    assert _any_block_has_declaration(
+        subnav,
+        r"padding",
+        r"0\.5rem\s+0\s+0",
     )
 
 

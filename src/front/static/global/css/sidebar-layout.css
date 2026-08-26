@@ -254,10 +254,9 @@ body.full-width-layout {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    /* Shell gutter (0.5rem) + this inset (0.5rem) = the original 1rem
-       top/left/right. No bottom inset here: the shell padding already supplies
-       the bottom gutter, so the content is not shortened twice. */
-    padding: 0.5rem 0.5rem 0;
+    /* The shell owns the vertical gutter. Keeping only the horizontal inset
+       aligns each page heading with the top edge of the sidebar card. */
+    padding: 0 0.5rem;
     overflow-y: auto;
     overflow-x: hidden;
     transition: width 0.25s ease;
@@ -291,7 +290,7 @@ body.full-width-layout {
 .sidebar-content:has(#graphql-section.active),
 .sidebar-content:has(#dataquality-section.active) {
     overflow: hidden;
-    padding: 0.5rem 0.5rem 0;
+    padding: 0 0.5rem;
 }
 
 #sigmagraph-section.active,
@@ -307,7 +306,7 @@ body.full-width-layout {
 
 #logs-section.active {
     overflow: hidden;
-    padding: 0.5rem 1rem 0;
+    padding: 0 1rem;
     box-sizing: border-box;
 }
 
@@ -349,7 +348,7 @@ body.full-width-layout {
 .sidebar-content:has(#results-section.active),
 .sidebar-content:has(#sql-section.active) {
     overflow: hidden;
-    padding: 0.5rem;
+    padding: 0 0.5rem;
     display: flex;
     flex-direction: column;
 }

@@ -412,15 +412,14 @@ and `global/css/sidebar-layout.css`.
 `overflow: hidden`. `--ob-chrome-height` remains navbar + L2, written only
 by `breadcrumb.js`.
 
-**Gutter.** `.sidebar-nav` fills that shell (`margin: 0; height: 100%`).
-`.sidebar-content` uses `padding: 0.5rem 0.5rem 0`. Combined with the
-shell, that is a 0.5rem outer gutter, **1rem** top/left/right on the
-content, and **no added bottom inset** (the shell padding already supplies
-the bottom gutter). Data Quality
-(`.sidebar-content:has(#dataquality-section.active)`) and Logs
-(`#logs-section.active`) keep the same zero-bottom padding (`0.5rem 0.5rem 0`
-and `0.5rem 1rem 0`). Do not restore a bottom padding that recreates the
-8px inset.
+**Gutter.** `.ob-subnav-nav` owns only the `0.5rem` space above the visible L2
+workspace rail (`padding: 0.5rem 0 0`); `.sidebar-layout` owns the matching
+`0.5rem` space below it. Therefore the visible L1→L2 and L2→page gaps are both
+8px. `.sidebar-nav` fills the shell (`margin: 0; height: 100%`), while
+`.sidebar-content` uses `padding: 0 0.5rem`: no second vertical inset, and a
+0.5rem horizontal inset. Page-specific fixed panes may change horizontal
+padding but must keep a zero top/bottom inset. Do not restore vertical content
+padding that shifts the title below the sidebar or shortens the pane.
 
 **Flex chain.** `.sidebar-content` is a column flex container with
 `min-height: 0`. `.sidebar-section.active` is `flex: 1 1 0; min-height: 0`.
@@ -437,6 +436,9 @@ main surface vs the menu, not stuffing every form field into one viewport.
 
 **Rendered invariant.** At 1600×1000, `.sidebar-nav` and the visible
 primary pane share `getBoundingClientRect().bottom` within **1px**.
+The visible section `.section-header` (or the primary pane when no title is
+present) shares the sidebar's top edge within **1px**. The visible L1→L2 and
+L2→sidebar gaps are both **8px ±1px**.
 Fixed-height routes must not grow the document past the viewport by more
 than 1px.
 
@@ -773,6 +775,11 @@ baseline. The active item keeps a transparent background, uses
 `--db-primary` underline. The rail has no outer fill, card outline, shadow, or
 radius, so it remains subordinate to the L2 workspace control and surrounding
 content surfaces.
+
+Inactive tabs use the configurable `--db-hover-indigo` well on hover. This
+token is derived from the branding colour selected in Settings and remains
+lighter than `--db-primary-light`; never substitute the fixed grey
+`--db-hover-warm` for tab navigation.
 
 Every tab navigation must carry `nav nav-tabs ob-tabs`. Use
 `ob-tabs--compact` only for constrained right-hand panels. Do not introduce

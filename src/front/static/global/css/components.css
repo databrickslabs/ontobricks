@@ -926,7 +926,7 @@
 
 .nav-tabs.ob-tabs .nav-link:hover:not(.active):not(.disabled) {
     color: var(--db-text, #1e293b) !important;
-    background: var(--db-hover-warm, rgba(0, 0, 0, 0.03)) !important;
+    background: var(--db-hover-indigo, var(--db-hover-warm, rgba(0, 0, 0, 0.03))) !important;
     border-bottom-color: transparent !important;
 }
 

@@ -34,15 +34,18 @@ Five sidebar page families, all using `.sidebar-layout` from
 
 - `--ob-chrome-height` (navbar + L2 subnav, owned by `breadcrumb.js`) is the
   only viewport-height input.
-- `.sidebar-layout` owns the 0.5rem outer gutter (`padding` and `gap`).
+- `.ob-subnav-nav` owns the 0.5rem gutter above the visible L2 rail;
+  `.sidebar-layout` owns the matching 0.5rem gutter below it.
 - `.sidebar-nav` is a framed card with `margin: 0` and `height: 100%`.
-- `.sidebar-content` adds a 0.5rem inset on top/left/right and **no** extra
-  bottom inset.
+- `.sidebar-content` adds a 0.5rem horizontal inset and **no** extra vertical
+  inset, aligning page titles with the sidebar top.
 - Long-form sections scroll inside `.sidebar-content` (or a scoped inner
   scroller). Fixed-height canvases and consoles scroll internally and must
   not grow the document on desktop.
 - Mobile (`max-width: 768px`) uses normal document flow. No pane-level
   `100vh`.
+- Rendered invariant: L1→L2 gap = L2→sidebar gap = 8px ±1px, and the active
+  section header top matches the sidebar top within 1px.
 - Rendered invariant: `|sidebar.bottom - pane.bottom| <= 1px` at 1600×1000.
 
 ## Desktop shell
@@ -50,12 +53,13 @@ Five sidebar page families, all using `.sidebar-layout` from
 ```text
 viewport
   L1 navbar
-  L2 subnav          ← --ob-chrome-height
+  L2 subnav          padding-top: 0.5rem; padding-bottom: 0
+                     ← --ob-chrome-height
   .sidebar-layout    height: calc(100vh - var(--ob-chrome-height, 60px))
                      padding: 0.5rem; gap: 0.5rem; box-sizing: border-box
                      overflow: hidden
     .sidebar-nav     margin: 0; height: 100%; framed card
-    .sidebar-content padding: 0.5rem 0.5rem 0; flex column; min-height: 0
+    .sidebar-content padding: 0 0.5rem; flex column; min-height: 0
       .sidebar-section.active
         .content-section
           header + primary surface
@@ -66,9 +70,10 @@ Geometry:
 | Edge | How it is made |
 |------|----------------|
 | Outer gutter | Shell `padding: 0.5rem` on all four sides. |
+| L1→L2 / L2→page | L2 top padding and shell top padding are both `0.5rem`. |
 | Nav–content gap | Shell `gap: 0.5rem`. |
-| Content top / left / right | Shell 0.5rem + content 0.5rem = **1rem** total. |
-| Content bottom | Shell 0.5rem only. Content padding-bottom is **0**. |
+| Content top / bottom | Shell 0.5rem only; content vertical padding is **0**. |
+| Content left / right | Shell 0.5rem + content 0.5rem = **1rem** total. |
 
 The shell padding is what exposes the nav card’s four rounded corners. Do not
 restore `margin: 0.5rem` / `height: calc(100% - 1rem)` on `.sidebar-nav`.
@@ -102,9 +107,9 @@ Quality, or Logs, `.sidebar-content` is `overflow: hidden`. An inner owner
 scrolls (canvas, GraphiQL, DQ tab body, `#logsConsoleWrap`). On desktop the
 document must not exceed the viewport by more than 1px.
 
-**Data Quality and Logs — no extra bottom padding.** The shared Data Quality
-`:has(#dataquality-section.active)` rule and `#logs-section.active` use a
-zero bottom padding (`0.5rem 0.5rem 0` and `0.5rem 1rem 0` respectively).
+**Data Quality and Logs — no extra vertical padding.** The shared Data Quality
+`:has(#dataquality-section.active)` rule and `#logs-section.active` retain
+horizontal insets but zero top/bottom padding (`0 0.5rem` and `0 1rem`).
 Logs console scrolling is CSS-owned (`#logsConsoleWrap`: `flex: 1`,
 `min-height: 100px`, `overflow-y: auto`), not inline style.
 
@@ -139,6 +144,8 @@ Rendered pytest (`tests/e2e/navigation/test_sidebar_bottom_alignment.py`)
 covers a representative route set, not every sidebar item:
 
 - Desktop 1600×1000: `.sidebar-nav` vs primary pane bottoms, `delta <= 1`.
+- Desktop 1600×1000: equal 8px L1→L2 and L2→sidebar gaps, plus section-header
+  top vs sidebar top, `delta <= 1`.
 - Fixed-height routes: `documentHeight <= viewportHeight + 1`.
 - Mobile 390×844: visible overflow, window scroll, no horizontal overflow.
 

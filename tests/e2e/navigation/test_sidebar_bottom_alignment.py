@@ -51,6 +51,83 @@ SIDEBAR_PRIMARY_PANES = [
 
 
 @pytest.mark.parametrize(
+    "path",
+    [
+        pytest.param("/domain", id="domain"),
+        pytest.param("/ontology", id="ontology"),
+        pytest.param("/mapping", id="mapping"),
+        pytest.param("/dtwin/", id="knowledge-graph"),
+    ],
+)
+def test_desktop_chrome_uses_equal_vertical_gutters(page, live_server, path):
+    page.set_viewport_size(DESKTOP_VIEWPORT)
+    page.goto(f"{live_server}{path}")
+    page.wait_for_load_state("domcontentloaded")
+    page.locator("#obSubnav:not(.d-none)").wait_for(state="visible")
+
+    geometry = page.evaluate(
+        """() => {
+            const navbar = document.querySelector('body > nav.navbar');
+            const levelTwoRail = document.querySelector(
+                '#obSubnav .ob-subnav-workspace-list'
+            );
+            const sidebar = document.querySelector('.sidebar-nav');
+            const navbarRect = navbar.getBoundingClientRect();
+            const railRect = levelTwoRail.getBoundingClientRect();
+            const sidebarRect = sidebar.getBoundingClientRect();
+            return {
+                levelOneToLevelTwo: railRect.top - navbarRect.bottom,
+                levelTwoToContent: sidebarRect.top - railRect.bottom,
+            };
+        }"""
+    )
+
+    assert geometry["levelOneToLevelTwo"] == pytest.approx(8, abs=1)
+    assert geometry["levelTwoToContent"] == pytest.approx(
+        geometry["levelOneToLevelTwo"],
+        abs=1,
+    )
+
+
+@pytest.mark.parametrize(
+    "path,section",
+    [
+        pytest.param("/domain", "information", id="domain-information"),
+        pytest.param("/ontology", "information", id="ontology-information"),
+        pytest.param("/settings", "ui", id="settings-ui"),
+    ],
+)
+def test_desktop_page_title_aligns_with_sidebar_top(
+    page,
+    live_server,
+    path,
+    section,
+):
+    page.set_viewport_size(DESKTOP_VIEWPORT)
+    page.goto(f"{live_server}{path}")
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_function("typeof SidebarNav !== 'undefined'")
+    page.evaluate("(sectionName) => SidebarNav.switchTo(sectionName)", section)
+
+    header = page.locator(".sidebar-section.active .section-header").first
+    header.wait_for(state="visible")
+    geometry = page.evaluate(
+        """() => {
+            const sidebar = document.querySelector('.sidebar-nav');
+            const header = document.querySelector(
+                '.sidebar-section.active .section-header'
+            );
+            return {
+                sidebarTop: sidebar.getBoundingClientRect().top,
+                headerTop: header.getBoundingClientRect().top,
+            };
+        }"""
+    )
+
+    assert geometry["headerTop"] == pytest.approx(geometry["sidebarTop"], abs=1)
+
+
+@pytest.mark.parametrize(
     "path,section,pane_selector,fixed_height",
     SIDEBAR_PRIMARY_PANES,
 )

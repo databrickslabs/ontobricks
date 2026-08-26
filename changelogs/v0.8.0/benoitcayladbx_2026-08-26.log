@@ -1469,10 +1469,12 @@ Changes:
 
 1. `src/front/static/global/css/components.css`
    Replaced the fused rounded `.ob-tabs` treatment with a transparent,
-   horizontally scrollable underline rail and added the shared compact density.
+   horizontally scrollable underline rail, added the shared compact density,
+   and switched inactive hover to the brand-aware primary tint.
 2. `src/front/static/global/css/main.css`
-   Aligned legacy Bootstrap tab fallbacks and restored `.ob-tab-content` as a
-   complete independent bordered surface.
+   Aligned legacy Bootstrap tab fallbacks to the standard density and restored
+   `.ob-tab-content` as a complete independent bordered surface while matching
+   the configurable hover tint.
 3. `src/front/static/ontology/js/ontology-shared-panels.js`
    Applied the shared compact density to generated Ontology form tabs.
 4. `src/front/static/mapping/js/mapping-design.js`
@@ -1484,7 +1486,8 @@ Changes:
 7. `src/front/static/ontology/css/ontology-shared-panels.css`
    Removed local compact typography and spacing now owned by the shared modifier.
 8. `src/front/templates/partials/ontology/_ontology_cohorts.html`
-   Renamed the non-tab cohort card wrapper to reflect its actual role.
+   Renamed the non-tab cohort card wrapper and removed its vestigial tabpanel
+   structure.
 9. `src/front/templates/partials/dtwin/_query_cohorts.html`
    Renamed the non-tab cohort card wrapper to reflect its actual role.
 10. `src/front/static/query/css/query-cohorts.css`
@@ -1495,18 +1498,25 @@ Changes:
     Removed orphan panel and mapping-modal tab implementations.
 13. `tests/units/front/test_clarity_design_contract.py`
     Replaced rounded/fill contracts with underline, focus, density, overflow,
-    migration, semantic naming, and dead-style assertions.
+    migration, brand-aware hover, semantic naming, and dead-style assertions.
 14. `tests/units/front/test_ontology_split_panel_layout.py`
     Updated the panel contract to require the shared compact rail without local
     typography or spacing overrides.
 15. `.cursor/11-frontend-design.mdc`
     Documented the global underline rail, independent content surfaces, two
-    densities, responsive overflow, focus state, and anti-patterns.
+    densities, responsive overflow, configurable hover, focus state, and
+    anti-patterns.
 16. `.planning/ui-refresh/mockups/tabs-underline-rail.html`
     Added the approved interactive design mockup covering standard, compact,
     and constrained mobile contexts.
 17. `.planning/ui-refresh/mockups/renders/tabs-underline-rail.png`
     Added the rendered design reference.
+18. `src/front/static/ontology/css/ontology-dataquality.css`
+    Removed the ID-scoped font and padding override so Data Quality uses the
+    same standard density as Business Rules and every other page-level rail.
+19. `src/front/static/query/css/query-sync.css`
+    Removed an unused tab-gap override that contradicted the continuous shared
+    baseline.
 
 Modified files:
 - `src/front/static/global/css/components.css`
@@ -1516,9 +1526,11 @@ Modified files:
 - `src/front/templates/partials/dtwin/_query_sigmagraph.html`
 - `src/front/static/query/css/query-sigmagraph.css`
 - `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/ontology/css/ontology-dataquality.css`
 - `src/front/templates/partials/ontology/_ontology_cohorts.html`
 - `src/front/templates/partials/dtwin/_query_cohorts.html`
 - `src/front/static/query/css/query-cohorts.css`
+- `src/front/static/query/css/query-sync.css`
 - `src/front/static/global/css/pages.css`
 - `src/front/static/global/css/mapping.css`
 - `tests/units/front/test_clarity_design_contract.py`
@@ -1531,7 +1543,14 @@ Modified files:
 Tests:
 - RED: new tab-contract tests failed for the previous filled, rounded,
   non-scrollable component and unmigrated variants.
-- GREEN: `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py tests/units/front/test_ontology_split_panel_layout.py tests/units/front/test_analytics_dashboard.py tests/units/front/test_mapping_designer_split_layout.py` → 166 passed, 1 warning.
+- RED: rendered verification exposed the Data Quality ID selector as a third
+  density; focused static contracts also caught the legacy fallback padding,
+  vestigial cohort tabpanel, and unused Sync gap.
+- GREEN: focused tabs, sidebar geometry, and UI-branding contracts → 335 passed,
+  1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5598 passed, 303 skipped,
+  6 deselected, 1 xfailed, 23 warnings.
+- `git diff --check` → passed.
 
 ## Restore Graph Chat mobile natural flow
 

@@ -224,8 +224,7 @@ def test_panel_body_is_the_only_scroller():
 
 
 def test_designer_insets_match_the_explorer():
-    """The shell's 0.5rem outer gutter plus this 0.5rem inner inset preserves
-    the existing 1rem top/left/right position and adds no second bottom inset."""
+    """Designer and Explorer share horizontal insets and shell-owned vertical spacing."""
     designer = _read(MAP_CSS)
     explorer = _read(SIGMAGRAPH_CSS)
 
@@ -237,16 +236,13 @@ def test_designer_insets_match_the_explorer():
         explorer_wrapper, "padding"
     ) == "0"
 
-    # Shell now supplies a 0.5rem outer gutter, so each section adds only the
-    # remaining 0.5rem to keep the total top/left/right inset at 1rem. Both
-    # canvases must agree, or one sits deeper than the other.
+    # The shell owns vertical spacing; both canvases add only the remaining
+    # horizontal inset so neither sits deeper than the other.
     section = _block(designer, "#map-section.active")
-    assert _declaration(section, "padding") == "0.5rem"
-    assert _declaration(section, "padding-bottom") == "0"
+    assert _declaration(section, "padding") == "0 0.5rem"
 
     explorer_section = _block(explorer, "#sigmagraph-section.active")
-    assert _declaration(explorer_section, "padding") == "0.5rem"
-    assert _declaration(explorer_section, "padding-bottom") == "0"
+    assert _declaration(explorer_section, "padding") == "0 0.5rem"
 
 
 def test_designer_entities_and_relationships_use_the_shared_flex_height():
