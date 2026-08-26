@@ -62,7 +62,7 @@ Shared chrome (same tokens as Ontology / Designer and KG Explorer):
 | Click entity or relationship | Panel shows that object's mapping UI. Selection highlight uses `--db-primary`. |
 | Click canvas outside a node/link | Clear selection; panel returns to placeholder. |
 | Drag handle | Panel height changes; canvas SVG resizes (`resizeMapSvg`) after the drag and on window resize. |
-| Persist size | Last height stored in `sessionStorage`, same pattern as Ontology panel width. |
+| Persist size | Last height stored in `sessionStorage` under `mappingDesignerPanelHeight`, same pattern as Ontology panel width. |
 | Save mapping in the panel | Content updates; panel stays open. |
 | Empty ontology / loading | Existing loading overlay on the canvas; panel stays as placeholder. |
 
