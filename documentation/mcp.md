@@ -517,6 +517,10 @@ cd src/mcp-server
 
 See `documentation/deployment.md` §7 for Playground wiring and `app.yaml` env.
 
+To register the deployed MCP app as a **Unity Catalog HTTP connection** and
+attach it to **Genie One** (plus Playground / Genie Code), follow
+[`documentation/uc-mcp-connection-genie-one.md`](uc-mcp-connection-genie-one.md).
+
 ### Using in Playground
 
 1. Go to your Databricks workspace

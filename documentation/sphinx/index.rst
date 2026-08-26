@@ -31,6 +31,7 @@ RST summaries; see the architecture guide for the full design document.
    guides/lakebase-graphdb
    guides/cohort_discovery
    guides/mcp
+   guides/uc-mcp-connection-genie-one
    guides/development
    guides/sizing
    guides/product
