@@ -30,7 +30,7 @@ class _TagCollector(HTMLParser):
 
 
 def _html(client, path: str) -> str:
-    resp = client.get(path)
+    resp = client.get(path, headers={"accept": "text/html"})
     assert resp.status_code == 200, f"GET {path} returned {resp.status_code}"
     return resp.text
 
@@ -106,7 +106,10 @@ class TestBaseTemplate:
         brand = _find(tags, tag="a", class_="navbar-brand")
         assert brand is not None
         assert brand.get("href") == "/"
-        assert "OntoBricks" in html
+        logo = _find(tags, tag="img", id_="brandLogoImg")
+        assert logo is not None
+        assert "data-brand-icon" in logo
+        assert 'data-brand-title' in html
 
     @pytest.mark.parametrize("path", ["/", "/settings", "/ontology"])
     def test_has_notification_container(self, client, path):

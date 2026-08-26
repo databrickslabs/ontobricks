@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en" data-max-notifications="{{ max_notifications }}">
 <head>
+    {% set _branding = ui_branding_for() %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}OntoBricks{% endblock %}</title>
+    <title>{% block title %}{{ brand_page_title() }}{% endblock %}</title>
     
     <!-- OntoBricks Favicon -->
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2">
+    <link rel="icon" type="image/svg+xml" href="{{ _branding.logo_url }}">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -28,6 +29,7 @@
          any per-component rule that might set display/pointer-events on
          the same selectors. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/permissions.css') }}?v={{ asset_version }}">
+    <style id="uiBrandingTokens">{{ ui_branding_css_vars() }}</style>
     
     <!-- OntoBricks JS Utilities (defer: non-blocking, executed after HTML parse) -->
     <!-- permissions.js MUST stay first so window.OB.permissions exists before
@@ -63,8 +65,8 @@
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="{{ menu_config.brand.route }}">
-                <img id="brandLogoImg" src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="{{ menu_config.brand.label }}" width="24" height="24" class="me-2">
-                {{ menu_config.brand.label }}
+                <img id="brandLogoImg" data-brand-icon src="{{ _branding.logo_url }}" alt="{{ _branding.app_title }}" width="24" height="24" class="me-2">
+                <span id="brandTitleText" data-brand-title>{{ _branding.app_title }}</span>
                 {% if app_version %}<span class="ob-navbar-brand-version">v{{ app_version }}</span>{% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">

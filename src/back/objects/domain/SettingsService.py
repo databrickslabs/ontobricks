@@ -21,8 +21,11 @@ from back.core.databricks.constants import PERMISSIONS_APPS_PATH
 from back.core.databricks.lakebase.grants import resolve_mcp_app_name
 from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
+    DEFAULT_LOGO_PATH,
     get_databricks_client,
     get_databricks_host_and_token,
+    normalize_ui_branding,
+    resolve_app_registry_context,
     resolve_delta_warehouse_id,
     resolve_warehouse_id,
     run_blocking,
@@ -1274,7 +1277,6 @@ class SettingsService:
     # at 64×64 (≈2.7×) gives crisp rendering on retina displays without
     # bloating the global config blob.
     NAVBAR_LOGO_RECOMMENDED_SIZE = "64×64 px"
-    NAVBAR_LOGO_DEFAULT_PATH = "/static/global/img/favicon.svg"
     _NAVBAR_LOGO_ALLOWED_MIME = {
         "image/svg+xml",
         "image/png",
@@ -1285,37 +1287,8 @@ class SettingsService:
     _NAVBAR_LOGO_MAX_BYTES = 1024 * 1024  # 1 MB — way more than a 64×64 icon needs
 
     @staticmethod
-    def get_navbar_logo_result(
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        """Return the configured navbar logo (data URL) or the bundled default."""
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        custom = global_config_service.get_navbar_logo(host, token, registry_cfg)
-        return {
-            "success": True,
-            "logo_url": custom or SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
-            "is_custom": bool(custom),
-            "default_url": SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
-            "recommended_size": SettingsService.NAVBAR_LOGO_RECOMMENDED_SIZE,
-            "max_bytes": SettingsService._NAVBAR_LOGO_MAX_BYTES,
-            "allowed_mime": sorted(SettingsService._NAVBAR_LOGO_ALLOWED_MIME),
-        }
-
-    @staticmethod
-    def upload_navbar_logo_result(
-        content: bytes,
-        content_type: str,
-        email: str,
-        user_token: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        """Validate and persist an uploaded navbar logo (admin only, stored globally)."""
-        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
-
+    def _validate_and_encode_logo(content: bytes, content_type: str) -> tuple[str, str]:
+        """Validate logo payload and return ``(mime, data_url)``."""
         if not content:
             raise ValidationError("Empty file — pick an image to upload")
         if len(content) > SettingsService._NAVBAR_LOGO_MAX_BYTES:
@@ -1334,11 +1307,113 @@ class SettingsService:
         import base64
 
         b64 = base64.b64encode(content).decode("ascii")
-        data_url = f"data:{mime};base64,{b64}"
+        return mime, f"data:{mime};base64,{b64}"
 
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
+    @staticmethod
+    def get_ui_branding_result(
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return normalized UI branding payload for Settings."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        return {
+            "success": True,
+            "branding": global_config_service.get_ui_branding(host, token, registry_cfg),
+        }
+
+    @staticmethod
+    def save_ui_branding_result(
+        app_title: str,
+        primary_color: str,
+        logo_content: Optional[bytes],
+        logo_mime: Optional[str],
+        reset_logo: bool,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Validate and persist title/color/logo atomically (admin only)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        if logo_content is not None and reset_logo:
+            raise ValidationError("reset_logo cannot be true when logo_file is provided")
+
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        current = global_config_service.get_ui_branding(host, token, registry_cfg)
+
+        logo_data_url = str(current.get("logo_data_url", "") or "")
+        if reset_logo:
+            logo_data_url = ""
+        elif logo_content is not None:
+            _, logo_data_url = SettingsService._validate_and_encode_logo(
+                logo_content, logo_mime or ""
+            )
+
+        try:
+            normalized = normalize_ui_branding(
+                {
+                    "version": current.get("version", 1),
+                    "app_title": app_title,
+                    "primary_color": primary_color,
+                    "logo_data_url": logo_data_url,
+                }
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
+        ok, msg = global_config_service.set_ui_branding(
+            host,
+            token,
+            registry_cfg,
+            {
+                "version": normalized.version,
+                "app_title": normalized.app_title,
+                "primary_color": normalized.primary_color,
+                "logo_data_url": normalized.logo_data_url,
+            },
         )
+        if not ok:
+            raise InfrastructureError("Failed to save UI branding", detail=msg)
+
+        return {"success": True, "branding": normalized.to_dict()}
+
+    @staticmethod
+    def get_navbar_logo_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the configured navbar logo (data URL) or the bundled default."""
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        branding = global_config_service.get_ui_branding(host, token, registry_cfg)
+        custom = str(branding.get("logo_data_url", "") or "")
+        return {
+            "success": True,
+            "logo_url": custom or DEFAULT_LOGO_PATH,
+            "is_custom": bool(custom),
+            "default_url": DEFAULT_LOGO_PATH,
+            "recommended_size": SettingsService.NAVBAR_LOGO_RECOMMENDED_SIZE,
+            "max_bytes": SettingsService._NAVBAR_LOGO_MAX_BYTES,
+            "allowed_mime": sorted(SettingsService._NAVBAR_LOGO_ALLOWED_MIME),
+        }
+
+    @staticmethod
+    def upload_navbar_logo_result(
+        content: bytes,
+        content_type: str,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Validate and persist an uploaded navbar logo (admin only, stored globally)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        mime, data_url = SettingsService._validate_and_encode_logo(content, content_type)
+
+        host, token, registry_cfg = resolve_app_registry_context(settings)
         ok, msg = global_config_service.set_navbar_logo(
             host, token, registry_cfg, data_url
         )
@@ -1362,9 +1437,7 @@ class SettingsService:
         """Clear the custom navbar logo so the bundled default is used again."""
         SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
+        host, token, registry_cfg = resolve_app_registry_context(settings)
         ok, msg = global_config_service.set_navbar_logo(
             host, token, registry_cfg, ""
         )
@@ -1372,7 +1445,7 @@ class SettingsService:
             raise InfrastructureError("Failed to reset navbar logo", detail=msg)
         return {
             "success": True,
-            "logo_url": SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
+            "logo_url": DEFAULT_LOGO_PATH,
             "is_custom": False,
         }
 

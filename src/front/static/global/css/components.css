@@ -172,19 +172,19 @@
 .btn-primary {
     background-color: var(--db-primary);
     border-color: var(--db-primary);
-    color: #fff;
+    color: var(--db-on-primary);
 }
 
 .btn-primary:hover {
     background-color: var(--db-primary-dark);
     border-color: var(--db-primary-dark);
-    color: #fff;
+    color: var(--db-on-primary);
 }
 
 .btn-primary:focus {
     background-color: var(--db-primary-dark);
     border-color: var(--db-primary-dark);
-    color: #fff;
+    color: var(--db-on-primary);
     box-shadow: var(--db-focus-ring);
 }
 
@@ -193,7 +193,7 @@
 .show > .btn-primary.dropdown-toggle {
     background-color: var(--db-primary-darker) !important;
     border-color: var(--db-primary-darker) !important;
-    color: #fff !important;
+    color: var(--db-on-primary) !important;
 }
 
 /* Keep secondary/semantic solid variants neutral and unfilled */
@@ -956,8 +956,8 @@
 .nav-tabs.ob-tabs .nav-link.active,
 .nav-tabs.ob-tabs .nav-item.show .nav-link {
     color: var(--db-primary-darker, #3730A3) !important;
-    background: var(--db-primary-light, rgba(79, 70, 229, 0.1)) !important;
-    border-bottom-color: var(--db-primary, #4F46E5) !important;
+    background: var(--db-primary-light) !important;
+    border-bottom-color: var(--db-primary) !important;
     border-radius: 0 !important;
     font-weight: 600;
 }
@@ -988,6 +988,12 @@
     border-top: none !important;
     border-top-left-radius: 0 !important;
     border-top-right-radius: 0 !important;
+    /* Match the strip's 12px scrollbar-gutter inset. Without this, a
+       following .card keeps the sidebar-section full-width card rule and
+       sits 12px wider / a seam below the tab head. */
+    margin-top: 0;
+    margin-right: 12px;
+    width: auto;
 }
 
 /* Standalone full-height pattern: a single .ob-tabs-wrap container

@@ -19,6 +19,11 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.helpers import (
+    DEFAULT_APP_TITLE,
+    DEFAULT_PRIMARY_COLOR,
+    normalize_ui_branding,
+)
 from back.core.query_limits import (
     get_graph_chat_result_cap as _effective_result_cap,
     get_graph_query_timeout_s as _effective_timeout_s,
@@ -181,7 +186,24 @@ class GlobalConfigService:
         Empty string means "no custom logo" — the UI falls back to the
         bundled default (``static/global/img/favicon.svg``).
         """
-        return self.get(host, token, registry_cfg, "navbar_logo")
+        return self.get_ui_branding(host, token, registry_cfg).get("logo_data_url", "")
+
+    def get_ui_branding(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """Return normalized UI branding with legacy ``navbar_logo`` fallback."""
+        data = self.load(host, token, registry_cfg)
+        raw = data.get("ui_branding")
+        candidate = dict(raw) if isinstance(raw, dict) else {}
+
+        normalized = normalize_ui_branding(candidate)
+        if not normalized.logo_data_url:
+            legacy = str(data.get("navbar_logo", "") or "").strip()
+            if legacy:
+                candidate["logo_data_url"] = legacy
+                normalized = normalize_ui_branding(candidate)
+
+        return normalized.to_dict()
 
     def get_use_cloud_fetch(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -218,7 +240,7 @@ class GlobalConfigService:
                 "Registry not configured — set catalog and schema in Settings first",
             )
 
-        data = self.load(host, token, registry_cfg, force=True)
+        data = dict(self.load(host, token, registry_cfg, force=True))
         data["version"] = data.get("version", 1)
         data.update(updates)
 
@@ -288,7 +310,52 @@ class GlobalConfigService:
         data_url: str,
     ) -> Tuple[bool, str]:
         """Persist the navbar logo as a ``data:`` URL (empty string clears it)."""
-        return self._save(host, token, registry_cfg, {"navbar_logo": data_url or ""})
+        return self.set_ui_branding(
+            host,
+            token,
+            registry_cfg,
+            {"logo_data_url": data_url or ""},
+        )
+
+    def set_ui_branding(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        branding: Dict[str, Any],
+    ) -> Tuple[bool, str]:
+        """Persist a normalized UI branding payload under ``ui_branding``."""
+        prev_cache = self._cache
+        prev_cache_ts = self._cache_ts
+        source = (
+            self._cache
+            if isinstance(self._cache, dict)
+            else self.load(host, token, registry_cfg, force=True)
+        )
+        data = dict(source)
+        current = data.get("ui_branding")
+        merged = dict(current) if isinstance(current, dict) else {}
+        merged.update(dict(branding or {}))
+
+        normalized = normalize_ui_branding(merged)
+        merged["version"] = int(merged.get("version") or normalized.version or 1)
+        merged["app_title"] = normalized.app_title
+        merged["primary_color"] = normalized.primary_color
+        merged["logo_data_url"] = normalized.logo_data_url
+
+        updates = {
+            "ui_branding": merged,
+            # Keep legacy key synchronized to prevent stale resurrection when
+            # unified branding is reset to default logo.
+            "navbar_logo": merged["logo_data_url"],
+        }
+        ok, msg = self._save(host, token, registry_cfg, updates)
+        if not ok:
+            self._cache = prev_cache
+            self._cache_ts = prev_cache_ts
+        # On success, _save() already refreshed and updated the cache from the
+        # force-loaded union. Avoid overwriting it with the pre-save snapshot.
+        return ok, msg
 
     # NOTE: The graph *backend selection* (formerly the global ``graph_engine`` /
     # ``triple_store_backend`` keys) moved to a mandatory per-domain choice —
@@ -528,6 +595,12 @@ class GlobalConfigService:
             "default_base_uri": "",
             "default_emoji": "",
             "navbar_logo": "",
+            "ui_branding": {
+                "version": 1,
+                "app_title": DEFAULT_APP_TITLE,
+                "primary_color": DEFAULT_PRIMARY_COLOR,
+                "logo_data_url": "",
+            },
             "use_cloud_fetch": True,
             "registry_cache_ttl": 300,
             # 0 = unset → env var / built-in default from back.core.query_limits.

@@ -1372,6 +1372,71 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 ---
 
+## Settings Reference
+
+### Configuration → UI (Application Branding)
+
+> **Required role:** Administrator. All users see the active branding; only
+> admins can change it.
+
+Navigate to **Settings → Configuration → UI** to customise how OntoBricks
+presents itself across every page.
+
+#### What you can configure
+
+| Field | Description | Constraints |
+|-------|-------------|-------------|
+| **Application title** | The name shown in the navbar, browser tab, and `alt=` text. | 1–60 characters (trimmed, Unicode code points). Default: `OntoBricks`. |
+| **Primary color** | Hex color (`#RRGGBB`) for buttons, active navigation, focus rings, and highlights. | Any valid 6-digit uppercase hex. Default: `#4F46E5`. |
+| **Brand icon** | SVG, PNG, JPEG, WebP, or GIF uploaded as the favicon and navbar logo. | Max 1 MB. Default: the built-in OntoBricks logo. |
+
+#### Derived palette
+
+Entering a single primary color automatically generates the full token family:
+a dark shade, a darker shade, a light/alpha tint, hover and focus ring values,
+and a WCAG-contrast–safe foreground color (`--db-on-primary`) guaranteed to
+meet a ≥ 4.5:1 contrast ratio against the chosen primary. Swatches in the UI
+preview each derived value before you save.
+
+Semantic status colors (success, warning, danger, info, draft) and all surface,
+border, and text colors are **not** affected by this setting — they remain
+consistent regardless of the primary you choose.
+
+#### Live preview
+
+Changes to the title, color, or icon take effect immediately in the open
+Settings page — you can see how the navbar, buttons, focus ring, tab indicators,
+and other primary-colored elements look before committing. The rest of the app
+is not yet affected until you save.
+
+**Discard** removes the local preview and restores the last saved values.
+
+#### Saving and resetting
+
+- **Save** sends all three fields atomically. If any field fails validation the
+  save is rejected and nothing is written — the existing branding is preserved.
+- **Reset icon** (the dedicated button in the Branding card) reverts only the
+  icon draft back to the built-in default logo, leaving any unsaved title or
+  color edits intact. The icon is not persisted until you click **Save**.
+- **Reset to defaults** restores `OntoBricks`, `#4F46E5`, and the built-in logo
+  as a preview. You must still click **Save** to persist the reset.
+- After a successful save, the new branding is applied to every subsequent page
+  load with no default-color flash: the server injects the CSS variables before
+  any other style loads.
+
+#### Icon scope
+
+The configured icon appears as:
+
+- the browser favicon (`<link rel="icon">`),
+- the navbar brand logo (`#brandLogoImg`),
+- the logo shown in the Help modal, KG Chat, and the Ontology Map canvas.
+
+The icon is not resized or cropped server-side; use a square asset for best
+results across all sizes.
+
+---
+
 ## Troubleshooting
 
 ### Connection Issues

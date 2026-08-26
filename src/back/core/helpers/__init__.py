@@ -12,6 +12,15 @@ from back.core.helpers.SQLHelpers import (  # noqa: F401
     SQLHelpers,
 )
 from back.core.helpers.URIHelpers import URIHelpers  # noqa: F401
+from back.core.helpers.UIBranding import (  # noqa: F401
+    BrandPalette,
+    UIBranding,
+    DEFAULT_APP_TITLE,
+    DEFAULT_PRIMARY_COLOR,
+    DEFAULT_LOGO_PATH,
+    derive_brand_palette,
+    normalize_ui_branding,
+)
 
 # SQL / URI helpers must be bound before importing databricks: transitive
 # imports can pull ``back.core.helpers`` again while this module is still
@@ -44,6 +53,7 @@ resolve_default_emoji = DatabricksHelpers.resolve_default_emoji
 resolve_use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch
 resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 resolve_analytics_job_name = DatabricksHelpers.resolve_analytics_job_name
+resolve_app_registry_context = DatabricksHelpers.resolve_app_registry_context
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
 get_delta_databricks_credentials = DatabricksHelpers.get_delta_databricks_credentials
@@ -63,6 +73,7 @@ __all__ = [
     "resolve_use_cloud_fetch",
     "resolve_analytics_job_enabled",
     "resolve_analytics_job_name",
+    "resolve_app_registry_context",
     "get_databricks_client",
     "get_databricks_credentials",
     "get_delta_databricks_credentials",
@@ -84,4 +95,11 @@ __all__ = [
     "safe_identifier",
     "SAFE_SQL_IDENT",
     "SAFE_COL_IDENT",
+    "BrandPalette",
+    "UIBranding",
+    "DEFAULT_APP_TITLE",
+    "DEFAULT_PRIMARY_COLOR",
+    "DEFAULT_LOGO_PATH",
+    "derive_brand_palette",
+    "normalize_ui_branding",
 ]

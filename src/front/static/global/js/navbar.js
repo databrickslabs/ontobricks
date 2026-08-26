@@ -116,8 +116,15 @@ async function loadNavbarState() {
 function applyBrandLogo(branding) {
     const img = document.getElementById('brandLogoImg');
     if (!img) return;
-    if (branding && branding.is_custom && branding.logo_url) {
+    if (branding && branding.logo_url) {
         img.src = branding.logo_url;
+    }
+    if (branding && branding.app_title) {
+        img.alt = branding.app_title;
+    }
+    const brandText = document.getElementById('brandTitleText');
+    if (brandText && branding && branding.app_title) {
+        brandText.textContent = branding.app_title;
     }
 }
 

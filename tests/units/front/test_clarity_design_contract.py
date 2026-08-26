@@ -67,6 +67,10 @@ def _menu_config() -> dict:
     return json.loads(_read(MENU_CONFIG))
 
 
+def _strip_root_palette_block(css_text: str) -> str:
+    return re.sub(r":root\s*\{[^}]*\}", "", css_text, flags=re.DOTALL)
+
+
 def test_main_css_declares_clarity_primary_and_warm_tokens():
     css = _read(MAIN_CSS)
     # Contract keeps canonical uppercase hex for the primary indigo token.
@@ -100,7 +104,9 @@ def test_components_css_keeps_only_primary_button_filled():
     assert _any_block_has_declaration(
         primary_blocks, r"(?:background|background-color)", r"var\(--db-primary\)"
     )
-    assert _any_block_has_declaration(primary_blocks, r"color", r"#fff")
+    assert _any_block_has_declaration(
+        primary_blocks, r"color", r"var\(--db-on-primary\)"
+    )
 
     # Semantic outcome: neutral and outline button variants stay visually unfilled.
     assert secondary_blocks, "No CSS rule targets .btn-secondary"
@@ -170,6 +176,24 @@ def test_components_css_ob_tabs_strip_rounds_its_top_corners():
     )
 
 
+def test_ob_tabs_following_card_shares_the_strip_right_inset():
+    """Domain / Information uses `ul.ob-tabs` + `.card`. The strip is inset
+    12px for the stable scrollbar gutter; `.sidebar-section .card { width:
+    100% }` made the card ignore that inset, so the tab head sat short of
+    the card's top and right borders."""
+    css = _read(COMPONENTS_CSS)
+    match = re.search(
+        r"\.nav-tabs\.ob-tabs\s*\+\s*\.card,[^{]*\{([^}]+)\}",
+        css,
+        flags=re.DOTALL,
+    )
+    assert match, "missing adjacent-sibling rule for ob-tabs + card"
+    block = match.group(1)
+    assert re.search(r"margin-right\s*:\s*12px\s*;", block)
+    assert re.search(r"margin-top\s*:\s*0\s*;", block)
+    assert re.search(r"width\s*:\s*auto\s*;", block)
+
+
 def test_designer_canvas_selection_uses_clarity_indigo():
     """The Designer canvas highlighted selection with Bootstrap blue (#0d6efd),
     which is outside the palette."""
@@ -203,12 +227,13 @@ def test_main_css_l2_and_nav_tabs_use_square_indigo_soft_selection():
 def test_nav_hover_indigo_token_is_lighter_than_active_fill():
     """Hover tint must stay below the 0.12 active fill so the two read apart."""
     css = _read(MAIN_CSS)
-    match = re.search(
-        r"--db-hover-indigo\s*:\s*rgba\(\s*79\s*,\s*70\s*,\s*229\s*,\s*(0\.[0-9]+)\s*\)\s*;",
+    hover_match = re.search(
+        r"--db-hover\s*:\s*rgba\(\s*79\s*,\s*70\s*,\s*229\s*,\s*(0\.[0-9]+)\s*\)\s*;",
         css,
     )
-    assert match, "--db-hover-indigo token missing"
-    assert float(match.group(1)) < 0.12
+    assert hover_match, "--db-hover token missing"
+    assert float(hover_match.group(1)) < 0.12
+    assert re.search(r"--db-hover-indigo\s*:\s*var\(--db-hover\)\s*;", css)
 
 
 def test_navbar_dropdown_hover_matches_sidebar():
@@ -251,7 +276,7 @@ def test_l2_dropdown_items_match_sidebar_hover_and_active():
     )
     assert re.search(
         r"\.ob-subnav\s+\.dropdown-menu\s+\.dropdown-item\.active\s*\{"
-        r"[^}]*background\s*:\s*rgba\(\s*79\s*,\s*70\s*,\s*229\s*,\s*0\.[0-9]+\s*\)\s*;",
+        r"[^}]*background\s*:\s*var\(--db-primary-light\)\s*;",
         css,
         flags=re.DOTALL,
     )
@@ -266,7 +291,9 @@ def test_base_template_keeps_logo_nav_structure_and_l1_before_l2():
     )
 
     assert 'id="brandLogoImg"' in html
-    assert "global/img/favicon.svg" in html
+    assert 'data-brand-icon' in html
+    assert 'data-brand-title' in html
+    assert "{{ _branding.logo_url }}" in html
     assert 'id="obSubnav"' in html
     assert save_action["element_id"] == "menuSaveDomain"
     # Base template contract is dynamic: id comes from save_action.v.element_id.
@@ -292,12 +319,12 @@ def test_sidebar_layout_preserves_geometry_and_clarity_active_tokens():
     )
 
     assert re.search(
-        r"\.sidebar-nav\s+\.nav-link\.active\s*\{[^}]*background\s*:\s*rgba\(\s*79\s*,\s*70\s*,\s*229\s*,\s*0\.[0-9]+\s*\)\s*;[^}]*\}",
+        r"\.sidebar-nav\s+\.nav-link\.active\s*\{[^}]*background\s*:\s*var\(--db-primary-light\)\s*;[^}]*\}",
         css,
         flags=re.DOTALL,
     )
     assert re.search(
-        r"\.sidebar-nav\s+\.nav-link\.active\s*\{[^}]*color\s*:\s*#4F46E5\s*;[^}]*\}",
+        r"\.sidebar-nav\s+\.nav-link\.active\s*\{[^}]*color\s*:\s*var\(--db-primary-selected-text\)\s*;[^}]*\}",
         css,
         flags=re.DOTALL,
     )
@@ -345,8 +372,30 @@ def test_ontoviz_entity_headers_use_indigo_soft_not_red():
 
     assert "fdeaea" not in css.lower()
     blocks = _rule_blocks_for_exact_class(css, ".ovz-entity-header")
-    # The value carries a fallback, so it holds nested parentheses.
-    assert _any_block_has_declaration(blocks, r"background", r"var\(--db-primary-light.*")
+    assert _any_block_has_declaration(blocks, r"background", r"var\(--db-primary-light\)")
+
+
+def test_primary_consumers_use_runtime_tokens_outside_root_fallback():
+    css_files = [MAIN_CSS, COMPONENTS_CSS, SIDEBAR_LAYOUT_CSS, ONTOVIZ_CSS]
+    forbidden = [
+        "#4f46e5",
+        "rgba(79, 70, 229",
+        "79, 70, 229",
+    ]
+
+    for css_file in css_files:
+        stripped = _strip_root_palette_block(_read(css_file)).lower()
+        for literal in forbidden:
+            assert literal not in stripped, f"{css_file} still uses literal {literal}"
+
+
+def test_ontology_map_highlight_reads_primary_token_from_css():
+    js = _read(REPO_ROOT / "src/front/static/ontology/js/ontology-map.js")
+    assert "--db-primary" in js
+    assert "getComputedStyle(document.documentElement)" in js
+    # Keep exactly one explicit fallback literal scoped to the helper.
+    assert js.count("#4F46E5") == 1
+    assert "return value || '#4F46E5';" in js
 
 
 def test_frontend_design_rule_documents_new_palette_and_immutable_structure():
@@ -373,6 +422,8 @@ def test_base_template_preserves_css_and_js_contract_ordering():
     css_links = re.findall(r'filename=\'([^\']+\.css)\'', html)
     assert css_links, "No stylesheet references found in base.html"
     assert css_links[-1] == "global/css/permissions.css"
+    assert html.index("global/css/permissions.css") < html.index('id="uiBrandingTokens"')
+    assert html.index('id="uiBrandingTokens"') < html.index("{% block extra_css %}{% endblock %}")
 
     defer_scripts = re.findall(
         r"<script\s+defer\s+src=\"\{\{\s*url_for\('static',\s*filename='([^']+\.js)'",

@@ -17,6 +17,9 @@
 
 const SidebarNav = {
     _STORAGE_KEY: 'ontobricks-sidebar-collapsed',
+    _initialized: false,
+    _onSectionChange: null,
+    _onBeforeSectionChange: null,
 
     /**
      * Initialize sidebar navigation
@@ -28,11 +31,21 @@ const SidebarNav = {
     init: function(options = {}) {
         const navSelector = options.navSelector || '.sidebar-nav';
         const sectionSelector = options.sectionSelector || '.sidebar-section';
-        const onSectionChange = options.onSectionChange || null;
-        const onBeforeSectionChange = options.onBeforeSectionChange || null;
+        if (Object.prototype.hasOwnProperty.call(options, 'onSectionChange')) {
+            SidebarNav._onSectionChange = options.onSectionChange;
+        }
+        if (Object.prototype.hasOwnProperty.call(options, 'onBeforeSectionChange')) {
+            SidebarNav._onBeforeSectionChange = options.onBeforeSectionChange;
+        }
 
         // Ensure collapse UI is set up (idempotent)
         SidebarNav._setupCollapse();
+
+        // Avoid duplicate listeners if a page re-initializes with updated callbacks.
+        if (SidebarNav._initialized) {
+            return;
+        }
+        SidebarNav._initialized = true;
 
         document.querySelectorAll(`${navSelector} .nav-link[data-section]`).forEach(link => {
             link.addEventListener('click', async function(e) {
@@ -41,8 +54,9 @@ const SidebarNav = {
                 
                 if (!section) return;
                 
-                if (onBeforeSectionChange && typeof onBeforeSectionChange === 'function') {
-                    const shouldProceed = await onBeforeSectionChange(section);
+                const beforeHook = SidebarNav._onBeforeSectionChange;
+                if (beforeHook && typeof beforeHook === 'function') {
+                    const shouldProceed = await beforeHook(section);
                     if (shouldProceed === false) {
                         return;
                     }
@@ -68,8 +82,9 @@ const SidebarNav = {
                     detail: { section, targetSection }
                 }));
 
-                if (onSectionChange && typeof onSectionChange === 'function') {
-                    onSectionChange(section, targetSection);
+                const changeHook = SidebarNav._onSectionChange;
+                if (changeHook && typeof changeHook === 'function') {
+                    changeHook(section, targetSection);
                 }
             });
         });

@@ -14,6 +14,8 @@ Routes (mounted at ``/graphql`` on the main app and at the external prefix from 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+from html import escape
+import json
 from typing import Any, Dict, List, Optional
 
 from api.constants import EXTERNAL_GRAPHQL_PUBLIC_PREFIX
@@ -31,6 +33,10 @@ from back.objects.registry import RegistryService
 from back.core.graphdb import get_graphdb
 from shared.config.constants import DEFAULT_BASE_URI
 from back.core.helpers import effective_graph_name, effective_graph_query_table
+from shared.fastapi.ui_branding import (
+    get_request_ui_branding,
+    render_ui_branding_css_vars,
+)
 
 logger = get_logger(__name__)
 
@@ -327,7 +333,17 @@ async def graphql_playground(
     api_prefix = (
         EXTERNAL_GRAPHQL_PUBLIC_PREFIX if is_external else "/graphql"
     )
-    return HTMLResponse(_graphiql_html(domain_name, display_name, api_prefix))
+    branding = get_request_ui_branding(request)
+    return HTMLResponse(
+        _graphiql_html(
+            domain_name=domain_name,
+            display_name=display_name,
+            graphql_api_prefix=api_prefix,
+            page_title=f"{branding.get('app_title', 'OntoBricks')} GraphQL - {display_name}",
+            logo_url=str(branding.get("logo_url", "/static/global/img/favicon.svg")),
+            css_vars=render_ui_branding_css_vars(branding),
+        )
+    )
 
 
 @router.post(
@@ -514,16 +530,30 @@ async def graphql_debug(
 # ------------------------------------------------------------------
 
 
-def _graphiql_html(domain_name: str, display_name: str, graphql_api_prefix: str) -> str:
+def _graphiql_html(
+    domain_name: str,
+    display_name: str,
+    graphql_api_prefix: str,
+    page_title: str,
+    logo_url: str,
+    css_vars: str,
+) -> str:
     """*graphql_api_prefix* is ``/graphql`` or ``EXTERNAL_GRAPHQL_PUBLIC_PREFIX`` so GraphiQL POSTs to the same mount."""
+    escaped_title = escape(page_title, quote=True)
+    escaped_logo_url = escape(logo_url, quote=True)
+    escaped_css_vars = escape(css_vars, quote=False)
+    depth_url_js = json.dumps(f"{graphql_api_prefix}/settings/depth")
+    execute_url_js = json.dumps(f"{graphql_api_prefix}/{domain_name}")
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>OntoBricks GraphQL — {display_name}</title>
-  <link rel="icon" href="/static/global/img/favicon-32.png" />
+  <title>{escaped_title}</title>
+  <link rel="icon" href="{escaped_logo_url}" />
   <link href="https://unpkg.com/graphiql@3/graphiql.min.css" rel="stylesheet" />
   <style>
+    {escaped_css_vars}
     body {{ margin: 0; overflow: hidden; }}
     #graphiql {{ height: 100vh; }}
     .graphiql-container .topBar {{
@@ -551,7 +581,7 @@ def _graphiql_html(domain_name: str, display_name: str, graphql_api_prefix: str)
     (async function() {{
       var dflt = {DEFAULT_DEPTH}, mx = {MAX_DEPTH};
       try {{
-        var r = await fetch('{graphql_api_prefix}/settings/depth');
+        var r = await fetch({depth_url_js});
         if (r.ok) {{ var d = await r.json(); dflt = d.default || dflt; mx = d.max || mx; }}
       }} catch {{}}
       var sel = document.getElementById('depthSel');
@@ -564,7 +594,7 @@ def _graphiql_html(domain_name: str, display_name: str, graphql_api_prefix: str)
       function fetcher(params) {{
         var depth = parseInt(sel.value || dflt, 10);
         var body = Object.assign({{}}, params, {{ depth: depth }});
-        return fetch('{graphql_api_prefix}/{domain_name}', {{
+        return fetch({execute_url_js}, {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
           credentials: 'same-origin',

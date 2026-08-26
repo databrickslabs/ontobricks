@@ -116,7 +116,6 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
 /* Entity headers carry the Clarity indigo-soft tint, the same fill selection
    uses everywhere else, instead of the light red they had. */
 .ovz-entity-header {
-    /* Fallback for ontoviz's standalone demo page, which doesn't load main.css. */
-    background: var(--db-primary-light, rgba(79, 70, 229, 0.1));
+    background: var(--db-primary-light);
 }
 

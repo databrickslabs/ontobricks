@@ -28,6 +28,16 @@ function _resolveLinkEndpoint(endpoint) {
 }
 
 /**
+ * Resolve the current brand primary from CSS custom properties.
+ */
+function _getBrandPrimaryColor() {
+    const value = getComputedStyle(document.documentElement)
+        .getPropertyValue('--db-primary')
+        .trim();
+    return value || '#4F46E5';
+}
+
+/**
  * Show/hide loading overlay for ontology model
  */
 function showOntologyMapLoading(show) {
@@ -1759,7 +1769,7 @@ function startMapConnectionMode(sourceEntity, container, type = 'relationship') 
     // CSS class fails to apply for any reason.
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('class', type === 'inheritance' ? 'map-connection-line map-inheritance-line' : 'map-connection-line');
-    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : '#4F46E5');
+    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : _getBrandPrimaryColor());
     line.setAttribute('stroke-width', '3');
     line.setAttribute('stroke-dasharray', type === 'inheritance' ? '5,5' : '8,4');
     line.setAttribute('stroke-linecap', 'round');

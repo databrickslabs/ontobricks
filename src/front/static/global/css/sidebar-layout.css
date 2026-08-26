@@ -116,8 +116,8 @@ body.full-width-layout {
 }
 
 .sidebar-nav .nav-link.active {
-    background: rgba(79, 70, 229, 0.12);
-    color: #4F46E5;
+    background: var(--db-primary-light);
+    color: var(--db-primary-selected-text);
     font-weight: 650;
 }
 
@@ -133,7 +133,7 @@ body.full-width-layout {
 }
 
 .sidebar-nav .nav-link.active i {
-    color: #4F46E5;
+    color: var(--db-primary-selected-text);
 }
 
 /* Disabled sidebar items (requires domain saved to UC) */

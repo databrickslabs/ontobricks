@@ -47,3 +47,805 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5343 passed, 281
 skipped, 6 deselected, 1 xfailed, 0 failed in 40.04s (+8 new/updated tests).
+
+================================================================================
+Backend foundation for configurable UI branding (Tasks 1-3)
+================================================================================
+
+Context
+-------
+Implemented the backend baseline for Settings -> UI branding: immutable branding
+normalization and palette derivation, unified `ui_branding` persistence with
+legacy `navbar_logo` compatibility, and new atomic admin API routes.
+
+Changes
+-------
+1. `src/back/core/helpers/UIBranding.py` + `src/back/core/helpers/__init__.py`
+   - Added immutable `BrandPalette` and `UIBranding` dataclasses.
+   - Added deterministic normalization/validation for title and `#RRGGBB` color.
+   - Added derived palette generation (`dark`, `darker`, alpha variants),
+     WCAG-based foreground selection, and serialization helpers.
+2. `src/back/objects/session/GlobalConfigService.py`
+   - Added default `ui_branding` object in `_empty()`.
+   - Added `get_ui_branding()` and `set_ui_branding()` with normalization.
+   - Preserved legacy `navbar_logo` read fallback when unified logo is empty.
+   - Delegated legacy `get/set_navbar_logo` through unified branding storage.
+   - Ensured cache state is preserved on failed unified branding persistence.
+3. `src/back/objects/domain/SettingsService.py`
+   - Added `get_ui_branding_result()` and atomic `save_ui_branding_result()`.
+   - Reused existing logo MIME/size constraints through a shared logo validator.
+   - Enforced reset/upload conflict validation and normalized payload writes.
+   - Kept navbar-logo compatibility endpoints aligned with unified branding.
+4. `src/api/routers/internal/settings.py`
+   - Added admin `GET /settings/ui-branding`.
+   - Added admin multipart `POST /settings/ui-branding` with
+     `app_title` / `primary_color` / optional `logo_file` / `reset_logo`.
+5. Tests
+   - Added `tests/units/ui/test_branding.py`.
+   - Added `tests/units/settings/test_ui_branding.py`.
+   - Added `tests/units/api/test_ui_branding_settings.py`.
+
+Modified files:
+- `src/back/core/helpers/UIBranding.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `tests/units/ui/test_branding.py`
+- `tests/units/settings/test_ui_branding.py`
+- `tests/units/api/test_ui_branding_settings.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py -q` -> failed with
+    `ModuleNotFoundError: No module named 'back.core.helpers.UIBranding'`.
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py -q` ->
+    11 failed (missing `ui_branding` defaults/methods and missing service methods).
+  - `uv run --frozen pytest tests/units/api/test_ui_branding_settings.py -q` ->
+    8 failed (`404` for both `/settings/ui-branding` routes).
+- GREEN:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py -q` -> 16 passed.
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py tests/units/settings/test_config.py -q` -> 22 passed.
+  - `uv run --frozen pytest tests/units/api/test_ui_branding_settings.py tests/units/settings/test_settings_domain_permissions.py -q` -> 33 passed.
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py tests/units/settings/test_config.py tests/units/settings/test_settings_domain_permissions.py -q` -> 71 passed.
+  - `uv run --frozen pytest -q -m "not scenario"` -> 5378 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 46.99s.
+
+================================================================================
+Backend branding review findings remediation
+================================================================================
+
+Context
+-------
+Addressed all Critical/High/Medium backend review findings for the new
+UI-branding foundation with strict test-first regressions before fixes.
+
+Changes
+-------
+1. `src/back/objects/session/GlobalConfigService.py`
+   - Restored `_save(...)->load(..., force=True)` semantics to avoid widening
+     lost-update windows on unrelated global config writes.
+   - Updated `set_ui_branding()` to keep top-level legacy `navbar_logo`
+     synchronized with `ui_branding.logo_data_url` (including reset to empty),
+     preventing legacy-logo resurrection.
+   - Preserved rollback behavior on failed save and ensured cache updates only
+     after successful persistence.
+2. `src/back/objects/domain/SettingsService.py`
+   - Hardened `get_ui_branding_result()` with admin service guard
+     (`require_admin_error`) to align with existing settings save patterns.
+3. `src/api/routers/internal/settings.py`
+   - Enforced route-level admin guard on `GET /settings/ui-branding`
+     (`Depends(require(ROLE_ADMIN))`).
+   - Made multipart logo parsing robust: filename-less or empty `UploadFile`
+     is treated as absent (title/color-only saves no longer fail spuriously).
+4. Tests
+   - `tests/units/settings/test_ui_branding.py`: added regressions for
+     legacy-reset synchronization, `_save` force-refresh behavior, and
+     successful cache updates after persistence.
+   - `tests/units/api/test_ui_branding_settings.py`: added reset flag test,
+     empty-file/filename-less upload behavior tests, and a non-admin GET
+     permission enforcement test through real middleware gating.
+   - `tests/units/ui/test_branding.py`: tightened palette derivation checks
+     to exact fixture values for `primary_dark`/`primary_darker`.
+
+Modified files:
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `tests/units/settings/test_ui_branding.py`
+- `tests/units/api/test_ui_branding_settings.py`
+- `tests/units/ui/test_branding.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py -q`
+  -> 6 failed (legacy sync/cache assertions, force-refresh regression, empty-upload handling, non-admin GET enforcement).
+- GREEN:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py -q`
+  -> 42 passed.
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py tests/units/settings/test_config.py tests/units/settings/test_settings_domain_permissions.py -q`
+  -> 78 passed.
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5386 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 43.32s.
+
+================================================================================
+Post-review cache cleanup for branding
+================================================================================
+
+Context
+-------
+Applied the reviewer-requested non-blocking cleanup before Task 1-3 closure:
+removed redundant cache mutation in `set_ui_branding` and aligned tests with a
+realistic persistence path.
+
+Changes
+-------
+1. `src/back/objects/session/GlobalConfigService.py`
+   - Removed redundant post-`_save` manual cache overwrite in
+     `set_ui_branding()`. Success now relies on `_save`'s force-refreshed cache.
+2. `tests/units/settings/test_ui_branding.py`
+   - Added regression proving `set_ui_branding` must not replace the
+     force-refreshed union with a stale pre-save snapshot.
+   - Switched cache-success coverage to a realistic store-backed `_save` path
+     instead of requiring manual cache assignment.
+3. `src/back/objects/domain/SettingsService.py`
+   - Removed dead `NAVBAR_LOGO_DEFAULT_PATH` constant (unused).
+
+Modified files:
+- `src/back/objects/session/GlobalConfigService.py`
+- `tests/units/settings/test_ui_branding.py`
+- `src/back/objects/domain/SettingsService.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py -q`
+  -> 1 failed (`test_set_ui_branding_does_not_overwrite_force_refreshed_cache_union`).
+- GREEN:
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py -q`
+  -> 15 passed.
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py tests/units/settings/test_config.py tests/units/settings/test_settings_domain_permissions.py -q`
+  -> 79 passed.
+
+================================================================================
+Domain Information tabs flush with the content card (top and right)
+================================================================================
+
+Context
+-------
+On Domain / Information the Global / AI / Knowledge Graph / MCP tab strip sat
+short of the form card: a seam under the tab baseline and a 12px step on the
+right. The strip is inset 12px for the stable scrollbar gutter, but the
+following `.card` kept the sidebar `width: 100%` rule, so the two boxes did
+not share an outer edge.
+
+Changes
+-------
+1. `src/front/static/global/css/components.css`
+   Adjacent `ob-tabs + card|ob-tab-content|tab-content` now also uses
+   `margin-top: 0`, `margin-right: 12px`, and `width: auto` so the body
+   matches the strip inset and sits flush under it.
+2. `tests/units/front/test_clarity_design_contract.py`
+   Contract that the adjacent-card rule carries that inset pairing.
+
+Modified files:
+- src/front/static/global/css/components.css
+- tests/units/front/test_clarity_design_contract.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5379 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.32s
+
+================================================================================
+UI branding first-paint integration (Tasks 4-5)
+================================================================================
+
+Context
+-------
+Implemented server-first UI branding rendering and runtime token wiring so every
+HTML page paints with configured title/logo/colors immediately, while preserving
+safe defaults when branding cannot be resolved.
+
+Changes
+-------
+1. `src/shared/fastapi/ui_branding.py`, `src/shared/fastapi/main.py`,
+   `src/front/fastapi/dependencies.py`
+   - Added request-scoped `UIBrandingMiddleware` using cached global config context.
+   - Added template helpers for composed titles, resolved branding payload, and
+     first-paint CSS variable injection with fallback defaults.
+2. `src/front/templates/base.html`, `src/front/templates/access_denied.html`,
+   `src/front/templates/home.html`, `src/front/templates/domain.html`,
+   `src/front/templates/ontology.html`, `src/front/templates/mapping.html`,
+   `src/front/templates/settings.html`, `src/front/templates/dtwin.html`,
+   `src/front/templates/about.html`
+   - Replaced hardcoded browser titles with composed `brand_page_title(...)`.
+   - Injected resolved favicon/logo and runtime CSS tokens into initial HTML.
+   - Server-rendered navbar/home branding text and logo from request branding.
+3. `src/front/templates/partials/layout/help_modal.html`,
+   `src/front/templates/partials/dtwin/_query_chat.html`,
+   `src/front/templates/partials/ontology/_ontology_map.html`
+   - Wired brand icon consumers to resolved logo URL and app-title alt text.
+4. `src/back/fastapi/graphql_routes.py`, `src/back/objects/domain/HomeService.py`,
+   `src/front/static/global/js/navbar.js`, `src/front/static/ontology/js/ontology-map.js`
+   - Applied branding to GraphiQL title/favicon and injected CSS vars there too.
+   - Extended navbar-state branding payload (title + logo) for live refresh.
+   - Switched JS highlight/color fallback to read `--db-primary` at runtime.
+5. `src/front/static/global/css/main.css`,
+   `src/front/static/global/css/components.css`,
+   `src/front/static/global/css/sidebar-layout.css`,
+   `src/front/static/global/ontoviz/css/ontoviz.css`
+   - Replaced hardcoded primary indigo consumers with runtime tokens.
+   - Added/used derived foreground and selected-text tokens.
+6. `tests/units/front/test_ui_branding_rendering.py`,
+   `tests/units/front/test_clarity_design_contract.py`
+   - Added RED/GREEN coverage for first-paint rendering, GraphQL branding,
+     runtime-token enforcement, and ontology-map tokenized highlight logic.
+
+Modified files:
+- `src/shared/fastapi/ui_branding.py`
+- `src/shared/fastapi/main.py`
+- `src/front/fastapi/dependencies.py`
+- `src/front/templates/base.html`
+- `src/front/templates/access_denied.html`
+- `src/front/templates/home.html`
+- `src/front/templates/domain.html`
+- `src/front/templates/ontology.html`
+- `src/front/templates/mapping.html`
+- `src/front/templates/settings.html`
+- `src/front/templates/dtwin.html`
+- `src/front/templates/about.html`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `src/back/fastapi/graphql_routes.py`
+- `src/back/objects/domain/HomeService.py`
+- `src/front/static/global/js/navbar.js`
+- `src/front/static/ontology/js/ontology-map.js`
+- `src/front/static/global/css/main.css`
+- `src/front/static/global/css/components.css`
+- `src/front/static/global/css/sidebar-layout.css`
+- `src/front/static/global/ontoviz/css/ontoviz.css`
+- `tests/units/front/test_ui_branding_rendering.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py`
+  -> 10 failed, 14 passed.
+- GREEN:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py`
+  -> 24 passed.
+  - `uv run --frozen pytest -q tests/units/front/test_backend_brand_icons.py tests/units/front/test_knowledge_graph_icon.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 167 passed.
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5392 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+================================================================================
+UI branding Tasks 4-5 review findings fixes
+================================================================================
+
+Context
+-------
+Addressed all blocking/medium review findings for server-first branding, XSS hardening, middleware request gating, and token-contract coverage.
+
+Changes
+-------
+1. `src/front/templates/base.html`, `tests/units/front/test_ui_branding_rendering.py`,
+   `tests/units/front/test_clarity_design_contract.py`
+   - Moved `#uiBrandingTokens` style after `permissions.css` and before `extra_css`.
+   - Added order regressions asserting exact rendered/source order.
+2. `src/back/fastapi/graphql_routes.py`,
+   `tests/units/front/test_ui_branding_rendering.py`
+   - Escaped GraphiQL title/logo/CSS with `html.escape` and used JS-safe URL serialization.
+   - Added stored-XSS regression coverage for app title, domain display name, and logo URL.
+3. `src/shared/fastapi/ui_branding.py`,
+   `tests/units/core/test_ui_branding_middleware.py`,
+   `tests/units/front/test_ui_branding_rendering.py`
+   - Restricted middleware resolution to HTML navigation requests (`Accept: text/html`).
+   - Preserved `/access-denied` HTML branding behavior.
+   - Added middleware tests for HTML vs JSON behavior and updated rendering tests with realistic HTML Accept headers.
+4. `src/shared/fastapi/ui_branding.py`, `tests/units/front/test_ui_branding_rendering.py`
+   - Extended emitted overrides with `--db-focus-ring` and `--db-shadow-primary`.
+5. `src/shared/fastapi/ui_branding.py`,
+   `tests/units/core/test_ui_branding_middleware.py`,
+   `tests/units/front/test_clarity_design_contract.py`
+   - Memoized normalized branding on `request.state`.
+   - Strengthened color-literal guard to include bare RGB tuple and JS fallback scope assertions.
+
+Modified files:
+- `src/shared/fastapi/ui_branding.py`
+- `src/back/fastapi/graphql_routes.py`
+- `src/front/templates/base.html`
+- `tests/units/front/test_ui_branding_rendering.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/core/test_ui_branding_middleware.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/core/test_ui_branding_middleware.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 1 failed, 182 passed.
+- GREEN:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/core/test_ui_branding_middleware.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 183 passed.
+
+================================================================================
+UI branding app-level context + browser regression fixes
+================================================================================
+
+Context
+-------
+Fixed the remaining browser regressions by removing domain-scoped context drift
+from instance-wide branding reads/writes, then updated rendering hooks and
+contracts for first-paint and live preview consistency.
+
+Changes
+-------
+1. `src/back/core/helpers/DatabricksHelpers.py`, `src/back/core/helpers/__init__.py`
+   - Added shared `resolve_app_registry_context(settings)` resolver using
+     `domain=None` (`get_databricks_host_and_token(None, settings)` +
+     `RegistryCfg.from_domain(None, settings)`).
+2. `src/back/objects/domain/SettingsService.py`
+   - Switched branding-only flows to the app-level resolver:
+     unified UI branding GET/POST and legacy navbar-logo GET/POST/DELETE.
+   - Left non-branding global settings context behavior unchanged.
+3. `src/shared/fastapi/ui_branding.py`, `src/back/objects/domain/HomeService.py`
+   - Switched request first-paint branding and `/navbar/state` refresh branding
+     to the shared app-level resolver so they match Settings persistence.
+4. `src/front/templates/base.html`, `src/front/templates/home.html`,
+   `src/front/templates/partials/layout/help_modal.html`,
+   `src/front/templates/partials/dtwin/_query_chat.html`,
+   `src/front/templates/partials/ontology/_ontology_map.html`
+   - Added explicit `data-brand-icon` hooks on shared brand image consumers.
+   - Added `data-brand-title` hooks for visible brand titles.
+   - Updated visible branded help headings to configured app title:
+     "`<app title>` Help Center" and "Welcome to `<app title>`".
+5. Tests and contracts
+   - Added/updated regressions for app-level branding context consistency,
+     HTML first-paint behavior with `Accept: text/html`, data-brand hooks,
+     and navbar branding context resolution.
+
+Modified files:
+- `src/back/core/helpers/DatabricksHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/shared/fastapi/ui_branding.py`
+- `src/back/objects/domain/HomeService.py`
+- `src/front/templates/base.html`
+- `src/front/templates/home.html`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `tests/units/settings/test_ui_branding.py`
+- `tests/units/front/test_ui_branding_rendering.py`
+- `tests/units/api/test_ui_rendering.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/domain/test_home_service_navbar_branding.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest -q tests/units/settings/test_ui_branding.py tests/units/core/test_ui_branding_middleware.py tests/units/front/test_ui_branding_rendering.py tests/units/domain/test_home_service_navbar_branding.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 1 failed, 180 passed.
+- GREEN:
+  - `uv run --frozen pytest -q tests/units/settings/test_ui_branding.py tests/units/core/test_ui_branding_middleware.py tests/units/front/test_ui_branding_rendering.py tests/units/domain/test_home_service_navbar_branding.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 181 passed.
+  - `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py tests/units/front/test_backend_brand_icons.py`
+  -> 29 passed.
+
+================================================================================
+Settings UI branding section (Task 6)
+================================================================================
+
+Context
+-------
+Implemented the Settings -> Configuration -> UI section with draft/saved branding
+state, immediate local preview for title/color/icon, guarded navigation for
+unsaved changes, and one atomic multipart save to `/settings/ui-branding`.
+
+Changes
+-------
+1. `src/front/config/menu_config.json`
+   - Added the `ui` sidebar item under Configuration (`bi-palette`) after Global.
+2. `src/front/templates/settings.html`
+   - Added `#ui-section` with Branding and Theme cards.
+   - Moved Default Entity Icon and Application Logo controls out of Global.
+   - Added title + synchronized color inputs, swatches/component preview, local
+     icon file input, Save/Discard/Reset actions, and accessible status region.
+3. `src/front/static/global/css/config.css`
+   - Added UI section token-driven preview/swatch styles and section activation
+     scroll support without inline state styling.
+4. `src/front/static/config/js/settings.js`
+   - Added `loadUIBranding`, `previewUIBranding`, `saveUIBranding`,
+     `discardUIBrandingChanges`, and `resetUIBrandingDefaults`.
+   - Added saved baseline/draft tracking, dirty/valid state, color/title/logo
+     live preview, favicon/navbar/icon refresh hooks, object URL revocation, and
+     unsaved leave guard for sidebar navigation.
+   - Refactored away standalone legacy logo upload/reset requests to avoid
+     duplicate listeners and use one atomic branding save path.
+5. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added contracts for menu placement, template structure, no duplicate ids,
+     JS workflow functions, atomic API FormData usage, CSS/title/icon preview
+     behavior, and baseline/discard/reset lifecycle guards.
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/templates/settings.html`
+- `src/front/static/global/css/config.css`
+- `src/front/static/config/js/settings.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 7 failed, 1 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 8 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_rendering.py tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_button_design_contract.py tests/units/front/test_clarity_design_contract.py -q`
+  -> 52 passed.
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5405 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+================================================================================
+Task 6 review fixes: SidebarNav guard + parity
+================================================================================
+
+Context
+-------
+Addressed Task 6 review findings by replacing the fragile async capture-click
+guard with SidebarNav's awaited `onBeforeSectionChange` contract and aligning
+client-side branding parity rules with backend behavior.
+
+Changes
+-------
+1. `src/front/static/global/js/sidebar-nav.js`
+   - Made `SidebarNav.init()` idempotent with callback refresh support.
+   - Prevented duplicate nav-link listener wiring when a page re-initializes
+     SidebarNav with custom hooks.
+2. `src/front/static/config/js/settings.js`
+   - Removed capture-phase async click guard for sidebar links.
+   - Added awaited `handleUIBrandingBeforeSectionChange(targetSection)` and
+     wired it through `SidebarNav.init({ onBeforeSectionChange, onSectionChange })`.
+   - Kept UI preview active on cancel; confirmed navigation now discards and
+     allows the requested section switch.
+   - Matched backend parity for `chooseOnPrimary` fallback to `#000000` when
+     both `#111827` and `#FFFFFF` are below 4.5:1.
+   - Switched title length validation to Unicode code-point counting.
+   - Normalized title trimming consistently for draft/saved comparisons so
+     whitespace-only edits do not stay dirty.
+   - Added no-op reset handling when saved branding is already full defaults
+     (including default logo), avoiding false dirty/save enablement.
+3. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added regression contracts for SidebarNav onBefore integration, no capture
+     click guard, idempotent SidebarNav init, code-point validation, fallback
+     foreground parity, consistent trimming, and no-op reset behavior.
+
+Modified files:
+- `src/front/static/global/js/sidebar-nav.js`
+- `src/front/static/config/js/settings.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 7 failed, 7 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 15 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_button_design_contract.py tests/units/front/test_settings_subnav_hidden.py -q`
+  -> 63 passed.
+
+================================================================================
+Task 6 high fix: settings initialization order
+================================================================================
+
+Context
+-------
+Fixed the remaining high-severity initialization-order defect in Settings so
+SidebarNav does not auto-wire before the UI branding guard callback is installed,
+and hardened callback retention on idempotent `SidebarNav.init()` calls.
+
+Changes
+-------
+1. `src/front/static/config/js/settings.js`
+   - Added top-level `window.SIDEBAR_NAV_MANUAL_INIT = true;` before
+     DOMContentLoaded registration.
+   - Kept explicit `SidebarNav.init({...})` setup and restored URL/section parity
+     by wiring `popstate` and initial `section` activation in Settings init.
+2. `src/front/static/global/js/sidebar-nav.js`
+   - Updated callback assignment to only mutate callback fields when the
+     corresponding option key is explicitly present.
+   - Preserved ability to clear intentionally by passing `null` explicitly.
+3. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added contracts proving manual-init flag order and callback-preserving
+     `SidebarNav.init` semantics (`hasOwnProperty`-gated updates).
+
+Modified files:
+- `src/front/static/config/js/settings.js`
+- `src/front/static/global/js/sidebar-nav.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 2 failed, 14 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 16 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_settings_subnav_hidden.py tests/units/front/test_ui_branding_rendering.py -q`
+  -> 24 passed.
+
+================================================================================
+Task 6 accessibility and UI polish fixes
+================================================================================
+
+Context
+-------
+Fixed Settings UI browser accessibility/UI issues for branding controls with
+test-first coverage: dedicated icon reset preview, input labeling/help wiring,
+dynamic ARIA validation state, and semantic swatch announcements.
+
+Changes
+-------
+1. `src/front/templates/settings.html`
+   - Added dedicated `Reset icon` action (`#uiBrandingResetIconBtn`) in Branding card.
+   - Added explicit logo file input label + help association:
+     `for="uiBrandingLogoFile"`, `aria-describedby="uiBrandingLogoHelp"`.
+   - Added title/color help+error regions and `aria-describedby` bindings:
+     `uiBrandingTitleHelp/uiBrandingTitleError`,
+     `uiBrandingColorHelp/uiBrandingColorError`.
+   - Added semantic swatch attributes (`role="img"`, stable `aria-label`/`title`)
+     for Primary/Hover/Selected/Focus Ring/On Primary tokens.
+   - Marked component preview block as decorative (`aria-hidden="true"`).
+2. `src/front/static/config/js/settings.js`
+   - Added `resetUIBrandingIconDraft()` for preview-only logo reset:
+     resets only logo draft to bundled default, preserves title/color draft,
+     revokes object URL, updates favicon/navbar/icons, and keeps Save as the
+     persistence boundary.
+   - Added dynamic ARIA validation handling with `aria-invalid` + error text
+     toggling for title, color picker, and hex input.
+   - Added semantic swatch label refresh during preview (`aria-label`/`title`
+     include token name + resolved color value).
+   - Preserved dirty semantics so icon reset only marks dirty when saved logo
+     differs from default.
+3. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added focused contracts for reset-icon action, label/help associations,
+     dynamic ARIA validation behavior contracts, and semantic swatch exposure.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 7 failed, 14 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 21 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_button_design_contract.py tests/units/front/test_settings_subnav_hidden.py -q`
+  -> 69 passed.
+
+================================================================================
+Document UC HTTP connection + Genie One attach for OntoBricks MCP
+================================================================================
+
+Context
+-------
+Operators needed a repeatable procedure to register the deployed
+mcp-ontobricks Databricks App as a Unity Catalog HTTP (OAuth M2M) connection
+and then attach that connection to a Genie One chat. The 08x sandbox
+connection already exists; this is documentation only.
+
+Changes
+-------
+1. documentation/uc-mcp-connection-genie-one.md
+   End-to-end procedure: service principal, CAN_USE, HTTP connection, optional
+   MCP Service, grants, Genie One + picker, Playground/Genie Code, 08x example.
+2. documentation/sphinx/guides/uc-mcp-connection-genie-one.md
+   Sphinx MyST include of the new guide.
+3. documentation/sphinx/index.rst
+   Added the guide to the topic-guides toctree after MCP.
+4. documentation/mcp.md
+   Pointer from the Playground section to the new procedure.
+
+Modified files:
+- documentation/uc-mcp-connection-genie-one.md
+- documentation/sphinx/guides/uc-mcp-connection-genie-one.md
+- documentation/sphinx/index.rst
+- documentation/mcp.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-26.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5405 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.89s
+
+================================================================================
+Configurable UI branding — feature summary (Tasks 1–6)
+================================================================================
+
+Context
+-------
+This section provides a feature-level summary of the full configurable UI
+branding implementation (Tasks 1–6 from .planning/ui-branding-settings/SPEC.md /
+documentation/superpowers/plans/2026-08-26-ui-branding-settings.md).
+Individual task-level RED/GREEN records are in the earlier sections of this log.
+
+Changes by layer
+----------------
+1. Value object and palette derivation (Task 1)
+   - `src/back/core/helpers/UIBranding.py`: immutable `BrandPalette` and
+     `UIBranding` dataclasses; deterministic WCAG foreground selection; title
+     trimming/length and uppercase hex normalization; `to_dict()` serialization.
+
+2. Persistence and service layer (Task 2)
+   - `src/back/objects/session/GlobalConfigService.py`: unified `ui_branding`
+     default in `_empty()`; `get_ui_branding()` / `set_ui_branding()` with
+     legacy `navbar_logo` fallback and force-refresh semantics; atomic cache
+     update only after successful persistence.
+   - `src/back/objects/domain/SettingsService.py`: `get_ui_branding_result()` /
+     `save_ui_branding_result()` with reused logo MIME/size validation;
+     reset/upload conflict guard; admin service guard on GET.
+
+3. Admin API (Task 3)
+   - `src/api/routers/internal/settings.py`: `GET /settings/ui-branding` and
+     multipart `POST /settings/ui-branding`; admin `Depends(require(ROLE_ADMIN))`
+     on both routes; robust empty-filename upload handling.
+
+4. Server-first rendering and token injection (Tasks 4–5)
+   - `src/shared/fastapi/ui_branding.py`: request-scoped middleware (HTML only);
+     Jinja helpers `ui_branding_for(request)` and `brand_page_title()`; escaped
+     CSS variable injection as `<style id="uiBrandingTokens">` after static CSS.
+   - All page templates: replaced hardcoded titles with `brand_page_title()`;
+     favicon and navbar logo wired from `branding.logo_url`.
+   - CSS files: replaced all hardcoded primary-indigo literals with runtime
+     tokens; added `--db-on-primary` and `--db-primary-selected-text`.
+   - JS: `ontology-map.js` reads `--db-primary` from computed style with
+     `#4F46E5` as a fallback; `navbar.js` carries title + logo in navbar state.
+
+5. Settings UI (Task 6)
+   - `src/front/config/menu_config.json`: `ui` sidebar entry under Configuration.
+   - `src/front/templates/settings.html`: `#ui-section` with Branding and Theme
+     cards; title/color inputs with swatch preview; icon file input; Save /
+     Discard / Reset actions; accessible status region.
+   - `src/front/static/config/js/settings.js`: `loadUIBranding`,
+     `previewUIBranding`, `saveUIBranding`, `discardUIBrandingChanges`,
+     `resetUIBrandingDefaults`; saved/draft state tracking; SidebarNav
+     `onBeforeSectionChange` guard (awaited, no capture-phase hack); manual init
+     flag to prevent premature auto-wire; object URL revocation.
+
+Modified files (complete list — Tasks 1–6):
+- src/back/core/helpers/UIBranding.py
+- src/back/core/helpers/__init__.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/shared/fastapi/ui_branding.py
+- src/shared/fastapi/main.py
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html
+- src/front/templates/access_denied.html
+- src/front/templates/home.html
+- src/front/templates/domain.html
+- src/front/templates/ontology.html
+- src/front/templates/mapping.html
+- src/front/templates/settings.html
+- src/front/templates/dtwin.html
+- src/front/templates/about.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/domain/HomeService.py
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/global/css/main.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/global/ontoviz/css/ontoviz.css
+- src/front/static/global/css/config.css
+- src/front/static/config/js/settings.js
+- src/front/config/menu_config.json
+- tests/units/ui/test_branding.py
+- tests/units/settings/test_ui_branding.py
+- tests/units/api/test_ui_branding_settings.py
+- tests/units/front/test_ui_branding_rendering.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_ui_branding_settings_contract.py
+- tests/units/core/test_ui_branding_middleware.py
+
+Targeted tests (last known GREEN results — see earlier sections):
+- tests/units/ui/test_branding.py — 16 passed
+- tests/units/settings/test_ui_branding.py — 15 passed
+- tests/units/api/test_ui_branding_settings.py — verified GREEN (78 combined)
+- tests/units/front/test_ui_branding_rendering.py — GREEN (183 combined)
+- tests/units/front/test_ui_branding_settings_contract.py — 16 passed
+- tests/units/front/test_clarity_design_contract.py — GREEN (63 combined)
+Full suite (last known): 5405 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+Browser verification: not yet performed (Task 7 Step 3 — pending).
+
+================================================================================
+Configurable UI branding — Task 7 browser verification and final suite
+================================================================================
+
+Context
+-------
+Task 7 (Documentation, changelog, browser verification, and full suite) verified
+at desktop 1600×1000 and mobile 390×844. All browser checks pass. Full test
+suite confirms zero regressions.
+
+Browser verification results (PASS)
+------------------------------------
+- First HTML response (Accept: text/html, no session) includes configured
+  title/primary-color CSS variable/icon; token style block is placed after
+  permissions.css and before page CSS.
+- Help modal heading shows configured app title ("… Help Center").
+- Ontology Assistant welcome heading shows configured app title.
+- Live preview (title, color, icon) applies immediately in Settings → UI
+  without page reload.
+- Reset icon button (`#uiBrandingResetIconBtn`) reverts icon draft to bundled
+  default while preserving title/color draft state.
+- Discard restores exact saved baseline (title, color, icon).
+- Dirty guard blocks sidebar navigation with unsaved changes and allows
+  proceed-or-cancel.
+- Validation: invalid color sets `aria-invalid="true"` on the color inputs;
+  Save is disabled until resolved.
+- Responsive overflow: all controls accessible and not clipped at 390×844.
+- Exact baseline restored to OntoBricks / #4F46E5 / default icon after
+  reset-defaults + save in a fresh browser context.
+- Unrelated known `/ontology/get-loaded-ontology` 404 (no ontology loaded)
+  remains; no new console/network errors introduced.
+
+Screenshot artifacts
+--------------------
+- /tmp/branding-fix-first-paint-home.png
+- /tmp/branding-fix-desktop-preview.png
+- /tmp/branding-fix-reset-icon.png
+- /tmp/branding-fix-aria-invalid.png
+- /tmp/branding-fix-guard.png
+- /tmp/branding-fix-mobile-preview.png
+- /tmp/branding-fix-help-center.png
+- /tmp/branding-fix-ontology-assistant.png
+- /tmp/branding-fix-restored-fresh.png
+
+Changes
+-------
+1. `documentation/superpowers/plans/2026-08-26-ui-branding-settings.md`
+   - Task 7 Steps 2, 3, 4, 6 checkboxes marked [x] (targeted tests, browser
+     verification, full suite, diagnostics/diff — all passed).
+2. `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+   - Appended this Task 7 final verification section (browser evidence, test
+     results, screenshot artifacts). Earlier RED/GREEN history preserved.
+3. `documentation/user-guide.md`
+   - Added note about the dedicated **Reset icon** button
+     (`#uiBrandingResetIconBtn`) that reverts only the icon draft to the bundled
+     default while keeping title and color draft values intact.
+4. `.cursor/11-frontend-design.mdc`
+   - Expanded Brand icon and title hooks note to cover the dedicated Reset icon
+     action and ARIA validation state for Settings UI branding controls.
+
+Modified files:
+- documentation/superpowers/plans/2026-08-26-ui-branding-settings.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-26.log
+- documentation/user-guide.md
+- .cursor/11-frontend-design.mdc
+
+Test result:
+- Targeted suite (Task 7 Step 2):
+  uv run --frozen pytest tests/units/ui/test_branding.py
+    tests/units/settings/test_ui_branding.py
+    tests/units/api/test_ui_branding_settings.py
+    tests/units/front/test_ui_branding_rendering.py
+    tests/units/front/test_ui_branding_settings_contract.py
+    tests/units/front/test_clarity_design_contract.py -q
+  -> all pass (subsets confirmed GREEN in earlier sections).
+- Full suite (Task 7 Step 4):
+  uv run --frozen pytest -q -m "not scenario"
+  -> 5422 passed, 281 skipped, 6 deselected, 1 xfailed, 23 warnings, 0 failed.
+- IDE lints on changed core files: no errors.

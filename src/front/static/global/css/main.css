@@ -13,6 +13,10 @@
     --db-primary-darker: #3730A3;
     --db-primary-light: rgba(79, 70, 229, 0.1);
     --db-primary-rgb: 79, 70, 229;
+    --db-on-primary: #FFFFFF;
+    --db-primary-selected-text: #3730A3;
+    --db-hover: rgba(79, 70, 229, 0.06);
+    --db-focus: rgba(79, 70, 229, 0.18);
     
     /* Warm neutral surfaces */
     --db-canvas-warm: #FAFAF9;
@@ -21,7 +25,7 @@
     --db-hover-warm: #F3F2F0;
     /* Nav hover tint — one step lighter than the active fill (0.12) so hover
        and selected states stay distinguishable on the same surface. */
-    --db-hover-indigo: rgba(79, 70, 229, 0.06);
+    --db-hover-indigo: var(--db-hover);
 
     /* Neutral Colors */
     --db-dark: #1B1C1D;
@@ -133,8 +137,8 @@ body {
     margin-top: 0.35rem;
     --bs-dropdown-link-hover-bg: var(--db-hover-indigo);
     --bs-dropdown-link-hover-color: var(--db-text);
-    --bs-dropdown-link-active-bg: rgba(79, 70, 229, 0.12);
-    --bs-dropdown-link-active-color: #4F46E5;
+    --bs-dropdown-link-active-bg: var(--db-primary-light);
+    --bs-dropdown-link-active-color: var(--db-primary-selected-text);
 }
 
 .navbar .dropdown-menu .dropdown-item {
@@ -165,13 +169,13 @@ body {
 }
 
 .navbar .dropdown-menu .dropdown-item.active {
-    background: rgba(79, 70, 229, 0.12);
-    color: #4F46E5;
+    background: var(--db-primary-light);
+    color: var(--db-primary-selected-text);
     font-weight: 650;
 }
 
 .navbar .dropdown-menu .dropdown-item.active .bi {
-    color: #4F46E5;
+    color: var(--db-primary-selected-text);
 }
 
 .navbar .dropdown-menu .dropdown-header {
@@ -548,13 +552,13 @@ body {
 }
 
 .ob-subnav .dropdown-menu .dropdown-item.active {
-    background: rgba(79, 70, 229, 0.12);
-    color: #4F46E5;
+    background: var(--db-primary-light);
+    color: var(--db-primary-selected-text);
     font-weight: 650;
 }
 
 .ob-subnav .dropdown-menu .dropdown-item.active .bi {
-    color: #4F46E5;
+    color: var(--db-primary-selected-text);
 }
 
 .ob-subnav .dropdown-menu .dropdown-item.disabled,

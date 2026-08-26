@@ -9,7 +9,7 @@ import json
 
 from typing import Optional
 
-from fastapi import APIRouter, Request, Depends, Query, Response
+from fastapi import APIRouter, Request, Depends, Query, Response, Form, File, UploadFile
 from fastapi.responses import PlainTextResponse
 
 from shared.config.settings import get_settings, Settings
@@ -563,6 +563,58 @@ async def save_base_uri(
 # ===========================================
 # Branding (Navbar Logo)
 # ===========================================
+
+
+@router.get("/ui-branding")
+async def get_ui_branding(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+    _role: str = Depends(require(ROLE_ADMIN)),
+):
+    """Return normalized UI branding settings (admin only)."""
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.get_ui_branding_result(
+        email, user_token, session_mgr, settings
+    )
+
+
+@router.post("/ui-branding")
+async def save_ui_branding(
+    request: Request,
+    app_title: str = Form(""),
+    primary_color: str = Form(""),
+    reset_logo: bool = Form(False),
+    logo_file: UploadFile | None = File(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save title/color/logo atomically from multipart form data (admin only)."""
+    logo_content = None
+    logo_mime = None
+    if logo_file is not None:
+        filename = (getattr(logo_file, "filename", "") or "").strip()
+        content = await logo_file.read()
+        # Match legacy upload behavior: ignore placeholder/empty file parts.
+        if filename and content:
+            logo_content = content
+            logo_mime = (getattr(logo_file, "content_type", "") or "")
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_ui_branding_result(
+        app_title=app_title,
+        primary_color=primary_color,
+        logo_content=logo_content,
+        logo_mime=logo_mime,
+        reset_logo=reset_logo,
+        email=email,
+        user_token=user_token,
+        session_mgr=session_mgr,
+        settings=settings,
+    )
 
 
 @router.get("/navbar-logo")

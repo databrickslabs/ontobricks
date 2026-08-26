@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}OntoBricks - Home{% endblock %}
+{% block title %}{{ brand_page_title('Home') }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry-my-tasks.css') }}?v={{ asset_version }}">
@@ -12,8 +12,8 @@
 <!-- Hero Section -->
 <div class="home-hero">
     <h1>
-        <img src="{{ url_for('static', filename='global/img/ontobricks-icon.svg') }}?v=2" alt="OntoBricks" width="56" height="56" class="me-2 align-middle">
-        OntoBricks <span class="ob-home-brand-version">v{{ app_version }}</span>
+        <img data-brand-icon src="{{ ui_branding_for().logo_url }}" alt="{{ ui_branding_for().app_title }}" width="56" height="56" class="me-2 align-middle">
+        <span data-brand-title>{{ ui_branding_for().app_title }}</span> <span class="ob-home-brand-version">v{{ app_version }}</span>
     </h1>
     <p class="tagline">Explore and govern your organization's knowledge &mdash; one trusted, connected view of your business data.</p>
 </div>

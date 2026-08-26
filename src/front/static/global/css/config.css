@@ -6,6 +6,7 @@
 #databricks-section.active,
 #lakebase-section.active,
 #global-section.active,
+#ui-section.active,
 #permissions-section.active,
 #registry-section.active,
 #health-section.active {
@@ -171,6 +172,99 @@
 
 .settings-registry-ttl-input {
     max-width: 200px;
+}
+
+/* Settings → UI branding */
+#ui-section {
+    --ui-preview-primary: var(--db-primary);
+    --ui-preview-primary-rgb: var(--db-primary-rgb);
+    --ui-preview-hover: var(--db-hover-indigo);
+    --ui-preview-light: var(--db-primary-light);
+    --ui-preview-focus: var(--db-focus-ring);
+    --ui-preview-on-primary: var(--db-on-primary, #ffffff);
+    --ui-preview-selected-text: var(--db-primary-selected-text, var(--db-primary-dark));
+}
+
+.ui-branding-swatches .ui-branding-swatch {
+    border: 1px solid var(--db-border-light);
+    border-radius: var(--db-radius-control);
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ui-branding-swatch-primary {
+    background: var(--ui-preview-primary);
+    color: var(--ui-preview-on-primary);
+}
+
+.ui-branding-swatch-hover {
+    background: var(--ui-preview-hover);
+    color: var(--db-text);
+}
+
+.ui-branding-swatch-light {
+    background: var(--ui-preview-light);
+    color: var(--ui-preview-selected-text);
+}
+
+.ui-branding-swatch-focus {
+    background: #ffffff;
+    color: var(--db-text);
+    box-shadow: var(--ui-preview-focus);
+}
+
+.ui-branding-swatch-on-primary {
+    background: var(--ui-preview-primary-dark, var(--db-primary-dark));
+    color: var(--ui-preview-on-primary);
+}
+
+.ui-branding-preview {
+    border: 1px solid var(--db-border-light);
+    border-radius: var(--db-radius-control);
+    padding: 0.75rem;
+    background: #ffffff;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.ui-branding-preview .ui-branding-preview-btn {
+    background-color: var(--ui-preview-primary);
+    border-color: var(--ui-preview-primary);
+    color: var(--ui-preview-on-primary);
+}
+
+.ui-branding-preview .ui-branding-preview-btn:hover,
+.ui-branding-preview .ui-branding-preview-btn:focus-visible {
+    background-color: var(--ui-preview-primary-dark, var(--db-primary-dark));
+    border-color: var(--ui-preview-primary-dark, var(--db-primary-dark));
+}
+
+.ui-branding-preview-active {
+    display: inline-flex;
+    width: fit-content;
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--db-radius-control);
+    background: var(--ui-preview-light);
+    color: var(--ui-preview-selected-text);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.ui-branding-preview-hover {
+    border-radius: var(--db-radius-control);
+    padding: 0.45rem 0.5rem;
+    background: var(--ui-preview-hover);
+    color: var(--db-text);
+    font-size: 0.8rem;
+}
+
+.ui-branding-preview-focus:focus {
+    box-shadow: var(--ui-preview-focus);
+    border-color: var(--ui-preview-primary);
 }
 
 /* ==========================================================================

@@ -20,6 +20,7 @@ from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
 from back.objects.session import FileSessionMiddleware, reap_expired_sessions
 from back.core.logging import setup_logging, get_logger
+from shared.fastapi.ui_branding import UIBrandingMiddleware
 
 setup_logging()
 logger = get_logger(__name__)
@@ -607,6 +608,9 @@ def create_app() -> FastAPI:
 
     # Permission enforcement (runs after session is available)
     app.add_middleware(PermissionMiddleware)
+
+    # Resolve UI branding once per page request after session setup.
+    app.add_middleware(UIBrandingMiddleware, settings=settings)
 
     # Custom file-based session middleware
     is_app = bool(os.getenv("DATABRICKS_APP_PORT"))

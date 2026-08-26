@@ -134,6 +134,20 @@ class DatabricksHelpers:
         return RegistryCfg.from_domain(domain, settings).as_dict()
 
     @staticmethod
+    def resolve_app_registry_context(settings) -> Tuple[str, str, Dict[str, str]]:
+        """Resolve app-instance context for global (non-domain) configuration.
+
+        Branding is instance-wide and must not depend on the active domain in
+        session. This helper always resolves host/token and registry settings
+        from ``domain=None``.
+        """
+        from back.objects.registry import RegistryCfg
+
+        host, token = DatabricksHelpers.get_databricks_host_and_token(None, settings)
+        registry_cfg = RegistryCfg.from_domain(None, settings).as_dict()
+        return host, token, registry_cfg
+
+    @staticmethod
     def resolve_warehouse_id(domain, settings) -> str:
         """Resolve the SQL Warehouse ID using a layered fallback strategy.
 

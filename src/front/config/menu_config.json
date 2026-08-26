@@ -421,6 +421,13 @@
                             "icon": "bi-sliders",
                             "default": false,
                             "requires": null
+                        },
+                        {
+                            "id": "ui",
+                            "label": "UI",
+                            "icon": "bi-palette",
+                            "default": false,
+                            "requires": null
                         }
                     ]
                 },
