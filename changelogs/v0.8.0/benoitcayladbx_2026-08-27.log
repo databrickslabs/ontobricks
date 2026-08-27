@@ -1,0 +1,91 @@
+================================================================================
+Ontology-only publish + describe_ontology: unit tests and robustness fix
+================================================================================
+
+Context
+-------
+The ontology-only MCP publish feature (publish a domain with only an ontology,
+new `describe_ontology` tool, `has_graph`-driven tool hiding) shipped with
+integration-level coverage. This adds focused unit tests for the new helpers
+and the MCP no-graph restriction, and hardens the ontology-detection helper
+against a malformed registry row that a new test surfaced.
+
+Changes
+-------
+1. src/back/objects/registry/RegistryService.py
+   `version_document_has_ontology` now coerces any non-dict `ontology` /
+   `versions[<v>]` node to "no ontology" instead of raising `AttributeError`.
+   A hand-edited row like `{"ontology": "oops"}` previously crashed
+   submit-for-review and the `has_graph` computation.
+2. tests/units/registry/test_registry_ontology_detection.py (new)
+   Unit tests for `version_document_has_ontology` (top-level + nested shapes,
+   empty/malformed) and `_version_sort_key` (numeric ordering, dict rows,
+   junk tolerance).
+3. tests/units/registry/test_review_service.py
+   `_make_svc(has_ontology=...)`; renamed `test_submit_requires_build` to
+   `test_submit_requires_build_or_ontology` and added
+   `test_submit_allowed_with_ontology_and_no_build` (ontology-only submit
+   succeeds with no KG build).
+4. tests/units/mcp/test_domain_policy_gating.py
+   Extended the stub (`classes`, `ontology`, `API_V1_DOMAIN_ONTOLOGY`) and
+   added the ontology-only section: every graph tool hidden on select,
+   selection message flags the domain, call-time refusal for a hidden graph
+   tool, `describe_ontology` allowed (structured classes + OWL), targeting a
+   domain via `domain_name` without select, policy can still hide the tool,
+   and a built-domain control that keeps its graph tools.
+
+Modified files
+--------------
+- src/back/objects/registry/RegistryService.py
+- tests/units/registry/test_registry_ontology_detection.py
+- tests/units/registry/test_review_service.py
+- tests/units/mcp/test_domain_policy_gating.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5639 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings.
+
+
+================================================================================
+Ontology Designer: persist attribute removal on section switch and navigation
+================================================================================
+
+Context
+-------
+In Ontology -> Designer, removing an attribute from a class (e.g. `customerid`
+on `Customer`), then leaving the page (another Ontology section or a full
+navigation to KG -> Explorer) and coming back, the attribute reappeared. Root
+cause: an attribute edit reaches the session only through the 500 ms debounced
+`syncDesignToOntology` -> `POST /ontology/save`. That pending save was cancelled
+on section switch (`flushDesignLayout` cleared the timer and saved layout only)
+and dropped on full page unload (only a layout beacon + a stale `save-to-uc`
+fired). On return, the Designer rebuilt attributes from the never-updated
+session, so the removed attribute came back.
+
+Changes
+-------
+1. src/front/static/global/js/ontology-design.js
+   - Added an `ontologyDirty` flag set by `scheduleAutoSave` and cleared once the
+     ontology is persisted, so exit paths know a real ontology edit is pending.
+   - `flushDesignLayout` (section switch) now runs the full `syncDesignToOntology`
+     when `ontologyDirty`, instead of saving only the layout — the removed
+     attribute is committed to the session before leaving.
+   - Extracted the pure, synchronous canvas->OntologyState derivation into
+     `commitDesignToOntologyState()` (reused by `syncDesignToOntology`).
+   - Added `saveOntologyBeacon` on `beforeunload`/`pagehide` (registered before
+     the layout beacon): rebuilds state from the canvas and fires a keepalive
+     `POST /ontology/save` so a full navigation persists the edit.
+   - Reset `ontologyDirty` on load completion to avoid a stale flag.
+
+Modified files
+--------------
+- src/front/static/global/js/ontology-design.js
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+Frontend-only change (vanilla JS). `node --check` on the edited file passes.
+GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5639 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings.

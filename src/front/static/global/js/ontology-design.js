@@ -7,6 +7,7 @@ let autoSaveTimeout = null;
 let isLoadingData = false;  // Flag to prevent auto-save during data loading
 let isViewOnlyMode = true;  // Default to view-only mode
 let layoutDirty = false;    // Track unsaved layout changes
+let ontologyDirty = false;  // Track ontology edits (attributes, relationships…) not yet in the session
 let registryDirty = false;  // Track changes not yet persisted to the registry
 let ontologyVersionAtLoad = null;  // Track ontology version when design was last loaded
 
@@ -307,12 +308,14 @@ function scheduleAutoSave() {
     }
     
     layoutDirty = true;
+    ontologyDirty = true;
     registryDirty = true;
 
     if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
     }
     autoSaveTimeout = setTimeout(async () => {
+        autoSaveTimeout = null;
         // Double-check flag in case loading started during the timeout
         if (isLoadingData) {
             console.log('[AUTO-SAVE] Skipped - data loading in progress');
@@ -320,6 +323,7 @@ function scheduleAutoSave() {
         }
         await syncDesignToOntology(false);
         layoutDirty = false;
+        ontologyDirty = false;
     }, 500); // Save 500ms after last change
 }
 
@@ -335,7 +339,16 @@ async function flushDesignLayout() {
     
     if (!ontologyDesigner || isLoadingData) return;
     
-    if (layoutDirty) {
+    if (ontologyDirty) {
+        // A debounced ontology sync (attribute add/remove, rename, relationship
+        // edit …) was pending. Persist it fully now — syncDesignToOntology also
+        // saves the layout — otherwise the edit is lost when leaving the section
+        // and reappears on return because the session was never updated.
+        console.log('[FLUSH] Persisting pending ontology changes');
+        await syncDesignToOntology(false);
+        ontologyDirty = false;
+        layoutDirty = false;
+    } else if (layoutDirty) {
         console.log('[FLUSH] Saving pending layout changes');
         await saveDesignLayoutOnly();
         layoutDirty = false;
@@ -387,6 +400,32 @@ function saveDesignLayoutBeacon() {
         console.warn('[BEACON] Failed to save layout:', error);
     }
 }
+
+/**
+ * Persist pending ontology edits (attribute add/remove, rename, relationship
+ * changes …) on page teardown. The 500 ms debounced syncDesignToOntology is
+ * dropped when the page unloads, so a full navigation (e.g. Designer → KG
+ * Explorer) would otherwise leave the session with the pre-edit ontology and
+ * the change would reappear on return. We rebuild the state from the canvas and
+ * fire a keepalive /ontology/save so the browser completes it during teardown.
+ * Registered before the layout beacon so the session is refreshed first.
+ */
+function saveOntologyBeacon() {
+    if (!ontologyDesigner || isLoadingData || !ontologyDirty) return;
+    try {
+        commitDesignToOntologyState();
+        if (typeof window.saveConfigToSession === 'function') {
+            window.saveConfigToSession({ keepalive: true });
+        }
+        ontologyDirty = false;
+        console.log('[BEACON] Ontology saved via keepalive');
+    } catch (error) {
+        console.warn('[BEACON] Failed to save ontology:', error);
+    }
+}
+
+window.addEventListener('beforeunload', saveOntologyBeacon);
+window.addEventListener('pagehide', saveOntologyBeacon);
 
 window.addEventListener('beforeunload', saveDesignLayoutBeacon);
 window.addEventListener('pagehide', saveDesignLayoutBeacon);
@@ -486,8 +525,38 @@ window.refreshRelationshipInDesigner = refreshRelationshipInDesigner;
  * Sync design to OntologyState and optionally save to session
  */
 async function syncDesignToOntology(showFeedback = false) {
-    if (!ontologyDesigner) return;
-    
+    const design = commitDesignToOntologyState();
+    if (!design) return;
+
+    if (typeof OntologyState !== 'undefined' && OntologyState.config) {
+        // Save to session (await to ensure it completes)
+        await saveOntologyToSession(showFeedback);
+
+        // Also save the design layout for domain persistence
+        await saveDesignLayout(design);
+
+        // Regenerate OWL content to reflect changes
+        if (typeof autoGenerateOwl === 'function') {
+            autoGenerateOwl();
+        }
+
+        const inheritanceCount = design.inheritances ? design.inheritances.length : 0;
+        console.log('Design synced:', (OntologyState.config.classes || []).length + ' classes, ' + inheritanceCount + ' inheritances');
+    }
+}
+
+/**
+ * Rebuild OntologyState.config.classes/properties from the current canvas.
+ *
+ * Pure and synchronous (no network): the derivation used to live inside
+ * syncDesignToOntology, but it is split out so an unload handler can refresh
+ * the in-memory state and immediately fire a keepalive /ontology/save. Returns
+ * the raw design JSON (for layout persistence) or null when the designer is
+ * not ready.
+ */
+function commitDesignToOntologyState() {
+    if (!ontologyDesigner) return null;
+
     const design = ontologyDesigner.toJSON();
     
     // Build a map of entity ID to entity name for inheritance lookup
@@ -598,21 +667,9 @@ async function syncDesignToOntology(showFeedback = false) {
         
         OntologyState.config.classes = classes;
         OntologyState.config.properties = [...existingDataProperties, ...objectProperties];
-        
-        // Save to session (await to ensure it completes)
-        await saveOntologyToSession(showFeedback);
-        
-        // Also save the design layout for domain persistence
-        await saveDesignLayout(design);
-        
-        // Regenerate OWL content to reflect changes
-        if (typeof autoGenerateOwl === 'function') {
-            autoGenerateOwl();
-        }
-        
-        const inheritanceCount = design.inheritances ? design.inheritances.length : 0;
-        console.log('Design synced:', classes.length + ' classes, ' + objectProperties.length + ' relationships, ' + inheritanceCount + ' inheritances');
     }
+
+    return design;
 }
 
 /**
@@ -984,6 +1041,7 @@ async function loadFromOntologyFresh() {
     setTimeout(() => {
         isLoadingData = false;
         layoutDirty = false;
+        ontologyDirty = false;
         ontologyVersionAtLoad = _getOntologyVersion();
         console.log('[LOAD FRESH] Data load complete - auto-save re-enabled');
     }, 600);
@@ -1818,6 +1876,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         setTimeout(() => {
             isLoadingData = false;
             layoutDirty = false;
+            ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
             console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);  // Wait longer than auto-save debounce (500ms)
@@ -1851,6 +1910,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         setTimeout(() => {
             isLoadingData = false;
             layoutDirty = false;
+            ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
             console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);
@@ -1987,6 +2047,7 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         setTimeout(() => {
             isLoadingData = false;
             layoutDirty = false;
+            ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
             console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);
