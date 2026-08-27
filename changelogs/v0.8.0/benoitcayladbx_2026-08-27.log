@@ -89,3 +89,108 @@ Tests
 Frontend-only change (vanilla JS). `node --check` on the edited file passes.
 GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5639 passed, 305 skipped,
 6 deselected, 1 xfailed, 23 warnings.
+
+
+================================================================================
+Ontology Designer: stop concurrent unload writers from reverting an edit
+================================================================================
+
+Context
+-------
+Follow-up to the previous entry. The first fix persisted a pending Designer
+edit on unload via a keepalive /ontology/save beacon, but the removed attribute
+still reappeared when the user navigated within the 500 ms autosave debounce.
+Root cause is a lost-update race on the file-based session: on page unload the
+Designer fires THREE keepalive writes that each do a full read-modify-write of
+the session — /ontology/save (the ontology beacon), /domain/design-views/
+save-current (Domain.save_current_design_view → session.save()) and
+/domain/save-to-uc (Domain.save_domain_to_uc → session.save()). The two layout/
+registry writers load the session snapshot from BEFORE the ontology beacon's
+edit and their trailing session.save() overwrites it, so the removed attribute
+is written back. (Waiting >500 ms avoided the bug because the debounced save had
+already committed and no concurrent /ontology/save was in flight.)
+
+Changes
+-------
+1. src/front/static/global/js/ontology-design.js
+   - Added `unloadOntologyFlushed`: the ontology beacon sets it when it fires
+     the keepalive /ontology/save, claiming the sole session write for this
+     unload.
+   - `saveDesignLayoutBeacon` and `saveRegistryOnUnload` now early-return when
+     `unloadOntologyFlushed` is set, so neither races the ontology beacon with a
+     stale full-session snapshot. When the ontology is already clean (debounce
+     had fired), both run as before. The registry re-syncs on the next section
+     switch / explicit save, which run sequentially rather than racing.
+
+Modified files
+--------------
+- src/front/static/global/js/ontology-design.js
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+Frontend-only change (vanilla JS). `node --check` on the edited file passes.
+GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5639 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings.
+
+
+================================================================================
+Allow Editors and Builders to manage data sources
+================================================================================
+
+Context
+-------
+Users with Databricks App `CAN_USE` and an OntoBricks Editor or Builder role
+could mutate domain metadata, but the Add Data Source picker could not load
+Unity Catalog catalogs or schemas because those read-only endpoints inherited
+the admin-only Settings gate. This made `CAN_MANAGE` necessary for a normal
+domain-authoring workflow.
+
+Changes
+-------
+1. src/shared/fastapi/main.py
+   Added method-aware non-admin exceptions for catalog and schema discovery,
+   including the path-parameter schema route. Settings writes and SQL Warehouse
+   selection remain admin-only. Documented the allow-list in the middleware
+   docstring.
+2. tests/units/auth/test_permission_middleware.py
+   Added regression coverage for Editor and Builder access to all data-source
+   location endpoints and for continued denial of write methods.
+3. documentation/deployment.md
+   Documented Builder permissions, Layer 4 role table, non-admin data-source
+   management, and the retained administrator boundary for shared configuration.
+4. documentation/user-guide.md
+   Added role guidance to the data-source mapping workflow.
+5. documentation/development.md
+   Updated role capabilities and `/settings` enforcement so catalog/schema
+   GET allow-list is explicit.
+6. documentation/api.md
+   Documented which `/settings` discovery routes Editors/Builders may call.
+7. documentation/get-started.md, documentation/INFO.md, README.md
+   User-facing note: Add Data Source no longer requires `CAN_MANAGE`.
+8. docs/superpowers/specs/2026-08-27-editor-builder-data-sources-design.md
+   Recorded the approved permission-boundary design.
+9. docs/superpowers/plans/2026-08-27-editor-builder-data-sources.md
+   Recorded the test-first implementation and verification plan.
+
+Modified files
+--------------
+- src/shared/fastapi/main.py
+- tests/units/auth/test_permission_middleware.py
+- documentation/deployment.md
+- documentation/user-guide.md
+- documentation/development.md
+- documentation/api.md
+- documentation/get-started.md
+- documentation/INFO.md
+- README.md
+- docs/superpowers/specs/2026-08-27-editor-builder-data-sources-design.md
+- docs/superpowers/plans/2026-08-27-editor-builder-data-sources.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+GREEN `uv run --frozen pytest -q tests/units/auth/test_permission_middleware.py`
+(`-k "data_source"` -> 27 passed) and GREEN
+`uv run --frozen pytest -q -m "not scenario"` -> 5666 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings in 53.15s.

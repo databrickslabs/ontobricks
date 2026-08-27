@@ -252,7 +252,8 @@ All four layers must be satisfied before the application is fully functional. Th
 ║  Role     Source                          Access                                         ║
 ║  ──────── ─────────────────────────────── ──────────────────────────────────────────── ║
 ║  Admin    CAN_MANAGE on Databricks App    Full access + manage Teams matrix              ║
-║  Editor   domain_permissions table        Full read + write on all features              ║
+║  Builder  domain_permissions table        Design + data sources + build / lifecycle      ║
+║  Editor   domain_permissions table        Design + import / manage data sources          ║
 ║  Viewer   domain_permissions table        Read-only (no create / edit / delete)          ║
 ║  (none)   not in list                     Access Denied — redirected to error page       ║
 ║                                                                                         ║
@@ -998,11 +999,17 @@ OntoBricks includes a built-in permission system that controls who can access th
 | Role | Access |
 |------|--------|
 | **Admin** | Full access + can manage the permission list. Determined by **CAN_MANAGE** on the Databricks App. |
+| **Builder** | Full domain design access, including importing and managing data sources, plus build and lifecycle operations. |
 | **Editor** | Full access to all features (read + write). |
 | **Viewer** | Read-only access (cannot create, edit, or delete). |
 | **No role** | Blocked entirely (redirect to Access Denied page). |
 
 When no permissions are configured yet, only users with **CAN_MANAGE** on the Databricks App have access. Everyone else is blocked until an admin adds them via the Permissions tab.
+
+Editors and Builders can browse Unity Catalog catalogs and schemas from the
+domain's **Data Sources** panel and can import, update, or remove its tables.
+They do not need `CAN_MANAGE` for these domain operations. Shared application
+configuration, including SQL Warehouse selection, remains admin-only.
 
 ### Users and Groups
 
@@ -1041,7 +1048,7 @@ The script is idempotent. It discovers each app's service principal via `databri
 1. Ensure you have **CAN_MANAGE** on the sandbox app **`ontobricks-XXX`** in the Databricks UI (**Compute > Apps > ontobricks-XXX > Permissions**), or on your production app name if different
 2. Open the app and go to **Settings > Permissions**
 3. Click **Add** to grant access to workspace users or groups
-4. Assign each principal a **Viewer** or **Editor** role
+4. Assign each principal a **Viewer**, **Editor**, or **Builder** role
 5. Users not in the list are blocked from accessing the app
 
 ### Diagnostics

@@ -9,6 +9,7 @@ let isViewOnlyMode = true;  // Default to view-only mode
 let layoutDirty = false;    // Track unsaved layout changes
 let ontologyDirty = false;  // Track ontology edits (attributes, relationships…) not yet in the session
 let registryDirty = false;  // Track changes not yet persisted to the registry
+let unloadOntologyFlushed = false;  // The ontology beacon owns the session write on this unload
 let ontologyVersionAtLoad = null;  // Track ontology version when design was last loaded
 
 /**
@@ -372,6 +373,11 @@ async function saveDesignLayoutOnly() {
  */
 function saveDesignLayoutBeacon() {
     if (!ontologyDesigner || !layoutDirty || isLoadingData) return;
+    // The ontology beacon already wrote the whole session (classes, properties
+    // AND positions) this unload. /design-views/save-current does its own
+    // read-modify-write of the session, so letting it run concurrently would
+    // clobber the ontology beacon's edit with a stale snapshot.
+    if (unloadOntologyFlushed) return;
     
     try {
         const design = ontologyDesigner.toJSON();
@@ -418,6 +424,11 @@ function saveOntologyBeacon() {
             window.saveConfigToSession({ keepalive: true });
         }
         ontologyDirty = false;
+        // Claim the session write for this unload: the layout and registry
+        // beacons each read-modify-write the whole session, so they must NOT
+        // race this keepalive /ontology/save or they overwrite the edit with a
+        // pre-edit snapshot (the bug where a removed attribute reappears).
+        unloadOntologyFlushed = true;
         console.log('[BEACON] Ontology saved via keepalive');
     } catch (error) {
         console.warn('[BEACON] Failed to save ontology:', error);
@@ -482,6 +493,13 @@ function saveRegistryOnUnload() {
     // pending edit. The flush is a no-op once the panel is clean.
     if (typeof flushSharedPanelOnUnload === 'function') flushSharedPanelOnUnload();
     if (!registryDirty) return;
+    // save-to-uc also read-modify-writes the whole session (Domain.save_domain_to_uc
+    // ends with session.save()). If the ontology beacon just fired a keepalive
+    // /ontology/save, running this concurrently would persist a pre-edit
+    // snapshot back into the session and revert the edit. Skip it: the session
+    // now holds the change and the registry is re-synced on the next section
+    // switch / explicit save (both of which run sequentially, not racing).
+    if (unloadOntologyFlushed) return;
     try {
         fetch('/domain/save-to-uc', {
             method: 'POST',

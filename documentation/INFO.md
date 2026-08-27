@@ -277,7 +277,9 @@ See **[Ontology import](documentation/user-guide.md#ontology-import-merged)** in
 
 ### 2. 🔗 Assign Data Sources
 
-Connect ontology to Databricks tables via the **Mapping** page:
+Import Unity Catalog tables from **Domain → Data Sources** (**Add Data Source**).
+Editors and Builders can do this with `CAN_USE`; `CAN_MANAGE` is not required.
+Then connect those tables to the ontology on the **Mapping** page:
 
 - **Visual Designer**: Click entities/relationships on the interactive designer to configure their SQL queries
 - **Direct Edit Mode**: Clicking an assigned item immediately loads the editable column-mapping grid

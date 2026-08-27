@@ -794,8 +794,8 @@ A user's effective role is determined by combining all three layers.
 | Role | Source | Capabilities |
 |------|--------|--------------|
 | **Admin** | Databricks App `CAN_MANAGE` permission | Full access. Can view, edit, build, and manage the Settings page including the permission list. |
-| **Builder** | In-app permission list | Can view, edit, and **build graph viewers**. Cannot access Settings. |
-| **Editor** | In-app permission list | Can view all pages, create and modify domains, ontologies, and mappings. **Cannot build graph viewers.** Cannot access Settings. |
+| **Builder** | In-app permission list | Can view, edit, **import and manage data sources**, and **build graph viewers**. Cannot change shared Settings (SQL Warehouse, Teams, branding). |
+| **Editor** | In-app permission list | Can view all pages, create and modify domains, ontologies, mappings, and **data sources**. **Cannot build graph viewers.** Cannot change shared Settings. |
 | **Viewer** | In-app permission list | Read-only access. Can browse domains, ontologies, and query results. All write operations (POST, PUT, PATCH, DELETE) are blocked. Cannot access Settings. |
 | **None** | Default when not matched | Completely blocked. Redirected to the Access Denied page. |
 
@@ -848,7 +848,7 @@ Request arrives
 |-----------|--------|
 | `role = none` | JSON 403 (for fetch/XHR) or redirect to `/access-denied` (for page navigation). |
 | `role = viewer` + write method (POST/PUT/PATCH/DELETE) | JSON 403: "Viewer role does not allow write operations". |
-| `role != admin` + path starts with `/settings` | JSON 403 or redirect to `/`. Only admins can access the Settings page. |
+| `role != admin` + path starts with `/settings` | JSON 403 or redirect to `/`, except an explicit GET allow-list (registry/warehouse status **and** Unity Catalog catalog/schema browse used by **Add Data Source**). Settings writes and warehouse selection stay admin-only. |
 | Digital twin build + effective domain role < `builder` | JSON 403: "Only builders and admins can build a graph viewer". |
 | Otherwise | Request proceeds normally. |
 

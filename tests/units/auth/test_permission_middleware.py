@@ -356,6 +356,39 @@ class TestAdminOnlyPaths:
         )
         assert result.get("passed")
 
+    @pytest.mark.parametrize("domain_role", [ROLE_EDITOR, ROLE_BUILDER])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/settings/catalogs",
+            "/settings/schemas",
+            "/settings/schemas/main",
+        ],
+    )
+    def test_domain_editors_can_browse_data_source_locations(
+        self, domain_role, path
+    ):
+        """Editors and Builders can populate the Add Data Source picker."""
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, domain_role, method="GET", path=path
+        )
+        assert result.get("passed")
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/settings/catalogs",
+            "/settings/schemas",
+            "/settings/schemas/main",
+        ],
+    )
+    def test_data_source_location_writes_remain_admin_only(self, path):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_BUILDER, method="POST", path=path
+        )
+        assert resp.status_code in (302, 403)
+        assert not result.get("passed")
+
     def test_post_on_registry_exception_is_still_admin_only(self):
         """POST /settings/registry (change registry location) must
         NOT benefit from the read-only GET exception."""
@@ -446,6 +479,44 @@ class TestDomainScopedRoutes:
             ROLE_APP_USER, ROLE_EDITOR, method="POST", path="/ontology/"
         )
         assert result.get("passed")
+
+    @pytest.mark.parametrize("domain_role", [ROLE_EDITOR, ROLE_BUILDER])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/domain/metadata/list-tables",
+            "/domain/metadata/initialize-async",
+            "/domain/metadata/save",
+            "/domain/metadata/clear",
+            "/domain/metadata/update-table-location",
+            "/domain/metadata/update-async",
+        ],
+    )
+    def test_editors_and_builders_can_manage_data_sources(
+        self, domain_role, path
+    ):
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, domain_role, method="POST", path=path
+        )
+        assert result.get("passed")
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/domain/metadata/list-tables",
+            "/domain/metadata/initialize-async",
+            "/domain/metadata/save",
+            "/domain/metadata/clear",
+            "/domain/metadata/update-table-location",
+            "/domain/metadata/update-async",
+        ],
+    )
+    def test_viewer_cannot_manage_data_sources(self, path):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="POST", path=path
+        )
+        assert resp.status_code == 403
+        assert not result.get("passed")
 
     def test_admin_bypasses_domain_gate(self):
         _, _, result = _dispatch_with_roles(

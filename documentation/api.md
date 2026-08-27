@@ -1117,6 +1117,14 @@ POST /read-volume-file
 
 ### Configuration Endpoints
 
+Shared Databricks configuration lives under `/settings`. Warehouse
+selection and every Settings **write** remain **admin-only** (`CAN_MANAGE`).
+Read-only discovery used by the domain **Data Sources** picker
+(`GET /settings/catalogs`, `GET /settings/schemas`,
+`GET /settings/schemas/<catalog>`) is available to any signed-in app user;
+Editors and Builders then persist tables via `/domain/metadata/*`.
+Viewers can list catalogs but cannot import or remove data sources.
+
 #### Get Current Configuration
 
 ```http

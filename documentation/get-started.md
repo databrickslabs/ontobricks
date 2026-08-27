@@ -281,6 +281,12 @@ Alternatively, use the traditional form interface:
 
 ### 5. Assign Data Sources
 
+Load Unity Catalog tables from **Domain → Data Sources → Add Data Source**
+(catalog and schema picker). Editors and Builders can do this with `CAN_USE`;
+they do not need `CAN_MANAGE`. Viewers cannot import or remove sources.
+
+Then map those tables on the **Mapping** page:
+
 1. Go to the **Mapping** page (click on "Mapping" in the navbar)
 2. Your ontology must be loaded (indicated by green checkmark)
 

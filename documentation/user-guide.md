@@ -400,6 +400,10 @@ Navigate to the **Mapping** page by clicking "Mapping" in the navigation bar.
 
 > **Note**: You must have an ontology loaded before creating mappings. The "Ontology" indicator in the navbar should show a green checkmark.
 
+Users with an **Editor** or **Builder** role on the current domain can browse
+Unity Catalog and import, update, or remove data sources. `CAN_MANAGE` is only
+required for shared application configuration such as SQL Warehouse selection.
+
 ### Information (Sidebar)
 
 Click **Information** in the sidebar to view the current mapping status:
