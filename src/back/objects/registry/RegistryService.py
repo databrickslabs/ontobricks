@@ -817,14 +817,22 @@ class RegistryService:
 
         Tolerates both document shapes seen across stores: a top-level
         ``ontology`` block and the ``versions[<v>].ontology`` nesting used by
-        :meth:`find_published_version`.
+        :meth:`find_published_version`. Any non-dict node (from a hand-edited
+        or corrupt row) reads as "no ontology" rather than raising.
         """
+
+        def _classes(node: Any) -> list:
+            ont = node.get("ontology") if isinstance(node, dict) else None
+            cls = ont.get("classes") if isinstance(ont, dict) else None
+            return cls if isinstance(cls, list) else []
+
         if not isinstance(data, dict):
             return False
-        classes = ((data.get("ontology") or {}).get("classes")) or []
+        classes = _classes(data)
         if not classes and version:
-            vdata = (data.get("versions") or {}).get(version) or {}
-            classes = ((vdata.get("ontology") or {}).get("classes")) or []
+            versions = data.get("versions")
+            vdata = versions.get(version) if isinstance(versions, dict) else None
+            classes = _classes(vdata)
         return bool(classes)
 
     def write_version(self, folder: str, version: str, data: str) -> Tuple[bool, str]:

@@ -45,14 +45,19 @@ def _request(email="alice@acme.com"):
 
 
 def _make_svc(*, status="DRAFT", last_build="2026-01-01", quorum=1,
-              versions=("1", "2"), initial_events=None, configured=True):
+              versions=("1", "2"), initial_events=None, configured=True,
+              has_ontology=False):
     info = {"status": status, "last_build": last_build}
     events = [dict(e) for e in (initial_events or [])]
+
+    doc = {"info": info}
+    if has_ontology:
+        doc["ontology"] = {"classes": [{"uri": "urn:C"}]}
 
     svc = MagicMock()
     svc.cfg.is_configured = configured
     svc.list_versions_sorted.return_value = list(versions)
-    svc.read_version.return_value = (True, {"info": info}, "")
+    svc.read_version.return_value = (True, doc, "")
     svc.store.get_domain_quorum.return_value = quorum
 
     def _set_status(folder, version, new_status):
@@ -126,11 +131,23 @@ def test_submit_requires_builder():
               user_domain_role=ROLE_EDITOR)
 
 
-def test_submit_requires_build():
-    svc, _, _ = _make_svc(status="DRAFT", last_build="")
+def test_submit_requires_build_or_ontology():
+    svc, _, _ = _make_svc(status="DRAFT", last_build="", has_ontology=False)
     with pytest.raises(ValidationError):
         _call("submit", svc, comment="", user_role=ROLE_ADMIN,
               user_domain_role=ROLE_NONE)
+
+
+def test_submit_allowed_with_ontology_and_no_build():
+    """Ontology-only publish: no KG build, but a valid ontology is enough."""
+    svc, info, events = _make_svc(
+        status="DRAFT", last_build="", has_ontology=True
+    )
+    result = _call("submit", svc, comment="onto only",
+                   user_role="", user_domain_role=ROLE_BUILDER)
+    assert result["success"] is True
+    assert info["status"] == "IN-REVIEW"
+    assert events[-1]["action"] == ACTION_SUBMITTED
 
 
 def test_submit_wrong_status_conflicts():

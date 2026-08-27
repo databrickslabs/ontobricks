@@ -87,6 +87,19 @@ def mcp_env(monkeypatch):
                 }
             ],
         },
+        # Consumed by ``describe_ontology`` (and ``select_domain`` for the
+        # class-action cache). Defaults empty so existing tests are unaffected.
+        "classes": [],
+        "ontology": {
+            "success": True,
+            "base_uri": "https://example.com/customer360#",
+            "class_count": 2,
+            "property_count": 1,
+            "content": (
+                "@prefix : <https://example.com/customer360#> .\n"
+                ":Customer a owl:Class .\n:Contract a owl:Class ."
+            ),
+        },
         "get_calls": [],
     }
 
@@ -100,7 +113,9 @@ def mcp_env(monkeypatch):
                 "graph_name": "g", "view_table": "v",
             }
         if path == mcp_app.API_V1_DOMAIN_CLASSES:
-            return {"success": True, "classes": []}
+            return {"success": True, "classes": state["classes"]}
+        if path == mcp_app.API_V1_DOMAIN_ONTOLOGY:
+            return state["ontology"]
         if path == mcp_app.API_V1_DT_NODE_CONTEXT:
             return state["node_context"]
         if path == mcp_app.API_V1_DT_NODE_VIRTUAL_ATTRIBUTES:
@@ -436,3 +451,118 @@ async def test_disabled_virtual_attributes_never_reaches_the_backend(mcp_env) ->
         entity_uri="https://example.com/Customer/CUST001"
     )
     assert state["get_calls"] == []
+
+
+# ---------------------------------------------------------------------------
+# Ontology-only domains (has_graph = False)
+
+
+def _onto_only(name: str = "onto", policy: dict | None = None) -> dict:
+    """A published-but-never-built domain: graph tools must all disappear."""
+    return {
+        "name": name,
+        "description": "",
+        "mcp_policy": policy or {},
+        "has_graph": False,
+    }
+
+
+async def test_ontology_only_domain_hides_every_graph_tool(mcp_env) -> None:
+    tools, state = mcp_env
+    state["domains"] = [_onto_only()]
+    ctx = FakeContext()
+    await _select(tools, "onto", ctx)
+
+    from server.app import GRAPH_TOOLS  # type: ignore[import-not-found]
+
+    disables = [c for c in ctx.calls if c[0] == "disable"]
+    assert len(disables) == 1
+    # Exactly the graph tools are hidden — describe_ontology stays.
+    assert disables[0][1] == set(GRAPH_TOOLS)
+    assert "describe_ontology" not in disables[0][1]
+    assert disables[0][2] == {"tool"}
+
+
+async def test_ontology_only_selection_message_flags_the_domain(mcp_env) -> None:
+    tools, state = mcp_env
+    state["domains"] = [_onto_only()]
+    text = await _select(tools, "onto")
+
+    assert "ontology only" in text
+    assert "describe_ontology" in text
+
+
+async def test_ontology_only_domain_refuses_a_graph_tool_at_call_time(
+    mcp_env,
+) -> None:
+    """A stale client that calls a hidden graph tool still gets a refusal."""
+    tools, state = mcp_env
+    state["domains"] = [_onto_only()]
+    await _select(tools, "onto", FakeContext(explode=True))
+    state["get_calls"].clear()
+
+    message = await tools["describe_entity"](search="CUST001")
+    assert "not available" in message
+    assert "ontology only" in message
+    # The guard runs before any HTTP call.
+    assert state["get_calls"] == []
+
+
+async def test_describe_ontology_is_allowed_on_an_ontology_only_domain(
+    mcp_env,
+) -> None:
+    tools, state = mcp_env
+    state["domains"] = [_onto_only()]
+    state["classes"] = [
+        {"name": "Customer", "uri": "https://example.com/customer360#Customer",
+         "dataset": {"fullName": "main.crm.customers"}},
+        {"name": "Contract", "uri": "https://example.com/customer360#Contract"},
+    ]
+    await _select(tools, "onto")
+
+    text = await tools["describe_ontology"]()
+    assert "not available" not in text
+    assert "Base URI:   https://example.com/customer360#" in text
+    assert "Customer" in text and "Contract" in text
+    # The dataset attachment is surfaced as a tag ...
+    assert "[dataset]" in text
+    # ... and the raw OWL rides along.
+    assert ":Customer a owl:Class ." in text
+
+
+async def test_describe_ontology_can_target_a_domain_without_select(mcp_env) -> None:
+    tools, state = mcp_env
+    state["domains"] = [_onto_only()]
+    # No select_domain call: passing domain_name must still work.
+    text = await tools["describe_ontology"](domain_name="onto")
+    assert "Ontology — onto" in text
+
+
+async def test_describe_ontology_honours_a_policy_that_hides_it(mcp_env) -> None:
+    tools, state = mcp_env
+    state["domains"] = [
+        {
+            "name": "d",
+            "description": "",
+            "mcp_policy": {"disabled_tools": ["describe_ontology"]},
+        }
+    ]
+    await _select(tools, "d")
+
+    message = await tools["describe_ontology"]()
+    assert "not available" in message
+    assert "MCP policy" in message
+
+
+async def test_graph_domain_keeps_its_graph_tools(mcp_env) -> None:
+    """Control: a built domain (has_graph defaults True) hides nothing."""
+    tools, state = mcp_env
+    state["domains"] = [{"name": "built", "description": "", "mcp_policy": {}}]
+    ctx = FakeContext()
+    await _select(tools, "built", ctx)
+
+    assert not [c for c in ctx.calls if c[0] == "disable"]
+    # And a graph tool actually reaches the backend.
+    state["get_calls"].clear()
+    await tools["list_entity_types"]()
+    assert state["get_calls"] != []
