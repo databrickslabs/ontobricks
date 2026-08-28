@@ -44,7 +44,8 @@ dependencies = [
     # (CVE-2026-47707 / GHSA-fr49-mhgj-crfc) and circular-fragment DOS in
     # QueryDepthLimiter — both DOS via resource exhaustion.
     "strawberry-graphql[fastapi]>=0.315.7",
-    "mlflow>=3.11.1",
+    # mlflow>=3.15.0 fixes a critical advisory (GHSA / CVE reported by Dependabot).
+    "mlflow>=3.15.0",
     "apscheduler>=3.10,<4",
     "owlrl>=7.0.0",
     "pyshacl>=0.26.0",
@@ -116,11 +117,14 @@ constraint-dependencies = [
     # CVE-2026-44307 / GHSA-2h4p-vjrc-8xpq (TemplateLookup path traversal on Windows).
     "mako>=1.3.12",
     "pygments>=2.20.0",
-    # GitPython 3.1.55 includes the complete fixes for the path/config injection
-    # advisory series. Pulled in transitively by mlflow-skinny.
-    "gitpython>=3.1.55",
+    # GitPython 3.1.58 includes the complete fixes for the path/config injection
+    # advisory series (Dependabot high). Pulled in transitively by mlflow-skinny.
+    "gitpython>=3.1.58",
     # Security floors for transitive dependencies reported by Dependabot.
     "click>=8.3.3",
+    # sqlparse>=0.6.0 fixes a ReDoS advisory (Dependabot high). Pulled in
+    # transitively (mlflow / sqlglot).
+    "sqlparse>=0.6.0",
     "mcp>=1.28.1",
     "pillow>=12.3.0",
     "pip>=26.1.2",
@@ -141,7 +145,8 @@ constraint-dependencies = [
     #   GHSA-xcgm-r5h9-7989 (CVE-2026-54274)  incomplete WebSocket frame payloads bypass mem limits
     #   GHSA-63hw-fmq6-xxg2 (CVE-2026-54277)  C HTTP parser bypasses max_line_size for frag lines
     #   GHSA-4fvr-rgm6-gqmc (CVE-2026-54273)  HTTP/1 pipelined requests queue without limit + 5 more
-    "aiohttp>=3.14.1",
+    # aiohttp 3.14.3 closes two more Dependabot advisories (high + medium).
+    "aiohttp>=3.14.3",
     # pyjwt>=2.13.0 fixes five issues (pulled in transitively):
     #   GHSA-xgmm-8j9v-c9wx (CVE-2026-48526)  public-key JWK accepted as HMAC secret → token forge
     #   GHSA-jq35-7prp-9v3f                   algorithm allow-list bypass with PyJWK/PyJWKClient
@@ -152,6 +157,9 @@ constraint-dependencies = [
     "msgpack>=1.2.1",
     # cryptography>=48.0.1: statically linked OpenSSL in wheels was vulnerable to
     # CVE-2026-34180 (GHSA-537c-gmf6-5ccf) — affects pre-built PyPI wheels only.
+    # NOTE: a further Dependabot high advisory (vulnerable >=44,<50, patched
+    # 50.0.0) cannot be applied yet — mlflow pins cryptography<50, so bumping to
+    # 50 makes the graph unsatisfiable. Revisit once mlflow relaxes the cap.
     "cryptography>=48.0.1",
 ]
 

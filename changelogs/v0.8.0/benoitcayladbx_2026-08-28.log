@@ -141,3 +141,42 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped,
 6 deselected, 1 xfailed in 41.78s. GREEN.
+
+================================================================================
+Security: bump vulnerable dependencies (Dependabot)
+================================================================================
+
+Context
+-------
+Dependabot reported 16 open alerts on the default branch. Raised the security
+floors and re-locked. The lockfile was regenerated through the internal proxy
+(the only reachable index in this environment) and then host-normalized back to
+`files.pythonhosted.org` — the proxy fronts identical `/packages/<hash>/<file>`
+paths, so the URLs and hashes are byte-identical to a public-index lock. Verified
+zero `pypi-proxy.dev.databricks.com` URLs remain (deploy-safe per
+`.cursor/09-package-management`).
+
+Changes
+-------
+1. pyproject.toml
+   - mlflow  >=3.11.1 → >=3.15.0  (critical)   → locked 3.15.1
+   - gitpython >=3.1.55 → >=3.1.58 (high)       → locked 3.1.59
+   - aiohttp  >=3.14.1 → >=3.14.3 (high+medium) → locked 3.14.3
+   - sqlparse: new constraint >=0.6.0 (high, ReDoS; transitive) → locked 0.6.0
+2. uv.lock
+   - Regenerated for the above (and transitive mlflow-skinny / mlflow-tracing
+     3.15.1). Host-normalized to files.pythonhosted.org.
+
+Not applied (blocked upstream)
+------------------------------
+- cryptography: advisory patched in 50.0.0, but mlflow pins cryptography<50, so
+  bumping makes the graph unsatisfiable. Kept at >=48.0.1 with a NOTE in
+  pyproject.toml; revisit once mlflow relaxes the cap.
+
+Modified files:
+- pyproject.toml
+- uv.lock
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped,
+6 deselected, 1 xfailed in 43.27s. GREEN. Lockfile verified proxy-free.
