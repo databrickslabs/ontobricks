@@ -251,7 +251,7 @@ OntoBricks separates configuration into several layers:
 | `src/shared/config/settings.py` | **Environment-specific settings** loaded from `.env` / env vars via Pydantic `BaseSettings` | Databricks host, token, session directory |
 | `src/shared/config/constants.py` | **Static constants and defaults** that rarely change and are shared across modules | App name/version, OWL namespaces, LLM defaults, wizard quick-templates |
 | `src/front/config/menu_config.json` | **Navbar + sidebar navigation** for the Jinja2 UI | Page labels, Bootstrap Icons (`icon`), menu structure; top-level icons must stay distinct (Registry `bi-boxes`, Domain `bi-box`, Ontology `bi-bezier2`, Mapping `bi-shuffle`, Knowledge Graph `bi-radar`) and match `breadcrumb.js` `_ROUTE_MAP` |
-| `src/back/objects/session/global_config.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in a `.global_config.json` file on the UC Volume root, shared across all user sessions | SQL Warehouse ID, default base URI, default class icon (emoji) |
+| `src/back/objects/session/GlobalConfigService.py` | **Instance-level `GlobalConfigService`** — admin-editable settings stored in the registry (`global_config` JSONB, or `.global_config.json` on Volume-backed registries), shared across all user sessions | SQL Warehouse ID, default base URI, default class icon, UI branding (`ui_branding`) |
 | `src/back/objects/registry/permissions.py` | **`PermissionService`** — stores per-user permission levels in `.permissions.json` (app-wide) and per-domain overrides in `.domain_permissions.json` (per domain folder). Defines the role hierarchy: `admin > builder > editor > viewer > none`. | `CAN MANAGE` admin flag |
 
 **`src/shared/config/constants.py`** key contents:
@@ -268,15 +268,23 @@ OntoBricks separates configuration into several layers:
 
 To add a new generation template, add an entry to `WIZARD_TEMPLATES` in `src/shared/config/constants.py` — the UI button is rendered dynamically.
 
-**`src/back/objects/session/global_config.py`** (`GlobalConfigService` singleton):
+**`src/back/objects/session/GlobalConfigService.py`** (`GlobalConfigService` singleton):
 
 | Setting | Description | Modified By |
 |---------|-------------|-------------|
 | `warehouse_id` | SQL Warehouse ID used by all backends and API calls | Admin only |
 | `default_base_uri` | Default ontology base URI domain | Admin only |
 | `default_emoji` | Default class icon emoji (e.g. `📦`) | Admin only |
+| `ui_branding` | Versioned object: `app_title`, `primary_color`, `logo_data_url` (empty = bundled favicon) | Admin only (`GET`/`POST /settings/ui-branding`) |
 
-The service caches the JSON file in memory with a TTL to minimize UC Volume reads. Settings are resolved via `resolve_warehouse_id()`, `resolve_default_base_uri()`, and `resolve_default_emoji()` helper functions in `src/back/core/helpers/`. Version-scoped UC paths are derived through `effective_uc_version_path` in `DatabricksHelpers.py`.
+The service caches the document in memory with a TTL. Persistence goes through
+the active `RegistryStore` (`save_global_config` / `load_global_config`), so
+Lakebase and Volume backends keep the same keys. Settings are resolved via
+`resolve_warehouse_id()`, `resolve_default_base_uri()`, and
+`resolve_default_emoji()` in `src/back/core/helpers/`. UI branding is
+normalized by `normalize_ui_branding()` (`src/back/core/helpers/UIBranding.py`)
+and injected per HTML request by `UIBrandingMiddleware`. Version-scoped UC
+paths are derived through `effective_uc_version_path` in `DatabricksHelpers.py`.
 
 **UC Volume file layout** (root of the configured registry volume):
 
@@ -424,7 +432,7 @@ src/
 │       │   ├── middleware.py           # File-based session middleware (cookie + ASGI)
 │       │   ├── SessionManager.py       # Request-scoped session get/set/delete wrapper
 │       │   ├── DomainSession.py       # DomainSession (current OntoBricks domain payload)
-│       │   └── global_config.py        # Instance-level GlobalConfigService
+│       │   └── GlobalConfigService.py  # Instance-level GlobalConfigService
 │       └── registry/                   # Registry, permissions & scheduled builds
 │           ├── service.py              # RegistryService + RegistryCfg
 │           ├── permissions.py          # PermissionService (ADMIN / BUILDER / EDITOR / VIEWER / NONE + domain-level overrides)
@@ -698,7 +706,7 @@ relational tables:
 | Table | Purpose |
 |---|---|
 | `registries` | One row per `(catalog, schema, volume)` triplet — scopes everything else |
-| `global_config` | Instance-wide settings (warehouse, emoji, base URI, …) as JSONB |
+| `global_config` | Instance-wide settings (warehouse, emoji, base URI, `ui_branding`, …) as JSONB |
 | `domains` | Stable per-domain identity (UUID, name, base URI, description) plus `mcp_policy` — a JSONB blob holding the [per-domain MCP policy](mcp.md#per-domain-mcp-policy) (which tools the domain publishes, how its ontology attachments are surfaced). Defaults to `{}`, which reproduces pre-0.8 behaviour, so no backfill is needed |
 | `domain_versions` | Per-version JSONB document; mirrors what `V{N}.json` used to hold |
 | `domain_permissions` | Per-domain ACL (replaces `.domain_permissions.json`) |

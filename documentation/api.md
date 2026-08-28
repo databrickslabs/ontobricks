@@ -1245,6 +1245,41 @@ GET /settings/get-default-emoji
 POST /settings/set-default-emoji
 ```
 
+Persists `default_emoji` in the registry `global_config` document (admin write).
+
+#### Get/Save UI Branding
+
+Admin-only. Title, primary color, and logo are stored as one `ui_branding`
+object in the same registry `global_config` document.
+
+```http
+GET /settings/ui-branding
+POST /settings/ui-branding
+```
+
+**GET response:**
+
+```json
+{
+  "success": true,
+  "branding": {
+    "app_title": "OntoBricks",
+    "primary_color": "#4F46E5",
+    "logo_url": "/static/global/img/favicon.svg",
+    "is_custom_logo": false,
+    "palette": {
+      "primary_rgb": "79, 70, 229",
+      "primary_dark": "#4338CA",
+      "on_primary": "#FFFFFF"
+    }
+  }
+}
+```
+
+**POST** is `multipart/form-data` with `app_title`, `primary_color`, optional
+`logo_file`, and optional `reset_logo=true`. The three branding fields are
+written atomically; validation failure writes nothing.
+
 #### Get/Save Base URI
 
 ```http

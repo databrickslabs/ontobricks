@@ -97,6 +97,7 @@
 - **Multi-Client**: Works with Cursor, Claude Desktop, or any MCP-compatible client.
 
 ## Navigation & UX
+- **Configurable UI branding**: Admins set application title, primary color, brand icon, and default entity icon under **Settings → Configuration → UI**. Title/color/logo are previewed locally then saved atomically to the registry `global_config.ui_branding` object; the default entity icon is written immediately to `default_emoji`. **Default** restores factory title/color/logo as a preview (Save to persist) and restores 📦 immediately. All users see the saved brand; only admins can change it.
 - **Deep-Linkable Sections**: Sidebar section changes push `?section=<id>` to browser history — sections are bookmarkable and navigable with Back/Forward.
 - **Registry modal from navbar**: Open **Registry → Browse** as a modal overlay from the top navbar without leaving the current domain; legacy `/registry/` URLs redirect into Home with the modal opened.
 - **Registry Browse for “Active” version**: Expand a domain in **Registry → Browse** to set which version is **Active** (API/MCP); the Domain app no longer exposes a per-version toggle on **Domain → Versions** (badge only).

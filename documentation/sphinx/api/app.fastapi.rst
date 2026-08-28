@@ -21,6 +21,17 @@ Health
    :undoc-members:
    :show-inheritance:
 
+UI branding
+-----------
+
+Request-scoped title, primary color, and logo resolution for HTML pages.
+Values come from registry ``global_config.ui_branding``.
+
+.. automodule:: shared.fastapi.ui_branding
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Dependencies
 ------------
 

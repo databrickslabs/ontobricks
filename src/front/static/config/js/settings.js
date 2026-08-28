@@ -491,7 +491,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function selectDefaultEmoji(emoji) {
+    async function selectDefaultEmoji(emoji, options) {
+        const notify = !options || options.notify !== false;
         try {
             const response = await fetch('/settings/set-default-emoji', {
                 method: 'POST',
@@ -502,7 +503,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
             if (result.success) {
                 document.getElementById('currentDefaultEmoji').textContent = emoji;
-                showNotification('Default entity icon updated to ' + emoji, 'success', 2000);
+                if (notify) {
+                    showNotification('Default entity icon updated to ' + emoji, 'success', 2000);
+                }
             } else {
                 showNotification('Error: ' + result.message, 'error');
             }
@@ -984,7 +987,14 @@ document.addEventListener('DOMContentLoaded', function () {
         showUIBrandingStatus('Changes discarded. Saved branding restored.', 'info');
     }
 
-    function resetUIBrandingDefaults() {
+    async function resetUIBrandingDefaults() {
+        const factoryEntityIcon = '📦';
+        const emojiEl = document.getElementById('currentDefaultEmoji');
+        const currentEmoji = emojiEl ? String(emojiEl.textContent || '').trim() : '';
+        if (currentEmoji && currentEmoji !== factoryEntityIcon) {
+            await selectDefaultEmoji(factoryEntityIcon, { notify: false });
+        }
+
         if (!draftUIBranding) return;
         if (isSavedUIBrandingDefaultState() && !uiBrandingPendingLogoFile) {
             uiBrandingResetLogo = false;

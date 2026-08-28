@@ -1,0 +1,78 @@
+================================================================================
+Settings UI: Default button restores factory branding
+================================================================================
+
+Context
+-------
+Settings → Configuration → UI already previewed factory title, color, and logo
+via a long "Reset to defaults" action. The control is now labeled Default, and
+it also restores the factory default entity icon immediately.
+
+Changes
+-------
+1. src/front/templates/settings.html
+   Relabeled `#uiBrandingResetDefaultsBtn` to Default with an accessible
+   restore-factory description.
+2. src/front/static/config/js/settings.js
+   `resetUIBrandingDefaults()` still previews OntoBricks / #4F46E5 / bundled
+   logo; it now also persists the factory entity icon (📦) when needed.
+3. tests/units/front/test_ui_branding_settings_contract.py
+   Contract coverage for the Default label and entity-icon reset.
+4. documentation/user-guide.md
+   Documented Default vs Save persistence for branding vs entity icon.
+5. .cursor/11-frontend-design.mdc
+   Runtime theme contract now names the Default button.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_ui_branding_settings_contract.py
+- documentation/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped, 6 deselected, 1 xfailed, 0 failed in 53.91s
+
+================================================================================
+Document UI branding persistence in user guide and Sphinx
+================================================================================
+
+Context
+-------
+Settings → Configuration → UI already persisted title/color/logo and the
+default entity icon in registry `global_config`, but the user guide, API
+guide, architecture notes, and Sphinx autodoc did not describe that path
+or the Default button vs Save split.
+
+Changes
+-------
+1. documentation/user-guide.md
+   Added Default entity icon, registry persistence table, and Save vs
+   Default write timing.
+2. documentation/features.md
+   Added a Navigation & UX bullet for configurable UI branding.
+3. documentation/architecture.md
+   Documented `ui_branding` on `GlobalConfigService` and the Lakebase
+   `global_config` JSONB payload.
+4. documentation/api.md
+   Documented `GET`/`POST /settings/ui-branding`.
+5. README.md
+   Clarified that branding lives in registry `global_config`.
+6. documentation/sphinx/api/app.core.helpers.rst
+   Autodoc for `back.core.helpers.UIBranding`.
+7. documentation/sphinx/api/app.fastapi.rst
+   Autodoc for `shared.fastapi.ui_branding`.
+8. `ci/build_docs.sh`
+   Rebuilt Sphinx HTML (no new warnings for the branding modules).
+
+Modified files:
+- documentation/user-guide.md
+- documentation/features.md
+- documentation/architecture.md
+- documentation/api.md
+- README.md
+- documentation/sphinx/api/app.core.helpers.rst
+- documentation/sphinx/api/app.fastapi.rst
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped, 6 deselected, 1 xfailed, 0 failed in 46.14s

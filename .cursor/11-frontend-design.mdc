@@ -117,7 +117,9 @@ surface: `#obSubnav` is transparent and its segmented workspace control uses
 - A dedicated **Reset icon** button (`#uiBrandingResetIconBtn`) in the Branding
   card reverts only the icon draft to the bundled default logo, leaving
   title/color drafts intact. It marks the draft dirty only when the saved logo
-  differs from the default; `resetUIBrandingDefaults()` resets all three fields.
+  differs from the default; the **Default** button (`#uiBrandingResetDefaultsBtn`)
+  calls `resetUIBrandingDefaults()` to preview factory title/color/logo and
+  immediately restore the factory default entity icon.
 - Title and color inputs expose `aria-describedby` for help and error regions,
   and toggle `aria-invalid="true"` dynamically on validation failure. Swatches
   carry `role="img"` with stable `aria-label`/`title` values that update during

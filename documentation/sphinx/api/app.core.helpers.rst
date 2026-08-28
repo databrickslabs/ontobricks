@@ -24,3 +24,11 @@ URIHelpers
    :members:
    :undoc-members:
    :show-inheritance:
+
+UIBranding
+----------
+
+.. automodule:: back.core.helpers.UIBranding
+   :members:
+   :undoc-members:
+   :show-inheritance:

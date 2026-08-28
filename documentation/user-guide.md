@@ -1398,13 +1398,18 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 Navigate to **Settings → Configuration → UI** to customise how OntoBricks
 presents itself across every page.
 
+Saved values are **instance-wide**: they are written to the registry
+`global_config` document (`ui_branding` plus `default_emoji`) and apply to
+every user on the next page load. They are not stored in a domain version.
+
 #### What you can configure
 
 | Field | Description | Constraints |
 |-------|-------------|-------------|
 | **Application title** | The name shown in the navbar, browser tab, and `alt=` text. | 1–60 characters (trimmed, Unicode code points). Default: `OntoBricks`. |
-| **Primary color** | Hex color (`#RRGGBB`) for buttons, active navigation, focus rings, and highlights. | Any valid 6-digit uppercase hex. Default: `#4F46E5`. |
 | **Brand icon** | SVG, PNG, JPEG, WebP, or GIF uploaded as the favicon and navbar logo. | Max 1 MB. Default: the built-in OntoBricks logo. |
+| **Default entity icon** | Emoji used for new ontology classes. | Any emoji. Default: 📦. Saved immediately when you pick a new icon (no **Save** click). |
+| **Primary color** | Hex color (`#RRGGBB`) for buttons, active navigation, focus rings, and highlights. | Any valid 6-digit uppercase hex. Default: `#4F46E5`. |
 
 #### Derived palette
 
@@ -1429,16 +1434,30 @@ is not yet affected until you save.
 
 #### Saving and resetting
 
-- **Save** sends all three fields atomically. If any field fails validation the
-  save is rejected and nothing is written — the existing branding is preserved.
+- **Save** writes title, primary color, and logo **atomically** to the registry
+  (`ui_branding`). If any field fails validation the save is rejected and
+  nothing is written — the existing branding is preserved.
 - **Reset icon** (the dedicated button in the Branding card) reverts only the
   icon draft back to the built-in default logo, leaving any unsaved title or
   color edits intact. The icon is not persisted until you click **Save**.
-- **Reset to defaults** restores `OntoBricks`, `#4F46E5`, and the built-in logo
-  as a preview. You must still click **Save** to persist the reset.
+- **Default** restores `OntoBricks`, `#4F46E5`, and the built-in logo as a
+  **local preview**, and immediately restores the factory default entity icon
+  (📦) in the registry. You must still click **Save** to persist title, color,
+  and logo.
 - After a successful save, the new branding is applied to every subsequent page
   load with no default-color flash: the server injects the CSS variables before
   any other style loads.
+
+#### Persistence
+
+| Setting | Registry key | When it is written |
+|---------|--------------|--------------------|
+| Title, color, logo | `global_config.ui_branding` | **Save** |
+| Default entity icon | `global_config.default_emoji` | As soon as you change it (or via **Default**) |
+
+The Lakebase registry table is `global_config` (JSONB). Volume-backed
+registries store the same object in `.global_config.json`. A restart of the
+app does not lose these values.
 
 #### Icon scope
 

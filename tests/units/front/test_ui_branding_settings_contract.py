@@ -65,6 +65,11 @@ def test_template_contains_ui_section_with_branding_and_theme_cards():
     assert 'id="uiBrandingSaveBtn"' in html
     assert 'id="uiBrandingDiscardBtn"' in html
     assert 'id="uiBrandingResetDefaultsBtn"' in html
+    assert re.search(
+        r'id="uiBrandingResetDefaultsBtn"[^>]*>\s*<i[^>]+></i>\s*Default\s*</button>',
+        html,
+        flags=re.DOTALL,
+    )
     assert 'id="uiBrandingStatus"' in html
 
 
@@ -137,6 +142,15 @@ def test_settings_js_previews_title_css_vars_and_icons_accessibly():
     assert "querySelectorAll('[data-brand-icon]')" in js
     assert "querySelectorAll('link[rel" in js
     assert "setAttribute('href'" in js
+
+
+def test_default_button_resets_branding_and_entity_icon():
+    js = _read(SETTINGS_JS)
+    reset_fn = js[js.find("function resetUIBrandingDefaults") : js.find("async function saveUIBranding")]
+    assert "function resetUIBrandingDefaults" in reset_fn
+    assert "UI_BRANDING_DEFAULTS" in reset_fn
+    assert "selectDefaultEmoji" in reset_fn
+    assert "📦" in reset_fn
 
 
 def test_settings_js_tracks_baseline_draft_and_discard_reset_behaviors():
@@ -241,13 +255,10 @@ def test_title_normalization_is_trimmed_consistently():
 
 def test_reset_defaults_is_noop_when_saved_state_is_already_default():
     js = _read(SETTINGS_JS)
-    reset_fn = re.search(
-        r"function resetUIBrandingDefaults\(\) \{(.*?)\n\s*\}",
-        js,
-        flags=re.DOTALL,
-    )
-    assert reset_fn, "resetUIBrandingDefaults function not found"
-    body = reset_fn.group(1)
+    start = js.find("async function resetUIBrandingDefaults")
+    end = js.find("async function saveUIBranding")
+    body = js[start:end]
+    assert start != -1 and end != -1
     assert "isSavedUIBrandingDefaultState()" in body
     assert "uiBrandingResetLogo = false;" in body
 
