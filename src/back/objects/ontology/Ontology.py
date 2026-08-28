@@ -305,7 +305,7 @@ class Ontology:
             if c.get("name")
         }
 
-        kept: list[Dict[str, Any]] = []
+        kept: List[Dict[str, Any]] = []
         removed = 0
         for prop in properties:
             prop_type = prop.get("type", "")

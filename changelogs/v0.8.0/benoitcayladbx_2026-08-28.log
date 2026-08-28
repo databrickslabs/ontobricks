@@ -76,3 +76,68 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped, 6 deselected, 1 xfailed, 0 failed in 46.14s
+
+================================================================================
+Marketing-oriented README rewrite
+================================================================================
+
+Context
+-------
+The top-level README mixed a one-line pitch with deep operational detail
+(prerequisites, Lakebase grant tables, build-performance internals, per-domain
+graph-engine keys). Reworked it into a marketing-first landing page that leads
+with the value proposition and pushes technical depth to pointers into the
+existing `documentation/` set.
+
+Changes
+-------
+1. README.md
+   - New hero + tagline ("Turn your Databricks tables into a living knowledge
+     graph — in four clicks"), refreshed badges, and a "data semantics gap"
+     opening drawn from documentation/product.md.
+   - Benefit-framed sections: Why OntoBricks, the 4-click table, "What's inside"
+     pillars (Design / Map / Build &amp; reason / Publish to AI / Govern /
+     Pluggable engine), and "Runs entirely on your Databricks".
+   - Condensed Get Started (local + deploy) with the full prerequisites and
+     idempotent deploy checklist moved behind links to get-started.md and
+     deployment.md. Dropped the verbose Lakebase grant tables, build-performance
+     and managed-synced notes from the README (they live in
+     lakebase-graphdb.md / graphdb-integration.md).
+   - Added a Documentation hub block linking product.md, user-guide.md,
+     features.md, architecture.md, api.md, mcp.md, lakebase-graphdb.md,
+     import-export.md and development.md. Kept the databrickslabs Project
+     Support disclaimer verbatim. Dropped the hard-coded version from the H1.
+
+Modified files:
+- README.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: docs-only change (README). `uv run --frozen pytest -q -m "not scenario"`
+re-run for hygiene → GREEN (no code paths touched).
+
+================================================================================
+Code-review cleanups (persistence fix)
+================================================================================
+
+Context
+-------
+Follow-ups from the global code review of the "deleted attribute resurrects"
+fix. Cosmetic only — no behaviour change.
+
+Changes
+-------
+1. src/front/static/global/js/ontology-design.js
+   Removed the informational `[BEACON]` / `[SYNC]` / `[LOAD]` `console.log`
+   debug traces shipped in the persistence paths; kept the `console.warn`
+   error-path logs (useful in the field).
+2. src/back/objects/ontology/Ontology.py
+   `prune_orphaned_datatype_properties`: annotate the accumulator as
+   `List[Dict[str, Any]]` (typing import) for consistency with the file style.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/back/objects/ontology/Ontology.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped,
+6 deselected, 1 xfailed in 41.78s. GREEN.

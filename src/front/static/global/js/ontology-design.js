@@ -412,7 +412,6 @@ function saveDesignLayoutBeacon() {
         );
         navigator.sendBeacon('/domain/design-views/save-current', blob);
         layoutDirty = false;
-        console.log('[BEACON] Layout saved via sendBeacon');
     } catch (error) {
         console.warn('[BEACON] Failed to save layout:', error);
     }
@@ -431,7 +430,6 @@ function saveOntologyBeacon() {
     if (!ontologyDesigner || isLoadingData || !ontologyDirty) return;
     // Never serialise a stale-fallback canvas back over the session ontology.
     if (!designerContentAuthoritative) {
-        console.log('[BEACON] Skipped ontology beacon — canvas not authoritative');
         return;
     }
     try {
@@ -445,7 +443,6 @@ function saveOntologyBeacon() {
         // race this keepalive /ontology/save or they overwrite the edit with a
         // pre-edit snapshot (the bug where a removed attribute reappears).
         unloadOntologyFlushed = true;
-        console.log('[BEACON] Ontology saved via keepalive');
     } catch (error) {
         console.warn('[BEACON] Failed to save ontology:', error);
     }
@@ -564,7 +561,6 @@ async function syncDesignToOntology(showFeedback = false) {
     // rebuild the ontology from it — that resurrects removed attributes/
     // relationships/parents. Persist only the visual layout instead.
     if (!designerContentAuthoritative) {
-        console.log('[SYNC] Canvas not authoritative — saving layout only');
         await saveDesignLayoutOnly();
         return;
     }
@@ -1712,7 +1708,6 @@ async function loadOntologyIntoDesigner(showAlert = true) {
     
     // Set flag to prevent auto-save during loading
     isLoadingData = true;
-    console.log('[LOAD] Starting data load - auto-save disabled');
 
     // Close the load-order race: on a full page load the Designer can run before
     // GET /ontology/load has populated OntologyState.config.classes. Without this
@@ -1938,7 +1933,6 @@ async function loadOntologyIntoDesigner(showAlert = true) {
             layoutDirty = false;
             ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
-            console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);  // Wait longer than auto-save debounce (500ms)
         return true;
     }
@@ -1976,7 +1970,6 @@ async function loadOntologyIntoDesigner(showAlert = true) {
             layoutDirty = false;
             ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
-            console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);
         return true;
     }
@@ -2115,7 +2108,6 @@ async function loadOntologyIntoDesigner(showAlert = true) {
             layoutDirty = false;
             ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
-            console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);
         return true;
     } else {
