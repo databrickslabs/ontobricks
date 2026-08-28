@@ -362,6 +362,255 @@ class TestSaveOntologyConfigFromEditor:
         assert out["mappings_cleaned"]["entity_mappings_removed"] == 1
         assert len(ps.get_classes()) == 1
 
+    def test_save_syncs_stale_attribute_out_of_design_views(
+        self, domain_session, sample_ontology_config
+    ):
+        """Removing an attribute must also drop it from design-view copies.
+
+        Each design view embeds a full attribute list per entity. If that copy
+        is not reconciled on save, the removed attribute flows back into the
+        ontology the next time the designer canvas is serialised — the bug where
+        a deleted attribute reappears after leaving and returning to the
+        Designer. See Ontology._sync_design_layout_with_ontology.
+        """
+        ps = domain_session
+        ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
+        # A design view whose Customer copy still carries a stale "customerid"
+        # (with canvas metadata) plus the two real attributes.
+        ps._data["design_layout"]["views"]["default"] = {
+            "entities": [
+                {
+                    "id": "entity_customer",
+                    "name": "Customer",
+                    "x": 10,
+                    "y": 20,
+                    "properties": [
+                        {
+                            "id": "p1",
+                            "name": "firstName",
+                            "type": "string",
+                            "isRequired": True,
+                            "isPrimaryKey": False,
+                        },
+                        {"id": "p2", "name": "lastName", "type": "string"},
+                        {"id": "stale", "name": "customerid", "type": "string"},
+                    ],
+                }
+            ]
+        }
+
+        # Save the ontology with "customerid" removed from Customer.
+        cfg = copy.deepcopy(sample_ontology_config)
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+
+        view_props = ps._data["design_layout"]["views"]["default"]["entities"][0][
+            "properties"
+        ]
+        names = [p["name"] for p in view_props]
+        assert "customerid" not in names
+        assert names == ["firstName", "lastName"]
+        # Survivor canvas metadata is preserved (not blindly rebuilt).
+        assert view_props[0]["isRequired"] is True
+        assert view_props[0]["id"] == "p1"
+
+    def test_save_adds_new_attribute_to_design_views(
+        self, domain_session, sample_ontology_config
+    ):
+        """A newly added ontology attribute is appended to design-view copies."""
+        ps = domain_session
+        ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
+        ps._data["design_layout"]["views"]["default"] = {
+            "entities": [
+                {
+                    "id": "entity_customer",
+                    "name": "Customer",
+                    "properties": [{"id": "p1", "name": "firstName"}],
+                }
+            ]
+        }
+
+        cfg = copy.deepcopy(sample_ontology_config)
+        # Customer gains a new attribute the view has never seen.
+        cfg["classes"][0]["dataProperties"].append(
+            {"name": "email", "localName": "email"}
+        )
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+
+        names = [
+            p["name"]
+            for p in ps._data["design_layout"]["views"]["default"]["entities"][0][
+                "properties"
+            ]
+        ]
+        assert names == ["firstName", "lastName", "email"]
+
+    def test_save_drops_orphaned_datatype_property(
+        self, domain_session, sample_ontology_config
+    ):
+        """A datatype attribute removed from a class must also leave ``properties``.
+
+        Each datatype attribute is mirrored as a ``DatatypeProperty`` (with a
+        ``domain``) in ``config['properties']``. The editor only removes it from
+        the class, so without pruning the mirror survives and
+        ``finalize_class_attributes`` resurrects the attribute on the next load —
+        the "deleted attribute keeps coming back" bug. See
+        Ontology.prune_orphaned_datatype_properties.
+        """
+        ps = domain_session
+        cfg = copy.deepcopy(sample_ontology_config)
+        # Customer carries "customerid" both on the class and as its datatype
+        # property mirror.
+        cfg["classes"][0]["dataProperties"].append(
+            {"name": "customerid", "localName": "customerid", "label": "Customer ID"}
+        )
+        cfg["properties"].append(
+            {
+                "uri": "http://test.org/ontology#customerid",
+                "name": "customerid",
+                "localName": "customerid",
+                "type": "DatatypeProperty",
+                "domain": "Customer",
+                "range": "string",
+            }
+        )
+        ps._data["ontology"].update(copy.deepcopy(cfg))
+
+        # Editor removes "customerid" from the class only (mirror still present).
+        edited = copy.deepcopy(cfg)
+        edited["classes"][0]["dataProperties"] = [
+            p
+            for p in edited["classes"][0]["dataProperties"]
+            if p["name"] != "customerid"
+        ]
+        Ontology(ps).save_ontology_config_from_editor({"config": edited})
+
+        prop_names = [p.get("name") for p in ps.get_properties()]
+        assert "customerid" not in prop_names
+        # The object property is untouched.
+        assert "hasOrder" in prop_names
+
+        # Re-finalizing (what happens on the next session load) must NOT
+        # resurrect the attribute.
+        Ontology.finalize_class_attributes(ps._data["ontology"])
+        customer = next(c for c in ps.get_classes() if c["name"] == "Customer")
+        assert "customerid" not in [p["name"] for p in customer["dataProperties"]]
+
+    def test_prune_orphaned_datatype_properties_keeps_valid_and_unknown(self):
+        """Prune only datatype mirrors whose attribute is gone from a known class."""
+        config = {
+            "classes": [
+                {"name": "Customer", "dataProperties": [{"name": "email"}]},
+            ],
+            "properties": [
+                # Removed attribute on a known class -> pruned.
+                {"name": "customerid", "type": "DatatypeProperty", "domain": "Customer"},
+                # Still present on the class -> kept.
+                {"name": "email", "type": "DatatypeProperty", "domain": "Customer"},
+                # Object property -> never touched.
+                {"name": "hasOrder", "type": "ObjectProperty", "domain": "Customer"},
+                # Domain points to an unknown class -> left alone.
+                {"name": "ghost", "type": "DatatypeProperty", "domain": "Missing"},
+                # No domain -> left alone.
+                {"name": "loose", "type": "DatatypeProperty", "domain": ""},
+            ],
+        }
+        removed = Ontology.prune_orphaned_datatype_properties(config)
+        assert removed == 1
+        names = [p["name"] for p in config["properties"]]
+        assert names == ["email", "hasOrder", "ghost", "loose"]
+
+    def _seed_view_with_full_graph(self, ps, sample_ontology_config):
+        """Populate ontology + a design view mirroring it (Customer, Order, hasOrder)."""
+        ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
+        ps._data["design_layout"]["views"]["default"] = {
+            "entities": [
+                {"id": "e_cust", "name": "Customer", "properties": []},
+                {"id": "e_order", "name": "Order", "properties": []},
+            ],
+            "relationships": [
+                {
+                    "id": "r1",
+                    "name": "hasOrder",
+                    "sourceEntityId": "e_cust",
+                    "targetEntityId": "e_order",
+                    "direction": "forward",
+                }
+            ],
+            "inheritances": [
+                {
+                    "id": "i1",
+                    "direction": "forward",
+                    "sourceEntityId": "e_cust",
+                    "targetEntityId": "e_order",
+                }
+            ],
+            # Real sessions store name-lists AND {source,target} dicts here; the
+            # reconciliation must handle both without raising (regression:
+            # TypeError unhashable dict crashed the whole /ontology/save).
+            "visibility": {
+                "hiddenEntities": ["Order"],
+                "collapsedEntities": [],
+                "hiddenInheritances": [{"source": "Customer", "target": "Order"}],
+                "hiddenRelationships": [{"source": "Customer", "target": "Order"}],
+            },
+        }
+
+    def test_save_prunes_deleted_relationship_from_views(
+        self, domain_session, sample_ontology_config
+    ):
+        """A relationship removed from the ontology is dropped from design views."""
+        ps = domain_session
+        self._seed_view_with_full_graph(ps, sample_ontology_config)
+        cfg = copy.deepcopy(sample_ontology_config)
+        cfg["properties"] = []  # hasOrder removed
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+        view = ps._data["design_layout"]["views"]["default"]
+        assert view["relationships"] == []
+
+    def test_save_prunes_deleted_entity_and_dependents_from_views(
+        self, domain_session, sample_ontology_config
+    ):
+        """Deleting a class removes its view entity plus rels/inheritances touching it."""
+        ps = domain_session
+        self._seed_view_with_full_graph(ps, sample_ontology_config)
+        cfg = copy.deepcopy(sample_ontology_config)
+        cfg["classes"] = [c for c in cfg["classes"] if c["name"] != "Order"]
+        cfg["properties"] = []  # hasOrder depends on Order
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+        view = ps._data["design_layout"]["views"]["default"]
+        assert [e["name"] for e in view["entities"]] == ["Customer"]
+        assert view["relationships"] == []  # endpoint gone
+        assert view["inheritances"] == []  # endpoint gone
+        assert view["visibility"]["hiddenEntities"] == []  # Order pruned
+
+    def test_save_prunes_stale_inheritance_from_views(
+        self, domain_session, sample_ontology_config
+    ):
+        """An inheritance not backed by an ontology parent link is dropped."""
+        ps = domain_session
+        self._seed_view_with_full_graph(ps, sample_ontology_config)
+        # No class declares a parent, so the seeded inheritance is stale.
+        cfg = copy.deepcopy(sample_ontology_config)
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+        view = ps._data["design_layout"]["views"]["default"]
+        assert view["inheritances"] == []
+
+    def test_save_keeps_valid_relationship_and_inheritance(
+        self, domain_session, sample_ontology_config
+    ):
+        """Content still present in the ontology survives reconciliation."""
+        ps = domain_session
+        self._seed_view_with_full_graph(ps, sample_ontology_config)
+        cfg = copy.deepcopy(sample_ontology_config)
+        # Make Order a child of Customer so the seeded inheritance is valid.
+        for c in cfg["classes"]:
+            if c["name"] == "Order":
+                c["parent"] = "Customer"
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+        view = ps._data["design_layout"]["views"]["default"]
+        assert [r["name"] for r in view["relationships"]] == ["hasOrder"]
+        assert len(view["inheritances"]) == 1
+
 
 class TestDeleteClassAndPropertyByUri:
     def test_delete_class_cascades_entity_mapping(

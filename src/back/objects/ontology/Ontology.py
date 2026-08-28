@@ -276,6 +276,59 @@ class Ontology:
         return config
 
     @staticmethod
+    def prune_orphaned_datatype_properties(config: Dict[str, Any]) -> int:
+        """Drop datatype properties whose attribute was removed from its class.
+
+        Inverse of :meth:`sync_class_data_properties`: a class's
+        ``dataProperties`` is the authoritative editor view, but each datatype
+        attribute is *also* mirrored as a ``DatatypeProperty`` in
+        ``config['properties']`` (carrying a ``domain``). The editor removes the
+        attribute from the class only — so the mirror survives and
+        ``sync_class_data_properties`` resurrects it on the next load. Here we
+        remove any datatype property whose ``domain`` names an existing class in
+        which the attribute is no longer present. Object properties and
+        properties whose domain is empty or points to an unknown class are left
+        untouched. Returns the number of properties removed.
+        """
+        classes = config.get("classes", [])
+        properties = config.get("properties", [])
+        if not classes or not properties:
+            return 0
+
+        attrs_by_class = {
+            c.get("name"): {
+                p.get("name")
+                for p in c.get("dataProperties", []) or []
+                if p.get("name")
+            }
+            for c in classes
+            if c.get("name")
+        }
+
+        kept: list[Dict[str, Any]] = []
+        removed = 0
+        for prop in properties:
+            prop_type = prop.get("type", "")
+            if prop_type not in ("DatatypeProperty", "Property", ""):
+                kept.append(prop)
+                continue
+            domain = prop.get("domain", "")
+            class_attrs = attrs_by_class.get(domain)
+            if class_attrs is None:
+                # No such class (or no domain) — not a resurrectable orphan.
+                kept.append(prop)
+                continue
+            pname = prop.get("name") or prop.get("localName")
+            if pname and pname not in class_attrs:
+                removed += 1
+                continue
+            kept.append(prop)
+
+        if removed:
+            config["properties"] = kept
+        return removed
+
+    @staticmethod
     def sync_class_data_properties(config: Dict[str, Any]) -> None:
         """Ensure ``classes[].dataProperties`` includes datatype attributes.
 
@@ -481,6 +534,17 @@ class Ontology:
             ontology_config, on_replace=_on_replace
         )
 
+        # Remove datatype properties whose attribute the editor just deleted from
+        # its class. Without this the mirror in ``properties`` survives and
+        # ``sync_class_data_properties`` resurrects the attribute on the next
+        # load (the "deleted attribute keeps coming back" bug).
+        orphaned_props = Ontology.prune_orphaned_datatype_properties(ontology_config)
+        if orphaned_props:
+            logger.info(
+                "Pruned %d orphaned datatype property(ies) removed in the editor",
+                orphaned_props,
+            )
+
         existing_constraints = s.constraints
         existing_swrl_rules = s.swrl_rules
         existing_axioms = s.axioms
@@ -538,6 +602,21 @@ class Ontology:
             old_props,
             ontology_config.get("properties", []),
         )
+        # Keep the design-layout views in sync with the ontology we just
+        # persisted. Each view stores its own copy of the structural content
+        # (attributes, relationships, inheritances) alongside layout, and those
+        # copies are NOT touched by the editor — so a stale copy flows back into
+        # the ontology the next time the designer canvas is serialised,
+        # resurrecting a just-removed attribute/relationship/parent. Reconciling
+        # here makes /ontology/save authoritative regardless of the UI path.
+        # Isolated: this defence-in-depth reconciliation must never break the
+        # ontology save itself (view schemas vary across sessions).
+        try:
+            self._sync_design_layout_with_ontology()
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "design-layout reconciliation failed — ontology still saved"
+            )
         s.save()
 
         return {
@@ -549,6 +628,136 @@ class Ontology:
                 "relationship_mappings_removed": removed_rel,
             },
         }
+
+    def _sync_design_layout_with_ontology(self) -> None:
+        """Reconcile design-layout views with the ontology (prune stale copies).
+
+        Every design view embeds a full copy of the ontology's structural
+        content alongside its layout: ``entities[].properties`` (attributes),
+        ``relationships`` and ``inheritances`` — independent of the ontology
+        ``classes``/``properties``. The editor only writes the ontology copy, so
+        these view copies drift and later overwrite the ontology when the
+        designer canvas is serialised back to config (the bug where a removed
+        attribute/relationship/parent reappears after leaving and returning to
+        the Designer).
+
+        This makes ``/ontology/save`` authoritative: for every view we
+          - drop entities whose class no longer exists,
+          - reconcile each surviving entity's attribute set with the class
+            (survivors keep their canvas metadata, removals are dropped, new
+            attributes are appended with defaults),
+          - drop relationships / inheritances that no longer match the ontology,
+          - prune dangling visibility references.
+        Additions of new entities/relationships are intentionally NOT synthesised
+        here (no server-side layout to invent) — the designer's merge-load branch
+        adds them from the ontology with fresh positions. Mutates
+        ``design_layout`` in place; the caller saves.
+        """
+        s = self._domain
+        views = (s.design_layout or {}).get("views") or {}
+        if not views:
+            return
+
+        classes = s.get_classes()
+        class_names = {c.get("name") for c in classes if c.get("name")}
+        class_attrs: Dict[str, List[str]] = {}
+        parent_by_child: Dict[str, str] = {}
+        for cls in classes:
+            name = cls.get("name")
+            if not name:
+                continue
+            class_attrs[name] = [
+                (dp.get("name") or dp.get("localName"))
+                for dp in (cls.get("dataProperties") or [])
+                if (dp.get("name") or dp.get("localName"))
+            ]
+            parent = cls.get("parent") or cls.get("parentClass")
+            if parent:
+                parent_by_child[name] = parent
+
+        # Ontology object properties as {name, frozenset(domain, range)} for
+        # orientation-agnostic matching against view relationships.
+        object_prop_keys: Set[Tuple[str, frozenset]] = set()
+        for prop in s.get_properties():
+            is_object = prop.get("type") == "ObjectProperty" or (
+                prop.get("domain") and prop.get("range")
+            )
+            if is_object and prop.get("name"):
+                object_prop_keys.add(
+                    (prop["name"], frozenset({prop.get("domain"), prop.get("range")}))
+                )
+
+        for view in views.values():
+            # 1. Entities: drop deleted classes, reconcile survivors' attributes.
+            surviving_entities = []
+            id_to_name: Dict[str, str] = {}
+            for entity in view.get("entities") or []:
+                ename = entity.get("name")
+                if ename not in class_names:
+                    continue  # class deleted from the ontology
+                if entity.get("id"):
+                    id_to_name[entity["id"]] = ename
+                existing = {
+                    p.get("name"): p
+                    for p in (entity.get("properties") or [])
+                    if p.get("name")
+                }
+                entity["properties"] = [
+                    existing.get(
+                        attr_name,
+                        {
+                            "name": attr_name,
+                            "type": "string",
+                            "isRequired": False,
+                            "isPrimaryKey": False,
+                        },
+                    )
+                    for attr_name in class_attrs.get(ename, [])
+                ]
+                surviving_entities.append(entity)
+            view["entities"] = surviving_entities
+
+            # 2. Relationships: keep only those matching an ontology object
+            # property (by name + endpoint class names, orientation-agnostic).
+            surviving_rels = []
+            for rel in view.get("relationships") or []:
+                src = id_to_name.get(rel.get("sourceEntityId"))
+                tgt = id_to_name.get(rel.get("targetEntityId"))
+                if not src or not tgt:
+                    continue  # endpoint entity was removed
+                if (rel.get("name"), frozenset({src, tgt})) in object_prop_keys:
+                    surviving_rels.append(rel)
+            view["relationships"] = surviving_rels
+
+            # 3. Inheritances: keep only pairs that still exist as class parents.
+            surviving_inh = []
+            for inh in view.get("inheritances") or []:
+                src = id_to_name.get(inh.get("sourceEntityId"))
+                tgt = id_to_name.get(inh.get("targetEntityId"))
+                if not src or not tgt:
+                    continue
+                if inh.get("direction") == "forward":
+                    parent_name, child_name = src, tgt
+                else:
+                    parent_name, child_name = tgt, src
+                if parent_by_child.get(child_name) == parent_name:
+                    surviving_inh.append(inh)
+            view["inheritances"] = surviving_inh
+
+            # 4. Prune dangling visibility references. Only the name-list keys
+            # (hiddenEntities / collapsedEntities) are string lists; the
+            # inheritance/relationship visibility keys hold {source, target}
+            # dicts and are left untouched (harmless if dangling).
+            visibility = view.get("visibility")
+            if isinstance(visibility, dict):
+                surviving_names = {e.get("name") for e in surviving_entities}
+                for key in ("hiddenEntities", "collapsedEntities"):
+                    if isinstance(visibility.get(key), list):
+                        visibility[key] = [
+                            n
+                            for n in visibility[key]
+                            if not isinstance(n, str) or n in surviving_names
+                        ]
 
     def delete_class_by_uri(self, class_uri: Optional[str]) -> Dict[str, Any]:
         """Remove a class by URI and drop entity mappings that reference it."""

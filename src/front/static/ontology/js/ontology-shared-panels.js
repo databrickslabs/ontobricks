@@ -847,9 +847,39 @@ function renderSharedEntityAttributes(viewOnly = false) {
     container.innerHTML = html;
 }
 
+/**
+ * Mirror the open entity's attribute buffer into OntologyState.config now.
+ *
+ * The panel is an edit buffer, but attribute add/remove/rename must not wait
+ * for an explicit Save: a background autosave (autoGenerateOwl → saveConfig, a
+ * section init, the registry unload beacon …) can persist OntologyState.config
+ * at any moment, and if the buffer edit has not been mirrored yet that autosave
+ * re-persists the pre-edit attribute list — the bug where a removed attribute
+ * reappears after leaving and returning. We only touch the open class's
+ * dataProperties (own attributes); name/parent/dataset etc. stay in the form
+ * until Save, and the class index is stable, so this is safe. Matches the
+ * shape saveSharedEntity writes (own attributes only; inherited are derived).
+ *
+ * @param {boolean} persist When true, also push the config to the session so
+ *     the edit survives an immediate navigation without relying on the unload
+ *     flush.
+ */
+function commitOpenEntityAttributesToConfig(persist) {
+    if (sharedPanelEditType !== 'entity' || sharedPanelEditIndex < 0) return;
+    const cls = OntologyState.config?.classes?.[sharedPanelEditIndex];
+    if (!cls) return;
+    cls.dataProperties = sharedPanelOwnAttributes
+        .filter(a => a.name && a.name.trim())
+        .map(a => ({ name: a.name.trim(), localName: a.name.trim() }));
+    if (persist && typeof window.saveConfigToSession === 'function') {
+        window.saveConfigToSession();
+    }
+}
+
 function addSharedEntityAttribute() {
     sharedPanelOwnAttributes.push({ name: '' });
     markPanelDirty();
+    commitOpenEntityAttributesToConfig(false);
     renderSharedEntityAttributes(false);
     setTimeout(() => {
         const inputs = document.querySelectorAll('#sharedEntityAttributes input:not([disabled])');
@@ -860,11 +890,17 @@ function addSharedEntityAttribute() {
 function updateSharedEntityAttribute(idx, value) {
     if (sharedPanelOwnAttributes[idx]) sharedPanelOwnAttributes[idx].name = value.trim();
     markPanelDirty();
+    // Rename typed by the user: mirror into config immediately, and persist so
+    // the session reflects it even if the user navigates right after.
+    commitOpenEntityAttributesToConfig(true);
 }
 
 function removeSharedEntityAttribute(idx) {
     sharedPanelOwnAttributes.splice(idx, 1);
     markPanelDirty();
+    // Persist the removal now: a background autosave must not re-add the
+    // attribute from a stale OntologyState.config after we leave the page.
+    commitOpenEntityAttributesToConfig(true);
     renderSharedEntityAttributes(false);
 }
 

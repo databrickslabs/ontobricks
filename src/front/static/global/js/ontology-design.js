@@ -11,6 +11,13 @@ let ontologyDirty = false;  // Track ontology edits (attributes, relationships�
 let registryDirty = false;  // Track changes not yet persisted to the registry
 let unloadOntologyFlushed = false;  // The ontology beacon owns the session write on this unload
 let ontologyVersionAtLoad = null;  // Track ontology version when design was last loaded
+// True only when the canvas was built with the ontology as the authoritative
+// content source (merge / from-OntologyState branches). False when it was built
+// from a saved design-layout view alone (ontology not yet loaded): in that case
+// the canvas is a stale visual and MUST NOT be serialised back to the session,
+// or it resurrects removed attributes/relationships/parents. See
+// loadOntologyIntoDesigner and syncDesignToOntology.
+let designerContentAuthoritative = false;
 
 /**
  * Resolve an entity name (from a property's domain/range) to an ID in the entity map.
@@ -311,6 +318,10 @@ function scheduleAutoSave() {
     layoutDirty = true;
     ontologyDirty = true;
     registryDirty = true;
+    // A user edit on the canvas makes it the current source of truth (this only
+    // runs for user-driven changes; loads are guarded by isLoadingData). Promote
+    // it so the pending sync is allowed to persist, including on a fresh canvas.
+    designerContentAuthoritative = true;
 
     if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
@@ -418,6 +429,11 @@ function saveDesignLayoutBeacon() {
  */
 function saveOntologyBeacon() {
     if (!ontologyDesigner || isLoadingData || !ontologyDirty) return;
+    // Never serialise a stale-fallback canvas back over the session ontology.
+    if (!designerContentAuthoritative) {
+        console.log('[BEACON] Skipped ontology beacon — canvas not authoritative');
+        return;
+    }
     try {
         commitDesignToOntologyState();
         if (typeof window.saveConfigToSession === 'function') {
@@ -543,6 +559,16 @@ window.refreshRelationshipInDesigner = refreshRelationshipInDesigner;
  * Sync design to OntologyState and optionally save to session
  */
 async function syncDesignToOntology(showFeedback = false) {
+    // Guard against clobber: if the canvas was built from a stale saved-layout
+    // view (ontology not authoritative) and the user has not edited it, do NOT
+    // rebuild the ontology from it — that resurrects removed attributes/
+    // relationships/parents. Persist only the visual layout instead.
+    if (!designerContentAuthoritative) {
+        console.log('[SYNC] Canvas not authoritative — saving layout only');
+        await saveDesignLayoutOnly();
+        return;
+    }
+
     const design = commitDesignToOntologyState();
     if (!design) return;
 
@@ -1687,7 +1713,21 @@ async function loadOntologyIntoDesigner(showAlert = true) {
     // Set flag to prevent auto-save during loading
     isLoadingData = true;
     console.log('[LOAD] Starting data load - auto-save disabled');
-    
+
+    // Close the load-order race: on a full page load the Designer can run before
+    // GET /ontology/load has populated OntologyState.config.classes. Without this
+    // await we fall into the "saved-layout-only" branch below, load a stale view
+    // and then serialise it back — resurrecting removed attributes/relationships/
+    // parents. Waiting guarantees the ontology is the authoritative content source
+    // whenever it actually has classes.
+    if (typeof window.waitForOntologyLoaded === 'function') {
+        try {
+            await window.waitForOntologyLoaded();
+        } catch (e) {
+            console.warn('[LOAD] waitForOntologyLoaded rejected — proceeding:', e);
+        }
+    }
+
     // First, try to load from saved design layout (domain persistence)
     const savedLayout = await loadDesignLayoutFromProject();
 
@@ -1888,6 +1928,8 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         
         const inhCount = mergedLayout.inheritances ? mergedLayout.inheritances.length : 0;
         console.log('Loading merged layout:', mergedLayout.entities.length + ' entities, ' + mergedLayout.relationships.length + ' relationships, ' + inhCount + ' inheritances');
+        // Content came from the ontology (authoritative) with saved positions.
+        designerContentAuthoritative = true;
         ontologyDesigner.fromJSON(mergedLayout, { autoLayout: false, center: _layoutHasHidden, animate: false });
         
         // Re-enable auto-save after loading completes
@@ -1922,6 +1964,10 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         
         const inhCount = savedLayout.inheritances ? savedLayout.inheritances.length : 0;
         console.log('Loading from saved design layout:', savedLayout.entities.length + ' entities, ' + inhCount + ' inheritances');
+        // Stale-fallback: the ontology was not available, so this canvas reflects
+        // a design-view snapshot only. Mark it non-authoritative so autosave never
+        // serialises it back over the session ontology.
+        designerContentAuthoritative = false;
         ontologyDesigner.fromJSON(savedLayout, { autoLayout: false, center: _layoutHasHidden, animate: false });
         
         // Re-enable auto-save after loading completes
@@ -1952,7 +1998,9 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         }
         
         ontologyDesigner.clear();
-        
+        // Built directly from OntologyState.config (authoritative content).
+        designerContentAuthoritative = true;
+
         // Create entity map for relationship linking
         const entityMap = new Map();
         
