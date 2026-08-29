@@ -158,6 +158,40 @@ def test_submit_wrong_status_conflicts():
 
 
 # ----------------------------------------------------------------------
+# No Backend (ontology-only) domains — submit/publish without a build
+# ----------------------------------------------------------------------
+
+
+def test_review_detail_no_backend_can_submit_on_ontology_alone():
+    """A No Backend domain never builds a graph, so its ontology is enough."""
+    svc, info, _ = _make_svc(status="DRAFT", last_build="", has_ontology=True)
+    info["graph_backend"] = "none"
+    detail = _call("review_detail", svc, user_role="",
+                   user_domain_role=ROLE_BUILDER)
+    assert detail["actions"]["can_submit"] is True
+    assert detail["actions"]["submit_blocked_reason"] == ""
+
+
+def test_review_detail_backend_domain_still_requires_a_build():
+    """Relaxation is scoped to No Backend; graph domains keep the build gate."""
+    svc, info, _ = _make_svc(status="DRAFT", last_build="", has_ontology=True)
+    info["graph_backend"] = "lakebase"
+    detail = _call("review_detail", svc, user_role="",
+                   user_domain_role=ROLE_BUILDER)
+    assert detail["actions"]["can_submit"] is False
+    assert "never been built" in detail["actions"]["submit_blocked_reason"]
+
+
+def test_review_detail_no_backend_without_ontology_is_blocked():
+    svc, info, _ = _make_svc(status="DRAFT", last_build="", has_ontology=False)
+    info["graph_backend"] = "none"
+    detail = _call("review_detail", svc, user_role="",
+                   user_domain_role=ROLE_BUILDER)
+    assert detail["actions"]["can_submit"] is False
+    assert detail["actions"]["submit_blocked_reason"] == "Define an ontology first."
+
+
+# ----------------------------------------------------------------------
 # Sign-off
 # ----------------------------------------------------------------------
 
@@ -390,6 +424,14 @@ def test_pending_actions_draft_without_build_has_none():
         "DRAFT", ROLE_BUILDER, "a@a.com",
         {"approvers": [], "approvals": 0}, 1, "")
     assert actions == []
+
+
+def test_pending_actions_no_backend_can_submit_without_build():
+    actions = ReviewService._pending_actions(
+        "DRAFT", ROLE_BUILDER, "a@a.com",
+        {"approvers": [], "approvals": 0}, 1, "",
+        can_submit_content=True)
+    assert [a["id"] for a in actions] == ["submit"]
 
 
 def test_pending_actions_review_member_can_review():
@@ -716,6 +758,32 @@ def test_my_tasks_in_review_lists_review_and_publish_for_admin():
     assert "review" in ids and "publish" in ids  # admin overrides quorum
     assert task["approvals"] == 0
     assert task["required"] == 2
+
+
+def test_my_tasks_no_backend_lists_submit_without_build():
+    """An ontology-only DRAFT version is submittable from the worklist."""
+    domains = [{
+        "name": "acme", "review_quorum": 1,
+        "versions": [
+            {"version": "2", "status": "DRAFT", "last_build": "",
+             "graph_backend": "none", "has_ontology": True},
+        ],
+    }]
+    result = _call_my_tasks(_my_tasks_svc(domains))
+    task = result["tasks"][0]
+    assert [a["id"] for a in task["actions"]] == ["submit"]
+
+
+def test_my_tasks_no_backend_without_ontology_has_no_submit():
+    domains = [{
+        "name": "acme", "review_quorum": 1,
+        "versions": [
+            {"version": "2", "status": "DRAFT", "last_build": "",
+             "graph_backend": "none", "has_ontology": False},
+        ],
+    }]
+    result = _call_my_tasks(_my_tasks_svc(domains))
+    assert result["tasks"] == []
 
 
 def test_my_tasks_skips_versions_without_pending_actions():

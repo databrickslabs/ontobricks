@@ -257,6 +257,43 @@ function applyDomainInfo(data) {
     // Sub-pages unlock as soon as a domain is open in session.
     // UC-save is no longer required for basic navigation.
     updateMenusForDomainStatus(hasDomain);
+
+    // Ontology-only ("No Backend") domains have no graph, so Mapping and
+    // Knowledge Graph are disabled entirely.
+    updateMenusForGraphBackend(hasDomain ? (data.info && data.info.graph_backend) : null);
+}
+
+/**
+ * Disable Mapping + Knowledge Graph navigation for "No Backend" domains.
+ * @param {string|null} backend - The per-domain graph backend, or null.
+ */
+function updateMenusForGraphBackend(backend) {
+    const graphless = backend === 'none';
+    const title = 'Not available for a No Backend (ontology-only) domain';
+    document.querySelectorAll('.nav-requires-graph').forEach(link => {
+        if (graphless) {
+            link.classList.add('nav-disabled');
+            link.setAttribute('aria-disabled', 'true');
+            link.style.pointerEvents = 'none';
+            link.setAttribute('title', title);
+        } else {
+            link.classList.remove('nav-disabled');
+            link.removeAttribute('aria-disabled');
+            link.style.pointerEvents = '';
+            link.removeAttribute('title');
+        }
+    });
+    document.querySelectorAll('.sidebar-requires-graph').forEach(link => {
+        if (graphless) {
+            link.classList.add('sidebar-disabled', 'disabled');
+            link.style.pointerEvents = 'none';
+            link.setAttribute('title', title);
+        } else {
+            link.classList.remove('sidebar-disabled', 'disabled');
+            link.style.pointerEvents = '';
+            link.removeAttribute('title');
+        }
+    });
 }
 
 /**

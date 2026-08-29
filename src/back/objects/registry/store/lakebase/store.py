@@ -889,6 +889,12 @@ class LakebaseRegistryStore(RegistryStore):
                                 "status": v["status"] or "DRAFT",
                                 "last_update": v["last_update"] or "",
                                 "last_build": v["last_build"] or "",
+                                "graph_backend": normalize_graph_backend(
+                                    (v["info"] or {}).get("graph_backend")
+                                ),
+                                "has_ontology": bool(
+                                    (v["ontology"] or {}).get("classes")
+                                ),
                             }
                             for v in versions
                         ],

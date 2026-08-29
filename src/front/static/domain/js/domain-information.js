@@ -29,6 +29,23 @@ function toggleLakehouseMaterializationSection() {
     section.classList.toggle('d-none', backend !== 'databricks');
 }
 
+// A "No Backend" domain is ontology-only: every graph MCP tool is unchecked
+// and locked, and the explanatory notice is revealed. Switching back to a real
+// backend re-enables (and re-checks) the graph tools to their default state.
+function applyGraphlessConstraints() {
+    const backend = (document.getElementById('domainGraphBackend') || {}).value;
+    const graphless = backend === 'none';
+
+    const notice = document.getElementById('noBackendNotice');
+    if (notice) notice.classList.toggle('d-none', !graphless);
+
+    document.querySelectorAll('.js-mcp-tool[data-requires-graph="true"]').forEach(el => {
+        el.disabled = graphless;
+        el.checked = !graphless;
+    });
+    if (typeof syncMcpSelectAll === 'function') syncMcpSelectAll();
+}
+
 // Populate the Neo4j connection dropdown from Settings named connections.
 // In-flight guard: the section toggle fires on init and on every backend
 // change, so without it a single reveal would issue several identical fetches.
@@ -399,6 +416,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
             graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
             graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
+            graphBackendEl.addEventListener('change', applyGraphlessConstraints);
             graphBackendEl.addEventListener('change', () => {
                 graphBackendEl.dataset.userEdited = '1';
             });
@@ -416,6 +434,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         syncNeo4jConnectionSection();
         toggleLakehouseMaterializationSection();
+        applyGraphlessConstraints();
         const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
         if (refreshDbBtn) {
             refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
@@ -480,6 +499,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             // `dataset.savedValue` when the select has nothing of its own.
             syncNeo4jConnectionSection();
             toggleLakehouseMaterializationSection();
+            applyGraphlessConstraints();
         }
 
         // The DT panel reads catalog/schema from the dropdown rendering of

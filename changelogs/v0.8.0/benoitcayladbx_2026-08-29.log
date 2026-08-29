@@ -35,3 +35,83 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-29.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5682 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.93s.
+
+## Add a "No Backend" (ontology-only) domain type
+
+Context: Some domains only need to publish their ontology, with no Knowledge
+Graph. Introduce a per-domain graph backend value "none" that disables all
+graph tooling: the Mapping and Knowledge Graph navbar features are turned off,
+the graph MCP tools are unselected and force-disabled (leaving only
+describe_ontology), and a habilitated user can move such a domain to IN-REVIEW
+and PUBLISHED on the strength of its ontology alone, with no build. The
+standalone MCP server needs no change: it already hides graph tools via the
+persisted policy, so an ontology-only domain serves only ontology information.
+
+Changes:
+
+1. src/back/core/graphdb/GraphDBFactory.py
+   Added "none" to GRAPH_BACKENDS with a GRAPHLESS_BACKEND constant and an
+   is_graphless_backend() helper; _create_auto now returns None (no store) for
+   a graphless domain.
+2. src/back/core/mcp_tools.py
+   Tagged each domain tool with requires_graph, exposed MCP_GRAPH_TOOL_NAMES,
+   and added force_graphless_policy() to disable every graph tool in a policy.
+3. src/back/objects/domain/Domain.py
+   save_domain_info now force-disables the graph MCP tools whenever the domain
+   backend is "none", independent of the client payload.
+4. src/back/objects/session/DomainSession.py
+   Documented "none" as a valid per-domain graph backend.
+5. src/back/objects/registry/ReviewService.py
+   Relaxed can_submit / submit_blocked_reason (review_detail) and the My Tasks
+   worklist (_pending_actions) so a No Backend domain submits on its ontology
+   alone; graph-backed domains still require a build.
+6. src/back/objects/registry/store/lakebase/store.py
+   Surfaced per-version graph_backend and has_ontology in the cached metadata
+   so the worklist can gate submission without extra reads.
+7. src/front/templates/partials/domain/_domain_information.html
+   Added the "No Backend" option, an ontology-only notice, and a
+   data-requires-graph marker on each MCP tool checkbox.
+8. src/front/static/domain/js/domain-information.js
+   Added applyGraphlessConstraints() to uncheck + lock the graph MCP tools and
+   reveal the notice for a No Backend domain, wired on change/init/rehydrate.
+9. src/front/static/domain/js/domain.js
+   Re-applied the graphless lock after an MCP policy rehydrate and stopped
+   "select all" from re-checking a locked tool.
+10. src/front/static/global/js/navbar.js
+    Added updateMenusForGraphBackend() to disable the Mapping and Knowledge
+    Graph navigation for a No Backend domain.
+11. src/front/templates/base.html
+    Marked the Mapping and Knowledge Graph subnav tabs with nav-requires-graph.
+12. src/front/routes/mapping.py, src/front/routes/dtwin.py
+    Redirected a No Backend domain away from the Mapping and Knowledge Graph
+    pages (direct-URL hardening).
+13. tests/units/graphdb/test_graphless_backend.py,
+    tests/units/core/test_mcp_graphless_policy.py,
+    tests/units/registry/test_review_service.py,
+    tests/units/front/test_no_backend_ui.py,
+    tests/units/graphdb/delta/test_triple_store_backend_config.py
+    Covered the vocabulary, forced policy, review-gate relaxation, and the
+    frontend contracts; updated the allowed-backends assertion.
+
+Modified files:
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/mcp_tools.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/session/DomainSession.py
+- src/back/objects/registry/ReviewService.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/templates/base.html
+- src/front/static/domain/js/domain-information.js
+- src/front/static/domain/js/domain.js
+- src/front/static/global/js/navbar.js
+- src/front/routes/mapping.py
+- src/front/routes/dtwin.py
+- tests/units/graphdb/test_graphless_backend.py
+- tests/units/core/test_mcp_graphless_policy.py
+- tests/units/registry/test_review_service.py
+- tests/units/front/test_no_backend_ui.py
+- tests/units/graphdb/delta/test_triple_store_backend_config.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5714 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.67s.

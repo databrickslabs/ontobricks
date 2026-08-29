@@ -49,6 +49,7 @@ from back.core.mcp_tools import (
     MCP_DOMAIN_TOOLS,
     MCP_REGISTRY_TOOLS,
     coerce_mcp_policy,
+    force_graphless_policy,
 )
 from back.objects.registry import RegistryService
 from back.objects.registry.registry_cache import invalidate_registry_cache
@@ -409,6 +410,15 @@ class Domain:
             }
         )
         self._s.info.pop("neo4j_database", None)
+
+        # Ontology-only ("No Backend") domains never expose graph tools: force
+        # every graph tool disabled regardless of what the client submitted.
+        from back.core.graphdb.GraphDBFactory import is_graphless_backend
+
+        if is_graphless_backend(self._s.info.get("graph_backend")):
+            self._s.info["mcp_policy"] = force_graphless_policy(
+                self._s.info.get("mcp_policy")
+            )
 
         if self._s.info.get("graph_backend") == "neo4j" and not str(
             self._s.info.get("neo4j_connection") or ""

@@ -42,7 +42,12 @@ MCP_REGISTRY_TOOLS: frozenset[str] = frozenset(
 )
 
 # Domain-scoped tools, in the order the MCP tab renders them.
-MCP_DOMAIN_TOOLS: tuple[Dict[str, str], ...] = (
+#
+# ``requires_graph`` marks a tool that needs a built graph / triple store.
+# ``describe_ontology`` is the only one that works on the ontology alone, so it
+# is the sole domain tool a "No Backend" (``graph_backend == "none"``) domain
+# exposes; every other tool is force-disabled for such domains.
+MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
     {
         "name": "describe_ontology",
         "label": "Describe ontology",
@@ -50,56 +55,70 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, str], ...] = (
         "relationships (domain/range) and the raw OWL. Works without a "
         "built graph, so it is the sole tool an ontology-only domain "
         "exposes.",
+        "requires_graph": False,
     },
     {
         "name": "list_entity_types",
         "label": "List entity types",
         "description": "Graph overview: entity types with instance counts and "
         "predicate usage.",
+        "requires_graph": True,
     },
     {
         "name": "describe_entity",
         "label": "Describe entity",
         "description": "Ground-truth lookup of one entity and its neighbours, "
         "including inferred triples.",
+        "requires_graph": True,
     },
     {
         "name": "get_status",
         "label": "Get status",
         "description": "Diagnostic: view table, graph name, triple count.",
+        "requires_graph": True,
     },
     {
         "name": "get_graphql_schema",
         "label": "Get GraphQL schema",
         "description": "Auto-generated GraphQL schema (SDL) for the domain.",
+        "requires_graph": True,
     },
     {
         "name": "query_graphql",
         "label": "Query GraphQL",
         "description": "Typed, schema-filtered queries with nested traversal.",
+        "requires_graph": True,
     },
     {
         "name": "get_entity_context",
         "label": "Get entity context",
         "description": "A node's dataset rows, cross-domain bridges and "
         "available actions.",
+        "requires_graph": True,
     },
     {
         "name": "invoke_entity_action",
         "label": "Invoke entity action",
         "description": "Run a Unity Catalog function declared on the entity's "
         "class.",
+        "requires_graph": True,
     },
     {
         "name": "compute_virtual_attributes",
         "label": "Compute virtual attributes",
         "description": "Run the Unity Catalog functions that compute an entity's "
         "virtual attributes and return their live values.",
+        "requires_graph": True,
     },
 )
 
 MCP_DOMAIN_TOOL_NAMES: frozenset[str] = frozenset(
     t["name"] for t in MCP_DOMAIN_TOOLS
+)
+
+# Tools that need a built graph — force-disabled on a "No Backend" domain.
+MCP_GRAPH_TOOL_NAMES: frozenset[str] = frozenset(
+    t["name"] for t in MCP_DOMAIN_TOOLS if t.get("requires_graph")
 )
 
 # Ontology attachments surfaced in the ``[Context]`` block, in render order.
@@ -180,3 +199,17 @@ def coerce_mcp_policy(raw: Any) -> Dict[str, Any]:
     if non_default:
         policy["context"] = non_default
     return policy
+
+
+def force_graphless_policy(policy: Any) -> Dict[str, Any]:
+    """Return *policy* with every graph tool added to ``disabled_tools``.
+
+    Used for "No Backend" (ontology-only) domains: whatever the client sent,
+    the persisted policy must disable all graph-dependent tools so the MCP
+    surface falls back to ``describe_ontology`` alone. The input is coerced
+    first, so a malformed blob still yields a valid policy.
+    """
+    coerced = coerce_mcp_policy(policy)
+    disabled = set(coerced.get("disabled_tools", [])) | set(MCP_GRAPH_TOOL_NAMES)
+    coerced["disabled_tools"] = sorted(disabled)
+    return coerced

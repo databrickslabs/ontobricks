@@ -29,7 +29,10 @@ logger = get_logger(__name__)
 #   ``lakebase``   -> triple_store_backend=lakebase,  graph_engine=lakebase
 #   ``databricks`` -> triple_store_backend=databricks (Delta)
 #   ``neo4j``      -> triple_store_backend=lakebase,  graph_engine=neo4j
-GRAPH_BACKENDS: Tuple[str, ...] = ("lakebase", "databricks", "neo4j")
+#   ``none``       -> ontology-only domain: no graph is ever built, no store is
+#                     created, and the graph-dependent features are disabled.
+GRAPHLESS_BACKEND = "none"
+GRAPH_BACKENDS: Tuple[str, ...] = ("lakebase", "databricks", "neo4j", GRAPHLESS_BACKEND)
 DEFAULT_GRAPH_BACKEND = "lakebase"
 
 # How the Lakehouse backend shapes the ``…_data`` relation, stored per domain in
@@ -46,6 +49,11 @@ def normalize_graph_backend(value: Optional[str]) -> str:
     """Return a valid per-domain graph backend, defaulting to ``lakebase``."""
     v = (value or "").strip().lower()
     return v if v in GRAPH_BACKENDS else DEFAULT_GRAPH_BACKEND
+
+
+def is_graphless_backend(value: Optional[str]) -> bool:
+    """True when the (normalized) backend is the ontology-only ``none`` type."""
+    return normalize_graph_backend(value) == GRAPHLESS_BACKEND
 
 
 def normalize_lakehouse_materialization(value: Optional[str]) -> str:
@@ -182,6 +190,10 @@ class GraphDBFactory:
 
         Mirrors the former ``TripleStoreFactory`` ``backend="graph"`` behaviour.
         """
+        if is_graphless_backend(self._resolve_graph_backend(domain)):
+            # Ontology-only domain: there is no graph store to build or query.
+            logger.debug("Graph backend is 'none'; no store is created.")
+            return None
         ts_backend = self._resolve_triple_store_backend(domain, settings)
         if ts_backend == "databricks":
             return self.create(domain, settings, engine="delta", engine_config={})

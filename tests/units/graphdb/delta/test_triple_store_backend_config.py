@@ -16,7 +16,7 @@ REGISTRY = {"catalog": "c", "schema": "s", "volume": "v"}
 
 class TestGraphBackendVocabulary:
     def test_allowed_backends(self):
-        assert set(GRAPH_BACKENDS) == {"lakebase", "databricks", "neo4j"}
+        assert set(GRAPH_BACKENDS) == {"lakebase", "databricks", "neo4j", "none"}
 
     def test_normalize_defaults_to_lakebase(self):
         assert normalize_graph_backend(None) == "lakebase"

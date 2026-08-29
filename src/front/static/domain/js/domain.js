@@ -525,7 +525,8 @@ function initMcpPolicyTab() {
     if (!selectAll || !tools.length) return;
 
     selectAll.addEventListener('change', () => {
-        tools.forEach(el => { el.checked = selectAll.checked; });
+        // Never re-check a locked tool (graph tools on a "No Backend" domain).
+        tools.forEach(el => { if (!el.disabled) el.checked = selectAll.checked; });
         selectAll.indeterminate = false;
     });
     tools.forEach(el => el.addEventListener('change', syncMcpSelectAll));
@@ -558,7 +559,12 @@ function applyMcpPolicy(policy) {
     document.querySelectorAll('.js-mcp-context').forEach(el => {
         el.value = context[el.dataset.featureName] || 'normal';
     });
-    syncMcpSelectAll();
+    // Re-lock the graph tools when the reloaded domain is ontology-only.
+    if (typeof applyGraphlessConstraints === 'function') {
+        applyGraphlessConstraints();
+    } else {
+        syncMcpSelectAll();
+    }
 }
 
 /**

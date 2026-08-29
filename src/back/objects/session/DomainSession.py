@@ -83,7 +83,9 @@ def get_empty_domain() -> Dict[str, Any]:
                 # Per-domain MCP surface policy (tools + dataset/bridges/
                 # actions handling). Empty means "everything exposed".
                 "mcp_policy": {},
-                # Mandatory per-domain graph backend: lakebase | databricks | neo4j.
+                # Mandatory per-domain graph backend:
+                # lakebase | databricks | neo4j | none.
+                # ``none`` is an ontology-only domain: no graph is ever built.
                 "graph_backend": "lakebase",
                 # Named Neo4j connection from Settings → Neo4j (required when
                 # graph_backend == "neo4j"). Value is the connection ``name``.

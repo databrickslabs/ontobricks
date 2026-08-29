@@ -109,7 +109,10 @@ domains between environments with the **OBX** export/import (UI or
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
-**Lakehouse** (governed Delta triple tables, zero extra infra), or **Neo4j**.
+**Lakehouse** (governed Delta triple tables, zero extra infra), **Neo4j**, or
+**No Backend** for ontology-only domains that publish their ontology with no
+graph built (Mapping and Knowledge Graph are disabled and the MCP surface
+serves only ontology information).
 Connection config stays workspace-global. Full reference:
 [Lakebase Graph DB](documentation/lakebase-graphdb.md) ·
 [Graph DB Integration](documentation/graphdb-integration.md).

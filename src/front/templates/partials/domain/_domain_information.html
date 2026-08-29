@@ -202,6 +202,7 @@
                                 <option value="lakebase" {% if (domain.graph_backend or 'lakebase') == 'lakebase' %}selected{% endif %}>Lakebase (Postgres)</option>
                                 <option value="databricks" {% if domain.graph_backend == 'databricks' %}selected{% endif %}>Lakehouse</option>
                                 <option value="neo4j" {% if domain.graph_backend == 'neo4j' %}selected{% endif %}>Neo4j</option>
+                                <option value="none" {% if domain.graph_backend == 'none' %}selected{% endif %}>No Backend (ontology only)</option>
                             </select>
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>Storage engine used to build and query this
@@ -212,6 +213,14 @@
                                 <i class="bi bi-exclamation-triangle me-1"></i>
                                 Changing the backend requires rebuilding the Knowledge Graph — existing graph
                                 artifacts in the previous backend are not migrated.
+                            </div>
+                            <!-- Shown only when backend = No Backend (JS toggles d-none) -->
+                            <div class="alert alert-info border small mt-2 py-2 mb-0 {% if domain.graph_backend != 'none' %}d-none{% endif %}" id="noBackendNotice">
+                                <i class="bi bi-diagram-2 me-1"></i>
+                                <strong>Ontology-only domain.</strong> No graph is built: the
+                                <strong>Mapping</strong> and <strong>Knowledge Graph</strong> features are disabled,
+                                the graph MCP tools are turned off (only <code>describe_ontology</code> is exposed),
+                                and the domain can be submitted for review and published on its ontology alone.
                             </div>
                         </div>
 
@@ -325,6 +334,7 @@
                                     <div class="form-check">
                                         <input class="form-check-input domain-editable js-mcp-tool" type="checkbox"
                                                id="mcpTool_{{ tool.name }}" data-tool-name="{{ tool.name }}"
+                                               data-requires-graph="{{ 'true' if tool.requires_graph else 'false' }}"
                                                {% if tool.name not in (domain.mcp_policy.get('disabled_tools') or []) %}checked{% endif %}>
                                         <label class="form-check-label" for="mcpTool_{{ tool.name }}">
                                             {{ tool.label }}
