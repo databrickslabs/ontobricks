@@ -858,7 +858,7 @@ function showNewDomainDialog() {
                             <p class="text-muted small mb-3">Enter a name for your new domain. You can add more details later.</p>
                             <div class="mb-3">
                                 <label for="${modalId}_name" class="form-label fw-semibold">Domain name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="${modalId}_name"
+                                <input type="text" class="form-control new-domain-field" id="${modalId}_name"
                                        placeholder="e.g. PatientCare, SupplyChain…" autocomplete="off" maxlength="64"
                                        pattern="[A-Z][A-Za-z0-9]*" inputmode="text" spellcheck="false">
                                 <div class="form-text">CamelCase alphanumeric only — no spaces or special characters.</div>
@@ -866,7 +866,7 @@ function showNewDomainDialog() {
                             </div>
                             <div class="mb-3">
                                 <label for="${modalId}_desc" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
-                                <textarea class="form-control" id="${modalId}_desc" rows="2"
+                                <textarea class="form-control new-domain-field" id="${modalId}_desc" rows="2"
                                           placeholder="Short description of this domain…" maxlength="256"></textarea>
                             </div>
                             <div class="mb-1">
@@ -874,7 +874,7 @@ function showNewDomainDialog() {
                                     <i class="bi bi-robot me-1"></i>LLM Endpoint <span class="text-muted fw-normal">(optional — for OntoBricks Agents)</span>
                                 </label>
                                 <div class="input-group">
-                                    <select class="form-select" id="${modalId}_llm">
+                                    <select class="form-select new-domain-field" id="${modalId}_llm">
                                         <option value="">Loading endpoints…</option>
                                     </select>
                                     <button type="button" class="btn btn-outline-secondary" id="${modalId}_llm_refresh" title="Refresh endpoints">

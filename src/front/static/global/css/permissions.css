@@ -262,6 +262,9 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
        admin "Back to Draft" / Publish on an IN-REVIEW or PUBLISHED
        version — opens this modal to capture an audit note, so the box
        must stay editable precisely when the domain is read-only.
+     - ``.new-domain-field`` fields in the New Domain modal. Creating a
+       separate domain is independent of the currently loaded domain's
+       lifecycle status or edit lock.
      - ``[data-collab]`` the discussion offcanvas fields (comment /
        reply boxes, task title / assignee / due-date — see
        ``comments-panel.js``). Comments and tasks are collaboration, not
@@ -292,9 +295,9 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
    ``/ontology/pitfalls/analyze`` endpoint is status-open), so a reader on
    a PUBLISHED/IN-REVIEW version must still be able to pick which patterns
    to check and run the analysis. */
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not([data-collab]),
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not([data-collab]),
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not([data-collab]) {
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not(.new-domain-field):not([data-collab]),
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not(.new-domain-field):not([data-collab]),
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(.new-domain-field):not([data-collab]) {
     pointer-events: none !important;
     background-color: #e9ecef !important;
     opacity: 0.7 !important;

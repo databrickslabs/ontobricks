@@ -215,14 +215,23 @@ function applyDomainStatusBadge(el, status) {
 /**
  * Apply domain name and menu visibility from pre-fetched data.
  */
+function domainIsLoaded(data) {
+    const stats = data.stats || {};
+    const hasContent = (stats.entities > 0) || (stats.entity_mappings > 0);
+    const name = data.info && data.info.name;
+    const hasCustomName = name && name !== 'NewProject' && name !== 'NewDomain';
+    return Boolean(hasCustomName || hasContent);
+}
+
+async function hasLoadedDomain() {
+    const state = await fetchCached('/navbar/state', 15000);
+    return domainIsLoaded(state.domain || {});
+}
+
 function applyDomainInfo(data) {
     const currentDomainNameEl = document.getElementById('currentDomainName');
     const domainSectionName = document.getElementById('domainSectionName');
-
-    const stats = data.stats || {};
-    const hasContent = (stats.entities > 0) || (stats.entity_mappings > 0);
-    const hasCustomName = data.info && data.info.name && data.info.name !== 'NewProject' && data.info.name !== 'NewDomain';
-    const hasDomain = hasCustomName || hasContent;
+    const hasDomain = domainIsLoaded(data);
 
     const domainName = (data.info && data.info.name) ? data.info.name : 'NewDomain';
     const version = (data.info && data.info.version) || '1';
@@ -414,31 +423,18 @@ window.refreshDigitalTwinStatus = refreshNavbarIndicators;
 // ==========================================
 
 /**
- * Start a new domain — collects name/description/LLM via popup, closes any
- * currently loaded domain (releasing its edit lock), persists session info,
- * then registers the new domain in the registry directly (no Save popup) and
- * opens it.
+ * Start a new domain — closes any currently loaded domain (with the shared
+ * save/discard/cancel flow), then collects the new details and registers it.
  */
 async function domainNew() {
+    const closed = await closeCurrentDomain({ navigate: false });
+    if (!closed) return;
+
     const input = await showNewDomainDialog();
     if (!input) return;
 
     try {
-        // 1. Close any loaded domain first: /domain/close releases the current
-        // domain's edit lock (no-op when nothing is loaded / not the holder)
-        // and resets the session to an empty state.
-        const clearResp = await fetch('/domain/close', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
-        });
-        const clearData = await clearResp.json();
-        if (!clearData.success) {
-            showNotification('Error: ' + clearData.message, 'error');
-            return;
-        }
-
-        // 2. Persist name, description, and LLM endpoint to session
+        // Persist name, description, and LLM endpoint to session.
         const payload = { name: input.name };
         if (input.description) payload.description = input.description;
         if (input.llm_endpoint) payload.llm_endpoint = input.llm_endpoint;
@@ -451,7 +447,7 @@ async function domainNew() {
 
         invalidateDomainCaches();
 
-        // 2b. Sync any stale Information form on the current page with the NEW
+        // Sync any stale Information form on the current page with the NEW
         // domain values. When "New Domain" is triggered from another domain's
         // Information page, #domainName still holds the previously-loaded
         // domain's name. doDomainSave()'s pre-save duplicate-name guard reads
@@ -473,7 +469,7 @@ async function domainNew() {
             if (typeof updateAutoBaseUri === 'function') updateAutoBaseUri();
         } catch (e) { /* Information form not on this page — nothing to sync */ }
 
-        // 3. Register the new domain in the registry directly (no Save popup)
+        // Register the new domain in the registry directly (no Save popup)
         // and open it on success.
         const ok = await doDomainSave({ afterSave: '/domain/#information' });
         if (!ok) return;
@@ -742,50 +738,89 @@ async function doDomainSave(opts = {}) {
  * over). Closing asks whether to save first, then releases the edit lock,
  * resets the session and returns to the Home page.
  */
-async function domainClose() {
-    const choice = await showCloseDomainDialog();
-    if (!choice || choice === 'cancel') return;
+function canSaveBeforeClose() {
+    if (window.OB && typeof window.OB.canEditOntology === 'function') {
+        return window.OB.canEditOntology();
+    }
+    return isSwitchSaveAllowed() && window.editLockMode !== 'view';
+}
 
-    if (choice === 'save') {
-        // Persist domain info from the form (if present), then save to the
-        // registry. Abort the close if the save did not succeed so the user
-        // does not silently lose changes.
+async function closeCurrentDomain(options = {}) {
+    const { navigate = false } = options;
+    let loaded;
+    try {
+        loaded = await hasLoadedDomain();
+    } catch (error) {
+        showNotification('Could not determine whether a domain is open.', 'error');
+        return false;
+    }
+    if (!loaded) return true;
+
+    const allowSave = canSaveBeforeClose();
+    const choice = await showCloseDomainDialog({ allowSave });
+    if (!choice || choice === 'cancel') return false;
+
+    if (choice === 'save' && allowSave) {
         await saveDomainInfoBeforeSave();
-        const ok = await doDomainSave({ afterSave: null });
-        if (!ok) return;
+        const saved = await doDomainSave({ afterSave: null });
+        if (!saved) return false;
     }
 
-    await closeDomainSession();
+    return closeDomainSession({ navigate });
+}
+
+async function domainClose() {
+    await closeCurrentDomain({ navigate: true });
 }
 
 /**
- * Release the edit lock, reset the session and navigate to Home.
+ * Release the edit lock, reset the session and optionally navigate to Home.
  */
-async function closeDomainSession() {
+async function closeDomainSession(options = {}) {
+    const { navigate = true } = options;
     showDomainLoading('Closing domain...');
     try {
-        await fetch('/domain/close', {
+        const response = await fetch('/domain/close', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin'
         });
-    } catch (e) {
-        // Best-effort: still navigate home so the user is not stuck.
-        console.warn('Could not cleanly close domain:', e);
+        const data = await response.json();
+        if (!response.ok || data.success === false) {
+            throw new Error(data.message || 'Could not close domain');
+        }
+        invalidateDomainCaches();
+        if (navigate) {
+            window.location.href = '/';
+        } else {
+            applyDomainInfo({});
+            hideDomainLoading();
+        }
+        return true;
+    } catch (error) {
+        hideDomainLoading();
+        showNotification('Failed to close domain: ' + error.message, 'error');
+        return false;
     }
-    invalidateDomainCaches();
-    window.location.href = '/';
 }
 
 /**
  * Ask the user whether to save before closing.
  * Resolves to 'save' | 'discard' | 'cancel'.
  */
-function showCloseDomainDialog() {
+function showCloseDomainDialog(options = {}) {
+    const { allowSave = true } = options;
     return new Promise((resolve) => {
         const existing = document.getElementById('domainCloseModal');
         if (existing) existing.remove();
 
+        const closeHint = allowSave
+            ? 'Do you want to save your changes before closing?'
+            : 'This domain is open in read-only mode and cannot be saved from this session.';
+        const saveAction = allowSave ? `<button type="button" class="btn btn-primary" id="closeSaveBtn">
+                   <i class="bi bi-cloud-upload"></i> Save &amp; Close
+               </button>`
+            : '';
         const modalHtml = `
             <div class="modal fade" id="domainCloseModal" tabindex="-1">
                 <div class="modal-dialog modal-dialog-centered">
@@ -796,16 +831,14 @@ function showCloseDomainDialog() {
                         </div>
                         <div class="modal-body">
                             <p class="mb-2">Closing releases the edit lock so another user can edit this domain.</p>
-                            <p class="text-muted mb-0">Do you want to save your changes before closing?</p>
+                            <p class="text-muted mb-0">${closeHint}</p>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" id="closeCancelBtn">Cancel</button>
                             <button type="button" class="btn btn-outline-danger" id="closeDiscardBtn">
                                 <i class="bi bi-x-lg"></i> Close without saving
                             </button>
-                            <button type="button" class="btn btn-primary" id="closeSaveBtn">
-                                <i class="bi bi-cloud-upload"></i> Save &amp; Close
-                            </button>
+                            ${saveAction}
                         </div>
                     </div>
                 </div>
@@ -813,14 +846,17 @@ function showCloseDomainDialog() {
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modalEl = document.getElementById('domainCloseModal');
-        const modal = new bootstrap.Modal(modalEl);
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
 
         let outcome = 'cancel';
         const finish = (choice) => { outcome = choice; modal.hide(); };
 
         document.getElementById('closeCancelBtn').addEventListener('click', () => finish('cancel'));
         document.getElementById('closeDiscardBtn').addEventListener('click', () => finish('discard'));
-        document.getElementById('closeSaveBtn').addEventListener('click', () => finish('save'));
+        const saveBtn = document.getElementById('closeSaveBtn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => finish('save'));
+        }
 
         modalEl.addEventListener('hidden.bs.modal', () => {
             modalEl.remove();

@@ -1,0 +1,37 @@
+## Close the loaded domain before creating another
+
+Context: New Domain previously collected details before silently closing the
+loaded domain, and view-mode CSS disabled the dialog fields. The workflow now
+resolves save, discard, or cancellation before showing the creation dialog.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   Shared the close workflow between Close and New Domain, with view-mode save
+   gating, failure handling, optional post-close navigation, and immediate
+   navbar cleanup after an in-place close.
+2. src/front/static/global/js/utils.js
+   Marked New Domain fields as independent from the loaded domain's read-only state.
+3. src/front/static/global/css/permissions.css
+   Exempted the New Domain controls from stale loaded-domain field lockdown.
+4. tests/units/front/test_new_domain_close_flow.py
+   Covered close-first ordering, cancellation, view-mode save gating, navigation,
+   and stale navbar cleanup.
+5. tests/units/front/test_new_domain_name_validation.py
+   Protected the three New Domain field exemptions.
+6. documentation/superpowers/specs/2026-08-29-new-domain-close-flow-design.md
+   Documented the approved close-first workflow and failure behavior.
+7. docs/superpowers/plans/2026-08-29-new-domain-close-flow.md
+   Recorded the TDD implementation and verification plan.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/utils.js
+- src/front/static/global/css/permissions.css
+- tests/units/front/test_new_domain_close_flow.py
+- tests/units/front/test_new_domain_name_validation.py
+- documentation/superpowers/specs/2026-08-29-new-domain-close-flow-design.md
+- docs/superpowers/plans/2026-08-29-new-domain-close-flow.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5682 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.93s.
