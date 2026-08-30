@@ -10,6 +10,7 @@ tests:
 4. The Mapping and Knowledge Graph pages redirect a ``none`` domain away.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -18,10 +19,13 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INFO_HTML = REPO_ROOT / "src/front/templates/partials/domain/_domain_information.html"
+DOMAIN_HTML = REPO_ROOT / "src/front/templates/domain.html"
+INFO_CSS = REPO_ROOT / "src/front/static/domain/css/domain-information.css"
 BASE_HTML = REPO_ROOT / "src/front/templates/base.html"
 INFO_JS = REPO_ROOT / "src/front/static/domain/js/domain-information.js"
 DOMAIN_JS = REPO_ROOT / "src/front/static/domain/js/domain.js"
 NAVBAR_JS = REPO_ROOT / "src/front/static/global/js/navbar.js"
+UTILS_JS = REPO_ROOT / "src/front/static/global/js/utils.js"
 MAPPING_ROUTE = REPO_ROOT / "src/front/routes/mapping.py"
 DTWIN_ROUTE = REPO_ROOT / "src/front/routes/dtwin.py"
 
@@ -42,6 +46,21 @@ def _render_select(**domain) -> str:
     from jinja2 import Environment
 
     template = Environment(autoescape=True).from_string(_select_markup())
+    return template.render(domain=domain)
+
+
+def _backend_cards_markup() -> str:
+    html = _read(INFO_HTML)
+    anchor = html.index('id="domainGraphBackendCards"')
+    start = html.rindex("<fieldset", 0, anchor)
+    end = html.index("</fieldset>", anchor) + len("</fieldset>")
+    return html[start:end]
+
+
+def _render_backend_cards(**domain) -> str:
+    from jinja2 import Environment
+
+    template = Environment(autoescape=True).from_string(_backend_cards_markup())
     return template.render(domain=domain)
 
 
@@ -70,6 +89,59 @@ class TestTheGraphBackendSelector:
         assert "d-none" not in tmpl.render(domain={"graph_backend": "none"})
 
 
+class TestTheGraphBackendCards:
+    @pytest.mark.parametrize(
+        ("value", "label"),
+        [
+            ("lakebase", "Lakebase"),
+            ("databricks", "Lakehouse"),
+            ("neo4j", "Neo4j"),
+            ("none", "No Backend"),
+        ],
+    )
+    def test_each_backend_is_a_native_radio_card(self, value, label):
+        rendered = _render_backend_cards(graph_backend=value)
+        assert 'name="domainGraphBackendChoice"' in rendered
+        assert f'value="{value}"' in rendered
+        assert re.search(rf'value="{value}"\s+checked', rendered)
+        assert label in rendered
+
+    def test_available_products_use_their_real_brand_assets(self):
+        cards = _backend_cards_markup()
+        assert "ob-icon-postgresql" in cards
+        assert "ob-icon-lakehouse" in cards
+        assert "ob-icon-neo4j" in cards
+        assert "bi-slash-circle" in cards
+
+    def test_the_compatibility_select_is_not_visible(self):
+        select = _select_markup()
+        assert "d-none" in select
+        assert 'aria-hidden="true"' in select
+        assert 'tabindex="-1"' in select
+
+    def test_the_tab_body_uses_the_standard_surface(self):
+        html = _read(INFO_HTML)
+        anchor = html.index('id="domainInfoTabContent"')
+        content_tag = html[html.rindex("<div", 0, anchor) : anchor]
+        assert "tab-content" in content_tag
+        assert "ob-tab-content" in content_tag
+        assert 'class="ob-tabs-wrap"' in html
+
+    def test_the_domain_page_loads_the_focused_stylesheet(self):
+        assert "domain/css/domain-information.css" in _read(DOMAIN_HTML)
+
+    def test_card_styles_cover_selection_focus_disabling_and_responsiveness(self):
+        css = _read(INFO_CSS)
+        assert ".domain-backend-grid" in css
+        grid_rule = css[css.index(".domain-backend-grid {") :]
+        grid_rule = grid_rule[: grid_rule.index("}")]
+        assert "clear: left" in grid_rule
+        assert ".domain-backend-option:checked + .domain-backend-card" in css
+        assert ".domain-backend-option:focus-visible + .domain-backend-card" in css
+        assert ".domain-backend-option:disabled + .domain-backend-card" in css
+        assert "@media" in css
+
+
 class TestTheMcpToolsCarryTheGraphMarker:
     def test_each_tool_checkbox_declares_whether_it_needs_a_graph(self):
         html = _read(INFO_HTML)
@@ -91,6 +163,23 @@ class TestTheInformationJsLocksGraphTools:
         assert "el.checked" in body
         assert "noBackendNotice" in body
 
+    def test_it_hides_graph_only_sections_for_no_backend(self):
+        html = _read(INFO_HTML)
+        js = _read(INFO_JS)
+        for section_id in (
+            "graphBackendMigrationNotice",
+            "dualKnowledgeGraphSection",
+            "tripleStoreGatewaySection",
+        ):
+            assert f'id="{section_id}"' in html
+            assert section_id in js
+        assert (
+            html.count(
+                "{% if domain.graph_backend == 'none' %}d-none{% endif %}"
+            )
+            >= 3
+        )
+
     def test_it_runs_on_change_init_and_rehydration(self):
         js = _read(INFO_JS)
         assert (
@@ -99,6 +188,22 @@ class TestTheInformationJsLocksGraphTools:
         )
         # Once on init, once after the /domain/info rehydrate.
         assert js.count("applyGraphlessConstraints();") >= 2
+
+
+class TestTheBackendCardsStayInSync:
+    def test_card_changes_flow_through_the_existing_select_pipeline(self):
+        js = _read(INFO_JS)
+        assert "function initGraphBackendCards()" in js
+        assert "backendSelect.value = option.value" in js
+        assert "backendSelect.dispatchEvent(new Event('change'" in js
+
+    def test_programmatic_backend_updates_refresh_the_cards(self):
+        js = _read(INFO_JS)
+        assert "function syncGraphBackendCards()" in js
+        hydration = js.index(
+            "graphBackendEl.value = infoData.info.graph_backend"
+        )
+        assert "syncGraphBackendCards();" in js[hydration : hydration + 250]
 
 
 class TestTheMcpTabRehydratesUnderTheConstraint:
@@ -137,6 +242,38 @@ class TestTheNavbarDisablesGraphFeatures:
         assert "'none'" in body
         assert "nav-requires-graph" in body
         assert "nav-disabled" in body
+
+
+class TestTheAddDomainDialogDefaultsToLakehouse:
+    """The New Domain dialog no longer asks for a backend: new domains default
+    to Lakehouse and the dialog explains the choices can be changed later in
+    Domain → Information."""
+
+    def _dialog(self) -> str:
+        src = _read(UTILS_JS)
+        start = src.index("function showNewDomainDialog")
+        end = src.index("window.showNewDomainDialog", start)
+        return src[start:end]
+
+    def test_the_dialog_has_no_backend_dropdown(self):
+        dialog = self._dialog()
+        assert "${modalId}_backend" not in dialog
+        assert '<option value="lakebase"' not in dialog
+
+    def test_the_dialog_defaults_the_backend_to_lakehouse(self):
+        assert "graph_backend: 'databricks'" in self._dialog()
+
+    def test_the_dialog_explains_the_choices_and_where_to_change_them(self):
+        dialog = self._dialog()
+        assert "Domain → Information" in dialog
+        for choice in ("Lakehouse", "Lakebase", "Neo4j", "No Backend"):
+            assert choice in dialog
+
+    def test_domain_new_forwards_the_default_backend_to_the_api(self):
+        js = _read(NAVBAR_JS)
+        start = js.index("async function domainNew(")
+        body = js[start : js.index("async function domainSave(", start)]
+        assert "payload.graph_backend = input.graph_backend" in body
 
 
 class TestThePagesRedirectAGraphlessDomain:

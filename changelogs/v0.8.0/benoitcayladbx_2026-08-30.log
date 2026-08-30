@@ -1,0 +1,47 @@
+## Standardize Domain backend selection
+
+Context: Domain → Information used the shared tab rail with a full-width card,
+which made the tab surface differ from the canonical application treatment.
+The Knowledge Graph backend was also presented as a compact dropdown that did
+not explain the available storage choices. This change introduces accessible
+backend cards and removes graph-only details from ontology-only domains.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_information.html
+   Replaced the visible backend dropdown with responsive native radio cards,
+   applied the standard tab-content surface, used existing product brand
+   assets, and identified graph-only sections for conditional visibility.
+2. src/front/static/domain/css/domain-information.css
+   Added token-based backend card layout, selected, focus, disabled, and
+   responsive states, including the Bootstrap floated-legend layout fix.
+3. src/front/static/domain/js/domain-information.js
+   Synchronized backend cards with the existing persistence value and hid the
+   migration, Dual Knowledge Graph, and Triple-Store Gateway sections for No
+   Backend.
+4. src/front/templates/domain.html
+   Loaded the focused Domain Information stylesheet.
+5. tests/units/front/test_no_backend_ui.py
+   Added contracts for accessible card markup, real brand assets, standard tab
+   structure, responsive CSS, synchronization, and graphless visibility.
+6. docs/superpowers/specs/2026-08-30-domain-backend-cards-design.md
+   Documented the approved interface and conditional behaviour.
+7. docs/superpowers/plans/2026-08-30-domain-backend-cards.md
+   Recorded the test-first implementation and verification plan.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/css/domain-information.css
+- src/front/static/domain/js/domain-information.js
+- src/front/templates/domain.html
+- tests/units/front/test_no_backend_ui.py
+- docs/superpowers/specs/2026-08-30-domain-backend-cards-design.md
+- docs/superpowers/plans/2026-08-30-domain-backend-cards.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-30.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5737 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 41.66s.
+
+Browser verification: Domain → Information backend cards passed pointer and
+keyboard selection, real-logo asset loading, backend-specific visibility,
+4/2/1-column responsive layouts, disabled-state handling, and console/network
+checks.

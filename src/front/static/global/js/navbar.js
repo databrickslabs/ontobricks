@@ -475,6 +475,7 @@ async function domainNew() {
         const payload = { name: input.name };
         if (input.description) payload.description = input.description;
         if (input.llm_endpoint) payload.llm_endpoint = input.llm_endpoint;
+        if (input.graph_backend) payload.graph_backend = input.graph_backend;
         await fetch('/domain/info', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -503,6 +504,11 @@ async function domainNew() {
             if (descEl) descEl.value = input.description || '';
             const llmEl = document.getElementById('domainLlmEndpoint');
             if (llmEl && input.llm_endpoint) llmEl.value = input.llm_endpoint;
+            const backendEl = document.getElementById('domainGraphBackend');
+            if (backendEl && input.graph_backend) {
+                backendEl.value = input.graph_backend;
+                if (typeof applyGraphlessConstraints === 'function') applyGraphlessConstraints();
+            }
             if (typeof updateAutoBaseUri === 'function') updateAutoBaseUri();
         } catch (e) { /* Information form not on this page — nothing to sync */ }
 

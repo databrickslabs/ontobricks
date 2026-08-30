@@ -212,6 +212,67 @@ class TestSaveDomainInfo:
         assert result["info"]["review_quorum"] == 1
 
 
+class TestSaveDomainInfoNoBackend:
+    """A "No Backend" (ontology-only) domain must persist with every graph MCP
+    tool force-disabled, whatever the client submitted, leaving only
+    ``describe_ontology`` exposed."""
+
+    def test_none_backend_force_disables_every_graph_tool(self):
+        from back.core.mcp_tools import MCP_GRAPH_TOOL_NAMES
+
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"graph_backend": "none"})
+
+        assert result["graph_backend"] == "none"
+        disabled = set(result["mcp_policy"].get("disabled_tools", []))
+        assert disabled == set(MCP_GRAPH_TOOL_NAMES)
+        # The persisted session policy matches the returned one.
+        assert set(domain.info["mcp_policy"]["disabled_tools"]) == set(
+            MCP_GRAPH_TOOL_NAMES
+        )
+
+    def test_none_backend_keeps_describe_ontology_enabled(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"graph_backend": "none"})
+        assert "describe_ontology" not in result["mcp_policy"]["disabled_tools"]
+
+    def test_none_backend_overrides_a_client_that_enables_graph_tools(self):
+        """A stale/hand-crafted payload cannot re-expose the graph tools."""
+        from back.core.mcp_tools import MCP_GRAPH_TOOL_NAMES
+
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info(
+            {"graph_backend": "none", "mcp_policy": {"disabled_tools": []}}
+        )
+        assert set(result["mcp_policy"]["disabled_tools"]) == set(
+            MCP_GRAPH_TOOL_NAMES
+        )
+
+    def test_none_backend_preserves_context_policy(self):
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info(
+            {
+                "graph_backend": "none",
+                "mcp_policy": {"context": {"actions": "disabled"}},
+            }
+        )
+        assert result["mcp_policy"]["context"] == {"actions": "disabled"}
+
+    def test_none_backend_needs_no_neo4j_connection(self):
+        """The Neo4j-connection guard must not fire for a graphless domain."""
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info({"graph_backend": "none"})
+        assert result["graph_backend"] == "none"
+
+    def test_graph_backend_does_not_force_disable_tools(self):
+        """Relaxation is scoped to No Backend; a Lakebase domain is untouched."""
+        domain = _mock_domain()
+        result = Domain(domain).save_domain_info(
+            {"graph_backend": "lakebase", "mcp_policy": {}}
+        )
+        assert result["mcp_policy"].get("disabled_tools", []) == []
+
+
 class TestGetDomainTemplateData:
     def test_returns_fields(self):
         domain = _mock_domain(classes=[{"name": "A"}])
@@ -219,6 +280,12 @@ class TestGetDomainTemplateData:
         assert data["name"] == "Test"
         assert data["has_ontology"] is True
         assert data["has_mapping"] is False
+
+    def test_none_backend_is_exposed_to_the_template(self):
+        domain = _mock_domain()
+        domain.info["graph_backend"] = "none"
+        data = Domain(domain).get_domain_template_data()
+        assert data["graph_backend"] == "none"
 
 
 class TestAuditTrail:

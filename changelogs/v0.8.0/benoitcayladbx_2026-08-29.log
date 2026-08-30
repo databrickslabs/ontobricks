@@ -115,3 +115,35 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-29.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5714 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.67s.
+
+## Add Domain: default to Lakehouse, explain backends
+
+Context: A short-lived iteration put a backend dropdown in the New Domain
+dialog. Since Neo4j needs a named connection the dialog can't capture, the
+picker was more confusing than helpful. Instead, new domains now default to the
+Lakehouse backend and the dialog explains the four options and where to change
+them (Domain → Information).
+
+Changes:
+1. src/front/static/global/js/utils.js — removed the backend `<select>` from
+   the New Domain dialog; replaced it with an explanatory note listing the
+   backends (Lakehouse default, Lakebase, Neo4j, No Backend) and pointing to
+   Domain → Information to change them. `showNewDomainDialog()` now returns a
+   fixed `graph_backend: 'databricks'` (Lakehouse) default.
+2. src/front/static/global/js/navbar.js — `domainNew()` forwards the default
+   `graph_backend` in the `/domain/info` payload and syncs the Information
+   form's `#domainGraphBackend` (unchanged from prior iteration).
+3. tests/units/front/test_no_backend_ui.py — replaced the dropdown contract
+   with `TestTheAddDomainDialogDefaultsToLakehouse` (no dropdown, Lakehouse
+   default, explanatory copy, navbar forwarding).
+4. tests/units/front/test_new_domain_name_validation.py — editable-field count
+   restored to 3.
+
+Modified files:
+- src/front/static/global/js/utils.js
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_no_backend_ui.py
+- tests/units/front/test_new_domain_name_validation.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-29.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5725 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.38s.

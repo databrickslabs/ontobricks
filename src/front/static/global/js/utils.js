@@ -869,6 +869,17 @@ function showNewDomainDialog() {
                                 <textarea class="form-control new-domain-field" id="${modalId}_desc" rows="2"
                                           placeholder="Short description of this domain…" maxlength="256"></textarea>
                             </div>
+                            <div class="alert alert-light border small py-2 mb-3">
+                                <i class="bi bi-hdd-network me-1"></i>
+                                This domain uses the <strong>Lakehouse</strong> graph backend by default. You can
+                                change it anytime in <strong>Domain → Information</strong>:
+                                <ul class="mb-0 mt-1 ps-3">
+                                    <li><strong>Lakehouse</strong> — graph stored as Delta tables in Unity Catalog (default).</li>
+                                    <li><strong>Lakebase</strong> — graph stored in a managed Postgres instance.</li>
+                                    <li><strong>Neo4j</strong> — external native graph database (requires a connection).</li>
+                                    <li><strong>No Backend</strong> — ontology only, no knowledge graph.</li>
+                                </ul>
+                            </div>
                             <div class="mb-1">
                                 <label for="${modalId}_llm" class="form-label fw-semibold">
                                     <i class="bi bi-robot me-1"></i>LLM Endpoint <span class="text-muted fw-normal">(optional — for OntoBricks Agents)</span>
@@ -940,7 +951,7 @@ function showNewDomainDialog() {
             const llm  = llmSelect.value || '';
             resolved = true;
             modal.hide();
-            resolve({ name, description: desc, llm_endpoint: llm });
+            resolve({ name, description: desc, llm_endpoint: llm, graph_backend: 'databricks' });
         });
 
         nameInput.addEventListener('input', () => {

@@ -1,0 +1,141 @@
+/**
+ * Domain Information page.
+ *
+ * Backend selection cards are local to this page. Shared tab rail and content
+ * surface styling remain owned by global/css/components.css and main.css.
+ */
+
+#domainGraphBackendCards {
+    min-width: 0;
+}
+
+.domain-backend-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    /* Bootstrap floats legends and only clears their immediate sibling. The
+       hidden compatibility select is that sibling, so clear the float here. */
+    clear: left;
+}
+
+.domain-backend-choice {
+    position: relative;
+    min-width: 0;
+}
+
+.domain-backend-option {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.domain-backend-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 8.25rem;
+    height: 100%;
+    padding: 0.875rem;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
+    color: var(--db-text);
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.domain-backend-card:hover {
+    background: var(--db-hover-indigo);
+    border-color: var(--db-primary);
+}
+
+.domain-backend-option:checked + .domain-backend-card {
+    background: var(--db-primary-light);
+    border-color: var(--db-primary);
+    box-shadow:
+        0 0 0 1px var(--db-primary),
+        0 4px 14px rgba(var(--db-primary-rgb), 0.12);
+}
+
+.domain-backend-option:focus-visible + .domain-backend-card {
+    outline: 2px solid var(--db-primary);
+    outline-offset: 2px;
+}
+
+.domain-backend-option:disabled + .domain-backend-card {
+    background: var(--bs-secondary-bg, #e9ecef);
+    border-color: var(--db-border);
+    color: var(--db-text-muted);
+    cursor: not-allowed;
+    opacity: 0.72;
+    box-shadow: none;
+}
+
+.domain-backend-check {
+    position: absolute;
+    top: 0.625rem;
+    right: 0.625rem;
+    color: var(--db-primary);
+    font-size: 1rem;
+    opacity: 0;
+}
+
+.domain-backend-option:checked + .domain-backend-card .domain-backend-check {
+    opacity: 1;
+}
+
+.domain-backend-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.domain-backend-logo .ob-brand-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+}
+
+.domain-backend-logo--neutral {
+    background: var(--db-hover-warm);
+    border-radius: var(--db-radius-control);
+    color: var(--db-text-secondary);
+    font-size: 1.35rem;
+}
+
+.domain-backend-title {
+    margin-bottom: 0.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.domain-backend-description {
+    color: var(--db-text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+@media (max-width: 991.98px) {
+    .domain-backend-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .domain-backend-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .domain-backend-card {
+        min-height: 7.5rem;
+    }
+}

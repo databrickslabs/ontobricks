@@ -5,6 +5,29 @@
 
 let currentDomainFolder = null;
 
+// The hidden select remains the single persistence-compatible value source.
+// Native radio cards mirror it and dispatch its existing change pipeline.
+function syncGraphBackendCards() {
+    const backendSelect = document.getElementById('domainGraphBackend');
+    if (!backendSelect) return;
+    document.querySelectorAll('.domain-backend-option').forEach(option => {
+        option.checked = option.value === backendSelect.value;
+    });
+}
+
+function initGraphBackendCards() {
+    const backendSelect = document.getElementById('domainGraphBackend');
+    if (!backendSelect) return;
+    document.querySelectorAll('.domain-backend-option').forEach(option => {
+        option.addEventListener('change', () => {
+            if (!option.checked) return;
+            backendSelect.value = option.value;
+            backendSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+    syncGraphBackendCards();
+}
+
 // Show the Neo4j connection selector only when the backend is Neo4j.
 function toggleNeo4jDatabaseSection() {
     const backend = (document.getElementById('domainGraphBackend') || {}).value;
@@ -35,9 +58,19 @@ function toggleLakehouseMaterializationSection() {
 function applyGraphlessConstraints() {
     const backend = (document.getElementById('domainGraphBackend') || {}).value;
     const graphless = backend === 'none';
+    syncGraphBackendCards();
 
     const notice = document.getElementById('noBackendNotice');
     if (notice) notice.classList.toggle('d-none', !graphless);
+
+    [
+        'graphBackendMigrationNotice',
+        'dualKnowledgeGraphSection',
+        'tripleStoreGatewaySection'
+    ].forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (section) section.classList.toggle('d-none', graphless);
+    });
 
     document.querySelectorAll('.js-mcp-tool[data-requires-graph="true"]').forEach(el => {
         el.disabled = graphless;
@@ -432,6 +465,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 materializationElInit.dataset.userEdited = '1';
             });
         }
+        initGraphBackendCards();
         syncNeo4jConnectionSection();
         toggleLakehouseMaterializationSection();
         applyGraphlessConstraints();
@@ -475,6 +509,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (graphBackendEl && !graphBackendEl.dataset.userEdited
                     && infoData.info && infoData.info.graph_backend) {
                 graphBackendEl.value = infoData.info.graph_backend;
+                syncGraphBackendCards();
             }
             const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
             if (neo4jDbEl && !neo4jDbEl.dataset.userEdited
