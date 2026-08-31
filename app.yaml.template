@@ -168,18 +168,6 @@ env:
   # or above the node count makes them exact instead of estimated.
   - name: ONTOBRICKS_ANALYTICS_JOB_PIVOTS
     value: "64"
-  # ── Neo4j (optional, legacy Apps secret path) ─────────────────
-  # Password may be sourced from a Databricks Apps secret resource (see
-  # `resources:` below). The `neo4j-password` resource is unbound by
-  # default — DAB does **not** bind it at deploy time (Neo4j is optional;
-  # a missing workspace secret would fail terraform apply — GH #136).
-  # Preferred path: Settings → Neo4j picks a secret scope/key at runtime
-  # (`auth_method: databricks_secret`). Bind this resource in the Apps UI
-  # only for legacy `auth_method: basic` + `NEO4J_PASSWORD` configs.
-  # See documentation/pr47-neo4j-demo/secret-configuration.md.
-  - name: NEO4J_PASSWORD
-    valueFrom: neo4j-password
-
 # User authorization scopes — declares which Databricks APIs the app is
 # allowed to access on behalf of the logged-in user via the
 # x-forwarded-access-token header injected by the Apps platform.
@@ -205,7 +193,3 @@ resources:
     description: "Unity Catalog Volume for the OntoBricks domain registry"
     volume:
       permission: CAN_READ_WRITE
-  - name: neo4j-password
-    description: "Legacy Databricks Apps secret for NEO4J_PASSWORD. Unbound by default — DAB does not bind it (GH #136). Prefer Settings → Neo4j (secret scope/key). Bind in the Apps UI only for legacy auth_method basic. See documentation/pr47-neo4j-demo/secret-configuration.md."
-    secret:
-      permission: READ

@@ -212,3 +212,32 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5756 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 48.33s.
+
+## Remove stale Neo4j deployment references
+
+Context: The optional Neo4j Apps secret was removed from the DAB binding, but
+the main app manifest still referenced the unbound resource and Makefile
+inspection targets still passed the deleted bundle variable. This produced a
+build-time resource-resolution error and broke bundle validation helpers.
+
+Changes:
+
+1. app.yaml.template
+   Removed the legacy unbound `neo4j-password` resource and `NEO4J_PASSWORD`
+   environment reference; Neo4j credentials remain managed through Settings.
+2. Makefile
+   Removed the deleted `neo4j_secret_scope` override from bundle validation and
+   summary targets.
+3. tests/units/settings/test_deploy_app_rename_guard.py
+   Added regression contracts covering both the rendered app manifest source
+   and Makefile deployment helpers.
+4. changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+   Recorded the clean-deployment correction and verification result.
+
+Modified files:
+- app.yaml.template
+- Makefile
+- tests/units/settings/test_deploy_app_rename_guard.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5758 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 53.38s.

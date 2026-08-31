@@ -206,7 +206,6 @@ bundle-validate:
 	    --var=registry_catalog="$$REGISTRY_CATALOG" \
 	    --var=registry_schema="$$REGISTRY_SCHEMA" \
 	    --var=registry_volume="$$REGISTRY_VOLUME" \
-	    --var=neo4j_secret_scope="$$NEO4J_SECRET_SCOPE" \
 	    --var=lakebase_project="$$LAKEBASE_PROJECT" \
 	    --var=lakebase_branch="$$LAKEBASE_BRANCH" \
 	    --var=lakebase_database_resource_segment="$$LAKEBASE_DATABASE_RESOURCE_SEGMENT" \
@@ -224,7 +223,6 @@ bundle-summary:
 	    --var=registry_catalog="$$REGISTRY_CATALOG" \
 	    --var=registry_schema="$$REGISTRY_SCHEMA" \
 	    --var=registry_volume="$$REGISTRY_VOLUME" \
-	    --var=neo4j_secret_scope="$$NEO4J_SECRET_SCOPE" \
 	    --var=lakebase_project="$$LAKEBASE_PROJECT" \
 	    --var=lakebase_branch="$$LAKEBASE_BRANCH" \
 	    --var=lakebase_database_resource_segment="$$LAKEBASE_DATABASE_RESOURCE_SEGMENT" \
