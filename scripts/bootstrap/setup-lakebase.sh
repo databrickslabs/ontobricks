@@ -40,7 +40,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR/.."
+cd "$SCRIPT_DIR/../.."
 
 # Preflight CLI auth + tooling before any API calls.
 chmod +x scripts/_internal/check-deploy-prerequisites.sh

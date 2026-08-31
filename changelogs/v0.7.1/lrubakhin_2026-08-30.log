@@ -1,0 +1,22 @@
+## Fix SCRIPT_DIR path resolution in setup-lakebase.sh
+Context: scripts/bootstrap/setup-lakebase.sh failed immediately on a fresh
+local setup with `chmod: cannot access
+'scripts/_internal/check-deploy-prerequisites.sh': No such file or
+directory`. The script computes SCRIPT_DIR and does `cd "$SCRIPT_DIR/.."`,
+but since the script lives at scripts/bootstrap/setup-lakebase.sh (two
+levels below the repo root), that only ascends one level, landing in
+scripts/ instead of the repo root, so every relative path referenced
+afterward resolves incorrectly. Likely a regression from when the script
+was relocated from scripts/setup-lakebase.sh into scripts/bootstrap/.
+Changes:
+1. scripts/bootstrap/setup-lakebase.sh
+   Changed `cd "$SCRIPT_DIR/.."` to `cd "$SCRIPT_DIR/../.."` so the script
+   correctly resolves the repo root.
+Modified files:
+- scripts/bootstrap/setup-lakebase.sh
+- changelogs/v0.7.1/lrubakhin_2026-08-30.log
+Tests: Manual verification on Windows 11 (Git Bash / MINGW64):
+./scripts/bootstrap/setup-lakebase.sh — before fix, fails immediately with
+the chmod error above; after fix, correctly locates and chmods
+scripts/_internal/check-deploy-prerequisites.sh and proceeds past the
+preflight-check stage. No pytest suite covers this shell script.
