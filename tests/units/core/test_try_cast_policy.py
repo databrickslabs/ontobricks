@@ -2,7 +2,7 @@
 ``CAST(``. Databricks warehouses run with ANSI mode on, where a bare ``CAST``
 aborts the whole statement on the first value that will not convert;
 ``TRY_CAST`` yields NULL instead. See
-``documentation/superpowers/specs/2026-08-05-spark-try-cast-design.md``.
+``docs/superpowers/specs/2026-08-05-spark-try-cast-design.md``.
 
 Deliberately excluded (see the design doc's "Amendment" section):
 ``src/jobs/graph_analytics_job.py`` and

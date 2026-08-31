@@ -305,7 +305,7 @@ Add the engine's Python package to `pyproject.toml` as an optional dependency:
 kuzu = ["kuzu>=0.4"]
 ```
 
-Update `documentation/development.md` with the new dependency (name, link, license).
+Update `docs/development.md` with the new dependency (name, link, license).
 
 ### Step 8 — Add tests
 
@@ -321,8 +321,8 @@ Create `tests/test_kuzu_store.py` following the patterns in
 ### Step 9 — Update documentation
 
 - Update this file if the architecture changes.
-- Add an entry to `documentation/development.md` in the Dependencies section.
-- Add a Sphinx `.rst` file under `documentation/sphinx/api/` for the new subpackage.
+- Add an entry to `docs/development.md` in the Dependencies section.
+- Add a Sphinx `.rst` file under `docs/sphinx/api/` for the new subpackage.
 - Update the changelog.
 
 ---
@@ -408,8 +408,8 @@ Use this checklist to track your progress:
 - [ ] Add `<option>` to `#domainGraphBackend` in `_domain_information.html`
 - [ ] Add optional dependency to `pyproject.toml`
 - [ ] Add tests in `tests/test_<engine>_store.py`
-- [ ] Update `documentation/development.md` (dependency table)
-- [ ] Add Sphinx `.rst` under `documentation/sphinx/api/`
+- [ ] Update `docs/development.md` (dependency table)
+- [ ] Add Sphinx `.rst` under `docs/sphinx/api/`
 - [ ] Update changelog
 
 ---

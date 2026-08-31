@@ -362,7 +362,7 @@ if $IS_LAKEBASE && $DO_BOOTSTRAP; then
             "$APP_NAME" \
             "$MCP_APP_NAME"; then
         if $DRY_RUN; then
-            die "Lakebase bootstrap preflight failed — fix the issues above before deploying (see documentation/DEPLOY_CHECKLIST.md)."
+            die "Lakebase bootstrap preflight failed — fix the issues above before deploying (see docs/DEPLOY_CHECKLIST.md)."
         fi
         warn "Lakebase bootstrap preflight reported blocking issues — deploy will continue but step 11 may fail."
     else

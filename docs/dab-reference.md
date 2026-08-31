@@ -2,7 +2,7 @@
 
 The bundle configuration lives at the project root (`databricks.yml`) as required by the Databricks CLI. This directory contains supplementary documentation.
 
-For the full deployment guide, see **[documentation/deployment.md](../docs/deployment.md)**.
+For the full deployment guide, see **[docs/deployment.md](../docs/deployment.md)**.
 
 See also: [Databricks Asset Bundles docs](https://docs.databricks.com/dev-tools/bundles/)
 

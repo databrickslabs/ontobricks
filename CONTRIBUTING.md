@@ -199,7 +199,7 @@ Special prefixes:
 |--------|-------------|
 | New SHACL validation feature | `feat/ontology-shacl-validation` |
 | Fix R2RML nested property bug | `fix/mapping-r2rml-nested-props` |
-| Update API docs | `documentation/api-digital-twin-endpoints` |
+| Update API docs | `docs/api-digital-twin-endpoints` |
 | Extract SPARQL service | `refactor/backend-sparql-service` |
 | Bump Lakebase client version | `build/graphdb-lakebase-client-bump` |
 | Prepare v0.3.0 release | `release/0.3.0` |

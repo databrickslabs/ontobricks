@@ -330,7 +330,7 @@ The **MCP** package exposes OntoBricks capabilities (domains, status, entities, 
 
 - **`src/mcp-server/server/app.py`** — `FastMCP` server factory (`create_mcp_server`), tool/resource definitions, HTTP client helpers, response formatting; **`create_databricks_app`** builds a **combined** FastAPI app mounting MCP HTTP routes for Databricks App deployment.
 - **`src/mcp-server/server/main.py`** — CLI entry (`uv run mcp-ontobricks`) running **`combined_app`** with Uvicorn.
-- **`app.yaml`** / deploy scripts (see `documentation/deployment.md`) wire env vars: `ONTOBRICKS_URL`, registry volume or catalog/schema/volume, warehouse ID, etc.
+- **`app.yaml`** / deploy scripts (see `docs/deployment.md`) wire env vars: `ONTOBRICKS_URL`, registry volume or catalog/schema/volume, warehouse ID, etc.
 
 ### 6.3 Operating modes (from module docstring)
 
@@ -500,8 +500,8 @@ All logging goes through `back/core/logging/LogManager`.
 - Review `/docs` and update it when refactoring changes structure or behaviour relevant to users.
 - For each feature, ensure there is at least one concrete example in the docs.
 - Update `README.md` to cover all features and capabilities.
-- **Dependencies**: Maintain the **Dependencies** section in `documentation/development.md` describing all external dependencies (Python libs, JS frameworks, CSS libs) with short description, link, and license type.
-- When adding or removing dependencies, update `documentation/development.md` accordingly.
+- **Dependencies**: Maintain the **Dependencies** section in `docs/development.md` describing all external dependencies (Python libs, JS frameworks, CSS libs) with short description, link, and license type.
+- When adding or removing dependencies, update `docs/development.md` accordingly.
 
 ### 11.2 Sphinx API documentation
 
@@ -522,7 +522,7 @@ All logging goes through `back/core/logging/LogManager`.
 5. **Re-export** all public symbols from `__init__.py`.
 6. **Update `back/core/__init__.py`** only if the new package is widely-used infrastructure.
 7. **Wire into routes** via FastAPI dependencies or direct imports from the package.
-8. **Update Sphinx** under `documentation/sphinx/api/`.
+8. **Update Sphinx** under `docs/sphinx/api/`.
 
 ---
 

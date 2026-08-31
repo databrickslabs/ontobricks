@@ -5,7 +5,7 @@ This document covers everything you need to provision, configure, and operate it
 from the API gotchas that trip up fresh installs to the Postgres schema layout and
 troubleshooting runbook.
 
-For the developer guide on *adding a new engine*, see `documentation/graphdb-integration.md`.
+For the developer guide on *adding a new engine*, see `docs/graphdb-integration.md`.
 
 ---
 

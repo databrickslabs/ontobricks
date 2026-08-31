@@ -4,7 +4,7 @@ Getting Started
 .. seealso::
 
    Full installation, environment variables, and troubleshooting:
-   :doc:`../guides/get-started` (from ``documentation/get-started.md``).
+   :doc:`../guides/get-started` (from ``docs/get-started.md``).
 
 Prerequisites
 -------------
@@ -58,7 +58,7 @@ Building This Documentation
    # Or manually
    cd sphinx && make html
 
-The built HTML is written to ``documentation/sphinx/_build/html/``.
+The built HTML is written to ``docs/sphinx/_build/html/``.
 
-The Markdown sources under ``documentation/*.md`` are also pulled into this site under
+The Markdown sources under ``docs/*.md`` are also pulled into this site under
 **Topic guides** (see the toctree on the home page).

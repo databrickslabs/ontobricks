@@ -15,7 +15,7 @@
   ·
   <a href="https://github.com/databrickslabs/ontobricks">GitHub</a>
   ·
-  <a href="documentation/README.md">Documentation</a>
+  <a href="docs/README.md">Documentation</a>
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ months-long integration project.
 
 Prefer full control? Every step is also available as a guided **manual
 workflow** — design, map, build, query, and reason at column-level precision.
-See the [User Guide](documentation/user-guide.md).
+See the [User Guide](docs/user-guide.md).
 
 ## What's inside
 
@@ -88,8 +88,8 @@ inference, SWRL rules and SHACL validation. Explore interactively: two-phase
 search, N-hop neighbour expansion, cross-domain bridge navigation, community
 detection (Louvain, Label Propagation, Greedy Modularity), and explainable
 **cohort discovery**. Query everything through an auto-generated **GraphQL**
-API. Details in the [User Guide](documentation/user-guide.md) and
-[Cohort Discovery](documentation/cohort_discovery.md).
+API. Details in the [User Guide](docs/user-guide.md) and
+[Cohort Discovery](docs/cohort_discovery.md).
 
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks
@@ -97,7 +97,7 @@ Playground over the [Model Context Protocol](https://modelcontextprotocol.io/).
 Each domain decides exactly **what it publishes** — which tools, which datasets,
 which class actions and virtual attributes — right down to ontology-only domains
 that expose a single `describe_ontology` tool. See
-[MCP Integration](documentation/mcp.md).
+[MCP Integration](docs/mcp.md).
 
 ### Govern the whole lifecycle
 Every domain version carries a **DRAFT / IN-REVIEW / PUBLISHED** status enforced
@@ -105,7 +105,7 @@ server-side. A **single editor** holds a DRAFT at a time (auto-releasing leases,
 admin take-over), a business-friendly **review workflow** collects sign-offs
 with a configurable quorum, and every decision is persisted append-only. Move
 domains between environments with the **OBX** export/import (UI or
-[CLI](documentation/import-export.md)).
+[CLI](docs/import-export.md)).
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
@@ -114,8 +114,8 @@ Pick a backend **per domain**: **Lakebase (Postgres)** by default,
 graph built (Mapping and Knowledge Graph are disabled and the MCP surface
 serves only ontology information).
 Connection config stays workspace-global. Full reference:
-[Lakebase Graph DB](documentation/lakebase-graphdb.md) ·
-[Graph DB Integration](documentation/graphdb-integration.md).
+[Lakebase Graph DB](docs/lakebase-graphdb.md) ·
+[Graph DB Integration](docs/graphdb-integration.md).
 
 ## Runs entirely on your Databricks
 
@@ -123,7 +123,7 @@ OntoBricks is not a separate platform. It deploys as a **Databricks App** and
 uses the services you already run — Unity Catalog for storage and metadata, a
 SQL Warehouse for execution, Model Serving for LLM automation, and Lakebase for
 the registry and graph store. Your data and your triples never leave your
-workspace. Architecture deep-dive: [architecture.md](documentation/architecture.md).
+workspace. Architecture deep-dive: [architecture.md](docs/architecture.md).
 
 ## Get started
 
@@ -148,16 +148,16 @@ Prerequisites (Databricks workspace with Apps enabled, a SQL Warehouse, a
 **Lakebase Autoscaling** database, and a Unity Catalog Volume) and the full,
 idempotent deploy checklist — including one-click graph-DB provisioning and
 permission bootstrap — are in the
-**[Get Started](documentation/get-started.md)** and
-**[Deployment Guide](documentation/deployment.md)**.
+**[Get Started](docs/get-started.md)** and
+**[Deployment Guide](docs/deployment.md)**.
 
 ## Documentation
 
-- **[Documentation hub](documentation/README.md)** — start here
-- **[Value proposition](documentation/product.md)** — the business case &amp; go-to-market
-- **[User Guide](documentation/user-guide.md)** · **[Features](documentation/features.md)** · **[Architecture](documentation/architecture.md)** · **[API](documentation/api.md)**
-- **[MCP](documentation/mcp.md)** · **[Graph DB](documentation/lakebase-graphdb.md)** · **[Import / Export](documentation/import-export.md)**
-- **[Developing OntoBricks](documentation/development.md)** — build, test, contribute
+- **[Documentation hub](docs/README.md)** — start here
+- **[Value proposition](docs/product.md)** — the business case &amp; go-to-market
+- **[User Guide](docs/user-guide.md)** · **[Features](docs/features.md)** · **[Architecture](docs/architecture.md)** · **[API](docs/api.md)**
+- **[MCP](docs/mcp.md)** · **[Graph DB](docs/lakebase-graphdb.md)** · **[Import / Export](docs/import-export.md)**
+- **[Developing OntoBricks](docs/development.md)** — build, test, contribute
 
 Product overview, screenshots and videos:
 [ontobricks.org](https://ontobricks.org/).

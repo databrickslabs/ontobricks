@@ -70,21 +70,21 @@ OntoBricks builds a **materialized graph viewer** (triple store) from your Datab
 Design your ontology visually — create entities, relationships, and inheritance hierarchies on an interactive canvas with emoji icons, attributes, constraints, and dashboard integration.
 
 <p align="center">
-  <img src="documentation/screenshots/Ontology-design.png" alt="Ontology Design" width="800">
+  <img src="docs/screenshots/Ontology-design.png" alt="Ontology Design" width="800">
 </p>
 
 ### Semantic Mapping
 Map ontology entities to Databricks tables — click any entity on the graph, write or generate SQL, then assign columns to attributes with a live data preview.
 
 <p align="center">
-  <img src="documentation/screenshots/Ontology-Mapping.png" alt="Ontology Mapping" width="800">
+  <img src="docs/screenshots/Ontology-Mapping.png" alt="Ontology Mapping" width="800">
 </p>
 
 ### Graph Viewer
 Explore your graph viewer — search, filter, and navigate entities and relationships with full attribute details, up to N levels deep.
 
 <p align="center">
-  <img src="documentation/screenshots/Graph-result.png" alt="Graph Viewer" width="800">
+  <img src="docs/screenshots/Graph-result.png" alt="Graph Viewer" width="800">
 </p>
 
 ## Features
@@ -149,7 +149,7 @@ Explore your graph viewer — search, filter, and navigate entities and relation
 ### Domain Management
 - **💾 Unity Catalog Storage**: Save/load domains to UC Volumes with version control
 - **📥 Import/Export**: Import OWL, RDFS ontologies and R2RML mappings; export OWL and R2RML
-- **🏦 Industry-Standard Ontologies**: One-click import of [FIBO](https://spec.edmcouncil.org/fibo/) (Financial), [CDISC](https://www.cdisc.org/) (Clinical), and [IOF](https://www.industrialontologies.org/) (Manufacturing) — see [Ontology import](documentation/user-guide.md#ontology-import-merged) in the user guide
+- **🏦 Industry-Standard Ontologies**: One-click import of [FIBO](https://spec.edmcouncil.org/fibo/) (Financial), [CDISC](https://www.cdisc.org/) (Clinical), and [IOF](https://www.industrialontologies.org/) (Manufacturing) — see [Ontology import](docs/user-guide.md#ontology-import-merged) in the user guide
 - **☁️ Databricks Apps Ready**: Designed for deployment as a Databricks App
 - **🧭 Domain Cockpit (Validation)**: Tiles for registry readiness; **Active Version** reflects the version **exposed via API/MCP** (set in Registry → Browse), not only the newest file on disk — with a *(not loaded)* hint when the editor session differs
 - **⏳ New domain flow**: Full-page loading overlay until Domain Information completes its first round-trip after **New Domain**
@@ -209,7 +209,7 @@ make deploy
 
 After deployment, bind the **sql-warehouse** and **volume** resources in the Databricks Apps UI (**Compute > Apps > ontobricks > Resources**). If the registry volume is empty, open the app and click **Settings > Registry > Initialize**.
 
-See [Deployment Guide](documentation/deployment.md) for detailed instructions including resource configuration, permissions, and the full deployment checklist.
+See [Deployment Guide](docs/deployment.md) for detailed instructions including resource configuration, permissions, and the full deployment checklist.
 
 ### Configuration
 
@@ -237,7 +237,7 @@ OntoBricks can automatically build a complete graph viewer from your Databricks 
 
 After a one-time configuration (Databricks connection, LLM endpoint, triple store table), the entire process from raw tables to a queryable graph viewer is fully automated.
 
-See the **[Automated triple-store pipeline](documentation/user-guide.md#automated-triple-store-pipeline-merged)** section in the user guide for detailed steps, tips, and the REST API equivalent.
+See the **[Automated triple-store pipeline](docs/user-guide.md#automated-triple-store-pipeline-merged)** section in the user guide for detailed steps, tips, and the REST API equivalent.
 
 ## Workflow
 
@@ -273,7 +273,7 @@ Instead of designing from scratch, you can import a pre-built ontology from the 
 
 Select the domains you need, click **Import**, and OntoBricks fetches, merges, and parses the modules automatically. You can also import any **OWL** or **RDFS** file from your local machine or Unity Catalog.
 
-See **[Ontology import](documentation/user-guide.md#ontology-import-merged)** in the user guide for details on each standard and available domains.
+See **[Ontology import](docs/user-guide.md#ontology-import-merged)** in the user guide for details on each standard and available domains.
 
 ### 2. 🔗 Assign Data Sources
 
@@ -316,7 +316,7 @@ Synchronize, validate, and explore your graph viewer:
 
 OntoBricks follows a clean **Routes → Services → Core** architecture with a consistent sidebar-based UI:
 
-![Architecture](documentation/images/architecture-overview.svg)
+![Architecture](docs/images/architecture-overview.svg)
 
 ```
 src/
@@ -358,7 +358,7 @@ src/
     └── pyproject.toml           # Dependencies
 ```
 
-See [Architecture Documentation](documentation/architecture.md) for detailed diagrams and explanations.
+See [Architecture Documentation](docs/architecture.md) for detailed diagrams and explanations.
 
 ## OntoViz Library
 
@@ -417,7 +417,7 @@ OntoBricks materializes both layers on every build, each one optimized for a dif
 | **BFS exploration** | Recursive CTE over flat triples | Recursive CTE over flat triples |
 | **Governance** | Full Unity Catalog lineage and permissions | Lakebase user role + App OAuth token |
 
-The Graph DB layer is pluggable behind `GraphDBBackend` and `GraphDBFactory`. Lakebase Postgres ships today; the abstraction's capability flags (`supports_cypher`, `is_cypher_backend`, `query_dialect`) reserve a slot for plugging in a future Cypher / Gremlin engine — see `documentation/graphdb-integration.md` for the integration template.
+The Graph DB layer is pluggable behind `GraphDBBackend` and `GraphDBFactory`. Lakebase Postgres ships today; the abstraction's capability flags (`supports_cypher`, `is_cypher_backend`, `query_dialect`) reserve a slot for plugging in a future Cypher / Gremlin engine — see `docs/graphdb-integration.md` for the integration template.
 
 ### Reasoning Engine
 
@@ -513,17 +513,17 @@ OntoBricks leverages these W3C and semantic web standards:
 
 ## Documentation
 
-Documentation is grouped by topic in [`documentation/`](documentation/README.md):
+Documentation is grouped by topic in [`docs/`](docs/README.md):
 
-- **[Get started](documentation/get-started.md)** — install, configure, environment variables
-- **[User guide](documentation/user-guide.md)** — features, automated pipeline, ontology import
-- **[Deployment](documentation/deployment.md)** — Apps, resources, MCP server
-- **[Architecture](documentation/architecture.md)** — design, OntoViz, agentic stack, triple-store + Graph DB layers
-- **[API](documentation/api.md)** — external REST/GraphQL and internal REST reference
-- **[MCP](documentation/mcp.md)** — Playground and client configuration
-- **[Development](documentation/development.md)** — dependencies, testing, SDK notes
-- **[Product](documentation/product.md)** — value proposition and innovation framing
-- **[Examples](documentation/examples.md)** — walkthrough tutorials
+- **[Get started](docs/get-started.md)** — install, configure, environment variables
+- **[User guide](docs/user-guide.md)** — features, automated pipeline, ontology import
+- **[Deployment](docs/deployment.md)** — Apps, resources, MCP server
+- **[Architecture](docs/architecture.md)** — design, OntoViz, agentic stack, triple-store + Graph DB layers
+- **[API](docs/api.md)** — external REST/GraphQL and internal REST reference
+- **[MCP](docs/mcp.md)** — Playground and client configuration
+- **[Development](docs/development.md)** — dependencies, testing, SDK notes
+- **[Product](docs/product.md)** — value proposition and innovation framing
+- **[Examples](docs/examples.md)** — walkthrough tutorials
 
 ## Development
 

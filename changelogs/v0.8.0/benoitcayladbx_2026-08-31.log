@@ -241,3 +241,97 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5758 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 53.38s.
+
+
+## Rename documentation/ → docs/ (single canonical docs root)
+
+Context: the repository had two parallel documentation trees — the historical
+`documentation/` (Help Center markdown, Sphinx sources, INFO/README) and a
+newer `docs/superpowers/` created by the writing-plans skill default. After
+first consolidating everything under `documentation/`, the decision was
+reversed to standardize on `docs/`, aligning with the `.cursorrules` "in /docs"
+wording and the superpowers skill default. The whole tree was renamed and every
+functional reference updated; historical audit files (changelogs, releases,
+superpowers plan/spec bodies) were intentionally left untouched.
+
+Changes:
+
+1. documentation/ → docs/
+   `git mv` of the entire tree (192 tracked files) so history is preserved.
+2. src/api/routers/internal/help.py
+   Help Center now resolves `<repo>/docs` (was `<repo>/documentation`); docstrings
+   and the missing-dir audit warning updated.
+3. databricks.yml, .databricksignore
+   Bundle sync now ships `docs/**`; excludes point at `docs/sphinx/_build/` and
+   `.doctrees/`. Removed the stale wholesale `docs/` exclusion (former GitHub
+   Pages marketing site) that would otherwise strip the Help Center from the
+   deployed bundle.
+4. ci/build_docs.sh, pyproject.toml, Makefile, scripts/deploy.sh,
+   scripts/_internal/_deploy-preflight.sh
+   Sphinx source dir, mypy/coverage excludes, and deploy-checklist pointers
+   repointed to `docs/`.
+5. src/front/static/global/js/help-docs.js, src/front/templates/settings.html
+   GitHub blob links and the Help Center path label repointed to `docs/`; the
+   JS asset normaliser keeps a legacy `documentation/` strip for old links.
+6. tests/units/api/test_help_api.py
+   Fixed the deploy-bundle guard tests for the inverted semantics — `docs/` must
+   NOT be excluded — and the asset-ref normaliser's legacy fallback.
+7. .cursor/07-project-conventions.mdc
+   Documented `docs/` as the single canonical docs root and that superpowers
+   plans/specs live under `docs/superpowers/`.
+
+Modified files:
+- src/api/routers/internal/help.py
+- databricks.yml
+- .databricksignore
+- ci/build_docs.sh
+- pyproject.toml
+- Makefile
+- scripts/deploy.sh
+- scripts/_internal/_deploy-preflight.sh
+- src/front/static/global/js/help-docs.js
+- src/front/templates/settings.html
+- tests/units/api/test_help_api.py
+- tests/e2e/help/test_help_modal_flows.py
+- tests/units/core/test_try_cast_policy.py
+- README.md, CONTRIBUTING.md
+- .cursor/07-project-conventions.mdc, .cursor/11-frontend-design.mdc
+- documentation/** → docs/** (192-file git rename; docs/*.md, docs/sphinx/**, docs/superpowers/**)
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5758 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 49.61s. Sphinx build (ci/build_docs.sh) → "Documentation built successfully" from docs/sphinx.
+
+
+## Deploy hygiene: ship only the Help Center runtime set from docs/
+
+Context: after the documentation/ → docs/ rename, the bundle synced all of
+`docs/**` (only the Sphinx build output was excluded). That shipped internal-only
+content — planning artifacts, Sphinx sources, diagrams, demo assets and
+non-catalogued guides — to the Databricks App. The Help Center only serves a
+fixed catalogue of `docs/*.md` plus `docs/images/` and `docs/screenshots/`, so
+everything else under docs/ is dead weight in the deployed bundle.
+
+Changes:
+
+1. databricks.yml
+   Replaced the two Sphinx-build excludes with a tighter set: exclude
+   `docs/sphinx/`, `docs/superpowers/`, `docs/diagrams/`, `docs/pr47-neo4j-demo/`
+   and the five non-catalogued markdown files (DEPLOY_CHECKLIST, PR_REVIEW_CHECKLIST,
+   dab-reference, sizing, uc-mcp-connection-genie-one). Only the catalogued
+   Help Center docs + images/ + screenshots/ now ship.
+2. .databricksignore
+   Mirrored the same exclusions so both bundle-sync mechanisms agree.
+3. tests/units/api/test_help_api.py
+   Added `test_bundle_excludes_non_runtime_docs` — asserts the internal docs/
+   content is excluded in both databricks.yml and .databricksignore, and that no
+   catalogued Help Center doc is excluded by its docs/<file> path.
+
+Modified files:
+- databricks.yml
+- .databricksignore
+- tests/units/api/test_help_api.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_help_api.py → 41 passed.
+Bundle: make bundle-validate → valid (exclude patterns match real files; only
+pre-existing mlruns/htmlcov/mlartifacts "no match" warnings remain).

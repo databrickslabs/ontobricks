@@ -335,7 +335,7 @@ MLFLOW_TRACKING_URI=databricks
 
 # Neo4j (only for domains whose graph backend is "neo4j") — the password is
 # resolved live from a Databricks secret scope/key picked in Settings → Back
-# end → Neo4j (see documentation/pr47-neo4j-demo/secret-configuration.md);
+# end → Neo4j (see docs/pr47-neo4j-demo/secret-configuration.md);
 # NEO4J_PASSWORD below is only read for the legacy `auth_method: "basic"`
 # configs still bound to an Apps secret resource.
 # NEO4J_PASSWORD=<bolt-password>          # legacy — in Apps, via a secret resource
@@ -363,7 +363,7 @@ in the deployed app:
   API). Deploy does **not** create or bind that secret (Neo4j is optional).
 - The app's own identity (SP OAuth in Apps, PAT/CLI profile locally) needs
   `READ` on that scope — see
-  `documentation/pr47-neo4j-demo/secret-configuration.md` for the one-time
+  `docs/pr47-neo4j-demo/secret-configuration.md` for the one-time
   `databricks secrets put-acl` setup.
 - Legacy configs still bound to the `neo4j-password` Apps secret resource
   (`auth_method: "basic"` + `NEO4J_PASSWORD` env var) keep working, but that
@@ -468,7 +468,7 @@ Edit the workspace-specific defaults in `scripts/deploy.config.sh`:
 | `DEFAULT_INSTANCE_ID` | Derives `APP_NAME` / `MCP_APP_NAME` / `DAB_TARGET` | Single knob for a deploy instance (e.g. `07x` → `ontobricks-07x`, target `dev-lakebase-07x`). |
 | `DEFAULT_APP_NAME` | `databricks.yml > var.app_name` and `DATABRICKS_APP_NAME` at runtime | Usually derived as `ontobricks-${DEFAULT_INSTANCE_ID}`; override only if you must. |
 | `DEFAULT_MCP_APP_NAME` | `databricks.yml > var.mcp_app_name` | Deployed name of the MCP companion (must start with `mcp-`). |
-| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | Auto: `dev-lakebase-<INSTANCE_ID>`. Force `dev-lakebase` only when upgrading a **pre-INSTANCE_ID** (0.6.x) deploy in place — see Upgrade Notes in `releases/ReleaseNotes_V0.7.0.md` and `documentation/DEPLOY_CHECKLIST.md` §5. |
+| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | Auto: `dev-lakebase-<INSTANCE_ID>`. Force `dev-lakebase` only when upgrading a **pre-INSTANCE_ID** (0.6.x) deploy in place — see Upgrade Notes in `releases/ReleaseNotes_V0.7.0.md` and `docs/DEPLOY_CHECKLIST.md` §5. |
 | `DEFAULT_WAREHOUSE_ID` | `app.yaml > DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT` + the `sql-warehouse` bundle resource | **SQL Warehouses** → your warehouse → **Connection details**. |
 | `DEFAULT_REGISTRY_CATALOG` / `_SCHEMA` / `_VOLUME` | Bundle `volume` resource (`uc_securable: <cat>.<schema>.<volume>`) | UC namespace that hosts the binary-artefact volume + the triplestore VIEW. |
 | `DEFAULT_LAKEBASE_PROJECT` | `databricks.yml > var.lakebase_project` | Autoscaling **project id** (final segment of `projects/<id>`). |
@@ -1235,7 +1235,7 @@ databricks bundle run mcp_ontobricks_app -t dev-lakebase
 
 ## 6. Triple Store & Graph DB Backend Configuration
 
-OntoBricks always materializes both a Delta view (Unity Catalog) and a Graph DB engine (Lakebase Postgres). Both layers are pluggable through their respective factories — see `documentation/graphdb-integration.md` for adding a new Graph DB engine.
+OntoBricks always materializes both a Delta view (Unity Catalog) and a Graph DB engine (Lakebase Postgres). Both layers are pluggable through their respective factories — see `docs/graphdb-integration.md` for adding a new Graph DB engine.
 
 ### Delta view (`view`) — No Extra Setup Required
 
@@ -1457,7 +1457,7 @@ OntoBricks/
 ├── app.yaml                # Main app runtime config
 ├── src/mcp-server/
 │   └── app.yaml            # MCP server runtime config
-└── documentation/dab-reference.md
+└── docs/dab-reference.md
     └── README.md           # DAB-specific documentation
 ```
 
@@ -1503,7 +1503,7 @@ make bootstrap-lakebase  # Lakebase schema grants (see scripts/bootstrap/lakebas
 
 ### File Sync
 
-The `.databricksignore` at the project root excludes non-runtime files (tests, data, IDE config, Sphinx HTML build output, etc.) from the main app sync, but **includes** `documentation/` so the in-app Help Center can serve `/api/help/docs/*` in production. The MCP server has its own `source_code_path` pointing directly to `src/mcp-server/`.
+The `.databricksignore` at the project root excludes non-runtime files (tests, data, IDE config, Sphinx HTML build output, etc.) from the main app sync, but **includes** `docs/` so the in-app Help Center can serve `/api/help/docs/*` in production. The MCP server has its own `source_code_path` pointing directly to `src/mcp-server/`.
 
 ### Binding existing apps
 

@@ -11,7 +11,7 @@ The suite exercises the happy path plus the hardening:
 
 - every catalogued doc slug returns 200 with markdown (no 404 in production),
 - catalogued markdown files and referenced ``images/`` assets exist on disk,
-- deploy bundle config ships ``documentation/`` to Databricks,
+- deploy bundle config ships ``docs/`` to Databricks,
 - unknown slugs → 404,
 - bad image filenames (path traversal / wrong extension) → 404,
 - valid known assets that may not exist on disk → 404 (never 500).
@@ -54,11 +54,11 @@ def _normalize_help_asset_ref(raw: str) -> tuple[str, str] | None:
     if not ref or ref.startswith(("http://", "https://", "data:", "/")):
         return None
     ref = ref.replace("\\", "/").lstrip("./")
-    if ref.startswith("documentation/"):
-        ref = ref[len("documentation/") :]
-    elif ref.startswith("docs/"):
-        # Legacy markdown paths from before docs/ → documentation/ rename.
+    if ref.startswith("docs/"):
         ref = ref[len("docs/") :]
+    elif ref.startswith("documentation/"):
+        # Legacy markdown paths from before the documentation/ → docs/ rename.
+        ref = ref[len("documentation/") :]
     for subdir in ("images", "screenshots"):
         prefix = f"{subdir}/"
         if ref.startswith(prefix):
@@ -171,7 +171,7 @@ class TestHelpCatalogIntegrity:
         response = client.get(f"/api/help/docs/{slug}")
         assert response.status_code == 200, (
             f"/api/help/docs/{slug} returned {response.status_code}; "
-            "deploy bundle must ship documentation/*.md"
+            "deploy bundle must ship docs/*.md"
         )
         body = response.json()
         assert body["slug"] == slug
@@ -216,10 +216,9 @@ class TestHelpDeployBundle:
             for line in ignore_path.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.strip().startswith("#")
         }
-        # Help Center markdown lives under documentation/; docs/ is the
-        # GitHub Pages marketing site and is intentionally excluded.
-        assert "documentation/" not in blocked
-        assert "docs/" in blocked
+        # Help Center markdown lives under docs/ and is served at
+        # /api/help/docs/*, so docs/ must NOT be excluded from the bundle.
+        assert "docs/" not in blocked
         assert "*.md" not in blocked
 
     def test_databricks_yml_includes_documentation_for_help_center(self):
@@ -227,9 +226,52 @@ class TestHelpDeployBundle:
         bundle = yaml.safe_load(bundle_path.read_text(encoding="utf-8"))
         includes = bundle.get("sync", {}).get("include", [])
         excludes = bundle.get("sync", {}).get("exclude", [])
-        assert "documentation/**" in includes
-        assert "documentation/" not in excludes
+        assert "docs/**" in includes
+        assert "docs/" not in excludes
         assert "*.md" not in excludes
+
+    # docs/ content that is NOT part of the Help Center runtime set (catalogued
+    # *.md + images/ + screenshots/) must be kept out of the deployed bundle,
+    # in both databricks.yml sync.exclude and .databricksignore.
+    _NON_RUNTIME_DOCS = {
+        "docs/sphinx/",
+        "docs/superpowers/",
+        "docs/diagrams/",
+        "docs/pr47-neo4j-demo/",
+        "docs/DEPLOY_CHECKLIST.md",
+        "docs/PR_REVIEW_CHECKLIST.md",
+        "docs/dab-reference.md",
+        "docs/sizing.md",
+        "docs/uc-mcp-connection-genie-one.md",
+    }
+
+    def test_bundle_excludes_non_runtime_docs(self):
+        bundle = yaml.safe_load(
+            (_REPO_ROOT / "databricks.yml").read_text(encoding="utf-8")
+        )
+        excludes = set(bundle.get("sync", {}).get("exclude", []))
+        blocked = {
+            line.strip()
+            for line in (_REPO_ROOT / ".databricksignore")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        assert self._NON_RUNTIME_DOCS <= excludes, (
+            "databricks.yml must exclude internal docs/ content: missing "
+            f"{self._NON_RUNTIME_DOCS - excludes}"
+        )
+        assert self._NON_RUNTIME_DOCS <= blocked, (
+            ".databricksignore must block internal docs/ content: missing "
+            f"{self._NON_RUNTIME_DOCS - blocked}"
+        )
+        # Guard the inverse: never exclude a catalogued Help Center doc by its
+        # explicit docs/<file> path.
+        for doc in _DOC_INDEX.values():
+            docs_path = f"docs/{doc['file']}"
+            assert docs_path not in excludes
+            assert docs_path not in blocked
+            assert docs_path not in self._NON_RUNTIME_DOCS
 
 
 class TestHelpDocFetch:

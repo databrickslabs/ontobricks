@@ -40,6 +40,14 @@ scope:
 | `api/routers/internal/` | Internal JSON API — session-aware, delegates to domain classes. |
 | `api/routers/v1.py` etc. | External REST API — stateless. |
 
+**Planning artifacts (superpowers plans/specs)**
+
+- Save brainstorming/planning artifacts under **`docs/superpowers/`** — plans in
+  `docs/superpowers/plans/YYYY-MM-DD-<slug>.md`, design specs in
+  `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`.
+- `docs/` is the single canonical docs root (Help Center markdown, Sphinx
+  sources, plans/specs). Do not create a parallel top-level `documentation/`.
+
 **Domain Security**
 
 - A domain must **never** include tokens, passwords, or other secrets.

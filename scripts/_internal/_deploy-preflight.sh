@@ -295,7 +295,7 @@ _preflight_summary() {
     echo ""
     if [[ $_PREFLIGHT_FAILED -gt 0 ]]; then
         echo "${_PF_C_RED}Preflight FAILED${_PF_C_RST}: ${_PREFLIGHT_FAILED} blocking issue(s), ${_PREFLIGHT_WARNINGS} warning(s)"
-        echo "See documentation/DEPLOY_CHECKLIST.md for the full deployment requirements."
+        echo "See docs/DEPLOY_CHECKLIST.md for the full deployment requirements."
         return 1
     fi
     if [[ $_PREFLIGHT_WARNINGS -gt 0 ]]; then

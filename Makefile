@@ -55,7 +55,7 @@ help:
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
 	@echo "    make bundle-validate     - Validate the bundle config (target from deploy.config.sh)"
 	@echo "    make bundle-summary      - Preview what will deploy (target from deploy.config.sh)"
-	@echo "    make deploy-check        - Read-only deploy prerequisite check (see documentation/DEPLOY_CHECKLIST.md)"
+	@echo "    make deploy-check        - Read-only deploy prerequisite check (see docs/DEPLOY_CHECKLIST.md)"
 	@echo ""
 	@echo "  Maintenance:"
 	@echo "    make clean        - Remove generated files"
@@ -228,7 +228,7 @@ bundle-summary:
 	    --var=lakebase_database_resource_segment="$$LAKEBASE_DATABASE_RESOURCE_SEGMENT" \
 	    --var=lakebase_registry_schema="$$LAKEBASE_SCHEMA"
 
-# Check deployment prerequisites (read-only — see documentation/DEPLOY_CHECKLIST.md)
+# Check deployment prerequisites (read-only — see docs/DEPLOY_CHECKLIST.md)
 deploy-check:
 	@chmod +x scripts/deploy.sh
 	@scripts/deploy.sh --dry-run

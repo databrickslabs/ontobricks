@@ -64,8 +64,8 @@ sync:
     # uploads the rendered file on every `databricks bundle deploy` run.
     - app.yaml
     - src/mcp-server/app.yaml
-    # Help Center serves markdown from documentation/ at runtime (/api/help/docs/*).
-    - documentation/**
+    # Help Center serves markdown from docs/ at runtime (/api/help/docs/*).
+    - docs/**
   exclude:
     - tests/
     - data/
@@ -84,7 +84,7 @@ sync:
     - scripts/
     - Makefile
     - CHANGELOG.md
-    # Help Center ships documentation/*.md; exclude root/repo meta markdown only.
+    # Help Center ships docs/*.md; exclude root/repo meta markdown only.
     - README.md
     - CONTRIBUTING.md
     - AGENTS.md
@@ -92,8 +92,19 @@ sync:
     - SECURITY.md
     - releases/
     - .claude/
-    - documentation/sphinx/_build/
-    - documentation/sphinx/.doctrees/
+    # docs/ ships ONLY the Help Center runtime set (catalogued *.md +
+    # images/, screenshots/). Everything else under docs/ is internal-only:
+    # Sphinx sources/build, planning artifacts, diagrams, demo assets, and
+    # non-catalogued checklists/guides — keep them out of the deployed bundle.
+    - docs/sphinx/
+    - docs/superpowers/
+    - docs/diagrams/
+    - docs/pr47-neo4j-demo/
+    - docs/DEPLOY_CHECKLIST.md
+    - docs/PR_REVIEW_CHECKLIST.md
+    - docs/dab-reference.md
+    - docs/sizing.md
+    - docs/uc-mcp-connection-genie-one.md
 
 variables:
   # ── App names ──────────────────────────────────────────────────────
@@ -288,7 +299,7 @@ targets:
             # ``terraform apply`` on first deploy (GH #136). The unbound
             # ``neo4j-password`` declaration in ``app.yaml.template`` remains
             # for legacy ``NEO4J_PASSWORD`` / Apps UI binding only.
-            # See documentation/pr47-neo4j-demo/secret-configuration.md.
+            # See docs/pr47-neo4j-demo/secret-configuration.md.
         mcp_ontobricks_app:
           resources:
             - name: postgres

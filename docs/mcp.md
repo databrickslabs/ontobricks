@@ -539,11 +539,11 @@ cd src/mcp-server
 ./deploy-mcp-server.sh
 ```
 
-See `documentation/deployment.md` §7 for Playground wiring and `app.yaml` env.
+See `docs/deployment.md` §7 for Playground wiring and `app.yaml` env.
 
 To register the deployed MCP app as a **Unity Catalog HTTP connection** and
 attach it to **Genie One** (plus Playground / Genie Code), follow
-[`documentation/uc-mcp-connection-genie-one.md`](uc-mcp-connection-genie-one.md).
+[`docs/uc-mcp-connection-genie-one.md`](uc-mcp-connection-genie-one.md).
 
 ### Using in Playground
 

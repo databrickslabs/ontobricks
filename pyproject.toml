@@ -229,7 +229,7 @@ target-version = "py310"
 src = ["src", "tests"]
 extend-exclude = [
     "src/**/_starter_kit/*",
-    "documentation/sphinx/_build/*",
+    "docs/sphinx/_build/*",
     ".venv/*",
     "htmlcov/*",
 ]
@@ -274,7 +274,7 @@ disallow_any_explicit = false
 strict_optional = false
 # Exclude tests + generated code from the gate (tests can be strict later).
 # mypy treats these as Python regexes, not globs — use literal substrings.
-exclude = "(tests/|/_starter_kit/|docs/|documentation/|build/|dist/|\\.venv/)"
+exclude = "(tests/|/_starter_kit/|docs/|docs/|build/|dist/|\\.venv/)"
 
 [[tool.mypy.overrides]]
 module = [
