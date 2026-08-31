@@ -18,8 +18,10 @@
     </div>
 </div>
 
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
         <!-- Tab Navigation -->
-        <ul class="nav nav-tabs ob-tabs" id="wizardTabs" role="tablist">
+        <ul class="nav nav-tabs ob-tabs nav-fill" id="wizardTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="wizard-tab-metadata" data-bs-toggle="tab" data-bs-target="#wizard-pane-metadata"
                         type="button" role="tab" aria-controls="wizard-pane-metadata" aria-selected="true">
@@ -47,7 +49,7 @@
         </ul>
 
         <!-- Tab Content -->
-        <div class="tab-content ob-tab-content" id="wizardTabContent">
+        <div class="tab-content p-3" id="wizardTabContent">
 
             <!-- Data Sources Tab -->
             <div class="tab-pane fade show active" id="wizard-pane-metadata" role="tabpanel" aria-labelledby="wizard-tab-metadata">
@@ -208,6 +210,8 @@
             <i class="bi bi-info-circle me-1"></i>
             Generation uses AI and may take a few seconds. The ontology will be applied automatically when ready.
         </div>
+        </div>
+    </div>
 
         <!-- Progress overlay is now dynamically created by JavaScript -->
     </div>

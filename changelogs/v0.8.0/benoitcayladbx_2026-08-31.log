@@ -1,0 +1,97 @@
+## Freeze backend cards in view mode
+
+Context: Domain → Information backend cards used hidden radio inputs. The
+generic read-only CSS blocked pointer events on those inputs, but their labels
+could still activate them and keyboard navigation could still change the
+selected backend. Viewers and edit-locked users must not be able to alter this
+domain setting.
+
+Changes:
+
+1. src/front/static/domain/js/domain-information.js
+   Natively disables backend card radios for read-only versions, viewer roles,
+   and edit locks; resynchronizes after lifecycle evaluation and whenever body
+   permission classes change.
+2. tests/units/front/test_no_backend_ui.py
+   Added regression contracts covering all three view-only states and
+   mid-session permission changes.
+
+Modified files:
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_no_backend_ui.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5739 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 51.73s.
+
+Browser verification: `.role-viewer`, `.read-only-version`, and
+`.read-only-locked` all natively disabled the four backend radios; pointer and
+keyboard selection remained frozen, while removing the view-only state restored
+interaction.
+
+## Match Domain Information tab surface
+
+Context: Domain → Information used a standalone bordered tab-content surface,
+while the requested Ontology → Data Quality reference places its tab rail and
+content inside one card. The separate surfaces produced different visible
+borders, radii, spacing, and rail edges despite sharing the same tab component.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_information.html
+   Rebuilt the tab container with the Data Quality `card h-100` /
+   `card-body p-0` structure, `nav-fill` rail, and `tab-content p-3` body.
+2. tests/units/front/test_no_backend_ui.py
+   Added regression contracts for the Data Quality tab-header classes and
+   single-card surface structure.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- tests/units/front/test_no_backend_ui.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5740 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 52.04s.
+
+Browser verification: Domain Information matched the Data Quality card border,
+radius, background, content padding, and flush rail geometry; tab switching,
+responsive overflow, backend cards, and read-only locking remained functional.
+
+## Standardize card-integrated page tabs
+
+Context: Ontology → Generate still used a standalone `ob-tab-content` surface
+under the tab rail, while Domain → Information and Ontology → Data Quality
+share one outer card. The Cursor rule treated all tab bodies as independent
+surfaces, so new pages kept drifting away from the Data Quality reference.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_wizard.html
+   Wrapped the Generate tabs in the Data Quality `card h-100` /
+   `card-body p-0 ob-tabs-wrap` structure with a `nav-fill` rail and
+   `tab-content p-3` body.
+2. .cursor/11-frontend-design.mdc
+   Documented card-integrated page tabs as the default page-level pattern
+   and kept `ob-tab-content` for genuinely independent surfaces.
+3. .claude/skills/frontend-design/SKILL.md
+   Added a thin Claude skill that points to `.cursor/11` and sequences
+   contract tests plus browser verification.
+4. CLAUDE.md
+   Registered the `frontend-design` skill in the Claude-only skill table.
+5. tests/units/front/test_clarity_design_contract.py
+   Added contracts for Generate markup, the Cursor rule skeleton, and the
+   Claude skill pointer.
+6. docs/superpowers/specs/2026-08-31-card-integrated-tabs-design.md
+   Recorded the approved design for the card-integrated tab pattern.
+7. docs/superpowers/plans/2026-08-31-card-integrated-tabs.md
+   Recorded the test-first implementation plan.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- .cursor/11-frontend-design.mdc
+- .claude/skills/frontend-design/SKILL.md
+- CLAUDE.md
+- tests/units/front/test_clarity_design_contract.py
+- docs/superpowers/specs/2026-08-31-card-integrated-tabs-design.md
+- docs/superpowers/plans/2026-08-31-card-integrated-tabs.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5743 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 50.82s.

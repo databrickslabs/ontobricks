@@ -42,6 +42,7 @@ own tooling (skills, mode switches) on top of those rules.
 | `deploy` | "deploy", "ship", "release" to Databricks |
 | `adding-subpackage` | New subdir under `back/core/`, `back/objects/`, or `agents/` |
 | `ai-feature` | Any change under `src/agents/**`, a new MLflow-traced LLM call, or an MCP tool wrapping an agent — the orchestrator for the `.cursor/12-ai-feature-lifecycle.mdc` gate (SPEC.md → dataset → eval → impl → re-eval) |
+| `frontend-design` | Creating or changing templates, tabs, cards, forms, responsive layout, or other frontend UI |
 
 The skill files in `.claude/skills/<name>/SKILL.md` are themselves thin —
 they sequence the work and point back to the canonical rules. They do not

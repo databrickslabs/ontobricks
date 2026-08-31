@@ -798,12 +798,39 @@ The rail owns single-line responsive behaviour: `flex-wrap: nowrap`,
 users can scroll the rail on narrow screens. Keyboard focus uses a visible 2px
 `--db-primary` inset outline and must never be removed.
 
-Tab content is an **independent surface**. `.ob-tabs` does not remove the next
-card's border or square its corners. Use plain `.tab-content` inside a parent
-card, or `.ob-tab-content` when the content itself needs a complete bordered,
-rounded, padded surface.
+Choose the container from the visual relationship. Use card-integrated page
+tabs when the rail and content form one logical workspace. Use
+`.ob-tab-content` only when the content is a genuinely independent bordered,
+rounded surface. `.ob-tabs` never owns card borders or corner geometry.
 
-**Canonical skeleton**
+#### Card-integrated page tabs
+
+This is the canonical page-level pattern used by Domain → Information,
+Ontology → Generate, Ontology → Data Quality, Ontology → Business Rules, and
+Ontology → Axioms:
+
+```html
+<div class="card h-100">
+    <div class="card-body p-0 ob-tabs-wrap">
+        <ul class="nav nav-tabs ob-tabs nav-fill"
+            id="<unique>Tabs" role="tablist">
+            ...
+        </ul>
+        <div class="tab-content p-3" id="<unique>TabContent">
+            ...
+        </div>
+    </div>
+</div>
+```
+
+The outer `<div>` may be a `<form class="card h-100">` when one form owns the
+whole workspace. Keep the inner `card-body p-0 ob-tabs-wrap`, `nav-fill` rail,
+and padded `tab-content` unchanged.
+
+#### Independent tab content
+
+Use the following skeleton only when the rail and body are separate visual
+surfaces:
 
 ```html
 <ul class="nav nav-tabs ob-tabs" id="<unique>Tabs" role="tablist">
@@ -862,10 +889,10 @@ rounded, padded surface.
     narrow right-hand panels and generated panel tabs.
 - Layout helpers (`nav-fill`, `flex-shrink-0`, `mb-0`) may accompany
   `ob-tabs`. The catalogued combinations are:
-  - `nav nav-tabs ob-tabs mb-0` — Domain / Settings.
-  - `nav nav-tabs ob-tabs` — Import / Wizard / Registry modal.
-  - `nav nav-tabs ob-tabs nav-fill` — Ontology DQ / Business
-    Rules / Axioms.
+  - `nav nav-tabs ob-tabs mb-0` — independent Domain / Settings surfaces.
+  - `nav nav-tabs ob-tabs` — Import / Registry modal.
+  - `nav nav-tabs ob-tabs nav-fill` — Domain Information / Ontology Generate /
+    Ontology DQ / Business Rules / Axioms.
   - `nav nav-tabs ob-tabs nav-fill flex-shrink-0` —
     DT-DataQuality / DT-Inference (the `flex-shrink-0` keeps the
     tab strip a fixed-size header inside their flex card body).
@@ -879,9 +906,9 @@ rounded, padded surface.
 - Do **not** add `style="gap: 2px;"` (or any inline `style`)
   on the tab `<ul>` — the gap of 0 is set by `ob-tabs` and is
   what makes the underline read as one continuous baseline.
-- The tab content can sit inside a Bootstrap `.card` or stand alone. Never
-  visually fuse the rail to a following card by removing its top border or
-  top radii.
+- The tab content can sit inside a Bootstrap `.card` or stand alone. For
+  independent surfaces, never visually fuse the rail to a following card by
+  removing its top border or top radii.
 - **Full-height pattern (preferred for tabbed pages).** Tabs +
   body should fill the page from below the section header to the
   shared sidebar/shell bottom (the 0.5rem viewport gutter),
@@ -902,8 +929,8 @@ rounded, padded surface.
      When `ob-tabs-wrap` is itself a direct child of
      `.content-section`, it grows to fill the section.
 - `.ob-tab-content` is an optional independent bordered surface with complete
-  card rounding. New tabs should default to plain `.tab-content` inside their
-  existing parent card.
+  card rounding. New page tabs should default to the card-integrated pattern
+  and plain `.tab-content` inside their parent card.
 
 **Anti-patterns**
 
@@ -919,6 +946,8 @@ rounded, padded surface.
   the tab `<ul>` or `.nav-link`; use `ob-tabs--compact`.
 - ❌ Removing the top border/radius from a following card to fuse it with the
   tab rail.
+- ❌ A standalone `.ob-tab-content` directly below the rail when both belong to
+  one logical card workspace. Use the card-integrated page-tabs skeleton.
 - ❌ A short, free-floating tabs-card that doesn't fill the page
   height. Use the *Full-height pattern* above (direct children of
   `.content-section`, or `.ob-tabs-wrap`) so the tabs reach the

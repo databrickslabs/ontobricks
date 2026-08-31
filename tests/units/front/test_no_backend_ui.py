@@ -119,13 +119,27 @@ class TestTheGraphBackendCards:
         assert 'aria-hidden="true"' in select
         assert 'tabindex="-1"' in select
 
-    def test_the_tab_body_uses_the_standard_surface(self):
+    def test_the_tabs_use_the_data_quality_card_surface(self):
         html = _read(INFO_HTML)
+        form_anchor = html.index('id="domainForm"')
+        form_tag = html[
+            html.rindex("<form", 0, form_anchor) : html.index(">", form_anchor)
+        ]
+        assert "card h-100 ob-tabs-wrap" in form_tag
+        assert '<div class="card-body p-0 ob-tabs-wrap">' in html
+
         anchor = html.index('id="domainInfoTabContent"')
         content_tag = html[html.rindex("<div", 0, anchor) : anchor]
         assert "tab-content" in content_tag
-        assert "ob-tab-content" in content_tag
-        assert 'class="ob-tabs-wrap"' in html
+        assert "p-3" in content_tag
+        assert "ob-tab-content" not in content_tag
+
+    def test_the_tab_header_matches_the_data_quality_nav_fill_contract(self):
+        html = _read(INFO_HTML)
+        anchor = html.index('id="domainInfoTabs"')
+        tab_header = html[html.rindex("<ul", 0, anchor) : anchor]
+        assert "nav nav-tabs ob-tabs nav-fill" in tab_header
+        assert "mb-0" not in tab_header
 
     def test_the_domain_page_loads_the_focused_stylesheet(self):
         assert "domain/css/domain-information.css" in _read(DOMAIN_HTML)
@@ -204,6 +218,31 @@ class TestTheBackendCardsStayInSync:
             "graphBackendEl.value = infoData.info.graph_backend"
         )
         assert "syncGraphBackendCards();" in js[hydration : hydration + 250]
+
+
+class TestTheBackendCardsRespectReadOnlyMode:
+    def test_all_read_only_body_states_natively_disable_the_radios(self):
+        js = _read(INFO_JS)
+        start = js.index("function syncGraphBackendCardEditability()")
+        body = js[start : start + 900]
+        for class_name in (
+            "read-only-version",
+            "role-viewer",
+            "read-only-locked",
+        ):
+            assert class_name in body
+        assert "option.disabled = readOnly || backendSelect.disabled" in body
+
+    def test_mid_session_permission_changes_resync_editability(self):
+        js = _read(INFO_JS)
+        assert "new MutationObserver(syncGraphBackendCardEditability)" in js
+        assert "attributeFilter: ['class']" in js
+        assert "syncGraphBackendCardEditability();" in js
+        status_update = js.index("updateVersionStatusUI(editable,")
+        assert (
+            "syncGraphBackendCardEditability();"
+            in js[status_update : status_update + 250]
+        )
 
 
 class TestTheMcpTabRehydratesUnderTheConstraint:

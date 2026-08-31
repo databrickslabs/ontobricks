@@ -36,6 +36,9 @@ QUERY_COHORT_TEMPLATE = (
     REPO_ROOT / "src/front/templates/partials/dtwin/_query_cohorts.html"
 )
 ONTOLOGY_WIZARD_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-wizard.css"
+ONTOLOGY_WIZARD_TEMPLATE = (
+    REPO_ROOT / "src/front/templates/partials/ontology/_ontology_wizard.html"
+)
 ONTOLOGY_PITFALLS_CSS = (
     REPO_ROOT / "src/front/static/ontology/css/ontology-pitfalls.css"
 )
@@ -49,6 +52,8 @@ REGISTRY_TEAMS_CSS = (
     REPO_ROOT / "src/front/static/registry/css/registry-teams.css"
 )
 FRONTEND_RULE = REPO_ROOT / ".cursor/11-frontend-design.mdc"
+CLAUDE_GUIDE = REPO_ROOT / "CLAUDE.md"
+FRONTEND_SKILL = REPO_ROOT / ".claude/skills/frontend-design/SKILL.md"
 MENU_CONFIG = REPO_ROOT / "src/front/config/menu_config.json"
 SIDEBAR_NAV_PARTIAL = (
     REPO_ROOT / "src/front/templates/partials/layout/_sidebar_nav.html"
@@ -321,6 +326,41 @@ def test_components_css_ob_tabs_exposes_standard_and_compact_densities():
 def test_data_quality_tabs_do_not_override_the_shared_density():
     css = _read(ONTOLOGY_DATAQUALITY_CSS)
     assert "#dqTabs .nav-link" not in css
+
+
+def test_ontology_generate_uses_the_card_integrated_tab_pattern():
+    template = _read(ONTOLOGY_WIZARD_TEMPLATE)
+    assert '<div class="card h-100">' in template
+    assert '<div class="card-body p-0 ob-tabs-wrap">' in template
+    assert (
+        'class="nav nav-tabs ob-tabs nav-fill" id="wizardTabs"'
+        in template
+    )
+    anchor = template.index('id="wizardTabContent"')
+    content_tag = template[template.rindex("<div", 0, anchor) : anchor]
+    assert "tab-content p-3" in content_tag
+    assert "ob-tab-content" not in content_tag
+
+
+def test_frontend_rule_defines_card_integrated_page_tabs():
+    rule = _read(FRONTEND_RULE)
+    assert "Card-integrated page tabs" in rule
+    assert '<div class="card h-100">' in rule
+    assert '<div class="card-body p-0 ob-tabs-wrap">' in rule
+    assert 'class="nav nav-tabs ob-tabs nav-fill"' in rule
+    assert 'class="tab-content p-3"' in rule
+    assert "Domain → Information" in rule
+    assert "Ontology → Generate" in rule
+
+
+def test_claude_frontend_skill_points_to_the_canonical_rule():
+    skill = _read(FRONTEND_SKILL)
+    assert ".cursor/11-frontend-design.mdc" in skill
+    assert "browser" in skill.lower()
+    assert "desktop" in skill.lower()
+    assert "mobile" in skill.lower()
+    assert 'uv run --frozen pytest -q -m "not scenario"' in skill
+    assert "frontend-design" in _read(CLAUDE_GUIDE)
 
 
 def test_ob_tabs_and_content_are_independent_surfaces():

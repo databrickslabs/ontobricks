@@ -15,6 +15,19 @@ function syncGraphBackendCards() {
     });
 }
 
+function syncGraphBackendCardEditability() {
+    const backendSelect = document.getElementById('domainGraphBackend');
+    if (!backendSelect) return;
+    const readOnly = [
+        'read-only-version',
+        'role-viewer',
+        'read-only-locked'
+    ].some(className => document.body.classList.contains(className));
+    document.querySelectorAll('.domain-backend-option').forEach(option => {
+        option.disabled = readOnly || backendSelect.disabled;
+    });
+}
+
 function initGraphBackendCards() {
     const backendSelect = document.getElementById('domainGraphBackend');
     if (!backendSelect) return;
@@ -26,6 +39,11 @@ function initGraphBackendCards() {
         });
     });
     syncGraphBackendCards();
+    syncGraphBackendCardEditability();
+    new MutationObserver(syncGraphBackendCardEditability).observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class']
+    });
 }
 
 // Show the Neo4j connection selector only when the backend is Neo4j.
@@ -486,6 +504,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             // whether this is the latest version. Older DRAFT versions edit.
             const editable = (statusData.status || 'DRAFT') === 'DRAFT';
             updateVersionStatusUI(editable, statusData.version, statusData.has_registry);
+            syncGraphBackendCardEditability();
             populateVersionDropdown(statusData.available_versions, statusData.version);
             const sf = statusData.domain_folder || statusData.project_folder;
             if (sf) {
