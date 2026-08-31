@@ -335,3 +335,72 @@ Modified files:
 Tests: uv run --frozen pytest -q tests/units/api/test_help_api.py → 41 passed.
 Bundle: make bundle-validate → valid (exclude patterns match real files; only
 pre-existing mlruns/htmlcov/mlartifacts "no match" warnings remain).
+
+--------------------------------------------------------------------------------
+
+## Ontology → Import adopts the card-integrated tab pattern
+
+Context:
+Ontology → Import still used the legacy standalone tab layout (a bare
+`nav-tabs ob-tabs` rail plus an independent `ob-tab-content` surface), which
+renders with a different border/radius/spacing than the canonical
+card-integrated page tabs already used by Ontology → Generate, Ontology → Data
+Quality and Domain → Information. Migrated Import onto the same pattern so all
+Ontology page tabs share one visual surface.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_import.html
+   Wrapped the tab rail and content in the canonical
+   `<div class="card h-100"><div class="card-body p-0 ob-tabs-wrap">…</div></div>`
+   surface. Added `nav-fill` to the `#importTabs` rail and replaced the
+   standalone `tab-content ob-tab-content` with the card-integrated
+   `tab-content p-3`. The hidden file inputs and the Import Status panel stay
+   as siblings below the card (unchanged behaviour, IDs and handlers).
+2. tests/units/front/test_clarity_design_contract.py
+   Added `ONTOLOGY_IMPORT_TEMPLATE` and
+   `test_ontology_import_uses_the_card_integrated_tab_pattern`, mirroring the
+   Generate contract: asserts the card/card-body/ob-tabs-wrap wrapper, the
+   `nav-fill` rail, `tab-content p-3`, and the absence of `ob-tab-content`.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_import.html
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5760 passed, 305 skipped,
+1 xfailed. (test_clarity_design_contract.py → 39 passed.)
+
+--------------------------------------------------------------------------------
+
+## KG → Runs adopts the card-integrated tab pattern
+
+Context:
+Same visual inconsistency as Ontology → Import: the Knowledge Graph → Runs
+section (Build runs / Analytics runs) still used the legacy standalone
+`nav-tabs ob-tabs` rail plus an independent `ob-tab-content` surface. Migrated
+it onto the canonical card-integrated page-tab pattern so it matches the rest of
+the workspace tabs.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_runs.html
+   Wrapped the `#runsTabs` rail and `#runsTabContent` in the canonical
+   `<div class="card h-100"><div class="card-body p-0 ob-tabs-wrap">…</div></div>`
+   surface, added `nav-fill` to the rail, and replaced
+   `tab-content ob-tab-content` with `tab-content p-3`. Tab IDs, targets,
+   tables, loading/empty/error elements and JS handlers are unchanged. (This
+   partial is shared by the KG page via dtwin.html, so Domain → Runs picks up
+   the same surface.)
+2. tests/units/front/test_clarity_design_contract.py
+   Added `DOMAIN_RUNS_TEMPLATE` and
+   `test_domain_runs_uses_the_card_integrated_tab_pattern`, mirroring the
+   Import/Generate contracts.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_runs.html
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5761 passed, 305 skipped,
+1 xfailed. (test_clarity_design_contract.py → 40 passed.)

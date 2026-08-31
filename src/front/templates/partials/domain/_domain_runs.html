@@ -19,7 +19,9 @@
         </div>
     </div>
 
-    <ul class="nav nav-tabs ob-tabs" id="runsTabs" role="tablist">
+    <div class="card h-100">
+    <div class="card-body p-0 ob-tabs-wrap">
+    <ul class="nav nav-tabs ob-tabs nav-fill" id="runsTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="rtab-btn-build" data-bs-toggle="tab"
                     data-bs-target="#rtab-build" type="button" role="tab"
@@ -36,7 +38,7 @@
         </li>
     </ul>
 
-    <div class="tab-content ob-tab-content" id="runsTabContent">
+    <div class="tab-content p-3" id="runsTabContent">
 
         <!-- ── TAB: Build runs ── -->
         <div class="tab-pane fade show active" id="rtab-build" role="tabpanel"
@@ -128,6 +130,8 @@
                 </div>
             </div>
         </div>
+    </div>
+    </div>
     </div>
 </div>
 <!-- NOTE: both run-details modals are rendered at page level in dtwin.html so
