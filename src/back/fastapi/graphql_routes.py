@@ -293,6 +293,7 @@ async def graphql_list_domains(
         domains=[
             GraphQLDomainInfo(name=p["name"], description=p["description"])
             for p in items
+            if p.get("has_graph", True)
         ],
     )
 

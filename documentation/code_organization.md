@@ -256,7 +256,7 @@ Defined in `api/routers/domains.py`. Representative paths:
 
 | Method | Path | Purpose (summary) |
 |--------|------|-------------------|
-| GET | `/api/v1/domains` | List MCP-exposed registry domains, each with its `mcp_policy` |
+| GET | `/api/v1/domains` | List MCP-exposed registry domains with `mcp_policy`, `graph_backend`, and `has_graph` |
 | GET | `/api/v1/domain/classes` | Per-class dataset / bridge / action metadata, filtered by the domain's MCP context policy |
 | GET | `/api/v1/domain/versions`, `/domain/design-status` | Versions and design readiness |
 | GET | `/api/v1/domain/ontology`, `/api/v1/domain/r2rml`, `/api/v1/domain/sparksql` | Serialized design artifacts |

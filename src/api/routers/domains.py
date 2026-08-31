@@ -3,7 +3,7 @@
 Mounted at ``/api/v1/domains`` and ``/api/v1/domain/...`` (prefix ``/v1`` on the sub-app).
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -64,6 +64,11 @@ class SparkSQLResponse(BaseModel):
 class DomainInfo(BaseModel):
     name: str
     description: str = ""
+    graph_backend: Literal["none", "lakebase", "databricks", "neo4j"] = Field(
+        default="lakebase",
+        description="Backend configured on the numeric-latest PUBLISHED version; "
+        "'none' denotes an ontology-only domain.",
+    )
     # Per-domain MCP surface policy. Empty means "every tool exposed, every
     # ontology attachment surfaced normally".
     mcp_policy: Dict[str, Any] = Field(default_factory=dict)
@@ -194,6 +199,7 @@ async def list_registry_domains(
             DomainInfo(
                 name=p["name"],
                 description=p["description"],
+                graph_backend=p.get("graph_backend", "lakebase"),
                 mcp_policy=p.get("mcp_policy") or {},
                 has_graph=p.get("has_graph", True),
             )

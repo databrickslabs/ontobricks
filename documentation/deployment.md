@@ -345,13 +345,15 @@ MLFLOW_TRACKING_URI=databricks
 > mints a short-lived JWT via `POST /api/2.0/postgres/credentials`
 > on every connection.
 
-#### Graph backend selection (Lakebase / Delta / Neo4j)
+#### Graph backend selection (No Backend / Lakebase / Delta / Neo4j)
 
-The Graph DB engine is chosen **per domain** (`graph_backend`: `lakebase`,
-`databricks`, or `neo4j`) under **Domain → Information → Knowledge Graph**;
-connection knobs live under **Settings → Back end**. Lakebase and the Delta
-(`databricks`) engine need no extra credentials beyond the Databricks/Lakebase
-config above. The **Neo4j** engine (Aura or self-hosted, Bolt protocol) always
+The Graph DB engine is chosen **per domain** (`graph_backend`: `none`,
+`lakebase`, `databricks`, or `neo4j`) under **Domain → Information → Knowledge
+Graph**; `none` creates an ontology-only domain and requires no graph
+infrastructure. Connection knobs live under **Settings → Back end**. Lakebase
+and the Delta (`databricks`) engine need no extra credentials beyond the
+Databricks/Lakebase config above. The **Neo4j** engine (Aura or self-hosted,
+Bolt protocol) always
 asks for the Bolt **username** directly and resolves the **password live from
 a Databricks secret** — there is no plain-text password field, in local dev or
 in the deployed app:

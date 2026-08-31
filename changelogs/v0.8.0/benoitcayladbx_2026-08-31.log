@@ -95,3 +95,120 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5743 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 50.82s.
+
+## Complete graphless external API contracts
+
+Context: The external domain listing exposed graph availability but omitted
+the configured backend, so clients could not distinguish an ontology-only
+domain from a graph-backed domain awaiting its first build. The GraphQL domain
+listing also advertised ontology-only domains that cannot provide a graph
+execution context, while the stateless domain-info endpoint omitted the same
+backend field.
+
+Changes:
+
+1. src/back/objects/registry/RegistryService.py
+   Added the numeric-latest PUBLISHED version's normalized graph backend to
+   each API/MCP domain summary.
+2. src/api/routers/domains.py
+   Exposed `graph_backend` as a documented and described OpenAPI enum on
+   `GET /api/v1/domains`.
+3. src/back/fastapi/graphql_routes.py
+   Filtered domains without a materialized graph from the GraphQL listing.
+4. src/back/objects/registry/store/base.py
+   Updated the registry summary contract to include the `none` backend.
+5. tests/units/api/test_external_api.py
+   Added REST serialization and GraphQL graphless-filtering regressions.
+6. tests/units/registry/test_registry_published.py
+   Added coverage for selecting the latest PUBLISHED version's backend.
+7. tests/contract/test_openapi_contract.py
+   Added the public `graph_backend` enum and default contract.
+8. documentation/api.md
+   Documented `graph_backend` for both domain endpoints, clarified `has_graph`,
+   and corrected stale request, parameter, and response names.
+9. documentation/architecture.md
+   Updated external REST and GraphQL architecture descriptions.
+10. documentation/code_organization.md
+    Updated the external domains endpoint contract.
+11. documentation/user-guide.md
+    Clarified that the GraphQL listing contains materialized domains only.
+12. src/back/objects/domain/payload.py
+    Added the normalized backend to stateless `POST /api/v1/domain/info`
+    responses, including the legacy `lakebase` default.
+13. tests/units/api/test_api_service.py
+    Added graphless and legacy normalization coverage for domain-info payloads.
+14. documentation/deployment.md
+    Added the ontology-only backend to deployment guidance.
+
+Modified files:
+- src/back/objects/registry/RegistryService.py
+- src/api/routers/domains.py
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/domain/payload.py
+- src/back/objects/registry/store/base.py
+- tests/units/api/test_external_api.py
+- tests/units/api/test_api_service.py
+- tests/units/registry/test_registry_published.py
+- tests/contract/test_openapi_contract.py
+- documentation/api.md
+- documentation/architecture.md
+- documentation/code_organization.md
+- documentation/deployment.md
+- documentation/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5748 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 43.12s.
+
+## Synchronize Settings API and Swagger
+
+Context: Settings → Developer → API used the internal registry listing and
+could offer domains or versions that the external API cannot serve. Its
+curated samples omitted graph backend availability, GraphQL copy referenced
+the removed Active toggle, and the custom OpenAPI builder dropped descriptive
+tag, contact, and license metadata.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_api.html
+   Updated domain and GraphQL reference copy, added backend availability
+   status, and marked graph-dependent Try-it controls.
+2. src/front/static/query/js/query-api.js
+   Loads API-exposed domains, limits versions to PUBLISHED entries, displays
+   backend readiness, and freezes graph controls until graph data exists.
+3. src/api/routers/v1.py
+   Added typed stateless domain-info and statistics response models for
+   accurate Swagger payload documentation.
+4. src/api/constants.py
+   Documented graph backend semantics in the external API overview and tags.
+5. src/api/external_app.py
+   Preserved tag, contact, and license metadata in the rewritten OpenAPI
+   schema.
+6. tests/units/front/test_settings_api_contract.py
+   Added curated content, selector-source, version-filter, and graph-control
+   contracts.
+7. tests/contract/test_openapi_contract.py
+   Added typed domain-info and descriptive OpenAPI metadata contracts.
+8. documentation/api.md
+   Documented the curated Settings API selector and graph capability states.
+9. documentation/user-guide.md
+   Updated the Settings navigation and graph Try-it availability guidance.
+10. docs/superpowers/specs/2026-08-31-settings-api-graph-backend-design.md
+    Recorded the approved Settings API and Swagger behavior.
+11. docs/superpowers/plans/2026-08-31-settings-api-graph-backend.md
+    Recorded the test-first implementation plan.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/static/query/js/query-api.js
+- src/api/routers/v1.py
+- src/api/constants.py
+- src/api/external_app.py
+- tests/units/front/test_settings_api_contract.py
+- tests/contract/test_openapi_contract.py
+- documentation/api.md
+- documentation/user-guide.md
+- docs/superpowers/specs/2026-08-31-settings-api-graph-backend-design.md
+- docs/superpowers/plans/2026-08-31-settings-api-graph-backend.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5756 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 48.33s.

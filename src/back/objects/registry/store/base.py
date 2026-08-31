@@ -69,7 +69,7 @@ class DomainSummary(TypedDict, total=False):
     name: str
     base_uri: str
     description: str
-    graph_backend: str       # lakebase | databricks | neo4j (from latest version info)
+    graph_backend: str       # none | lakebase | databricks | neo4j
     neo4j_connection: str    # Settings Neo4j connection name (when backend is neo4j)
     review_quorum: int       # per-domain sign-off quorum (>= 1)
     mcp_policy: Dict[str, Any]  # per-domain MCP tool + context policy

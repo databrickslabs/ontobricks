@@ -806,8 +806,10 @@ OntoBricks separates two concerns:
 2. **Graph DB** — the queryable graph engine used by the Knowledge Graph, reasoning, and BFS / shortest-path helpers. Pluggable via the `GraphDBFactory` abstraction. When the per-domain backend is `databricks`, the Graph DB *is* those Delta tables; when it is `lakebase` or `neo4j`, Build also mirrors triples into that engine.
 
 The active Graph DB engine is chosen **per domain** via `graph_backend`
-(`lakebase` | `databricks` | `neo4j`), set under **Domain → Information →
-Knowledge Graph**; connection settings live under **Settings → Back end**.
+(`none` | `lakebase` | `databricks` | `neo4j`), set under **Domain →
+Information → Knowledge Graph**; connection settings live under **Settings →
+Back end**. `none` is the ontology-only mode: no graph is built and the MCP
+surface exposes ontology information only.
 
 | Layer | Key | Storage | Query Language | Source of truth |
 |-------|-----|---------|----------------|-----------------|
@@ -1444,8 +1446,9 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 > **Ontology-only publish.** The `DRAFT -> IN-REVIEW` precondition accepts
 > *either* a Knowledge Graph build (`last_build`) *or* a valid ontology, so a
 > domain with only an ontology (no mapping, no graph) goes through the normal
-> workflow. `GET /api/v1/domains` then reports `has_graph:false`, and the MCP
-> server exposes `describe_ontology` alone for that domain (see
+> workflow. `GET /api/v1/domains` then reports `graph_backend:"none"` and
+> `has_graph:false`, and the MCP server exposes `describe_ontology` alone for
+> that domain (see
 > [MCP per-domain policy](mcp.md#ontology-only-domains)).
 
 ### Available Endpoints
@@ -1454,7 +1457,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/domains` | GET | List registry domains with ≥1 PUBLISHED version |
+| `/api/v1/domains` | GET | List registry domains with ≥1 PUBLISHED version, configured backend, and graph availability |
 | `/api/v1/domain/versions` | GET | List versions for a named domain |
 | `/api/v1/domain/design-status` | GET | Design status (ontology, metadata, mapping readiness) |
 | `/api/v1/domain/ontology` | GET | Get domain OWL ontology (Turtle) |
@@ -1491,7 +1494,7 @@ OntoBricks provides a stateless REST API at `/api/v1/` for external applications
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/graphql` | GET | List GraphQL-enabled domains |
+| `/graphql` | GET | List API-enabled domains with a materialized graph |
 | `/graphql/settings/depth` | GET | GraphQL depth settings |
 | `/graphql/{project_name}` | GET | GraphiQL playground |
 | `/graphql/{project_name}` | POST | Execute GraphQL query |

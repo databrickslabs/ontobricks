@@ -82,6 +82,46 @@ class TestMCPContractPaths:
             f" Available /v1 paths: " + ", ".join(p for p in sorted(paths) if "/v1" in p)[:300]
         )
 
+    def test_domain_info_declares_graph_backend_values(self, client):
+        spec = client.get("/api/openapi.json").json()
+        graph_backend = spec["components"]["schemas"]["DomainInfo"]["properties"][
+            "graph_backend"
+        ]
+        assert graph_backend["enum"] == [
+            "none",
+            "lakebase",
+            "databricks",
+            "neo4j",
+        ]
+        assert graph_backend["default"] == "lakebase"
+
+    def test_stateless_domain_info_declares_its_backend_payload(self, client):
+        spec = client.get("/api/openapi.json").json()
+        schemas = spec["components"]["schemas"]
+        payload = schemas["DomainFileInfoResponse"]["properties"]
+        assert payload["graph_backend"]["enum"] == [
+            "none",
+            "lakebase",
+            "databricks",
+            "neo4j",
+        ]
+        assert payload["statistics"]["$ref"].endswith(
+            "/DomainStatisticsResponse"
+        )
+        operation = spec["paths"]["/api/v1/domain/info"]["post"]
+        response_schema = operation["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
+        assert response_schema["$ref"].endswith("/DomainInfoSuccessResponse")
+
+    def test_external_openapi_preserves_descriptive_metadata(self, client):
+        spec = client.get("/api/openapi.json").json()
+        tags = {tag["name"]: tag["description"] for tag in spec["tags"]}
+        assert "graph_backend" in tags["Domain"]
+        assert "materialized graph" in tags["GraphQL"]
+        assert spec["info"]["contact"]["name"] == "OntoBricks Support"
+        assert spec["info"]["license"]["name"] == "Apache 2.0"
+
 
 @pytest.mark.contract
 @pytest.mark.integration

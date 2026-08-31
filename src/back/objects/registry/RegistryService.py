@@ -662,10 +662,10 @@ class RegistryService:
     ) -> Tuple[bool, List[Dict[str, Any]], str]:
         """List domains that have an MCP-enabled version.
 
-        Returns ``(ok, domains, message)`` where each domain is
-        ``{"name": ..., "description": ..., "mcp_policy": {...}}``.  When
-        *require_ontology* is ``True`` only domains whose MCP version has a
-        non-empty ``classes`` list are included.
+        Returns ``(ok, domains, message)`` where each domain includes its name,
+        description, MCP policy, configured graph backend, and graph
+        availability. When *require_ontology* is ``True`` only domains whose
+        MCP version has a non-empty ``classes`` list are included.
         """
         # Fast path: the cached two-query metadata listing already carries
         # per-version ``status`` + description, so a domain's PUBLISHED
@@ -693,6 +693,11 @@ class RegistryService:
             latest_published = max(
                 published, key=RegistryService._version_sort_key
             )
+            from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
+            graph_backend = normalize_graph_backend(
+                latest_published.get("graph_backend")
+            )
             has_graph = bool(latest_published.get("last_build"))
             if require_ontology:
                 # Metadata only carries the latest version's ontology, so
@@ -714,6 +719,7 @@ class RegistryService:
                     "name": name,
                     "description": d.get("description", ""),
                     "mcp_policy": coerce_mcp_policy(d.get("mcp_policy")),
+                    "graph_backend": graph_backend,
                     "has_graph": has_graph,
                 }
             )

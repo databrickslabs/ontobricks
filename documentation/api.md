@@ -8,6 +8,18 @@ The OntoBricks REST API provides stateless endpoints for external applications t
 http://localhost:8000/api/v1
 ```
 
+## Interactive references
+
+Use **Settings → Developer → API** for the curated endpoint catalog and
+interactive Try-it controls. Its selectors list only API-exposed PUBLISHED
+domains and PUBLISHED versions. The selected-domain status distinguishes
+ontology-only domains, graph-backed domains awaiting their first build, and
+graph-ready domains; controls that require graph data are disabled until a
+graph exists while ontology operations remain available.
+
+The generated references remain available at `/api/docs` (Swagger UI),
+`/api/redoc` (ReDoc), and `/api/openapi.json` (OpenAPI JSON).
+
 ## Authentication
 
 All endpoints that access Unity Catalog require Databricks authentication. Credentials can be provided via:
@@ -120,7 +132,7 @@ Get domain information and statistics.
 **Request:**
 ```json
 {
-    "project_path": "/Volumes/catalog/schema/volume/domain.json"
+    "domain_path": "/Volumes/catalog/schema/volume/domain.json"
 }
 ```
 
@@ -131,19 +143,24 @@ Get domain information and statistics.
     "data": {
         "name": "My Ontology Domain",
         "description": "Domain description",
+        "uri": "https://example.com/ontology#",
         "author": "John Doe",
         "version": "1.0.0",
-        "project_version": "1.0",
-        "created_at": "2024-01-15T10:30:00",
+        "status": "PUBLISHED",
+        "graph_backend": "none",
         "statistics": {
-            "entities": 5,
-            "relationships": 3,
-            "entity_mappings": 4,
-            "relationship_mappings": 2
+            "classes": 5,
+            "properties": 3,
+            "entities": 0,
+            "relationships": 0,
+            "has_r2rml": false
         }
     }
 }
 ```
+
+`graph_backend` is normalized to `none`, `lakebase`, `databricks`, or
+`neo4j`. Legacy documents without the field report `lakebase`.
 
 ---
 
@@ -559,6 +576,8 @@ List all domains that have at least one **PUBLISHED** version in the registry.
         {
             "name": "customer360",
             "description": "Customer 360 ontology",
+            "graph_backend": "lakebase",
+            "has_graph": true,
             "mcp_policy": {
                 "disabled_tools": ["query_graphql"],
                 "context": {"bridges": "preferred", "actions": "disabled"}
@@ -567,6 +586,8 @@ List all domains that have at least one **PUBLISHED** version in the registry.
         {
             "name": "finance",
             "description": "Contracts and payments",
+            "graph_backend": "none",
+            "has_graph": false,
             "mcp_policy": {}
         }
     ]
@@ -582,6 +603,13 @@ registry-level tool, and a missing `context` key defaults to `normal`.
 The MCP server reads this field to decide which tools to publish for the
 session; it is informational for other clients, since the disabling itself is
 also enforced server-side on the endpoints below.
+
+`graph_backend` is the backend configured on the numeric-latest PUBLISHED
+version: `none`, `lakebase`, `databricks`, or `neo4j`. `has_graph` reports
+runtime availability, not configuration: it is `true` only after that version
+has a successful graph build. Clients can therefore distinguish an
+ontology-only domain (`graph_backend: "none"`) from a graph-backed domain that
+has not been built yet.
 
 > **Lifecycle & API access.** Each domain version has a lifecycle status —
 > `DRAFT` → `IN-REVIEW` → `PUBLISHED`. The external API and MCP only serve data
@@ -667,8 +695,9 @@ versions are data-accessible via the API/MCP).
 Returns a comprehensive readiness status including ontology, metadata, and mapping completeness.
 
 **Parameters:**
-- `project_name` (query, optional): Domain name in the registry
-- `project_version` (query, optional): Specific version to load (latest if omitted)
+- `domain_name` (query, optional): Domain name in the registry
+- `domain_version` (query, optional): Specific PUBLISHED version to load
+  (numeric-latest PUBLISHED if omitted)
 
 **Response:**
 ```json
@@ -690,7 +719,7 @@ Returns a comprehensive readiness status including ontology, metadata, and mappi
         "entity_mapped": 10,
         "relationship_total": 9,
         "relationship_mapped": 9,
-        "completion_pct": 100
+        "progress_percent": 100
     },
     "build_ready": true
 }
@@ -2487,7 +2516,9 @@ GET /api/v1/domains
 
 List all domains that have at least one PUBLISHED version in the registry. The
 API/MCP serves the numeric-latest PUBLISHED version (see the lifecycle note
-above). Each entry carries the domain's `mcp_policy`.
+above). Each entry carries the domain's `mcp_policy`, configured
+`graph_backend` (`none`, `lakebase`, `databricks`, or `neo4j`), and `has_graph`
+availability flag.
 
 #### Class attachments
 
@@ -2506,7 +2537,7 @@ context policy.
 GET /api/v1/domain/versions
 ```
 
-**Query Parameters:** `project_name` (required)
+**Query Parameters:** `domain_name` (required)
 
 Returns all versions for the domain, latest first.
 
@@ -2516,7 +2547,7 @@ Returns all versions for the domain, latest first.
 GET /api/v1/domain/design-status
 ```
 
-**Query Parameters:** `project_name` (optional), `project_version` (optional)
+**Query Parameters:** `domain_name` (optional), `domain_version` (optional)
 
 Returns a comprehensive readiness status including ontology, metadata, and mapping completeness.
 
@@ -2540,7 +2571,7 @@ Returns a comprehensive readiness status including ontology, metadata, and mappi
     "entity_mapped": 10,
     "relationship_total": 9,
     "relationship_mapped": 9,
-    "completion_pct": 100
+    "progress_percent": 100
   },
   "build_ready": true
 }

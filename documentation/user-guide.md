@@ -1222,14 +1222,17 @@ Once your triple store is materialized (synced via Knowledge Graph), OntoBricks 
 
 ### Accessing GraphQL
 
-1. Navigate to **Knowledge Graph** → **API** and scroll to the **GraphQL API** section
+1. Navigate to **Settings** → **Developer** → **API** and scroll to the
+   **GraphQL API** section. The domain selector contains API-exposed PUBLISHED
+   domains only; graph Try-it actions remain disabled for ontology-only or
+   not-yet-built domains while ontology actions stay available.
 2. Alternatively, visit `/graphql/{domain_name}` to open the **GraphiQL Playground** directly
 
 ### Available Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/graphql` | GET | List all GraphQL-enabled domains |
+| `/graphql` | GET | List API-enabled domains with a materialized graph |
 | `/graphql/{domain_name}` | GET | Open GraphiQL playground for a domain |
 | `/graphql/{domain_name}` | POST | Execute a GraphQL query |
 | `/graphql/{domain_name}/schema` | GET | Get the SDL (Schema Definition Language) |

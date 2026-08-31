@@ -65,6 +65,9 @@ def create_external_api_app() -> FastAPI:
             openapi_version=app.openapi_version,
             description=app.description,
             routes=app.routes,
+            tags=EXTERNAL_OPENAPI_TAGS,
+            contact=EXTERNAL_API_CONTACT,
+            license_info=EXTERNAL_API_LICENSE_INFO,
         )
         mount_prefix = OPENAPI_PATH_PREFIX
         raw_paths = openapi_schema.get("paths") or {}
