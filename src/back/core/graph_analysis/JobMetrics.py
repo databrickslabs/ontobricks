@@ -58,6 +58,7 @@ UNAVAILABLE_METRICS = ("betweenness", "closeness")
 METRIC_SERIES_COLUMNS = frozenset(
     {"pagerank", "betweenness", "degree", "closeness", "clustering"}
 )
+METRIC_SERIES_MAX_LIMIT = 25_000
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +184,7 @@ def metric_series_query(output_table: str, metric: str, offset: int, limit: int)
     if metric not in METRIC_SERIES_COLUMNS:
         raise ValidationError("Unsupported graph metric")
     page_offset = max(0, int(offset))
-    page_limit = min(25_000, max(1, int(limit)))
+    page_limit = min(METRIC_SERIES_MAX_LIMIT, max(1, int(limit)))
     return (
         "SELECT node_uri, label, "
         f"{metric} AS score, COUNT(*) OVER() AS total_count\n"

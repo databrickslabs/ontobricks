@@ -3165,12 +3165,15 @@ class DigitalTwin:
         graph_name: str,
         metric: str,
         offset: int = 0,
-        limit: int = 25_000,
+        limit: int | None = None,
         settings: Any = None,
     ) -> Dict[str, Any]:
         """Return one paginated node-series for a validated graph metric."""
         from back.core.databricks import DatabricksClient
-        from back.core.graph_analysis import metric_series_query
+        from back.core.graph_analysis import (
+            METRIC_SERIES_MAX_LIMIT,
+            metric_series_query,
+        )
         from back.core.helpers import (
             get_databricks_host_and_token,
             resolve_delta_warehouse_id,
@@ -3192,7 +3195,8 @@ class DigitalTwin:
             output_schema, self._domain, graph_name
         )
         page_offset = max(0, int(offset))
-        sql = metric_series_query(output_table, metric, page_offset, limit)
+        page_limit = METRIC_SERIES_MAX_LIMIT if limit is None else limit
+        sql = metric_series_query(output_table, metric, page_offset, page_limit)
         rows = client.execute_query(sql) or []
 
         total = int(rows[0].get("total_count", 0) or 0) if rows else 0

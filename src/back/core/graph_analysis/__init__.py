@@ -5,6 +5,7 @@ from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.JobMetrics import (
     JobMetrics,
+    METRIC_SERIES_MAX_LIMIT,
     METRIC_SERIES_COLUMNS,
     analytics_snapshot,
     metric_series_query,
@@ -111,6 +112,7 @@ __all__ = [
     "CommunityDetector",
     "GraphBuilder",
     "JobMetrics",
+    "METRIC_SERIES_MAX_LIMIT",
     "METRIC_SERIES_COLUMNS",
     "LakeflowRunner",
     "analytics_snapshot",

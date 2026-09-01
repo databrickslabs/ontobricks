@@ -33,6 +33,7 @@ from back.core.w3c.shacl.constants import (
 from back.core.databricks import is_databricks_app
 from back.core.graphdb import get_graphdb
 from back.core.graph_analysis import (
+    METRIC_SERIES_MAX_LIMIT,
     MODE_JOB,
     analytics_job_configured,
     analytics_job_status,
@@ -647,7 +648,7 @@ async def get_latest_graph_metrics(
 async def get_graph_metric_series(
     metric: str = Query(...),
     offset: int = Query(0, ge=0),
-    limit: int = Query(25_000, ge=1),
+    limit: int = Query(METRIC_SERIES_MAX_LIMIT, ge=1),
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -667,7 +668,7 @@ async def get_graph_metric_series(
             graph_name,
             metric,
             offset,
-            min(25_000, int(limit)),
+            min(METRIC_SERIES_MAX_LIMIT, limit),
             settings,
         )
         return {

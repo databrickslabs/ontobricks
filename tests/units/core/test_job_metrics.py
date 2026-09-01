@@ -16,6 +16,7 @@ import pytest
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.graph_analysis.JobMetrics import (
     APPROXIMATE_METRICS,
+    METRIC_SERIES_MAX_LIMIT,
     UNAVAILABLE_METRICS,
     JobMetrics,
     analytics_snapshot,
@@ -289,6 +290,15 @@ class TestReadBackSql:
     def test_metric_series_query_rejects_unknown_metric(self):
         with pytest.raises(ValidationError, match="Unsupported graph metric"):
             metric_series_query("cat.sch.metrics", "drop table metrics", 0, 100)
+
+    def test_metric_series_query_clamps_limit_to_shared_max(self):
+        sql = metric_series_query(
+            "cat.sch.metrics",
+            "pagerank",
+            0,
+            METRIC_SERIES_MAX_LIMIT + 99,
+        )
+        assert f"LIMIT {METRIC_SERIES_MAX_LIMIT} OFFSET 0" in sql
 
     def test_type_profiles_query_reads_the_rollup_table(self):
         db = _OutputDB(_sample_rows())

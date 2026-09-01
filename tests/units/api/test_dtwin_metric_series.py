@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from back.core.errors import ValidationError
+from back.core.graph_analysis import METRIC_SERIES_MAX_LIMIT
 from back.objects.digitaltwin import DigitalTwin
 from shared.fastapi.main import app
 
@@ -136,7 +137,28 @@ def test_route_clamps_limit_and_carries_computed_at(client, monkeypatch):
     assert captured["graph_name"] == "cat.sch.graph_metrics"
     assert captured["metric"] == "pagerank"
     assert captured["offset"] == 3
-    assert captured["limit"] == 25_000
+    assert captured["limit"] == METRIC_SERIES_MAX_LIMIT
+
+
+def test_route_returns_has_result_false_when_graph_name_missing(client, monkeypatch):
+    from api.routers.internal import dtwin
+
+    domain = SimpleNamespace(uc_domain_folder="acme", current_version="1")
+    service_call = MagicMock()
+
+    monkeypatch.setattr(dtwin, "get_domain", lambda _session_mgr: domain)
+    monkeypatch.setattr(
+        dtwin,
+        "_load_stored_metrics",
+        lambda _d, _s: {"graph_name": "", "computed_at": "2026-09-01T12:00:00Z"},
+    )
+    monkeypatch.setattr(DigitalTwin, "load_graph_metric_series", service_call)
+
+    response = client.get("/dtwin/metrics/series", params={"metric": "pagerank"})
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True, "has_result": False}
+    service_call.assert_not_called()
 
 
 def test_route_rejects_unsupported_metric_with_http_400(client, monkeypatch):

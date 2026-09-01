@@ -154,3 +154,39 @@ Modified files:
 - .superpowers/sdd/task-2-report.md
 
 Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_metric_series.py → RED: 4 failed (missing method/route), then GREEN: 4 passed in 1.30s; uv run --frozen pytest -q -m "not scenario" → 5778 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.28s
+
+## Harden metric-series limit contract
+
+Context: Task 2 review found a drift risk where the `25_000` page limit was
+duplicated across SQL helper and API layer. This follow-up centralizes the
+limit in graph-analysis code, removes a redundant route cast, and adds a guard
+test for missing stored `graph_name` to prevent unnecessary Databricks calls.
+
+Changes:
+
+1. src/back/core/graph_analysis/JobMetrics.py
+   Add `METRIC_SERIES_MAX_LIMIT` and use it in `metric_series_query()` clamping logic.
+2. src/back/core/graph_analysis/__init__.py
+   Export `METRIC_SERIES_MAX_LIMIT` through the package surface.
+3. src/back/objects/digitaltwin/DigitalTwin.py
+   Consume the shared max-limit constant in `load_graph_metric_series()` instead of a duplicated literal.
+4. src/api/routers/internal/dtwin.py
+   Use the shared limit constant in typed query default/clamp and remove redundant `int(limit)` casting.
+5. tests/units/api/test_dtwin_metric_series.py
+   Add focused early-exit contract for empty stored `graph_name` and switch clamp assertion to the shared constant.
+6. tests/units/core/test_job_metrics.py
+   Add a focused contract test ensuring metric-series SQL clamps to `METRIC_SERIES_MAX_LIMIT`.
+7. .superpowers/sdd/task-2-report.md
+   Append RED/GREEN evidence and rationale for keeping `computed_at` fallback and duplicate offset boundary defenses.
+
+Modified files:
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_metric_series.py
+- tests/units/core/test_job_metrics.py
+- .superpowers/sdd/task-2-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_metric_series.py → RED: import error for missing `METRIC_SERIES_MAX_LIMIT`, then GREEN: 5 passed, 1 warning in 1.31s; uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series → RED: import error for missing `METRIC_SERIES_MAX_LIMIT`, then GREEN: 8 passed, 62 deselected, 1 warning in 0.90s
