@@ -199,8 +199,7 @@ echo
 # Mint a Lakebase JWT via the Autoscaling Postgres API. The legacy
 # ``/api/2.0/database/credentials`` mint cannot scope tokens to
 # Autoscaling-only project endpoints.
-PGPASSWORD="$(databricks api post /api/2.0/postgres/credentials \
-    --json "{\"endpoint\":\"${ENDPOINT_PATH}\"}" \
+PGPASSWORD="$(databricks postgres generate-database-credential "${ENDPOINT_PATH}" \
     | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')"
 if [[ -z "$PGPASSWORD" ]]; then
     echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}'." >&2

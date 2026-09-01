@@ -1,0 +1,26 @@
+## Fix broken credential-minting API call in lakebase-perms.sh
+Context: scripts/bootstrap/lakebase-perms.sh minted the Lakebase Postgres
+JWT via `databricks api post /api/2.0/postgres/credentials --json
+'{"endpoint": ...}'`, which reproducibly returns `Error: Not Found` even
+for a valid, working Autoscaling endpoint (confirmed via a direct standalone
+call, and via the dedicated CLI subcommand succeeding for the same
+endpoint). Because the script uses `set -euo pipefail`, the resulting
+non-JSON error text piped into `python3 -c 'json.load(...)'` throws a
+JSONDecodeError and silently kills the whole script with no error message
+printed — surfacing only as a bare `Error 1` from `make bootstrap-lakebase`.
+Changes:
+1. scripts/bootstrap/lakebase-perms.sh
+   Replaced the raw `databricks api post /api/2.0/postgres/credentials`
+   passthrough with the dedicated `databricks postgres
+   generate-database-credential` CLI subcommand, which correctly mints the
+   credential for the same endpoint.
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- changelogs/v0.7.1/lrubakhin_2026-08-31.log
+Tests: Manual verification on Windows 11 (Git Bash / MINGW64, Databricks
+CLI v1.14.1): DATABRICKS_CONFIG_PROFILE=<profile> bash
+scripts/bootstrap/lakebase-perms.sh -i ontobricks-db -b production -d
+ontobricks_registry -s ontobricks_registry -a "" -a "" — before fix,
+silently exits 1 immediately after the credential-minting step with no
+error text; after fix, mints the JWT successfully and proceeds to apply
+schema migrations and (attempted) permission grants.
