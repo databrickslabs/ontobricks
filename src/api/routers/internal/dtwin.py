@@ -643,6 +643,48 @@ async def get_latest_graph_metrics(
         raise InfrastructureError("Loading latest graph metrics failed", detail=str(e))
 
 
+@router.get("/metrics/series")
+async def get_graph_metric_series(
+    metric: str = Query(...),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25_000, ge=1),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return one paginated score series from the latest analytics run."""
+    try:
+        domain = get_domain(session_mgr)
+        stored = _load_stored_metrics(domain, settings)
+        if not stored:
+            return {"success": True, "has_result": False}
+
+        graph_name = stored.get("graph_name", "") or ""
+        if not graph_name:
+            return {"success": True, "has_result": False}
+
+        page = await run_blocking(
+            DigitalTwin(domain).load_graph_metric_series,
+            graph_name,
+            metric,
+            offset,
+            min(25_000, int(limit)),
+            settings,
+        )
+        return {
+            "success": True,
+            "has_result": True,
+            "metric": metric,
+            "computed_at": stored.get("computed_at", ""),
+            **page,
+        }
+
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("Loading graph metric series failed: %s", e)
+        raise InfrastructureError("Loading graph metric series failed", detail=str(e))
+
+
 @router.get("/metrics/history")
 async def get_graph_metrics_history(
     version: Optional[str] = Query(default=None),

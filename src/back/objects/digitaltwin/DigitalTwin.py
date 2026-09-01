@@ -3160,6 +3160,52 @@ class DigitalTwin:
             max_depth=int(getattr(settings, "analytics_job_max_depth", 32) or 32),
         )
 
+    def load_graph_metric_series(
+        self,
+        graph_name: str,
+        metric: str,
+        offset: int = 0,
+        limit: int = 25_000,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        """Return one paginated node-series for a validated graph metric."""
+        from back.core.databricks import DatabricksClient
+        from back.core.graph_analysis import metric_series_query
+        from back.core.helpers import (
+            get_databricks_host_and_token,
+            resolve_delta_warehouse_id,
+        )
+        from back.objects.registry import RegistryCfg
+
+        host, token = get_databricks_host_and_token(self._domain, settings)
+        warehouse_id = resolve_delta_warehouse_id(self._domain, settings)
+        client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+
+        output_schema = (
+            getattr(settings, "analytics_job_output_schema", "") or ""
+        ).strip()
+        if not output_schema:
+            rcfg = RegistryCfg.from_domain(self._domain, settings)
+            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+
+        output_table = DigitalTwin.analytics_output_table(
+            output_schema, self._domain, graph_name
+        )
+        page_offset = max(0, int(offset))
+        sql = metric_series_query(output_table, metric, page_offset, limit)
+        rows = client.execute_query(sql) or []
+
+        total = int(rows[0].get("total_count", 0) or 0) if rows else 0
+        next_offset = page_offset + len(rows)
+        return {
+            "offset": page_offset,
+            "total": total,
+            "next_offset": next_offset if next_offset < total else None,
+            "uris": [str(row.get("node_uri") or "") for row in rows],
+            "labels": [str(row.get("label") or "") for row in rows],
+            "scores": [float(row.get("score", 0.0) or 0.0) for row in rows],
+        }
+
     @staticmethod
     def analytics_output_table(output_schema: str, domain: Any, graph_name: str) -> str:
         """Build the per-version output table name for the analytics job.

@@ -127,3 +127,30 @@ Modified files:
 - .superpowers/sdd/task-1-report.md
 
 Tests: uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series → 7 passed, 62 deselected, 1 warning in 0.87s; uv run --frozen pytest -q -m "not scenario" → 5774 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 50.23s
+
+## Expose paginated analytics metric series
+
+Context: Task 2 of the KG Analytics all-node series introduces the API contract
+for paginated exhaustive metric distributions. The endpoint must read the
+existing registry result first, keep centralized error handling, preserve the
+current analytics payload shape, and delegate SQL assembly to Task 1 helpers.
+
+Changes:
+
+1. tests/units/api/test_dtwin_metric_series.py
+   Add TDD contracts for the service payload shape and endpoint behavior (no-result gate, 25k limit clamp, computed_at passthrough, and unsupported metric HTTP 400).
+2. src/back/objects/digitaltwin/DigitalTwin.py
+   Add load_graph_metric_series() to resolve Databricks connectivity and output table naming with existing helpers, execute metric_series_query(), and serialize arrays with pagination metadata.
+3. src/api/routers/internal/dtwin.py
+   Add GET /dtwin/metrics/series to load stored analytics first, return has_result=false when absent, and return paginated metric payload with metric and computed_at fields.
+4. .superpowers/sdd/task-2-report.md
+   Record implementation status, RED/GREEN evidence, commit metadata, self-review, and concerns for Task 2.
+
+Modified files:
+- tests/units/api/test_dtwin_metric_series.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+- .superpowers/sdd/task-2-report.md
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_metric_series.py → RED: 4 failed (missing method/route), then GREEN: 4 passed in 1.30s; uv run --frozen pytest -q -m "not scenario" → 5778 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.28s
