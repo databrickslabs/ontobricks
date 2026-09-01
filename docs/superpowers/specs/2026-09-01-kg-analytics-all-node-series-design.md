@@ -19,7 +19,7 @@ Delta output table on demand.
 
 Add a read-only endpoint:
 
-`GET /dtwin/metrics/series?metric=<name>&offset=<n>&limit=<n>`
+`GET /dtwin/metrics/series?metric=<name>`
 
 Accepted metric names are exactly:
 
@@ -36,12 +36,12 @@ The endpoint:
 3. Rejects metric names outside the allowlist before generating SQL.
 4. Derives the existing per-domain-version Analytics output table with
    `DigitalTwin.analytics_output_table`.
-5. Parses `offset` and `limit` as non-negative integers. The default page size
-   is 25,000 rows and the server-enforced maximum is also 25,000.
-6. Reads one page ordered by the selected score descending, then `node_uri`
-   ascending for deterministic tie-breaking. `COUNT(*) OVER()` supplies the
-   total without a second query.
-7. Returns parallel arrays rather than one JSON object per node:
+5. Executes one exhaustive query ordered by the selected score descending,
+   then `node_uri` ascending for deterministic tie-breaking.
+6. Keeps every point through 5,000 rows. Above that threshold, applies LTTB
+   server-side and returns 2,000 representative source points with their
+   original one-based ranks. All rows participate in the sampling decision.
+7. Returns parallel arrays rather than one JSON object per point:
 
 ```json
 {
@@ -49,9 +49,9 @@ The endpoint:
   "has_result": true,
   "metric": "pagerank",
   "computed_at": "2026-09-01T10:00:00Z",
-  "offset": 0,
   "total": 1350051,
-  "next_offset": 25000,
+  "sampled": true,
+  "ranks": [1],
   "uris": ["..."],
   "labels": ["Customer"],
   "scores": [0.42]
@@ -60,9 +60,15 @@ The endpoint:
 
 The query uses the same Databricks credentials, SQL warehouse, output schema,
 and table naming rules as `JobMetrics`. The selected column is interpolated
-only after allowlist validation; pagination values are parsed integers.
-Missing output tables or Databricks failures surface through the existing
-`InfrastructureError` path.
+only after allowlist validation. Missing output tables or Databricks failures
+surface through the existing `InfrastructureError` path.
+
+This one-query/server-sampling design supersedes the initial 25,000-row client
+pagination. Runtime validation on `bigcustomers` showed that approach required
+54 full-table ordered queries, approximately 137 MB of browser transfer, and
+5 minutes 29 seconds to display PageRank. Server-side LTTB retains the visual
+shape derived from all scores while removing repeated warehouse scans and the
+unbounded browser payload.
 
 The stored result's `computed_at` is included in the response and used by the
 frontend as a cache generation. This prevents a series from an older run being
@@ -76,12 +82,11 @@ Selecting a metric:
 1. Immediately updates the selected state and chart title.
 2. Reuses an in-memory series cached by `(computed_at, metric)` when available.
 3. Otherwise shows the existing branded inline loading treatment inside the
-   ranking card and requests `/dtwin/metrics/series` pages sequentially until
-   `next_offset` is null. The loading caption reports loaded and total nodes.
+   ranking card and requests `/dtwin/metrics/series` once.
 4. Uses an `AbortController` when the metric or Analytics generation changes.
    A late response is also generation-checked before it can update the chart.
-5. Stores only complete series in the reusable cache; aborted partial series
-   are discarded.
+5. Stores only complete responses in the reusable cache; aborted requests are
+   discarded.
 
 The chart uses Chart.js's line controller with visible points, which provides
 the requested scatter appearance plus a connecting line:
@@ -94,11 +99,11 @@ the requested scatter appearance plus a connecting line:
 - Title: `Nodes by <Metric>`; no Top-N wording.
 - The approximation and unavailable-metric notices remain unchanged.
 
-For series of up to 5,000 nodes, every point is rendered. Above that threshold,
-Chart.js's built-in LTTB decimation renders 2,000 representative samples while
-the full source series remains loaded. The UI states both the total node count
-and that visual decimation is active. The tooltip and click behavior operate
-on retained source points.
+For series of up to 5,000 nodes, every point is returned and rendered. Above
+that threshold, the backend returns 2,000 LTTB samples carrying their original
+ranks, labels, URIs, and scores. The UI states both the total node count and
+that visual sampling is active. Tooltip and click behavior operate on those
+retained source points.
 
 The `analyticsTopN` input no longer triggers a chart rebuild. It continues to
 control only the detail table below the chart.
@@ -125,7 +130,8 @@ control only the detail table below the chart.
 Backend tests cover:
 
 - metric allowlist validation;
-- pagination parsing, maximum page size, total count, and final-page behavior;
+- one exhaustive ordered query per selected metric;
+- deterministic LTTB output, threshold behavior, original ranks, and total;
 - deterministic exhaustive SQL ordering;
 - output-table resolution;
 - no-result response;
@@ -138,9 +144,9 @@ Frontend contract and browser tests cover:
 - no `.slice(0, _topN())` in the selected-metric chart;
 - Top N affects only the detail table;
 - per-generation/per-metric caching;
-- sequential page assembly and progress;
+- one-request response assembly;
 - stale-response rejection;
-- LTTB threshold configuration and notice;
+- server-sampling threshold and notice;
 - tooltip and Explorer click-through;
 - logarithmic distribution-strip behavior remains independent;
 - desktop and mobile rendering without console errors.

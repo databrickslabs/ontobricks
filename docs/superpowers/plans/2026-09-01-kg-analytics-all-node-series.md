@@ -354,3 +354,84 @@ git push origin develop
 Re-run the clean-tree, `uv.lock`, authentication, and full-test preflight,
 execute `make deploy`, start the MCP app if required, then verify `/healthz`
 and Databricks app state again after at least 60 seconds.
+
+---
+
+### Task 5: Replace repeated pagination with one-query server sampling
+
+**Context:** Runtime validation on `bigcustomers` measured 54 ordered queries,
+approximately 137 MB transferred, and 5 minutes 29 seconds before PageRank
+rendered. The user selected one exhaustive query with server-side LTTB before
+deployment.
+
+**Files:**
+- Modify: `src/back/core/graph_analysis/JobMetrics.py`
+- Modify: `src/back/core/graph_analysis/__init__.py`
+- Modify: `src/back/objects/digitaltwin/DigitalTwin.py`
+- Modify: `src/api/routers/internal/dtwin.py`
+- Modify: `src/front/static/query/js/query-analytics.js`
+- Modify: `tests/units/core/test_job_metrics.py`
+- Modify: `tests/units/api/test_dtwin_metric_series.py`
+- Modify: `tests/units/front/test_analytics_dashboard.py`
+- Modify: `tests/units/front/test_analytics_stale_result_gate.py`
+
+**Interfaces:**
+- `metric_series_query(output_table, metric)` returns one deterministic ordered
+  query without `COUNT(*) OVER()`, `LIMIT`, or `OFFSET`.
+- `sample_metric_series(rows, threshold=5_000, sample_size=2_000)` returns
+  retained rows and their original one-based ranks.
+- `GET /dtwin/metrics/series?metric=<name>` returns `total`, `sampled`, `ranks`,
+  `uris`, `labels`, and `scores`.
+
+- [ ] **Step 1: Write failing backend tests**
+
+Assert one SQL query, exact allowlist validation, all rows through 5,000, 2,000
+deterministic LTTB samples above 5,000, preserved first/last points and ranks,
+compact parallel arrays, and no pagination response fields.
+
+- [ ] **Step 2: Verify backend RED**
+
+```bash
+uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series tests/units/api/test_dtwin_metric_series.py
+```
+
+- [ ] **Step 3: Implement one-query sampling**
+
+Run one ordered Databricks query, pass every returned row to the pure LTTB
+sampler, and serialize only retained source points plus exhaustive `total`.
+Validate the metric before creating the Databricks client.
+
+- [ ] **Step 4: Verify backend GREEN**
+
+Run the Step 2 command and expect all selected tests to pass.
+
+- [ ] **Step 5: Write failing frontend tests**
+
+Assert one series fetch without `offset`, `limit`, or `next_offset`; consume
+server-provided `ranks`; retain request abort/generation/cache gates; and show
+the exhaustive total plus 2,000-point sampling caption.
+
+- [ ] **Step 6: Verify frontend RED**
+
+```bash
+uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py
+```
+
+- [ ] **Step 7: Implement the one-response frontend**
+
+Build points from parallel response arrays with `x = ranks[index]`, cache only
+complete responses, and render returned points directly. Keep Top N table-only,
+tooltip/click behavior, logarithmic distributions, and stale-request handling.
+
+- [ ] **Step 8: Verify frontend GREEN and full suite**
+
+```bash
+uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py
+uv run --frozen pytest -q -m "not scenario"
+```
+
+- [ ] **Step 9: Re-run `bigcustomers` browser validation**
+
+Confirm one HTTP 200 series request, substantially lower transfer and latency,
+correct exhaustive total/sampling caption, line rendering, metric-switch abort,
+cache reuse, table-only Top N, click-through, and mobile containment.
