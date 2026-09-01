@@ -1022,6 +1022,7 @@ function loadOntologyIntoMappingDesigner() {
 
 let currentPanelType = null; // 'entity' or 'relationship'
 let currentPanelUri = null;
+let currentPanelDirty = false;
 // Body element id of the host holding the panel: 'panelBody' (Designer right panel)
 // or 'manualPanelBody' (Manual Mapping bottom panel). The panel markup uses
 // page-global ep*/rp* ids, so a leftover copy in the other host would shadow the
@@ -1110,6 +1111,11 @@ function claimMappingPanel(panelBody, type, uri) {
     currentPanelHostId = hostId;
     currentPanelType = type;
     currentPanelUri = uri;
+    currentPanelDirty = false;
+}
+
+function markMappingPanelDirty() {
+    currentPanelDirty = true;
 }
 
 /**
@@ -1120,6 +1126,7 @@ function releaseMappingPanel() {
     currentPanelHostId = null;
     currentPanelType = null;
     currentPanelUri = null;
+    currentPanelDirty = false;
     
     if (EntityPanelState._autoLoadTimer) {
         clearTimeout(EntityPanelState._autoLoadTimer);
@@ -1172,6 +1179,10 @@ function guardedCloseMappingPanel() {
         return;
     }
     if (window.isActiveVersion === false) {
+        closeMappingPanel();
+        return;
+    }
+    if (!currentPanelDirty) {
         closeMappingPanel();
         return;
     }
@@ -1821,11 +1832,13 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
     updateEntityPanelSaveBtn();
     
     document.getElementById('epRunQueryBtn')?.addEventListener('click', runEntityPanelQuery);
+    document.getElementById('epSqlQuery')?.addEventListener('input', markMappingPanelDirty);
     
     // Exclude checkbox
     const epExcludeCb = document.getElementById('epExcludeCheck');
     if (epExcludeCb) {
         epExcludeCb.addEventListener('change', function() {
+            markMappingPanelDirty();
             toggleEntityExclusion(classUri, !this.checked, 'entity');
         });
     }
@@ -1833,6 +1846,7 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
     // Per-attribute include/exclude checkboxes
     document.querySelectorAll('.ep-attr-include-cb').forEach(cb => {
         cb.addEventListener('change', function() {
+            markMappingPanelDirty();
             const attrName = this.dataset.attr;
             const row = this.closest('tr');
             const nameCell = row.querySelector('td:nth-child(2)');
@@ -1987,6 +2001,7 @@ function showEntityColumnMenu(th, column) {
     
     menu.querySelectorAll('.dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
+            markMappingPanelDirty();
             const action = item.dataset.action;
             if (EntityPanelState.idColumn === column) EntityPanelState.idColumn = null;
             if (EntityPanelState.labelColumn === column) EntityPanelState.labelColumn = null;
@@ -2120,11 +2135,13 @@ function initRelationshipPanel(ontologyProperty, existingMapping) {
     updateRelPanelSaveBtn();
     
     document.getElementById('rpRunQueryBtn')?.addEventListener('click', runRelPanelQuery);
+    document.getElementById('rpSqlQuery')?.addEventListener('input', markMappingPanelDirty);
     
     // Exclude checkbox
     const rpExcludeCb = document.getElementById('rpExcludeCheck');
     if (rpExcludeCb) {
         rpExcludeCb.addEventListener('change', function() {
+            markMappingPanelDirty();
             toggleEntityExclusion(ontologyProperty.uri, !this.checked, 'relationship');
         });
     }
@@ -2132,6 +2149,7 @@ function initRelationshipPanel(ontologyProperty, existingMapping) {
     // Per-attribute include/exclude checkboxes
     document.querySelectorAll('.rp-attr-include-cb').forEach(cb => {
         cb.addEventListener('change', function() {
+            markMappingPanelDirty();
             const attrName = this.dataset.attr;
             const row = this.closest('tr');
             const nameCell = row.querySelector('td:nth-child(2)');
@@ -2285,6 +2303,7 @@ function showRelColumnMenu(th, column) {
     
     menu.querySelectorAll('.dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
+            markMappingPanelDirty();
             const action = item.dataset.action;
             if (RelPanelState.sourceIdColumn === column) RelPanelState.sourceIdColumn = null;
             if (RelPanelState.targetIdColumn === column) RelPanelState.targetIdColumn = null;
@@ -2657,6 +2676,7 @@ function _updateEntityAttrToggleBtn() {
 function toggleAllEntityAttrs() {
     const cbs = document.querySelectorAll('.ep-attr-include-cb');
     if (!cbs.length) return;
+    markMappingPanelDirty();
     const includeAll = EntityPanelState.excludedAttributes.length > 0;
     cbs.forEach(cb => {
         const attrName = cb.dataset.attr;
@@ -2709,6 +2729,7 @@ function _updateRelAttrToggleBtn() {
 function toggleAllRelAttrs() {
     const cbs = document.querySelectorAll('.rp-attr-include-cb');
     if (!cbs.length) return;
+    markMappingPanelDirty();
     const includeAll = RelPanelState.excludedAttributes.length > 0;
     cbs.forEach(cb => {
         const attrName = cb.dataset.attr;
@@ -2771,6 +2792,7 @@ function autoExcludeUnmappedEntityAttrs() {
     });
     _updateEntityAttrToggleBtn();
     if (changed > 0) {
+        markMappingPanelDirty();
         showNotification(`${changed} unmapped attribute(s) excluded`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);
@@ -2804,6 +2826,7 @@ function autoExcludeUnmappedRelAttrs() {
     });
     _updateRelAttrToggleBtn();
     if (changed > 0) {
+        markMappingPanelDirty();
         showNotification(`${changed} unmapped attribute(s) excluded`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);

@@ -436,6 +436,7 @@ Click **Designer** in the sidebar to use the visual mapping interface. This view
 6. Click **Apply** in the panel footer (writes into the session; publish the domain to persist)
 
 > **Note**: The SQL query is stored without a `LIMIT` clause. The preview limit only affects the grid display and is not part of the applied mapping.
+> Clicking the empty canvas closes an unchanged mapping panel without saving or refreshing the designer.
 
 **Example SQL Query:**
 ```sql

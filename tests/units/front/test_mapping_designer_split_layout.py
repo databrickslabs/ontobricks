@@ -211,6 +211,38 @@ def test_canvas_background_click_still_uses_guarded_close_path():
     )
 
 
+def test_canvas_background_click_skips_save_when_panel_is_unchanged():
+    js = _read(MAPPING_DESIGN_JS)
+    guarded_close = re.search(
+        r"function guardedCloseMappingPanel\(\)\s*\{([\s\S]*?)\n\}",
+        js,
+    )
+    assert guarded_close, "guardedCloseMappingPanel() must exist"
+    body = guarded_close.group(1)
+
+    assert "if (!currentPanelDirty)" in body
+    assert body.index("if (!currentPanelDirty)") < body.index("savePanelMapping()")
+    assert re.search(
+        r"if \(!currentPanelDirty\)\s*\{\s*closeMappingPanel\(\);\s*return;",
+        body,
+    )
+
+
+def test_mapping_panel_tracks_user_edits_separately_from_preview_loading():
+    js = _read(MAPPING_DESIGN_JS)
+
+    assert "let currentPanelDirty = false;" in js
+    assert "function markMappingPanelDirty()" in js
+    assert re.search(
+        r"epSqlQuery'\)\?\.addEventListener\('input',\s*markMappingPanelDirty\)",
+        js,
+    )
+    assert re.search(
+        r"rpSqlQuery'\)\?\.addEventListener\('input',\s*markMappingPanelDirty\)",
+        js,
+    )
+
+
 def test_resize_handle_setup_function_exists_and_is_called():
     js = _read(MAPPING_DESIGN_JS)
     assert "function setupMappingDesignerResizeHandle()" in js

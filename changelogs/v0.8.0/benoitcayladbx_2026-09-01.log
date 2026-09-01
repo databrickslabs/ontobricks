@@ -49,3 +49,28 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5765 passed, 304 skipped, 6 deselected, 1 xfailed in 42.90s; targeted mapping panel tests → 31 passed in 0.19s; browser flow Agent → Claim → Agent → 2 initial POST /mapping/test-query requests, 0 repeat requests, no visible spinner on cache restore
+
+## Skip unchanged Mapping Designer saves
+
+Context: Clicking an entity and then the empty canvas always treated the panel
+as edited. The close path saved the mapping and rebuilt the designer, causing
+an unnecessary spinner even when the user had only inspected the entity.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Track editable panel interactions and close unchanged panels without saving
+   or refreshing the designer.
+2. tests/units/front/test_mapping_designer_split_layout.py
+   Add regression contracts for the unchanged canvas-close path and dirty-state
+   tracking on entity and relationship SQL fields.
+3. docs/user-guide.md
+   Document that closing an unchanged panel from the canvas is side-effect free.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_designer_split_layout.py
+- docs/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5767 passed, 304 skipped, 6 deselected, 1 xfailed in 46.34s; targeted mapping panel tests → 33 passed in 0.15s; browser flow Customer → canvas → 0 requests, 0 saves, no designer rebuild, no visible spinner
