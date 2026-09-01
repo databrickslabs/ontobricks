@@ -263,3 +263,30 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED: 5 failed, 114 passed, 1 warning; interim rerun: 1 failed, 118 passed, 1 warning; final GREEN: 119 passed, 1 warning in 0.28s.
+
+## Finalize analytics docs and verification
+
+Context: Tasks 1-3 implemented the all-node analytics series behavior. This
+final pass consolidates user-facing documentation for the shipped UX and records
+the focused plus full-suite automated verification required before parent-run
+external validation.
+
+Changes:
+
+1. docs/user-guide.md
+   Update Analytics dashboard guidance for ranked all-node point-and-line
+   rendering, paginated loading progress, visible >5,000-node LTTB notice, and
+   Top N affecting the detail table only.
+2. docs/features.md
+   Update the Graph Analytics feature summary to reflect exhaustive ranked chart
+   behavior, paginated series loading progress, LTTB notice, and table-only Top N.
+3. changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+   Append this final Task 4 delivery section with documentation and test evidence
+   without duplicating prior implementation narratives.
+
+Modified files:
+- docs/user-guide.md
+- docs/features.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_job_metrics.py tests/units/api/test_dtwin_metric_series.py tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → GREEN: 194 passed, 1 warning in 2.35s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5791 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 53.84s. Browser validation intentionally deferred to parent task flow.

@@ -704,7 +704,7 @@ Because the job can take a while on large graphs, it runs **asynchronously** in 
 
 The **Dashboard** tab has three layers: KPI tiles, a **distribution strip**, and a **ranking chart**.
 
-**Distribution strip.** Five small histogram tiles — PageRank, Betweenness, Degree, Closeness, Clustering — summarise the score distribution across **every scored node in the graph**, not just the top-N shown in the ranking chart. That is the key distinction: the strip answers "is this node's score unusual for the graph as a whole?", while the ranking chart below lists only the top-N leaders for the metric you have selected. Each histogram uses 20 linear bins; the median and p90 shown in the tile caption are **interpolated approximations** from those bin counts (labelled ≈ in the UI). Click a tile to select that metric and redraw the ranking chart; a segmented control in the ranking section header mirrors the selection. The **Log scale** switch in the section header toolbar is selected by default and redraws all five tiles on a logarithmic count axis — useful for heavy-tailed metrics; turn it off to use raw linear counts. The caption notes when log scale is active because bar heights are no longer proportional to raw counts. If betweenness or closeness could not be computed for this run, that tile reads **Not computed for this run** instead of a histogram. Results computed before this redesign (legacy cached payloads) still show KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis.
+**Distribution strip.** Five small histogram tiles — PageRank, Betweenness, Degree, Closeness, Clustering — summarise the score distribution across **every scored node in the graph**. Each histogram uses 20 linear bins; the median and p90 shown in the tile caption are **interpolated approximations** from those bin counts (labelled ≈ in the UI). Click a tile to select that metric and redraw the ranking chart; a segmented control in the ranking section header mirrors the selection. The **Log scale** switch in the section header toolbar is selected by default and redraws all five tiles on a logarithmic count axis — useful for heavy-tailed metrics; turn it off to use raw linear counts. The caption notes when log scale is active because bar heights are no longer proportional to raw counts. If betweenness or closeness could not be computed for this run, that tile reads **Not computed for this run** instead of a histogram. Results computed before this redesign (legacy cached payloads) still show KPIs, the ranking chart and the detail table; distribution tiles prompt you to re-run the analysis.
 
 | Metric | What it measures |
 |--------|-----------------|
@@ -714,10 +714,12 @@ The **Dashboard** tab has three layers: KPI tiles, a **distribution strip**, and
 | **Closeness Centrality** | Reachability — how quickly this node can reach every other node in the graph |
 | **Clustering Coefficient** | Local density — fraction of a node's neighbors that are also connected to each other |
 
-**Ranking chart.** One full-width horizontal bar chart shows the top-N entities for whichever metric is selected (default PageRank). The ranking chart covers only the bounded top-N slice — unlike the distribution strip above, which spans the whole scored population.
+**Ranking chart.** One full-width ranked **point-and-line** chart shows **all scored nodes** for the selected metric (default PageRank), ordered by rank from left (highest score) to right (lowest score). The x-axis is rank position and the y-axis is the metric value. Metric switches reuse cached series when available and otherwise fetch the exhaustive ranking progressively from a paginated endpoint; while pages are loading, the chart card shows running progress so large populations do not look stalled.
 
-- **Click a bar** to jump directly to that entity in the Graph Viewer (the filter is pre-populated).
-- **Hover a bar** to see all five metric scores for that entity in the tooltip.
+For very large series, the chart applies LTTB decimation to the rendered line for responsiveness. When the selected metric contains more than **5,000 nodes**, a visible notice appears on the chart to signal that display downsampling is active (the full metric series is still loaded and retained for interactions such as drill-through).
+
+- **Click a point** to jump directly to that entity in the Graph Viewer (the filter is pre-populated).
+- **Hover a point** to see all five metric scores for that entity in the tooltip.
 - **Click the `?` button** on the ranking chart card header to open an explanation popup with the formula, a worked example, and guidance on why the metric matters.
 
 Below the ranking chart, a **PageRank Detail Table** lists the top-N entities with all five metrics displayed as mini progress bars, providing full context for why a node ranks highly. Every row is clickable → Graph Viewer.
@@ -742,9 +744,9 @@ An entity type is flagged as **flat / time-series** when:
 
 The AI Interpretation agent also mentions flat types in its Key Findings and Recommendations sections.
 
-#### Adjusting the Top-N and Resetting
+#### Adjusting Table Top-N and Resetting
 
-Use the **Top N** input at the top of the results section to control how many entities the ranking chart and detail table show. To analyse a different class, click **Run Analysis** again and pick the entity type in the **Analysis scope** dialog. The funnel line above the results names the scope the displayed result was computed with.
+Use the **Top N** input at the top of the results section to control how many entities the **detail table** shows. The ranked chart remains exhaustive for the selected metric and is not truncated by this control. To analyse a different class, click **Run Analysis** again and pick the entity type in the **Analysis scope** dialog. The funnel line above the results names the scope the displayed result was computed with.
 
 #### AI Interpretation
 
