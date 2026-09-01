@@ -313,6 +313,8 @@ class TestLogScaleToggle:
     def test_the_toggle_exists_in_the_section_header(self, panel):
         header = panel[: panel.index('id="analyticsSpinner"')]
         assert 'id="analyticsLogScale"' in header
+        switch = header[header.index('id="analyticsLogScale"') - 120 :]
+        assert "checked" in switch[:220]
 
     def test_the_toggle_is_labelled(self, panel):
         assert "Log scale" in panel
@@ -321,8 +323,8 @@ class TestLogScaleToggle:
         fn = _fn(js, "analyticsToggleLogScale")
         assert "_renderDistributionStrip" in fn
 
-    def test_it_defaults_to_linear(self, js):
-        assert "_logScale = false" in js
+    def test_it_defaults_to_logarithmic(self, js):
+        assert "_logScale = true" in js
 
     def test_the_axis_type_follows_the_flag(self, js):
         assert "'logarithmic'" in js

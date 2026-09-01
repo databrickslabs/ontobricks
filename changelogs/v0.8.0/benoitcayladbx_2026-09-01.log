@@ -74,3 +74,29 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5767 passed, 304 skipped, 6 deselected, 1 xfailed in 46.34s; targeted mapping panel tests → 33 passed in 0.15s; browser flow Customer → canvas → 0 requests, 0 saves, no designer rebuild, no visible spinner
+
+## Default Analytics distributions to logarithmic scale
+
+Context: Knowledge Graph Analytics distributions are typically heavy-tailed,
+but every visit started on a linear count axis. The Log scale option is now
+selected on initial load and remains user-toggleable for linear inspection.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_analytics.html
+   Render the Log scale switch as selected by default.
+2. src/front/static/query/js/query-analytics.js
+   Initialize the chart state consistently with the selected switch.
+3. tests/units/front/test_analytics_dashboard.py
+   Replace the legacy linear-default contract with the logarithmic default.
+4. docs/user-guide.md
+   Document the default scale and how to return to raw linear counts.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/static/query/js/query-analytics.js
+- tests/units/front/test_analytics_dashboard.py
+- docs/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5767 passed, 304 skipped, 6 deselected, 1 xfailed in 46.59s; targeted Analytics UI contracts → 108 passed in 0.28s

@@ -111,7 +111,7 @@
 
     var _selectedMetric = 'pagerank';
     var _distCharts = {};
-    var _logScale = false;
+    var _logScale = true;
 
     // Chart.js renders at 0px in a hidden pane, so charts are resized when the
     // Dashboard tab becomes visible.
