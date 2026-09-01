@@ -379,3 +379,29 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED #1: 4 failed, 116 passed, 1 warning; RED #2: 2 failed, 118 passed, 1 warning; GREEN: 120 passed, 1 warning in 0.20s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5795 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.59s.
+
+## Task 5 runtime validation: optimized exhaustive metric chart
+
+Context: Validate the approved one-query server-sampling design against the
+1.35-million-node `bigcustomers` graph before deployment and compare it with
+the discarded client-pagination baseline.
+
+Changes:
+
+1. changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+   Record measured browser, network, interaction, and responsive-layout
+   evidence for the final implementation.
+
+Modified files:
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: Browser validation on `bigcustomers` loaded PageRank with one
+`/dtwin/metrics/series?metric=pagerank` HTTP 200 request, no pagination
+parameters, 222,207 transferred bytes, and 14.3 seconds from request start to
+chart render. The response represented all 1,349,202 scored nodes with 2,000
+retained LTTB points. This replaced the measured 54-request, approximately
+137 MB, 5 minute 29 second baseline. Clustering abort completed in 0.23 seconds;
+the cached PageRank chart restored in 1 ms with no request. Top N changed only
+the table, logarithmic distributions remained enabled, Explorer click-through
+worked, the 390 px viewport had no page overflow, and no Analytics JavaScript
+errors were observed.
