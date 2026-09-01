@@ -37,9 +37,13 @@ class TestDigitalTwinSidebar:
         page.wait_for_load_state("domcontentloaded")
         link = page.locator('a[data-section="sigmagraph"]')
         assert link.is_visible()
+        label = (link.text_content() or "").lower()
+        # Sidebar label is "Explorer" (Graph Explorer); older builds said
+        # "Knowledge Graph" / "Graph".
         assert (
-            "knowledge" in (link.text_content() or "").lower()
-            or "graph" in (link.text_content() or "").lower()
+            "explorer" in label
+            or "knowledge" in label
+            or "graph" in label
         )
 
 
