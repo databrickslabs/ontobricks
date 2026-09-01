@@ -9,7 +9,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from back.core.errors import ValidationError
-from back.core.graph_analysis import METRIC_SERIES_MAX_LIMIT
 from back.objects.digitaltwin import DigitalTwin
 from shared.fastapi.main import app
 
@@ -21,7 +20,7 @@ def client():
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_service_serializes_metric_series_page(monkeypatch):
+def test_service_serializes_metric_series_payload(monkeypatch):
     from back.core import databricks
     from back.core import helpers
 
@@ -36,8 +35,8 @@ def test_service_serializes_metric_series_page(monkeypatch):
         def execute_query(self, sql):
             captured["sql"] = sql
             return [
-                {"node_uri": "urn:a", "label": "A", "score": 0.9, "total_count": 2},
-                {"node_uri": "urn:b", "label": "B", "score": 0.8, "total_count": 2},
+                {"node_uri": "urn:a", "label": "A", "score": 0.9},
+                {"node_uri": "urn:b", "label": "B", "score": 0.8},
             ]
 
     monkeypatch.setattr(
@@ -50,13 +49,13 @@ def test_service_serializes_metric_series_page(monkeypatch):
     settings = SimpleNamespace(analytics_job_output_schema="cat.sch")
 
     payload = DigitalTwin(domain).load_graph_metric_series(
-        graph_name="graph_name", metric="pagerank", offset=0, limit=10, settings=settings
+        graph_name="graph_name", metric="pagerank", settings=settings
     )
 
     assert payload == {
-        "offset": 0,
         "total": 2,
-        "next_offset": None,
+        "sampled": False,
+        "ranks": [1, 2],
         "uris": ["urn:a", "urn:b"],
         "labels": ["A", "B"],
         "scores": [0.9, 0.8],
@@ -65,6 +64,30 @@ def test_service_serializes_metric_series_page(monkeypatch):
     assert captured["token"] == "tok"
     assert captured["warehouse_id"] == "wh"
     assert "FROM cat.sch.graph_metrics_acme_1" in captured["sql"]
+    assert "ORDER BY pagerank DESC, node_uri ASC" in captured["sql"]
+    assert "LIMIT " not in captured["sql"]
+    assert "OFFSET " not in captured["sql"]
+
+
+def test_service_validates_metric_before_creating_client(monkeypatch):
+    from back.core import databricks
+    from back.core import helpers
+
+    monkeypatch.setattr(
+        helpers, "get_databricks_host_and_token", lambda _d, _s: ("https://h", "tok")
+    )
+    monkeypatch.setattr(helpers, "resolve_delta_warehouse_id", lambda _d, _s: "wh")
+    client_call = MagicMock()
+    monkeypatch.setattr(databricks, "DatabricksClient", client_call)
+
+    domain = SimpleNamespace(uc_domain_folder="acme", current_version="1")
+    settings = SimpleNamespace(analytics_job_output_schema="cat.sch")
+
+    with pytest.raises(ValidationError, match="Unsupported graph metric"):
+        DigitalTwin(domain).load_graph_metric_series(
+            graph_name="graph_name", metric="not_a_metric", settings=settings
+        )
+    client_call.assert_not_called()
 
 
 def test_route_returns_has_result_false_without_building_series(client, monkeypatch):
@@ -84,22 +107,20 @@ def test_route_returns_has_result_false_without_building_series(client, monkeypa
     service_call.assert_not_called()
 
 
-def test_route_clamps_limit_and_carries_computed_at(client, monkeypatch):
+def test_route_carries_computed_at_and_compact_payload(client, monkeypatch):
     from api.routers.internal import dtwin
 
     domain = SimpleNamespace(uc_domain_folder="acme", current_version="1")
     captured = {}
 
-    def _fake_series(self, graph_name, metric, offset, limit, settings):
+    def _fake_series(self, graph_name, metric, settings):
         captured["graph_name"] = graph_name
         captured["metric"] = metric
-        captured["offset"] = offset
-        captured["limit"] = limit
         captured["settings"] = settings
         return {
-            "offset": offset,
             "total": 1,
-            "next_offset": None,
+            "sampled": False,
+            "ranks": [1],
             "uris": ["urn:a"],
             "labels": ["A"],
             "scores": [0.9],
@@ -118,7 +139,7 @@ def test_route_clamps_limit_and_carries_computed_at(client, monkeypatch):
 
     response = client.get(
         "/dtwin/metrics/series",
-        params={"metric": "pagerank", "offset": "3", "limit": "999999"},
+        params={"metric": "pagerank"},
     )
 
     assert response.status_code == 200
@@ -127,17 +148,15 @@ def test_route_clamps_limit_and_carries_computed_at(client, monkeypatch):
         "has_result": True,
         "metric": "pagerank",
         "computed_at": "2026-09-01T12:00:00Z",
-        "offset": 3,
         "total": 1,
-        "next_offset": None,
+        "sampled": False,
+        "ranks": [1],
         "uris": ["urn:a"],
         "labels": ["A"],
         "scores": [0.9],
     }
     assert captured["graph_name"] == "cat.sch.graph_metrics"
     assert captured["metric"] == "pagerank"
-    assert captured["offset"] == 3
-    assert captured["limit"] == METRIC_SERIES_MAX_LIMIT
 
 
 def test_route_returns_has_result_false_when_graph_name_missing(client, monkeypatch):

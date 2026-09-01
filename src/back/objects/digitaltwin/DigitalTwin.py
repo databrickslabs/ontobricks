@@ -3164,21 +3164,22 @@ class DigitalTwin:
         self,
         graph_name: str,
         metric: str,
-        offset: int = 0,
-        limit: int | None = None,
         settings: Any = None,
     ) -> Dict[str, Any]:
-        """Return one paginated node-series for a validated graph metric."""
+        """Return one exhaustive node-series, sampled server-side if needed."""
         from back.core.databricks import DatabricksClient
         from back.core.graph_analysis import (
-            METRIC_SERIES_MAX_LIMIT,
             metric_series_query,
+            sample_metric_series,
+            validate_metric_series_column,
         )
         from back.core.helpers import (
             get_databricks_host_and_token,
             resolve_delta_warehouse_id,
         )
         from back.objects.registry import RegistryCfg
+
+        metric_name = validate_metric_series_column(metric)
 
         host, token = get_databricks_host_and_token(self._domain, settings)
         warehouse_id = resolve_delta_warehouse_id(self._domain, settings)
@@ -3194,20 +3195,17 @@ class DigitalTwin:
         output_table = DigitalTwin.analytics_output_table(
             output_schema, self._domain, graph_name
         )
-        page_offset = max(0, int(offset))
-        page_limit = METRIC_SERIES_MAX_LIMIT if limit is None else limit
-        sql = metric_series_query(output_table, metric, page_offset, page_limit)
+        sql = metric_series_query(output_table, metric_name)
         rows = client.execute_query(sql) or []
-
-        total = int(rows[0].get("total_count", 0) or 0) if rows else 0
-        next_offset = page_offset + len(rows)
+        sampled_rows, ranks, sampled = sample_metric_series(rows)
+        total = len(rows)
         return {
-            "offset": page_offset,
             "total": total,
-            "next_offset": next_offset if next_offset < total else None,
-            "uris": [str(row.get("node_uri") or "") for row in rows],
-            "labels": [str(row.get("label") or "") for row in rows],
-            "scores": [float(row.get("score", 0.0) or 0.0) for row in rows],
+            "sampled": sampled,
+            "ranks": ranks,
+            "uris": [str(row.get("node_uri") or "") for row in sampled_rows],
+            "labels": [str(row.get("label") or "") for row in sampled_rows],
+            "scores": [float(row.get("score", 0.0) or 0.0) for row in sampled_rows],
         }
 
     @staticmethod

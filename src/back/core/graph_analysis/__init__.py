@@ -5,10 +5,13 @@ from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.JobMetrics import (
     JobMetrics,
-    METRIC_SERIES_MAX_LIMIT,
     METRIC_SERIES_COLUMNS,
+    METRIC_SERIES_SAMPLE_SIZE,
+    METRIC_SERIES_SAMPLE_THRESHOLD,
     analytics_snapshot,
     metric_series_query,
+    sample_metric_series,
+    validate_metric_series_column,
     resolve_analytics_source,
 )
 from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
@@ -112,11 +115,14 @@ __all__ = [
     "CommunityDetector",
     "GraphBuilder",
     "JobMetrics",
-    "METRIC_SERIES_MAX_LIMIT",
     "METRIC_SERIES_COLUMNS",
+    "METRIC_SERIES_SAMPLE_THRESHOLD",
+    "METRIC_SERIES_SAMPLE_SIZE",
     "LakeflowRunner",
     "analytics_snapshot",
     "metric_series_query",
+    "sample_metric_series",
+    "validate_metric_series_column",
     "resolve_analytics_source",
     "analytics_job_configured",
     "analytics_job_status",

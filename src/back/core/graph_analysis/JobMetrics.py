@@ -58,7 +58,8 @@ UNAVAILABLE_METRICS = ("betweenness", "closeness")
 METRIC_SERIES_COLUMNS = frozenset(
     {"pagerank", "betweenness", "degree", "closeness", "clustering"}
 )
-METRIC_SERIES_MAX_LIMIT = 25_000
+METRIC_SERIES_SAMPLE_THRESHOLD = 5_000
+METRIC_SERIES_SAMPLE_SIZE = 2_000
 
 
 # ---------------------------------------------------------------------------
@@ -179,19 +180,90 @@ def top_nodes_query(output_table: str, top_n: int) -> str:
     )
 
 
-def metric_series_query(output_table: str, metric: str, offset: int, limit: int) -> str:
-    """Paginated series for one validated metric column."""
-    if metric not in METRIC_SERIES_COLUMNS:
+def validate_metric_series_column(metric: str) -> str:
+    """Return a validated metric column name for metric-series SQL."""
+    metric_name = str(metric or "").strip()
+    if metric_name not in METRIC_SERIES_COLUMNS:
         raise ValidationError("Unsupported graph metric")
-    page_offset = max(0, int(offset))
-    page_limit = min(METRIC_SERIES_MAX_LIMIT, max(1, int(limit)))
+    return metric_name
+
+
+def metric_series_query(output_table: str, metric: str) -> str:
+    """One exhaustive series query for a validated metric column."""
+    metric_name = validate_metric_series_column(metric)
     return (
         "SELECT node_uri, label, "
-        f"{metric} AS score, COUNT(*) OVER() AS total_count\n"
+        f"{metric_name} AS score\n"
         f"FROM {output_table}\n"
-        f"ORDER BY {metric} DESC, node_uri ASC\n"
-        f"LIMIT {page_limit} OFFSET {page_offset}"
+        f"ORDER BY {metric_name} DESC, node_uri ASC"
     )
+
+
+def sample_metric_series(
+    rows: List[Dict[str, Any]],
+    *,
+    threshold: int = METRIC_SERIES_SAMPLE_THRESHOLD,
+    sample_size: int = METRIC_SERIES_SAMPLE_SIZE,
+) -> Tuple[List[Dict[str, Any]], List[int], bool]:
+    """Return sampled rows and their original one-based ranks.
+
+    Uses pure LTTB above *threshold*. For *threshold* or fewer rows, returns
+    the full input with identity ranks.
+    """
+    total = len(rows)
+    if total <= max(1, int(threshold)):
+        return list(rows), [i + 1 for i in range(total)], False
+
+    target = min(total, max(3, int(sample_size)))
+    if target >= total:
+        return list(rows), [i + 1 for i in range(total)], False
+
+    def _score(index: int) -> float:
+        try:
+            return float(rows[index].get("score", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    bucket_width = float(total - 2) / float(target - 2)
+    sampled_indexes: List[int] = [0]
+    a = 0
+
+    for bucket in range(target - 2):
+        avg_start = int((bucket + 1) * bucket_width) + 1
+        avg_end = int((bucket + 2) * bucket_width) + 1
+        avg_start = min(max(1, avg_start), total - 1)
+        avg_end = min(max(avg_start + 1, avg_end), total)
+
+        avg_count = max(1, avg_end - avg_start)
+        avg_x = 0.0
+        avg_y = 0.0
+        for idx in range(avg_start, avg_end):
+            avg_x += float(idx)
+            avg_y += _score(idx)
+        avg_x /= float(avg_count)
+        avg_y /= float(avg_count)
+
+        range_start = int(bucket * bucket_width) + 1
+        range_end = int((bucket + 1) * bucket_width) + 1
+        range_start = min(max(1, range_start), total - 1)
+        range_end = min(max(range_start + 1, range_end), total - 1)
+
+        ax = float(a)
+        ay = _score(a)
+        max_area = -1.0
+        best = range_start
+        for idx in range(range_start, range_end):
+            area = abs((ax - avg_x) * (_score(idx) - ay) - (ax - float(idx)) * (avg_y - ay))
+            if area > max_area:
+                max_area = area
+                best = idx
+        sampled_indexes.append(best)
+        a = best
+
+    sampled_indexes.append(total - 1)
+    sampled_rows = [rows[idx] for idx in sampled_indexes]
+    ranks = [idx + 1 for idx in sampled_indexes]
+    return sampled_rows, ranks, True
 
 
 def type_profiles_query(output_table: str) -> str:

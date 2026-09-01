@@ -290,3 +290,51 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: `uv run --frozen pytest -q tests/units/core/test_job_metrics.py tests/units/api/test_dtwin_metric_series.py tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → GREEN: 194 passed, 1 warning in 2.35s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5791 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 53.84s. Browser validation intentionally deferred to parent task flow.
+
+## Task 5 backend: one-query series with server LTTB
+
+Context: Runtime evidence on `bigcustomers` showed client pagination required
+dozens of ordered scans and excessive transfer. The backend metric-series
+contract now runs exactly one exhaustive ordered Databricks query per metric
+and applies deterministic pure server-side LTTB sampling when the total exceeds
+5,000 rows.
+
+Changes:
+
+1. tests/units/core/test_job_metrics.py
+   Replaced paginated SQL expectations with one-query ordering contracts and
+   added TDD coverage for threshold pass-through, exact 2,000-point sampling,
+   first/last preservation, original one-based ranks, and deterministic output.
+2. tests/units/api/test_dtwin_metric_series.py
+   Replaced pagination payload contracts with compact exhaustive payload fields
+   (`total`, `sampled`, `ranks`, `uris`, `labels`, `scores`) and added a guard
+   test proving metric validation occurs before Databricks client construction.
+3. src/back/core/graph_analysis/JobMetrics.py
+   Removed pagination SQL helpers, added strict metric validation helper,
+   switched to one exhaustive ordered query per metric, and implemented pure
+   LTTB sampling with fixed `threshold=5000` and `sample_size=2000`.
+4. src/back/core/graph_analysis/__init__.py
+   Updated graph-analysis exports to remove obsolete pagination constants and
+   expose the new metric validation and sampling helpers.
+5. src/back/objects/digitaltwin/DigitalTwin.py
+   Updated metric-series loading to validate metric before credentials/client
+   setup, execute one exhaustive query, apply server-side LTTB, and serialize
+   only the retained representative source rows with original ranks.
+6. src/api/routers/internal/dtwin.py
+   Simplified `/dtwin/metrics/series` to metric-only input and aligned response
+   shape with the new non-paginated backend contract.
+7. .superpowers/sdd/task-5-backend-report.md
+   Added implementation report with RED/GREEN evidence, final verification,
+   commit metadata, concerns, and scope notes for backend-only delivery.
+
+Modified files:
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- tests/units/core/test_job_metrics.py
+- tests/units/api/test_dtwin_metric_series.py
+- .superpowers/sdd/task-5-backend-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series tests/units/api/test_dtwin_metric_series.py` → RED: collection error (`sample_metric_series` missing), then GREEN: 16 passed, 62 deselected, 1 warning in 1.09s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5794 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.86s.

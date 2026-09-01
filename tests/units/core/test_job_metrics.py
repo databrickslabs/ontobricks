@@ -16,7 +16,6 @@ import pytest
 from back.core.errors import InfrastructureError, ValidationError
 from back.core.graph_analysis.JobMetrics import (
     APPROXIMATE_METRICS,
-    METRIC_SERIES_MAX_LIMIT,
     UNAVAILABLE_METRICS,
     JobMetrics,
     analytics_snapshot,
@@ -24,6 +23,7 @@ from back.core.graph_analysis.JobMetrics import (
     distributions_query,
     interpolate_quantile,
     metric_series_query,
+    sample_metric_series,
     resolve_analytics_source,
     summary_query,
     top_nodes_query,
@@ -274,31 +274,72 @@ class TestReadBackSql:
         assert ranks == sorted(ranks, reverse=True)
 
     def test_metric_series_query_has_the_validated_sql_contract(self):
-        sql = metric_series_query("cat.sch.metrics", "pagerank", 25, 10)
+        sql = metric_series_query("cat.sch.metrics", "pagerank")
         assert "pagerank AS score" in sql
-        assert "COUNT(*) OVER() AS total_count" in sql
         assert "ORDER BY pagerank DESC, node_uri ASC" in sql
-        assert "LIMIT 10 OFFSET 25" in sql
+        assert "COUNT(*) OVER() AS total_count" not in sql
+        assert "LIMIT " not in sql
+        assert "OFFSET " not in sql
 
     @pytest.mark.parametrize(
         "metric", ["pagerank", "betweenness", "degree", "closeness", "clustering"]
     )
     def test_metric_series_query_accepts_all_allowed_metrics(self, metric):
-        sql = metric_series_query("cat.sch.metrics", metric, 0, 100)
+        sql = metric_series_query("cat.sch.metrics", metric)
         assert f"{metric} AS score" in sql
 
     def test_metric_series_query_rejects_unknown_metric(self):
         with pytest.raises(ValidationError, match="Unsupported graph metric"):
-            metric_series_query("cat.sch.metrics", "drop table metrics", 0, 100)
+            metric_series_query("cat.sch.metrics", "drop table metrics")
 
-    def test_metric_series_query_clamps_limit_to_shared_max(self):
-        sql = metric_series_query(
-            "cat.sch.metrics",
-            "pagerank",
-            0,
-            METRIC_SERIES_MAX_LIMIT + 99,
+    def test_metric_series_returns_all_rows_through_threshold(self):
+        rows = [
+            {"node_uri": f"urn:{i}", "label": f"N{i}", "score": float(10 - i)}
+            for i in range(8)
+        ]
+        sampled_rows, ranks, sampled = sample_metric_series(
+            rows, threshold=10, sample_size=4
         )
-        assert f"LIMIT {METRIC_SERIES_MAX_LIMIT} OFFSET 0" in sql
+        assert sampled is False
+        assert sampled_rows == rows
+        assert ranks == [1, 2, 3, 4, 5, 6, 7, 8]
+
+    def test_metric_series_lttb_samples_exact_size_and_preserves_edges(self):
+        rows = [
+            {
+                "node_uri": f"urn:{i}",
+                "label": f"N{i}",
+                "score": float(((i * 17) % 97) / 97.0),
+            }
+            for i in range(6001)
+        ]
+        sampled_rows, ranks, sampled = sample_metric_series(rows)
+        assert sampled is True
+        assert len(sampled_rows) == 2000
+        assert len(ranks) == 2000
+        assert ranks[0] == 1
+        assert ranks[-1] == 6001
+        assert sampled_rows[0]["node_uri"] == "urn:0"
+        assert sampled_rows[-1]["node_uri"] == "urn:6000"
+        assert ranks == sorted(ranks)
+
+    def test_metric_series_lttb_is_deterministic_for_same_input(self):
+        rows = [
+            {
+                "node_uri": f"urn:{i}",
+                "label": f"N{i}",
+                "score": float((i % 37) / 37.0),
+            }
+            for i in range(7000)
+        ]
+        first_rows, first_ranks, first_sampled = sample_metric_series(rows)
+        second_rows, second_ranks, second_sampled = sample_metric_series(rows)
+        assert first_sampled is True
+        assert second_sampled is True
+        assert first_ranks == second_ranks
+        assert [r["node_uri"] for r in first_rows] == [
+            r["node_uri"] for r in second_rows
+        ]
 
     def test_type_profiles_query_reads_the_rollup_table(self):
         db = _OutputDB(_sample_rows())
