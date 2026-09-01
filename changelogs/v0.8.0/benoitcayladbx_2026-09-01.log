@@ -24,3 +24,28 @@ Modified files:
 - tests/units/ui/test_home_and_explorer_contracts.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5763 passed, 304 skipped, 1 xfailed in 49.35s; targeted Playwright Home/Explorer e2e → 4 passed in 18.96s
+
+## Reuse unchanged Mapping Designer previews
+
+Context: Switching between already-mapped entities always reran the preview
+query and displayed a loading spinner, even when the entity SQL and preview
+limit had not changed. Mapping Designer now keeps successful entity previews
+in memory and restores them immediately on subsequent selections.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Cache successful entity previews by entity URI, SQL, and row limit, then
+   reuse unchanged results instead of repeating the preview API request.
+2. tests/units/front/test_mapping_designer_split_layout.py
+   Add regression contracts for cache restoration and successful-result caching.
+3. docs/user-guide.md
+   Document automatic first-load previews, cache reuse, and explicit refresh.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_designer_split_layout.py
+- docs/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5765 passed, 304 skipped, 6 deselected, 1 xfailed in 42.90s; targeted mapping panel tests → 31 passed in 0.19s; browser flow Agent → Claim → Agent → 2 initial POST /mapping/test-query requests, 0 repeat requests, no visible spinner on cache restore

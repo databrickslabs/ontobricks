@@ -427,7 +427,7 @@ Click **Designer** in the sidebar to use the visual mapping interface. This view
    - **Wizard**: AI-powered SQL generation using your LLM endpoint and table metadata
    - **SQL**: Direct SQL editing
     - **Mapping**: Interactive column-mapping grid with data preview
-3. For **already-assigned** entities, clicking directly loads the Mapping tab and runs the query automatically (direct edit mode)
+3. For **already-assigned** entities, the preview query runs automatically on first access. Switching away and back reuses the preview while the entity SQL and row limit remain unchanged; use **Refresh** to run it again explicitly.
 4. For **new** entities, the Wizard tab opens by default — describe your data and click **Generate** to create SQL
 5. In the **Mapping** tab:
    - Click column headers to assign them as ID, Label, or specific attributes

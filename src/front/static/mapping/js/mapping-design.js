@@ -1737,6 +1737,65 @@ const EntityPanelState = {
     _autoLoadTimer: null
 };
 
+const EntityPreviewCache = new Map();
+
+function entityPreviewCacheKey(classUri, sql, previewLimit) {
+    return JSON.stringify([classUri, sql, previewLimit]);
+}
+
+function applyEntityPanelPreview(result, options = {}) {
+    EntityPanelState.columns = result.columns;
+    EntityPanelState.rows = result.rows || [];
+
+    if (!EntityPanelState.idColumn || !result.columns.includes(EntityPanelState.idColumn)) {
+        EntityPanelState.idColumn = null;
+    }
+    if (EntityPanelState.labelColumn && !result.columns.includes(EntityPanelState.labelColumn)) {
+        EntityPanelState.labelColumn = null;
+    }
+
+    autoMapEntityColumns(result.columns);
+    renderEntityPanelGrid();
+    const epSummary = document.getElementById('epMappingSummary');
+    if (epSummary) epSummary.style.display = 'none';
+    const epLoading = document.getElementById('epMappingLoading');
+    if (epLoading) epLoading.style.display = 'none';
+    const epGrid = document.getElementById('epMappingGrid');
+    if (epGrid) epGrid.style.display = 'flex';
+
+    const epTab = document.getElementById('ep-mapping-tab');
+    if (epTab) {
+        epTab.disabled = false;
+        if (!options.autoLoad) bootstrap.Tab.getOrCreateInstance(epTab).show();
+    }
+
+    const statusEl = document.getElementById('epQueryStatus');
+    if (statusEl) {
+        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> ' + result.row_count + ' rows</span>';
+    }
+}
+
+function cacheEntityPreview(classUri, sql, previewLimit, result) {
+    EntityPreviewCache.set(
+        entityPreviewCacheKey(classUri, sql, previewLimit),
+        {
+            ...result,
+            columns: [...result.columns],
+            rows: (result.rows || []).map(row => Array.isArray(row) ? [...row] : {...row})
+        }
+    );
+}
+
+function restoreCachedEntityPreview(classUri, sql, previewLimit) {
+    const cached = EntityPreviewCache.get(
+        entityPreviewCacheKey(classUri, sql, previewLimit)
+    );
+    if (!cached) return false;
+
+    applyEntityPanelPreview(cached, { autoLoad: true });
+    return true;
+}
+
 function initEntityPanel(classUri, className, existingMapping, classInfo) {
     // Cancel any pending autoLoad from a previous entity to prevent race conditions
     if (EntityPanelState._autoLoadTimer) {
@@ -1799,10 +1858,13 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
 
     // Auto-load query data in background when there is an existing mapping with SQL
     if (existingMapping?.sql_query) {
-        EntityPanelState._autoLoadTimer = setTimeout(() => {
-            EntityPanelState._autoLoadTimer = null;
-            runEntityPanelQuery({ autoLoad: true });
-        }, 100);
+        const previewLimit = parseInt(document.getElementById('epPreviewLimit')?.value) || 10;
+        if (!restoreCachedEntityPreview(classUri, existingMapping.sql_query, previewLimit)) {
+            EntityPanelState._autoLoadTimer = setTimeout(() => {
+                EntityPanelState._autoLoadTimer = null;
+                runEntityPanelQuery({ autoLoad: true });
+            }, 100);
+        }
     }
 }
 
@@ -1817,6 +1879,7 @@ async function runEntityPanelQuery(options = {}) {
     
     // Capture the generation at call time so we can detect stale responses
     const capturedGeneration = EntityPanelState._generation;
+    const capturedPanelUri = currentPanelUri;
     
     const previewLimit = parseInt(document.getElementById('epPreviewLimit')?.value) || 10;
     const btn = document.getElementById('epRunQueryBtn');
@@ -1837,32 +1900,8 @@ async function runEntityPanelQuery(options = {}) {
         if (currentPanelType !== 'entity' || capturedGeneration !== EntityPanelState._generation) return;
         
         if (result.success) {
-            EntityPanelState.columns = result.columns;
-            EntityPanelState.rows = result.rows || [];
-            
-            if (!EntityPanelState.idColumn || !result.columns.includes(EntityPanelState.idColumn)) {
-                EntityPanelState.idColumn = null;
-            }
-            if (EntityPanelState.labelColumn && !result.columns.includes(EntityPanelState.labelColumn)) {
-                EntityPanelState.labelColumn = null;
-            }
-            
-            autoMapEntityColumns(result.columns);
-            renderEntityPanelGrid();
-            const epSummary = document.getElementById('epMappingSummary');
-            if (epSummary) epSummary.style.display = 'none';
-            const epLoading = document.getElementById('epMappingLoading');
-            if (epLoading) epLoading.style.display = 'none';
-            const epGrid = document.getElementById('epMappingGrid');
-            if (epGrid) epGrid.style.display = 'flex';
-            
-            const epTab = document.getElementById('ep-mapping-tab');
-            if (epTab) {
-                epTab.disabled = false;
-                if (!options.autoLoad) bootstrap.Tab.getOrCreateInstance(epTab).show();
-            }
-            
-            if (statusEl) statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> ' + result.row_count + ' rows</span>';
+            cacheEntityPreview(capturedPanelUri, sql, previewLimit, result);
+            applyEntityPanelPreview(result, options);
         } else {
             const epLoading = document.getElementById('epMappingLoading');
             if (epLoading) epLoading.style.display = 'none';

@@ -215,3 +215,29 @@ def test_resize_handle_setup_function_exists_and_is_called():
     js = _read(MAPPING_DESIGN_JS)
     assert "function setupMappingDesignerResizeHandle()" in js
     assert "setupMappingDesignerResizeHandle();" in js
+
+
+def test_entity_preview_is_reused_when_mapping_query_is_unchanged():
+    js = _read(MAPPING_DESIGN_JS)
+
+    assert "const EntityPreviewCache = new Map();" in js
+    assert "function restoreCachedEntityPreview(" in js
+    assert re.search(
+        r"if \(existingMapping\?\.sql_query\) \{"
+        r"[\s\S]*?if \(!restoreCachedEntityPreview\("
+        r"[\s\S]*?runEntityPanelQuery\(\{ autoLoad: true \}\)",
+        js,
+    )
+
+
+def test_successful_entity_preview_is_cached_by_entity_sql_and_limit():
+    js = _read(MAPPING_DESIGN_JS)
+
+    assert "function cacheEntityPreview(" in js
+    assert re.search(
+        r"if \(result\.success\) \{"
+        r"[\s\S]*?cacheEntityPreview\("
+        r"[\s\S]*?applyEntityPanelPreview\(result, options\)",
+        js,
+    )
+    assert "EntityPanelState.columns = result.columns" in js
