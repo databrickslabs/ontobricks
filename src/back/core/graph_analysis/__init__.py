@@ -5,7 +5,9 @@ from back.core.graph_analysis.CommunityDetector import CommunityDetector
 from back.core.graph_analysis.GraphBuilder import GraphBuilder
 from back.core.graph_analysis.JobMetrics import (
     JobMetrics,
+    METRIC_SERIES_COLUMNS,
     analytics_snapshot,
+    metric_series_query,
     resolve_analytics_source,
 )
 from back.core.graph_analysis.LakeflowRunner import LakeflowRunner
@@ -109,8 +111,10 @@ __all__ = [
     "CommunityDetector",
     "GraphBuilder",
     "JobMetrics",
+    "METRIC_SERIES_COLUMNS",
     "LakeflowRunner",
     "analytics_snapshot",
+    "metric_series_query",
     "resolve_analytics_source",
     "analytics_job_configured",
     "analytics_job_status",

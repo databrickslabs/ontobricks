@@ -100,3 +100,30 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5767 passed, 304 skipped, 6 deselected, 1 xfailed in 46.59s; targeted Analytics UI contracts → 108 passed in 0.28s
+
+## Add exhaustive metric-series SQL contract
+
+Context: Task 1 of the KG Analytics all-node series requires a validated SQL
+query helper that returns an exhaustive metric series payload. This adds the
+allowlisted metric contract, deterministic ordering, and pagination controls
+for downstream tasks to consume.
+
+Changes:
+
+1. tests/units/core/test_job_metrics.py
+   Add TDD contracts for metric-series SQL text, full allowlist acceptance, and invalid metric rejection with ValidationError.
+2. src/back/core/graph_analysis/JobMetrics.py
+   Add METRIC_SERIES_COLUMNS and metric_series_query() with strict metric validation plus normalized limit/offset bounds.
+3. src/back/core/graph_analysis/__init__.py
+   Export metric_series_query and METRIC_SERIES_COLUMNS from the graph_analysis package surface.
+4. .superpowers/sdd/task-1-report.md
+   Record task status, RED/GREEN evidence, commit metadata, and self-review notes for Task 1.
+
+Modified files:
+- tests/units/core/test_job_metrics.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/__init__.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+- .superpowers/sdd/task-1-report.md
+
+Tests: uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series → 7 passed, 62 deselected, 1 warning in 0.87s; uv run --frozen pytest -q -m "not scenario" → 5774 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 50.23s

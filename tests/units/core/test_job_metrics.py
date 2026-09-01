@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from back.core.errors import InfrastructureError
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graph_analysis.JobMetrics import (
     APPROXIMATE_METRICS,
     UNAVAILABLE_METRICS,
@@ -22,6 +22,7 @@ from back.core.graph_analysis.JobMetrics import (
     distribution_bounds_query,
     distributions_query,
     interpolate_quantile,
+    metric_series_query,
     resolve_analytics_source,
     summary_query,
     top_nodes_query,
@@ -270,6 +271,24 @@ class TestReadBackSql:
         rows = self._db().query(top_nodes_query("metrics", 5))
         ranks = [r["pagerank"] for r in rows]
         assert ranks == sorted(ranks, reverse=True)
+
+    def test_metric_series_query_has_the_validated_sql_contract(self):
+        sql = metric_series_query("cat.sch.metrics", "pagerank", 25, 10)
+        assert "pagerank AS score" in sql
+        assert "COUNT(*) OVER() AS total_count" in sql
+        assert "ORDER BY pagerank DESC, node_uri ASC" in sql
+        assert "LIMIT 10 OFFSET 25" in sql
+
+    @pytest.mark.parametrize(
+        "metric", ["pagerank", "betweenness", "degree", "closeness", "clustering"]
+    )
+    def test_metric_series_query_accepts_all_allowed_metrics(self, metric):
+        sql = metric_series_query("cat.sch.metrics", metric, 0, 100)
+        assert f"{metric} AS score" in sql
+
+    def test_metric_series_query_rejects_unknown_metric(self):
+        with pytest.raises(ValidationError, match="Unsupported graph metric"):
+            metric_series_query("cat.sch.metrics", "drop table metrics", 0, 100)
 
     def test_type_profiles_query_reads_the_rollup_table(self):
         db = _OutputDB(_sample_rows())

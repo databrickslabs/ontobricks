@@ -29,7 +29,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
-from back.core.errors import InfrastructureError
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graph_analysis.models import (
     DEFAULT_DISTRIBUTION_BINS,
     MODE_JOB,
@@ -54,6 +54,10 @@ APPROXIMATE_METRICS = ("betweenness", "closeness")
 #: What is missing when the job ran with no pivots, or when its BFS was
 #: truncated and the estimates would be biased.
 UNAVAILABLE_METRICS = ("betweenness", "closeness")
+
+METRIC_SERIES_COLUMNS = frozenset(
+    {"pagerank", "betweenness", "degree", "closeness", "clustering"}
+)
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +175,21 @@ def top_nodes_query(output_table: str, top_n: int) -> str:
         f"WHERE rn_dg <= {k} OR rn_pr <= {k} OR rn_cl <= {k}\n"
         f"   OR rn_bc <= {k} OR rn_cn <= {k}\n"
         "ORDER BY pagerank DESC, node_uri"
+    )
+
+
+def metric_series_query(output_table: str, metric: str, offset: int, limit: int) -> str:
+    """Paginated series for one validated metric column."""
+    if metric not in METRIC_SERIES_COLUMNS:
+        raise ValidationError("Unsupported graph metric")
+    page_offset = max(0, int(offset))
+    page_limit = min(25_000, max(1, int(limit)))
+    return (
+        "SELECT node_uri, label, "
+        f"{metric} AS score, COUNT(*) OVER() AS total_count\n"
+        f"FROM {output_table}\n"
+        f"ORDER BY {metric} DESC, node_uri ASC\n"
+        f"LIMIT {page_limit} OFFSET {page_offset}"
     )
 
 
