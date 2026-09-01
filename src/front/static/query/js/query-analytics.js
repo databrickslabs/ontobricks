@@ -112,6 +112,13 @@
     var _selectedMetric = 'pagerank';
     var _distCharts = {};
     var _logScale = true;
+    var _metricSeriesCache = {};
+    var _metricSeriesController = null;
+    var _analyticsGeneration = '';
+    var _metricSeriesRequestId = 0;
+    var _SERIES_PAGE_SIZE = 25000;
+    var _DECIMATION_THRESHOLD = 5000;
+    var _DECIMATION_SAMPLES = 2000;
 
     // Chart.js renders at 0px in a hidden pane, so charts are resized when the
     // Dashboard tab becomes visible.
@@ -317,6 +324,13 @@
         _analyticsData = null;
         _analyticsLastSections = null;
         _resultScope = null;
+        _analyticsGeneration = '';
+        _metricSeriesCache = {};
+        _metricSeriesRequestId += 1;
+        if (_metricSeriesController) {
+            _metricSeriesController.abort();
+            _metricSeriesController = null;
+        }
 
         var results = document.getElementById('analyticsResults');
         if (results) results.classList.add('d-none');
@@ -368,6 +382,16 @@
     function _renderAnalyticsData(data, meta) {
         meta = meta || {};
         _analyticsData = data;
+        var generation = meta.computed_at || '';
+        if (generation !== _analyticsGeneration) {
+            _analyticsGeneration = generation;
+            _metricSeriesCache = {};
+            _metricSeriesRequestId += 1;
+            if (_metricSeriesController) {
+                _metricSeriesController.abort();
+                _metricSeriesController = null;
+            }
+        }
 
         // ``meta`` describes the result being rendered, so it is the authority
         // on scope — including clearing it, which is what makes a full-graph
@@ -632,6 +656,11 @@
     window.analyticsRenderCharts = function () {
         if (!_analyticsData) return;
         _renderRankingChart();
+        window.analyticsRenderDetailTable();
+    };
+
+    window.analyticsRenderDetailTable = function () {
+        if (!_analyticsData) return;
         var topN = _topN();
         _renderPagerankTable(
             Object.keys(_analyticsData.nodes || {}),
@@ -644,6 +673,162 @@
     function _topN() {
         var el = document.getElementById('analyticsTopN');
         return Math.max(3, parseInt(el && el.value, 10) || 10);
+    }
+
+    function _seriesCacheKey(metric, generation) {
+        return (generation || '') + '::' + metric;
+    }
+
+    function _staleSeriesError() {
+        var err = new Error('stale metric series response');
+        err.name = 'AbortError';
+        return err;
+    }
+
+    async function _loadMetricSeries(metric, generation, onProgress) {
+        var cacheKey = _seriesCacheKey(metric, generation);
+        if (_metricSeriesCache[cacheKey]) {
+            return _metricSeriesCache[cacheKey];
+        }
+
+        _metricSeriesRequestId += 1;
+        var requestId = _metricSeriesRequestId;
+
+        if (_metricSeriesController) {
+            _metricSeriesController.abort();
+        }
+        _metricSeriesController = new AbortController();
+        var controller = _metricSeriesController;
+
+        var offset = 0;
+        var points = [];
+        var total = 0;
+        try {
+            while (true) {
+                var resp = await fetch(
+                    '/dtwin/metrics/series?metric=' + encodeURIComponent(metric)
+                    + '&offset=' + offset
+                    + '&limit=' + _SERIES_PAGE_SIZE,
+                    { credentials: 'same-origin', signal: controller.signal }
+                );
+                var payload = await resp.json();
+                if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
+                    throw _staleSeriesError();
+                }
+                if (!payload.success) {
+                    throw new Error(payload.message || 'Could not load metric series');
+                }
+                if (!payload.has_result) return [];
+
+                total = Number(payload.total || 0);
+                var uris = payload.uris || [];
+                var labels = payload.labels || [];
+                var scores = payload.scores || [];
+                for (var i = 0; i < uris.length; i++) {
+                    points.push({
+                        x: offset + i + 1,
+                        y: Number(scores[i] || 0),
+                        uri: uris[i] || '',
+                        label: labels[i] || _localName(uris[i] || '')
+                    });
+                }
+
+                if (typeof onProgress === 'function') {
+                    onProgress(points.length, total);
+                }
+
+                if (payload.next_offset == null) break;
+                offset = payload.next_offset;
+            }
+
+            if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
+                throw _staleSeriesError();
+            }
+            _metricSeriesCache[cacheKey] = points;
+            return points;
+        } finally {
+            if (_metricSeriesController === controller) {
+                _metricSeriesController = null;
+            }
+        }
+    }
+
+    function _renderMetricSeriesChart(meta, points, canvas, onPointClick) {
+        if (_charts.ranking) { _charts.ranking.destroy(); _charts.ranking = null; }
+        _charts.ranking = new Chart(canvas, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: meta.label,
+                    data: points,
+                    parsing: false,
+                    showLine: true,
+                    pointRadius: points.length > _DECIMATION_THRESHOLD ? 0 : 2,
+                    pointHoverRadius: 4,
+                    borderWidth: 1.5,
+                    borderColor: meta.color,
+                    backgroundColor: meta.color,
+                    fill: false,
+                    tension: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                onClick: function (event, elements) {
+                    if (!elements || !elements.length) return;
+                    var point = points[elements[0].index];
+                    if (point && point.uri && typeof onPointClick === 'function') {
+                        onPointClick(point.uri);
+                    }
+                },
+                onHover: function (event) {
+                    event.native.target.style.cursor =
+                        event.chart.getElementsAtEventForMode(
+                            event.native, 'nearest', { intersect: true }, true
+                        ).length ? 'pointer' : 'default';
+                },
+                plugins: {
+                    legend: { display: false },
+                    decimation: {
+                        enabled: points.length > _DECIMATION_THRESHOLD,
+                        algorithm: 'lttb',
+                        samples: 2000
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function (items) {
+                                var point = items[0].raw || points[items[0].dataIndex];
+                                return 'Rank #' + ((point && point.x) || (items[0].dataIndex + 1));
+                            },
+                            label: function (item) {
+                                var point = item.raw || {};
+                                return [
+                                    (point.label || _localName(point.uri || '')),
+                                    'URI: ' + (point.uri || '—'),
+                                    meta.label + ': ' + Number(point.y || 0).toFixed(6)
+                                ];
+                            },
+                            afterLabel: function () { return '\nClick to open in Graph Viewer'; }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Rank' },
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y: {
+                        title: { display: true, text: meta.label },
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    }
+                }
+            }
+        });
     }
 
     function _renderRankingChart() {
@@ -674,7 +859,7 @@
             + '<div class="card mt-2">'
             + '  <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">'
             + '    <span class="small fw-semibold">'
-            + '      <i class="bi ' + meta.icon + ' me-1"></i>Top nodes by ' + meta.label
+            + '      <i class="bi ' + meta.icon + ' me-1"></i>Nodes by ' + meta.label
             + '      <button class="btn btn-link btn-sm p-0 text-muted ms-1"'
             + '              onclick="_showMetricInfo(\'' + meta.key + '\')"'
             + '              title="What is ' + meta.label + '?">'
@@ -684,6 +869,7 @@
             + '  </div>'
             + '  <div class="card-body">'
             + '    <div id="analyticsRankingNotice"></div>'
+            + '    <div id="analyticsRankingStatus" class="analytics-rank-status"></div>'
             + '    <div class="analytics-rank-canvas-wrap">'
             + '      <canvas id="analyticsRankingChart"></canvas>'
             + '    </div>'
@@ -697,26 +883,9 @@
         });
 
         var notice = document.getElementById('analyticsRankingNotice');
+        var status = document.getElementById('analyticsRankingStatus');
         var canvas = document.getElementById('analyticsRankingChart');
-        if (!canvas || !notice) return;
-
-        var allNodes = _analyticsData.nodes || {};
-        var sorted = Object.keys(allNodes).sort(function (a, b) {
-            return (allNodes[b][meta.key] || 0) - (allNodes[a][meta.key] || 0);
-        }).slice(0, _topN());
-        var values = sorted.map(function (uri) {
-            return +(allNodes[uri][meta.key] || 0).toFixed(6);
-        });
-
-        // A flat zero chart would imply a measurement of zero. Explain instead.
-        if (!values.length || values.every(function (v) { return v === 0; })) {
-            canvas.style.display = 'none';
-            notice.innerHTML = '<div class="alert alert-light border small text-muted mb-0">'
-                + '<i class="bi bi-info-circle me-1"></i>'
-                + _zeroReason(meta.key, unavailable) + '</div>';
-            return;
-        }
-        canvas.style.display = '';
+        if (!canvas || !notice || !status) return;
 
         notice.innerHTML = approximate.indexOf(meta.key) !== -1
             ? '<div class="alert alert-warning border small py-1 px-2 mb-2">'
@@ -727,67 +896,57 @@
               + 'not as an absolute value — nodes with similar scores may be ordered '
               + 'wrongly. Analyse a single Entity Type for exact values.</div>'
             : '';
+        canvas.classList.add('d-none');
+        status.textContent = 'Loading metric series…';
+        notice.insertAdjacentHTML(
+            'beforeend',
+            '<div class="analytics-rank-loading">'
+            + '<div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>'
+            + '<span class="small text-muted">Loading ranked node scores…</span>'
+            + '</div>'
+        );
 
-        var labels = sorted.map(_displayName);
-        _charts.ranking = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: meta.label,
-                    data: values,
-                    backgroundColor: meta.color,
-                    borderRadius: 4,
-                    borderSkipped: false
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                onClick: function (event, elements) {
-                    if (!elements || !elements.length) return;
-                    var uri = sorted[elements[0].index];
-                    if (uri) _navigateToGraph(uri);
-                },
-                onHover: function (event) {
-                    event.native.target.style.cursor =
-                        event.chart.getElementsAtEventForMode(
-                            event.native, 'nearest', { intersect: true }, true
-                        ).length ? 'pointer' : 'default';
-                },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            title: function (items) {
-                                var uri = sorted[items[0].dataIndex];
-                                var type = (_analyticsData.node_types || {})[uri];
-                                return type ? uri + '  [' + _localName(type) + ']' : uri;
-                            },
-                            beforeBody: function (items) {
-                                var nm = allNodes[sorted[items[0].dataIndex]] || {};
-                                return _ALL_METRICS.map(function (m) {
-                                    return m.label + ' : ' + (nm[m.key] || 0).toFixed(6);
-                                }).concat(['──────────────────────────']);
-                            },
-                            label: function (item) {
-                                return '► ' + item.dataset.label + ' : ' + item.formattedValue;
-                            },
-                            afterLabel: function () { return '\nClick to open in Graph Viewer'; }
-                        }
-                    }
-                },
-                scales: {
-                    x: { beginAtZero: true, ticks: { font: { size: 11 } },
-                         grid: { color: 'rgba(0,0,0,0.05)' } },
-                    y: { ticks: { font: { size: 11 },
-                                  callback: function (val, idx) {
-                                      var l = labels[idx];
-                                      return l.length > 40 ? l.slice(0, 39) + '…' : l;
-                                  } },
-                         grid: { display: false } }
-                }
+        _loadMetricSeries(meta.key, _analyticsGeneration, function (loaded, total) {
+            status.textContent = total
+                ? ('Loading ' + loaded.toLocaleString() + ' / ' + total.toLocaleString() + ' nodes…')
+                : ('Loading ' + loaded.toLocaleString() + ' nodes…');
+        }).then(function (points) {
+            if (!host.querySelector('#analyticsRankingChart')) return;
+            if (!points.length || points.every(function (p) { return Number(p.y || 0) === 0; })) {
+                canvas.classList.add('d-none');
+                notice.innerHTML = '<div class="alert alert-light border small text-muted mb-0">'
+                    + '<i class="bi bi-info-circle me-1"></i>'
+                    + _zeroReason(meta.key, unavailable) + '</div>';
+                status.textContent = '';
+                return;
+            }
+
+            canvas.classList.remove('d-none');
+            notice.innerHTML = approximate.indexOf(meta.key) !== -1
+                ? '<div class="alert alert-warning border small py-1 px-2 mb-2">'
+                  + '<i class="bi bi-exclamation-triangle me-1"></i><strong>Estimate.</strong> '
+                  + meta.label + ' is sampled from ' + pivotCount + ' source node'
+                  + (pivotCount === 1 ? '' : 's') + ' rather than all of them, because the '
+                  + 'exact computation is quadratic in the graph size. Use it to rank nodes, '
+                  + 'not as an absolute value — nodes with similar scores may be ordered '
+                  + 'wrongly. Analyse a single Entity Type for exact values.</div>'
+                : '';
+            _renderMetricSeriesChart(meta, points, canvas, function (uri) {
+                _navigateToGraph(uri);
+            });
+            status.textContent = points.length > _DECIMATION_THRESHOLD
+                ? (points.length.toLocaleString() + ' nodes · visually sampled to '
+                    + _DECIMATION_SAMPLES.toLocaleString() + ' points')
+                : (points.length.toLocaleString() + ' nodes');
+        }).catch(function (err) {
+            if (err && err.name === 'AbortError') return;
+            canvas.classList.add('d-none');
+            notice.innerHTML = '<div class="alert alert-danger small mb-0">'
+                + '<i class="bi bi-exclamation-triangle me-1"></i>'
+                + 'Unable to load metric series.</div>';
+            status.textContent = '';
+            if (typeof showNotification === 'function') {
+                showNotification("Unable to load metric series", "error");
             }
         });
     }

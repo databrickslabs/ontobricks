@@ -190,3 +190,45 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_metric_series.py → RED: import error for missing `METRIC_SERIES_MAX_LIMIT`, then GREEN: 5 passed, 1 warning in 1.31s; uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series → RED: import error for missing `METRIC_SERIES_MAX_LIMIT`, then GREEN: 8 passed, 62 deselected, 1 warning in 0.90s
+
+## Chart all node scores by rank
+
+Context: Task 3 of the KG Analytics all-node series replaces the Top-N bar
+ranking chart with an all-node ranked point-and-line chart loaded from the new
+paginated metric-series endpoint, while keeping Top N table-only and preserving
+existing notices, metric switching, Explorer drill-through, and bounded payload
+behavior for table/AI consumers.
+
+Changes:
+
+1. tests/units/front/test_analytics_dashboard.py
+   Add focused source-contract tests for line+points chart type, LTTB settings,
+   paginated series API usage, `AbortController` presence, `Nodes by` title,
+   and table-only Top N wiring.
+2. tests/units/front/test_analytics_stale_result_gate.py
+   Add regression contract asserting `_clearAnalyticsResults` clears
+   `_metricSeriesCache`.
+3. src/front/static/query/js/query-analytics.js
+   Implement generation+metric series cache, paginated `/dtwin/metrics/series`
+   assembly, stale request abort/rejection, Chart.js line renderer with points,
+   rank axis + metric axis titles, LTTB decimation threshold (5,000 -> 2,000),
+   loading progress text, decimation notice, and local/global error handling.
+4. src/front/templates/partials/dtwin/_query_analytics.html
+   Rewire `analyticsTopN` `onchange` to `analyticsRenderDetailTable()` so Top N
+   affects only the detail table.
+5. src/front/static/query/css/query-analytics.css
+   Add ranking status/loading classes using existing design tokens.
+6. .superpowers/sdd/task-3-report.md
+   Record RED/GREEN execution evidence, full-suite verification, changed files,
+   and self-review concerns.
+
+Modified files:
+- src/front/static/query/js/query-analytics.js
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/static/query/css/query-analytics.css
+- tests/units/front/test_analytics_dashboard.py
+- tests/units/front/test_analytics_stale_result_gate.py
+- .superpowers/sdd/task-3-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED: 7 failed, 108 passed, 1 warning; interim fix rerun exposed 1 legacy click-through contract failure; final GREEN: 115 passed, 1 warning in 0.25s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5787 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.18s.

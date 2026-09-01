@@ -90,6 +90,10 @@ class TestTheDashboardIsGated:
         body = _block(_source(), "function _clearAnalyticsResults()", 900)
         assert "_analyticsData = null" in body
 
+    def test_the_clear_helper_drops_metric_series_cache(self):
+        body = _block(_source(), "function _clearAnalyticsResults()", 1400)
+        assert "_metricSeriesCache = {}" in body
+
 
 class TestTheBannerExplainsTheDisappearance:
     def test_it_says_previous_results_are_not_shown(self):

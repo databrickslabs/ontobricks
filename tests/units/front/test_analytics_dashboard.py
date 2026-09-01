@@ -309,6 +309,36 @@ class TestRankingCard:
         assert "_renderPagerankTable" in js
 
 
+class TestAllNodeSeriesChartContracts:
+    def test_the_selected_metric_chart_is_a_line_with_points(self, js):
+        ranking = _fn(js, "_renderRankingChart")
+        assert "type: 'line'" in js
+        assert "showLine: true" in js
+        assert ".slice(0, _topN())" not in ranking
+
+    def test_lttb_decimation_threshold_and_samples_are_configured(self, js):
+        assert "algorithm: 'lttb'" in js
+        assert "samples: 2000" in js
+
+    def test_metric_series_is_loaded_from_the_paginated_api(self, js):
+        assert "/dtwin/metrics/series" in js
+        assert "AbortController" in js
+
+    def test_chart_title_switches_to_nodes_by_metric(self, js):
+        assert "Nodes by " in js
+
+
+class TestTopNIsTableOnly:
+    def test_top_n_triggers_only_detail_table_render(self, panel):
+        top_n = panel[panel.index('id="analyticsTopN"') - 180:]
+        top_n = top_n[: top_n.index("nodes</span>")]
+        assert 'onchange="analyticsRenderDetailTable()"' in top_n
+        assert 'onchange="analyticsRenderCharts()"' not in top_n
+
+    def test_table_only_handler_is_exposed(self, js):
+        assert "window.analyticsRenderDetailTable" in js
+
+
 class TestLogScaleToggle:
     def test_the_toggle_exists_in_the_section_header(self, panel):
         header = panel[: panel.index('id="analyticsSpinner"')]
