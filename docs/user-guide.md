@@ -714,12 +714,12 @@ The **Dashboard** tab has three layers: KPI tiles, a **distribution strip**, and
 | **Closeness Centrality** | Reachability — how quickly this node can reach every other node in the graph |
 | **Clustering Coefficient** | Local density — fraction of a node's neighbors that are also connected to each other |
 
-**Ranking chart.** One full-width ranked **point-and-line** chart shows **all scored nodes** for the selected metric (default PageRank), ordered by rank from left (highest score) to right (lowest score). The x-axis is rank position and the y-axis is the metric value. Metric switches reuse cached series when available and otherwise fetch the exhaustive ranking progressively from a paginated endpoint; while pages are loading, the chart card shows running progress so large populations do not look stalled.
+**Ranking chart.** One full-width ranked **point-and-line** chart shows **all scored nodes** for the selected metric (default PageRank), ordered by rank from left (highest score) to right (lowest score). The x-axis is rank position and the y-axis is the metric value. Metric switches reuse cached series when available and otherwise issue one request to `/dtwin/metrics/series`.
 
-For very large series, the chart applies LTTB decimation to the rendered line for responsiveness. When the selected metric contains more than **5,000 nodes**, a visible notice appears on the chart to signal that display downsampling is active (the full metric series is still loaded and retained for interactions such as drill-through).
+The backend always runs one exhaustive ordered metric query. For series up to **5,000** nodes, the response returns every point. Above that threshold, the backend keeps **2,000 representative source points** with their original ranks using server-side visual sampling. The chart renders those retained points directly and the status line states both the exhaustive total and the rendered retained-point count.
 
 - **Click a point** to jump directly to that entity in the Graph Viewer (the filter is pre-populated).
-- **Hover a point** to see all five metric scores for that entity in the tooltip.
+- **Hover a point** to see rank, label, URI, and score in the tooltip.
 - **Click the `?` button** on the ranking chart card header to open an explanation popup with the formula, a worked example, and guidance on why the metric matters.
 
 Below the ranking chart, a **PageRank Detail Table** lists the top-N entities with all five metrics displayed as mini progress bars, providing full context for why a node ranks highly. Every row is clickable → Graph Viewer.

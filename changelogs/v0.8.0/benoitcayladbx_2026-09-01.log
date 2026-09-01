@@ -338,3 +338,44 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: `uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series tests/units/api/test_dtwin_metric_series.py` → RED: collection error (`sample_metric_series` missing), then GREEN: 16 passed, 62 deselected, 1 warning in 1.09s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5794 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.86s.
+
+## Task 5 frontend: one-response ranked rendering
+
+Context: Backend Task 5 now returns one compact ranked series payload per metric
+(`total`, `sampled`, `ranks`, `uris`, `labels`, `scores`) after one exhaustive
+ordered query plus server-side sampling when needed. The Analytics frontend no
+longer paginates metric series in the browser and no longer applies Chart.js
+decimation locally.
+
+Changes:
+
+1. `tests/units/front/test_analytics_dashboard.py`
+   Updated frontend contracts to enforce one-response `/dtwin/metrics/series`
+   loading, server-provided `ranks` usage for x-values, removal of browser
+   pagination/decimation state, and deterministic click extraction from
+   `event.chart.data.datasets[hit.datasetIndex].data[hit.index]`.
+2. `src/front/static/query/js/query-analytics.js`
+   Replaced sequential page loading with one fetch per metric, switched to
+   complete cache entries keyed by generation+metric, consumed backend-retained
+   points directly, preserved request abort + stale-render gates, removed
+   obsolete `_SERIES_PAGE_SIZE` and client LTTB settings, and made touch click
+   resolution deterministic from dataset data (no `$context` dependency).
+3. `docs/user-guide.md`
+   Rewrote ranking-chart behavior to document one exhaustive backend query with
+   server-side visual sampling and corrected tooltip content to rank/label/URI/score.
+4. `docs/features.md`
+   Updated Graph Analytics feature text to describe one-response series loading
+   and backend-retained point rendering (instead of browser pagination/LTTB).
+5. `.superpowers/sdd/task-5-frontend-report.md`
+   Added implementation report with RED/GREEN/full-suite evidence, commit info,
+   and residual concerns.
+
+Modified files:
+- tests/units/front/test_analytics_dashboard.py
+- src/front/static/query/js/query-analytics.js
+- docs/user-guide.md
+- docs/features.md
+- .superpowers/sdd/task-5-frontend-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED #1: 4 failed, 116 passed, 1 warning; RED #2: 2 failed, 118 passed, 1 warning; GREEN: 120 passed, 1 warning in 0.20s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5795 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.59s.

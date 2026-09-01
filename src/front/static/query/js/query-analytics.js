@@ -116,9 +116,6 @@
     var _metricSeriesController = null;
     var _analyticsGeneration = '';
     var _metricSeriesRequestId = 0;
-    var _SERIES_PAGE_SIZE = 25000;
-    var _DECIMATION_THRESHOLD = 5000;
-    var _DECIMATION_SAMPLES = 2000;
 
     // Chart.js renders at 0px in a hidden pane, so charts are resized when the
     // Dashboard tab becomes visible.
@@ -695,62 +692,78 @@
         _metricSeriesController = new AbortController();
         var controller = _metricSeriesController;
 
-        var offset = 0;
-        var points = [];
-        var total = 0;
         try {
-            while (true) {
-                var resp = await fetch(
-                    '/dtwin/metrics/series?metric=' + encodeURIComponent(metric)
-                    + '&offset=' + offset
-                    + '&limit=' + _SERIES_PAGE_SIZE,
-                    { credentials: 'same-origin', signal: controller.signal }
-                );
-                var payload = await resp.json();
-                if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
-                    throw _staleSeriesError();
-                }
-                if (!resp.ok) {
-                    throw new Error(payload.message || 'Could not load metric series');
-                }
-                if (!payload.success) {
-                    throw new Error(payload.message || 'Could not load metric series');
-                }
-                if (!payload.has_result) {
-                    throw new Error('No metric series available for the current analysis');
-                }
-
-                total = Number(payload.total || 0);
-                var uris = payload.uris || [];
-                var labels = payload.labels || [];
-                var scores = payload.scores || [];
-                for (var i = 0; i < uris.length; i++) {
-                    points.push({
-                        x: offset + i + 1,
-                        y: Number(scores[i] || 0),
-                        uri: uris[i] || '',
-                        label: labels[i] || _localName(uris[i] || '')
-                    });
-                }
-
-                if (typeof onProgress === 'function') {
-                    onProgress(points.length, total);
-                }
-
-                if (payload.next_offset == null) break;
-                offset = payload.next_offset;
+            var resp = await fetch(
+                '/dtwin/metrics/series?metric=' + encodeURIComponent(metric),
+                { credentials: 'same-origin', signal: controller.signal }
+            );
+            var payload = await resp.json();
+            if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
+                throw _staleSeriesError();
             }
+            if (!resp.ok) {
+                throw new Error(payload.message || 'Could not load metric series');
+            }
+            if (!payload.success) {
+                throw new Error(payload.message || 'Could not load metric series');
+            }
+            if (!payload.has_result) {
+                throw new Error('No metric series available for the current analysis');
+            }
+
+            var uris = payload.uris || [];
+            var labels = payload.labels || [];
+            var scores = payload.scores || [];
+            var ranks = payload.ranks || [];
+            var points = [];
+            var count = Math.max(uris.length, labels.length, scores.length, ranks.length);
+            for (var i = 0; i < count; i++) {
+                var rank = Number(ranks[i] || (i + 1));
+                if (!Number.isFinite(rank)) rank = i + 1;
+                points.push({
+                    x: Number(ranks[i] || (i + 1)),
+                    y: Number(scores[i] || 0),
+                    uri: uris[i] || '',
+                    label: labels[i] || _localName(uris[i] || '')
+                });
+                points[i].x = rank;
+            }
+
+            var series = {
+                metric: payload.metric || metric,
+                computedAt: payload.computed_at || generation,
+                total: Number(payload.total || points.length),
+                sampled: !!payload.sampled,
+                points: points
+            };
 
             if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
                 throw _staleSeriesError();
             }
-            _metricSeriesCache[cacheKey] = points;
-            return points;
+            if (typeof onProgress === 'function') {
+                onProgress(points.length, series.total, series.sampled);
+            }
+            _metricSeriesCache[cacheKey] = series;
+            return series;
         } finally {
             if (_metricSeriesController === controller) {
                 _metricSeriesController = null;
             }
         }
+    }
+
+    function _metricSeriesStatusText(total, shown, sampled) {
+        var totalSafe = Math.max(0, Number(total || 0));
+        var shownSafe = Math.max(0, Number(shown || 0));
+        if (!totalSafe) {
+            return shownSafe.toLocaleString() + ' points shown';
+        }
+        if (sampled) {
+            return totalSafe.toLocaleString() + ' nodes total · visually sampled to '
+                + shownSafe.toLocaleString() + ' retained points';
+        }
+        return totalSafe.toLocaleString() + ' nodes total · '
+            + shownSafe.toLocaleString() + ' points shown';
     }
 
     function _renderMetricSeriesChart(meta, points, canvas, onPointClick) {
@@ -763,7 +776,7 @@
                     data: points,
                     parsing: false,
                     showLine: true,
-                    pointRadius: points.length > _DECIMATION_THRESHOLD ? 0 : 2,
+                    pointRadius: 2,
                     pointHoverRadius: 4,
                     borderWidth: 1.5,
                     borderColor: meta.color,
@@ -779,9 +792,12 @@
                 onClick: function (event, elements) {
                     if (!elements || !elements.length) return;
                     var hit = elements[0];
-                    var point = (hit.element && hit.element.$context && hit.element.$context.raw)
-                        || (hit.$context && hit.$context.raw)
-                        || null;
+                    var point = null;
+                    if (event && event.chart && event.chart.data && event.chart.data.datasets
+                        && event.chart.data.datasets[hit.datasetIndex]
+                        && event.chart.data.datasets[hit.datasetIndex].data) {
+                        point = event.chart.data.datasets[hit.datasetIndex].data[hit.index];
+                    }
                     if (point && point.uri && typeof onPointClick === 'function') {
                         onPointClick(point.uri);
                     }
@@ -794,11 +810,6 @@
                 },
                 plugins: {
                     legend: { display: false },
-                    decimation: {
-                        enabled: points.length > _DECIMATION_THRESHOLD,
-                        algorithm: 'lttb',
-                        samples: _DECIMATION_SAMPLES
-                    },
                     tooltip: {
                         callbacks: {
                             title: function (items) {
@@ -916,9 +927,10 @@
             status.textContent = total
                 ? ('Loading ' + loaded.toLocaleString() + ' / ' + total.toLocaleString() + ' nodes…')
                 : ('Loading ' + loaded.toLocaleString() + ' nodes…');
-        }).then(function (points) {
+        }).then(function (series) {
             if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
             if (!host.querySelector('#analyticsRankingChart')) return;
+            var points = (series && series.points) || [];
             if (!points.length || points.every(function (p) { return Number(p.y || 0) === 0; })) {
                 canvas.classList.add('d-none');
                 notice.innerHTML = '<div class="alert alert-light border small text-muted mb-0">'
@@ -941,10 +953,11 @@
             _renderMetricSeriesChart(meta, points, canvas, function (uri) {
                 _navigateToGraph(uri);
             });
-            status.textContent = points.length > _DECIMATION_THRESHOLD
-                ? (points.length.toLocaleString() + ' nodes · visually sampled to '
-                    + _DECIMATION_SAMPLES.toLocaleString() + ' points')
-                : (points.length.toLocaleString() + ' nodes');
+            status.textContent = _metricSeriesStatusText(
+                series && series.total,
+                points.length,
+                !!(series && series.sampled)
+            );
         }).catch(function (err) {
             if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
             if (err && err.name === 'AbortError') return;

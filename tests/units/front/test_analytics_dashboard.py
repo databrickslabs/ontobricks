@@ -293,8 +293,9 @@ class TestRankingCard:
         fn = _fn(js, "_renderRankingChart")
         assert "_navigateToGraph" in fn
 
-    def test_the_top_n_input_still_drives_the_chart(self, js):
-        assert "analyticsTopN" in js
+    def test_top_n_is_not_read_by_the_ranking_chart(self, js):
+        ranking = _fn(js, "_renderRankingChart")
+        assert "analyticsTopN" not in ranking
 
     def test_the_estimate_notice_survives(self, js):
         assert "Estimate." in js
@@ -316,14 +317,25 @@ class TestAllNodeSeriesChartContracts:
         assert "showLine: true" in js
         assert ".slice(0, _topN())" not in ranking
 
-    def test_lttb_decimation_threshold_and_samples_are_configured(self, js):
-        assert "algorithm: 'lttb'" in js
-        assert "_DECIMATION_SAMPLES = 2000" in js
-        assert "samples: _DECIMATION_SAMPLES" in js
+    def test_browser_decimation_state_is_removed(self, js):
+        assert "_DECIMATION_THRESHOLD" not in js
+        assert "_DECIMATION_SAMPLES" not in js
+        assert "algorithm: 'lttb'" not in js
+        assert "samples:" not in _fn(js, "_renderMetricSeriesChart")
 
-    def test_metric_series_is_loaded_from_the_paginated_api(self, js):
+    def test_metric_series_is_loaded_from_one_response_api(self, js):
         assert "/dtwin/metrics/series" in js
         assert "AbortController" in js
+        loader = _fn(js, "_loadMetricSeries")
+        assert "offset=" not in loader
+        assert "limit=" not in loader
+        assert "next_offset" not in loader
+        assert "_SERIES_PAGE_SIZE" not in js
+
+    def test_points_use_server_returned_ranks(self, js):
+        loader = _fn(js, "_loadMetricSeries")
+        assert "var ranks = payload.ranks || [];" in loader
+        assert "x: Number(ranks[i] || (i + 1))" in loader
 
     def test_chart_title_switches_to_nodes_by_metric(self, js):
         assert "Nodes by " in js
@@ -341,9 +353,10 @@ class TestAllNodeSeriesChartContracts:
         fn = _fn(js, "_loadMetricSeries")
         assert "if (!resp.ok)" in fn
 
-    def test_decimated_click_uses_rendered_raw_point_not_full_index(self, js):
+    def test_touch_click_reads_dataset_point_deterministically(self, js):
         fn = _fn(js, "_renderMetricSeriesChart")
-        assert "$context.raw" in fn
+        assert "event.chart.data.datasets[hit.datasetIndex].data[hit.index]" in fn
+        assert "$context" not in fn
         on_click = fn[fn.index("onClick"):fn.index("onHover")]
         assert "points[elements[0].index]" not in on_click
 
