@@ -277,9 +277,10 @@ class ReasoningService:
         result = ReasoningResult()
         table_name = self._get_graph_name()
         ontology = self._get_ontology_dict()
+        constraints = self._get_constraints()
 
         transitive_props = self._find_properties_by_characteristic(
-            ontology, "transitive"
+            ontology, "transitive", constraints
         )
         logger.info(
             "Graph reasoning: %d transitive properties found%s",
@@ -304,7 +305,9 @@ class ReasoningService:
             except Exception as e:
                 logger.warning("Transitive closure for %s failed: %s", prop_uri, e)
 
-        symmetric_props = self._find_properties_by_characteristic(ontology, "symmetric")
+        symmetric_props = self._find_properties_by_characteristic(
+            ontology, "symmetric", constraints
+        )
         logger.info(
             "Graph reasoning: %d symmetric properties found%s",
             len(symmetric_props),
@@ -584,6 +587,28 @@ class ReasoningService:
             return self._domain._data.get("ontology", {})
         return {}
 
+    def _get_constraints(self) -> List[Dict]:
+        """Retrieve the domain's legacy/relationship constraints list.
+
+        This is a **separate storage** from ``ontology["properties"][i]
+        ["characteristics"]``: it's the flat list of ``{"type": ...,
+        "property": ...}`` dicts kept on ``domain.constraints`` (see
+        ``DomainSession.constraints``), which is what the Designer's
+        entity/relationship "Constraints" tabs actually read and write via
+        ``GET /ontology/constraints/list`` and ``POST /ontology/constraints
+        /save``  (``ontology-shared-panels.js``'s
+        ``saveEntityConstraintsToServer`` / ``saveRelationshipConstraintsToServer``).
+
+        ``ontology["properties"][i]["characteristics"]`` is never populated
+        by that save path, so property-characteristic lookups (used by
+        Graph reasoning for transitive closure / symmetric expansion) must
+        also consult this list — see ``_find_properties_by_characteristic``.
+        """
+        constraints = getattr(self._domain, "constraints", None)
+        if isinstance(constraints, list):
+            return constraints
+        return []
+
     def _get_graph_name(self) -> str:
         info = getattr(self._domain, "info", None)
         name = (
@@ -611,26 +636,96 @@ class ReasoningService:
 
     @staticmethod
     def _find_properties_by_characteristic(
-        ontology: Dict, characteristic: str
+        ontology: Dict,
+        characteristic: str,
+        constraints: Optional[List[Dict]] = None,
     ) -> List[str]:
-        """Extract property URIs with *characteristic* (normalized to data namespace)."""
+        """Extract property URIs that carry *characteristic*, normalized to
+        the data namespace.
+
+        Property characteristics (Functional, Inverse Functional, Symmetric,
+        Transitive) can live in **two different places** depending on how
+        they were saved:
+
+        1. ``ontology["properties"][i]["characteristics"]`` — a per-property
+           embedded list. Kept for forward-compatibility / defensiveness,
+           but as of this version nothing actually writes to it.
+        2. ``constraints`` — the flat ``domain.constraints`` list, e.g.
+           ``{"type": "transitive", "property": "tieneCapital"}``. This is
+           the storage the Designer's relationship Constraints tab actually
+           persists to (via ``POST /ontology/constraints/save``), so it's
+           the authoritative source in practice. Entries are matched by
+           property name (full name, local name, or URI local name) against
+           the ontology's ``properties`` list to resolve the full,
+           namespace-normalized URI.
+        """
         base_uri = ontology.get("base_uri", "")
         data_ns, sep = ReasoningService._namespace_parts(base_uri)
-        result = []
         target = characteristic.lower()
-        for prop in ontology.get("properties", []):
+        result: List[str] = []
+        seen = set()
+
+        props = ontology.get("properties", [])
+
+        # Name -> property dict lookup (by name, local name, and URI local
+        # name, all case-insensitive) so constraint entries — which only
+        # store a property *name* — can be resolved back to a full property
+        # dict (and from there, a normalized URI).
+        by_name: Dict[str, Dict] = {}
+        for prop in props:
+            name = prop.get("name", "") or prop.get("localName", "")
+            if name:
+                by_name.setdefault(name.lower(), prop)
+                by_name.setdefault(
+                    ReasoningService._local_name(name).lower(), prop
+                )
+            uri = prop.get("uri", "")
+            if uri:
+                by_name.setdefault(ReasoningService._local_name(uri).lower(), prop)
+
+        def _add_prop(prop: Dict) -> None:
+            name = prop.get("name", "") or prop.get("localName", "")
+            uri = ReasoningService._normalize_property_uri(
+                prop.get("uri", ""), data_ns, base_uri, sep, name
+            )
+            if uri and uri not in seen:
+                seen.add(uri)
+                result.append(uri)
+
+        # Source 1: characteristics embedded directly on the property dict.
+        for prop in props:
             chars = prop.get("characteristics", [])
             if isinstance(chars, list) and target in [
                 c.lower() for c in chars if isinstance(c, str)
             ]:
-                name = prop.get("name", "") or prop.get("localName", "")
+                _add_prop(prop)
+
+        # Source 2: the flat domain.constraints list — the actual storage
+        # populated by the Designer's relationship Constraints tab.
+        for c in constraints or []:
+            if not isinstance(c, dict):
+                continue
+            if str(c.get("type", "")).lower() != target:
+                continue
+            prop_name = c.get("property", "") or c.get("propertyName", "")
+            if not prop_name:
+                continue
+            prop = by_name.get(prop_name.lower()) or by_name.get(
+                ReasoningService._local_name(prop_name).lower()
+            )
+            if prop:
+                _add_prop(prop)
+            else:
+                # Property not found in the ontology's properties list
+                # (e.g. stale constraint referencing a renamed/removed
+                # property) — fall back to building the URI directly from
+                # the constraint's stored property name so the constraint
+                # isn't silently dropped.
                 uri = ReasoningService._normalize_property_uri(
-                    prop.get("uri", ""),
-                    data_ns,
-                    base_uri,
-                    sep,
-                    name,
+                    "", data_ns, base_uri, sep, prop_name
                 )
-                if uri:
+                if uri and uri not in seen:
+                    seen.add(uri)
                     result.append(uri)
+
         return result
