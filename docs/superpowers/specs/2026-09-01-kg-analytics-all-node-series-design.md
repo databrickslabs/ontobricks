@@ -19,7 +19,7 @@ Delta output table on demand.
 
 Add a read-only endpoint:
 
-`GET /dtwin/metrics/series?metric=<name>`
+`GET /dtwin/metrics/series?metric=<name>&offset=<n>&limit=<n>`
 
 Accepted metric names are exactly:
 
@@ -36,9 +36,12 @@ The endpoint:
 3. Rejects metric names outside the allowlist before generating SQL.
 4. Derives the existing per-domain-version Analytics output table with
    `DigitalTwin.analytics_output_table`.
-5. Reads every row ordered by the selected score descending, then `node_uri`
-   ascending for deterministic tie-breaking.
-6. Returns a compact, column-oriented payload:
+5. Parses `offset` and `limit` as non-negative integers. The default page size
+   is 25,000 rows and the server-enforced maximum is also 25,000.
+6. Reads one page ordered by the selected score descending, then `node_uri`
+   ascending for deterministic tie-breaking. `COUNT(*) OVER()` supplies the
+   total without a second query.
+7. Returns parallel arrays rather than one JSON object per node:
 
 ```json
 {
@@ -46,16 +49,20 @@ The endpoint:
   "has_result": true,
   "metric": "pagerank",
   "computed_at": "2026-09-01T10:00:00Z",
-  "points": [
-    {"rank": 1, "uri": "...", "label": "Customer", "score": 0.42}
-  ]
+  "offset": 0,
+  "total": 1350051,
+  "next_offset": 25000,
+  "uris": ["..."],
+  "labels": ["Customer"],
+  "scores": [0.42]
 }
 ```
 
 The query uses the same Databricks credentials, SQL warehouse, output schema,
 and table naming rules as `JobMetrics`. The selected column is interpolated
-only after allowlist validation. Missing output tables or Databricks failures
-surface through the existing `InfrastructureError` path.
+only after allowlist validation; pagination values are parsed integers.
+Missing output tables or Databricks failures surface through the existing
+`InfrastructureError` path.
 
 The stored result's `computed_at` is included in the response and used by the
 frontend as a cache generation. This prevents a series from an older run being
@@ -69,9 +76,12 @@ Selecting a metric:
 1. Immediately updates the selected state and chart title.
 2. Reuses an in-memory series cached by `(computed_at, metric)` when available.
 3. Otherwise shows the existing branded inline loading treatment inside the
-   ranking card and requests `/dtwin/metrics/series`.
-4. Discards a late response if another metric or Analytics generation became
-   active while the request was running.
+   ranking card and requests `/dtwin/metrics/series` pages sequentially until
+   `next_offset` is null. The loading caption reports loaded and total nodes.
+4. Uses an `AbortController` when the metric or Analytics generation changes.
+   A late response is also generation-checked before it can update the chart.
+5. Stores only complete series in the reusable cache; aborted partial series
+   are discarded.
 
 The chart uses Chart.js's line controller with visible points, which provides
 the requested scatter appearance plus a connecting line:
@@ -84,8 +94,8 @@ the requested scatter appearance plus a connecting line:
 - Title: `Nodes by <Metric>`; no Top-N wording.
 - The approximation and unavailable-metric notices remain unchanged.
 
-For normal series, every point is rendered. Above a documented threshold,
-Chart.js's built-in LTTB decimation reduces only the rendered samples while
+For series of up to 5,000 nodes, every point is rendered. Above that threshold,
+Chart.js's built-in LTTB decimation renders 2,000 representative samples while
 the full source series remains loaded. The UI states both the total node count
 and that visual decimation is active. The tooltip and click behavior operate
 on retained source points.
@@ -115,6 +125,7 @@ control only the detail table below the chart.
 Backend tests cover:
 
 - metric allowlist validation;
+- pagination parsing, maximum page size, total count, and final-page behavior;
 - deterministic exhaustive SQL ordering;
 - output-table resolution;
 - no-result response;
@@ -127,6 +138,7 @@ Frontend contract and browser tests cover:
 - no `.slice(0, _topN())` in the selected-metric chart;
 - Top N affects only the detail table;
 - per-generation/per-metric caching;
+- sequential page assembly and progress;
 - stale-response rejection;
 - LTTB threshold configuration and notice;
 - tooltip and Explorer click-through;
