@@ -232,3 +232,34 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED: 7 failed, 108 passed, 1 warning; interim fix rerun exposed 1 legacy click-through contract failure; final GREEN: 115 passed, 1 warning in 0.25s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5787 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.18s.
+
+## Harden all-node chart review fixes
+
+Context: Task 3 review flagged a cache-hit race and stale-closure risk in the
+all-node metric series renderer, plus decimated click-through using full-series
+indexing. This follow-up hardens request invalidation, stale gating, and
+decimation wiring without changing intended dashboard UX.
+
+Changes:
+
+1. tests/units/front/test_analytics_dashboard.py
+   Add focused contracts for request invalidation before cache-hit return,
+   stale closure guards in ranking `then/catch`, decimated click-through raw
+   datum mapping, `resp.ok` handling in series loader, and decimation constants.
+2. src/front/static/query/js/query-analytics.js
+   Add `_invalidateMetricSeriesRequest()` and call it before cache lookup in
+   `_loadMetricSeries()` so cache-hits also abort/invalidate stale in-flight
+   requests; gate ranking async progress/then/catch on active metric+generation;
+   read clicked point from rendered `$context.raw` to keep decimated clicks
+   aligned; switch decimation samples to `_DECIMATION_SAMPLES`; add localized
+   `resp.ok` and `has_result` handling in series loading.
+3. .superpowers/sdd/task-3-report.md
+   Append full RED/GREEN follow-up evidence and review-fix rationale.
+
+Modified files:
+- src/front/static/query/js/query-analytics.js
+- tests/units/front/test_analytics_dashboard.py
+- .superpowers/sdd/task-3-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED: 5 failed, 114 passed, 1 warning; interim rerun: 1 failed, 118 passed, 1 warning; final GREEN: 119 passed, 1 warning in 0.28s.

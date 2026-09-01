@@ -326,11 +326,7 @@
         _resultScope = null;
         _analyticsGeneration = '';
         _metricSeriesCache = {};
-        _metricSeriesRequestId += 1;
-        if (_metricSeriesController) {
-            _metricSeriesController.abort();
-            _metricSeriesController = null;
-        }
+        _invalidateMetricSeriesRequest();
 
         var results = document.getElementById('analyticsResults');
         if (results) results.classList.add('d-none');
@@ -386,11 +382,7 @@
         if (generation !== _analyticsGeneration) {
             _analyticsGeneration = generation;
             _metricSeriesCache = {};
-            _metricSeriesRequestId += 1;
-            if (_metricSeriesController) {
-                _metricSeriesController.abort();
-                _metricSeriesController = null;
-            }
+            _invalidateMetricSeriesRequest();
         }
 
         // ``meta`` describes the result being rendered, so it is the authority
@@ -685,17 +677,20 @@
         return err;
     }
 
+    function _invalidateMetricSeriesRequest() {
+        _metricSeriesRequestId += 1;
+        if (_metricSeriesController) {
+            _metricSeriesController.abort();
+            _metricSeriesController = null;
+        }
+        return _metricSeriesRequestId;
+    }
+
     async function _loadMetricSeries(metric, generation, onProgress) {
+        var requestId = _invalidateMetricSeriesRequest();
         var cacheKey = _seriesCacheKey(metric, generation);
         if (_metricSeriesCache[cacheKey]) {
             return _metricSeriesCache[cacheKey];
-        }
-
-        _metricSeriesRequestId += 1;
-        var requestId = _metricSeriesRequestId;
-
-        if (_metricSeriesController) {
-            _metricSeriesController.abort();
         }
         _metricSeriesController = new AbortController();
         var controller = _metricSeriesController;
@@ -715,10 +710,15 @@
                 if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
                     throw _staleSeriesError();
                 }
+                if (!resp.ok) {
+                    throw new Error(payload.message || 'Could not load metric series');
+                }
                 if (!payload.success) {
                     throw new Error(payload.message || 'Could not load metric series');
                 }
-                if (!payload.has_result) return [];
+                if (!payload.has_result) {
+                    throw new Error('No metric series available for the current analysis');
+                }
 
                 total = Number(payload.total || 0);
                 var uris = payload.uris || [];
@@ -778,7 +778,10 @@
                 animation: false,
                 onClick: function (event, elements) {
                     if (!elements || !elements.length) return;
-                    var point = points[elements[0].index];
+                    var hit = elements[0];
+                    var point = (hit.element && hit.element.$context && hit.element.$context.raw)
+                        || (hit.$context && hit.$context.raw)
+                        || null;
                     if (point && point.uri && typeof onPointClick === 'function') {
                         onPointClick(point.uri);
                     }
@@ -794,7 +797,7 @@
                     decimation: {
                         enabled: points.length > _DECIMATION_THRESHOLD,
                         algorithm: 'lttb',
-                        samples: 2000
+                        samples: _DECIMATION_SAMPLES
                     },
                     tooltip: {
                         callbacks: {
@@ -842,6 +845,8 @@
         var unavailable = _analyticsData.unavailable_metrics || [];
         var approximate = _analyticsData.approximate_metrics || [];
         var pivotCount = _analyticsData.pivot_count || 0;
+        var renderMetric = meta.key;
+        var renderGeneration = _analyticsGeneration;
 
         var segments = _ALL_METRICS.map(function (m) {
             return '<button type="button" class="analytics-rank-seg'
@@ -907,10 +912,12 @@
         );
 
         _loadMetricSeries(meta.key, _analyticsGeneration, function (loaded, total) {
+            if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
             status.textContent = total
                 ? ('Loading ' + loaded.toLocaleString() + ' / ' + total.toLocaleString() + ' nodes…')
                 : ('Loading ' + loaded.toLocaleString() + ' nodes…');
         }).then(function (points) {
+            if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
             if (!host.querySelector('#analyticsRankingChart')) return;
             if (!points.length || points.every(function (p) { return Number(p.y || 0) === 0; })) {
                 canvas.classList.add('d-none');
@@ -939,6 +946,7 @@
                     + _DECIMATION_SAMPLES.toLocaleString() + ' points')
                 : (points.length.toLocaleString() + ' nodes');
         }).catch(function (err) {
+            if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
             if (err && err.name === 'AbortError') return;
             canvas.classList.add('d-none');
             notice.innerHTML = '<div class="alert alert-danger small mb-0">'

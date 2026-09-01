@@ -318,7 +318,8 @@ class TestAllNodeSeriesChartContracts:
 
     def test_lttb_decimation_threshold_and_samples_are_configured(self, js):
         assert "algorithm: 'lttb'" in js
-        assert "samples: 2000" in js
+        assert "_DECIMATION_SAMPLES = 2000" in js
+        assert "samples: _DECIMATION_SAMPLES" in js
 
     def test_metric_series_is_loaded_from_the_paginated_api(self, js):
         assert "/dtwin/metrics/series" in js
@@ -326,6 +327,25 @@ class TestAllNodeSeriesChartContracts:
 
     def test_chart_title_switches_to_nodes_by_metric(self, js):
         assert "Nodes by " in js
+
+    def test_cache_hit_only_returns_after_request_invalidation(self, js):
+        fn = _fn(js, "_loadMetricSeries")
+        assert "_invalidateMetricSeriesRequest()" in fn
+        assert fn.index("_invalidateMetricSeriesRequest()") < fn.index("if (_metricSeriesCache[cacheKey])")
+
+    def test_stale_closures_are_gated_in_then_and_catch(self, js):
+        fn = _fn(js, "_renderRankingChart")
+        assert "if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;" in fn
+
+    def test_series_loader_checks_http_status_before_success(self, js):
+        fn = _fn(js, "_loadMetricSeries")
+        assert "if (!resp.ok)" in fn
+
+    def test_decimated_click_uses_rendered_raw_point_not_full_index(self, js):
+        fn = _fn(js, "_renderMetricSeriesChart")
+        assert "$context.raw" in fn
+        on_click = fn[fn.index("onClick"):fn.index("onHover")]
+        assert "points[elements[0].index]" not in on_click
 
 
 class TestTopNIsTableOnly:
