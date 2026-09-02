@@ -356,7 +356,7 @@ git commit -m "docs(settings): document schema permission health"
   auto-scroll behavior from Task 3.
 - Produces: matching Runs and system Health tab rails.
 
-- [ ] **Step 1: Write failing structural and behavior tests**
+- [x] **Step 1: Write failing structural and behavior tests**
 
 Assert both partials use:
 
@@ -371,31 +371,31 @@ Assert `ob-tab-content`, `text-primary`, and `text-success` are absent from
 their tab rails; existing tab/pane IDs remain; and the Settings auto-scroll
 rail list includes `settingsRunsTabs` and `healthTabs`.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 ```bash
 uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py
 ```
 
-- [ ] **Step 3: Wrap Runs tabs**
+- [x] **Step 3: Wrap Runs tabs**
 
 Keep the Domain filter above the card. Wrap the existing Runs rail and body in
 `card h-100` and `card-body p-0 ob-tabs-wrap`, add `nav-fill`, change the body
 to `tab-content p-3`, and let both tab icons inherit shared colors.
 
-- [ ] **Step 4: Wrap system Health tabs**
+- [x] **Step 4: Wrap system Health tabs**
 
 Wrap the existing Databricks/Diagnostics rail and body in the same canonical
 structure, add `nav-fill`, and change the body to `tab-content p-3`. Preserve
 all readiness/diagnostic IDs, lazy loading, refresh actions, and accessibility
 attributes.
 
-- [ ] **Step 5: Extend keyboard auto-scroll**
+- [x] **Step 5: Extend keyboard auto-scroll**
 
 Add `settingsRunsTabs` and `healthTabs` to the existing Settings-only rail list
 used by the `shown.bs.tab` and `focusin` nearest-scroll handlers.
 
-- [ ] **Step 6: Verify GREEN and full suite**
+- [x] **Step 6: Verify GREEN and full suite**
 
 ```bash
 uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py
@@ -409,7 +409,7 @@ Bootstrap switching and lazy loading still work, keyboard focus remains
 visible, tables/diagnostics stay contained, and no console/network errors
 occur.
 
-- [ ] **Step 8: Append changelog and commit**
+- [x] **Step 8: Append changelog and commit**
 
 Append a new section to the existing v0.8.0 daily changelog and commit:
 

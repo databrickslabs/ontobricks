@@ -34,24 +34,26 @@
         </div>
     </div>
 
-    <ul class="nav nav-tabs ob-tabs" id="settingsRunsTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="srtab-btn-build" data-bs-toggle="tab"
-                    data-bs-target="#srtab-build" type="button" role="tab"
-                    aria-controls="srtab-build" aria-selected="true">
-                <i class="bi bi-hammer me-1 text-primary"></i>Build runs
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="srtab-btn-analytics" data-bs-toggle="tab"
-                    data-bs-target="#srtab-analytics" type="button" role="tab"
-                    aria-controls="srtab-analytics" aria-selected="false">
-                <i class="bi bi-graph-up-arrow me-1 text-success"></i>Analytics runs
-            </button>
-        </li>
-    </ul>
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="settingsRunsTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="srtab-btn-build" data-bs-toggle="tab"
+                            data-bs-target="#srtab-build" type="button" role="tab"
+                            aria-controls="srtab-build" aria-selected="true">
+                        <i class="bi bi-hammer me-1"></i>Build runs
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="srtab-btn-analytics" data-bs-toggle="tab"
+                            data-bs-target="#srtab-analytics" type="button" role="tab"
+                            aria-controls="srtab-analytics" aria-selected="false">
+                        <i class="bi bi-graph-up-arrow me-1"></i>Analytics runs
+                    </button>
+                </li>
+            </ul>
 
-    <div class="tab-content ob-tab-content" id="settingsRunsTabContent">
+            <div class="tab-content p-3" id="settingsRunsTabContent">
 
         <!-- ── TAB: Build runs ── -->
         <div class="tab-pane fade show active" id="srtab-build" role="tabpanel"
@@ -195,6 +197,8 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
             </div>
         </div>
     </div>

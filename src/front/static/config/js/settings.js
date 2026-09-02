@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setupSettingsTabRailAutoScroll() {
-        ['deltaTabs', 'lakebaseTabs', 'neo4jTabs'].forEach((tabsId) => {
+        ['deltaTabs', 'lakebaseTabs', 'neo4jTabs', 'settingsRunsTabs', 'healthTabs'].forEach((tabsId) => {
             const rail = document.getElementById(tabsId);
             if (!rail) return;
 

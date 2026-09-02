@@ -12,6 +12,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SETTINGS_HTML = REPO_ROOT / "src/front/templates/settings.html"
 SETTINGS_JS = REPO_ROOT / "src/front/static/config/js/settings.js"
+HEALTH_PARTIAL = REPO_ROOT / "src/front/templates/partials/settings/_settings_health.html"
 
 
 def _read(path: Path) -> str:
@@ -211,11 +212,33 @@ class TestSettingsCanonicalTabRails:
         assert match, content_id
         assert "ob-tab-content" not in match.group(1)
 
+    def test_health_tab_group_uses_card_integrated_canonical_hierarchy(self):
+        html = _read(HEALTH_PARTIAL)
+        pattern = re.compile(
+            r'<div class="card h-100">\s*'
+            r'<div class="card-body p-0 ob-tabs-wrap">[\s\S]*?'
+            r'<ul class="nav nav-tabs ob-tabs nav-fill" id="healthTabs" role="tablist">',
+            re.DOTALL,
+        )
+        assert pattern.search(html), "healthTabs"
+
+        content_pattern = re.compile(
+            r'<div class="tab-content p-3" id="healthTabContent">',
+            re.DOTALL,
+        )
+        assert content_pattern.search(html), "healthTabContent"
+
+    def test_health_tab_content_surface_does_not_use_ob_tab_content_class(self):
+        html = _read(HEALTH_PARTIAL)
+        match = re.search(r'<div class="([^"]+)" id="healthTabContent">', html)
+        assert match, "healthTabContent"
+        assert "ob-tab-content" not in match.group(1)
+
 
 class TestSettingsTabRailScrollBehavior:
     def test_each_settings_tab_rail_registers_bootstrap_tab_activation_listener(self):
         js = _read(SETTINGS_JS)
-        assert "['deltaTabs', 'lakebaseTabs', 'neo4jTabs']" in js
+        assert "['deltaTabs', 'lakebaseTabs', 'neo4jTabs', 'settingsRunsTabs', 'healthTabs']" in js
         assert "const rail = document.getElementById(tabsId);" in js
         assert "rail.addEventListener('shown.bs.tab'" in js
 

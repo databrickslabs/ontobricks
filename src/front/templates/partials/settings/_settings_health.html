@@ -7,25 +7,27 @@
    Both tabs are lazy-loaded on first show.
 #}
 
-<!-- Tab strip -->
-<ul class="nav nav-tabs ob-tabs mb-0" id="healthTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="htab-databricks" data-bs-toggle="tab"
-                data-bs-target="#hpane-databricks" type="button" role="tab"
-                aria-controls="hpane-databricks" aria-selected="true">
-            <i class="bi bi-database me-1"></i> Databricks
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="htab-diagnostics" data-bs-toggle="tab"
-                data-bs-target="#hpane-diagnostics" type="button" role="tab"
-                aria-controls="hpane-diagnostics" aria-selected="false">
-            <i class="bi bi-stethoscope me-1"></i> Diagnostics
-        </button>
-    </li>
-</ul>
+<div class="card h-100">
+    <div class="card-body p-0 ob-tabs-wrap">
+        <!-- Tab strip -->
+        <ul class="nav nav-tabs ob-tabs nav-fill" id="healthTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="htab-databricks" data-bs-toggle="tab"
+                        data-bs-target="#hpane-databricks" type="button" role="tab"
+                        aria-controls="hpane-databricks" aria-selected="true">
+                    <i class="bi bi-database me-1"></i> Databricks
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="htab-diagnostics" data-bs-toggle="tab"
+                        data-bs-target="#hpane-diagnostics" type="button" role="tab"
+                        aria-controls="hpane-diagnostics" aria-selected="false">
+                    <i class="bi bi-stethoscope me-1"></i> Diagnostics
+                </button>
+            </li>
+        </ul>
 
-<div class="tab-content ob-tab-content" id="healthTabContent">
+        <div class="tab-content p-3" id="healthTabContent">
 
     <!-- ══════════════════════════════════════════════════════
          TAB 1 · Databricks — readiness probes (GET /health)
@@ -172,4 +174,6 @@
         </div>
     </div><!-- /#hpane-diagnostics -->
 
-</div><!-- /#healthTabContent -->
+        </div><!-- /#healthTabContent -->
+    </div>
+</div>

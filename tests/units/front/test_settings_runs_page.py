@@ -118,12 +118,35 @@ class TestRunsSection:
         html = _html(client, "/settings")
         tags = _tags(html)
         for element_id in (
+            "settingsRunsTabs",
+            "settingsRunsTabContent",
             "srtab-btn-build",
             "srtab-btn-analytics",
             "srtab-build",
             "srtab-analytics",
         ):
             assert _find(tags, id_=element_id) is not None
+
+    def test_runs_tabs_use_card_integrated_canonical_hierarchy(self, client):
+        html = _html(client, "/settings")
+        section = html[html.index('id="runs-section"') :]
+        assert '<div class="card h-100">' in section
+        assert '<div class="card-body p-0 ob-tabs-wrap">' in section
+        assert '<ul class="nav nav-tabs ob-tabs nav-fill" id="settingsRunsTabs" role="tablist">' in section
+        assert '<div class="tab-content p-3" id="settingsRunsTabContent">' in section
+
+    def test_runs_tab_content_surface_does_not_use_ob_tab_content_class(self, client):
+        html = _html(client, "/settings")
+        section = html[html.index('id="runs-section"') :]
+        match = re.search(r'<div class="([^"]+)" id="settingsRunsTabContent">', section)
+        assert match is not None
+        assert "ob-tab-content" not in match.group(1)
+
+    def test_runs_tab_icons_do_not_force_primary_or_success_colors(self, client):
+        html = _html(client, "/settings")
+        section = html[html.index('id="settingsRunsTabs"') : html.index('id="settingsRunsTabContent"')]
+        assert "text-primary" not in section
+        assert "text-success" not in section
 
     def test_each_tab_button_targets_its_own_pane(self, client):
         html = _html(client, "/settings")

@@ -284,3 +284,48 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
 Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py::TestGetEffectiveSchemaPermissions::test_effective_schema_discards_missing_or_mismatched_principals tests/units/front/test_settings_lakehouse_health_permissions.py::TestLakehouseHealthCopyAndRenderer::test_function_body_helper_is_not_hard_truncated` (RED) → 2 failed in 1.00s; `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/graphdb/delta/test_delta_package.py tests/units/settings/test_delta_health_permissions.py` (GREEN) → 89 passed, 0 failed in 1.38s; `uv run --frozen pytest -q -m "not scenario"` → 5831 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.93s.
+
+## Align Settings Runs and Health tab rails
+
+Context: Task 5 requires applying the canonical card-integrated `ob-tabs`
+layout to Settings Automation Runs and system Health while preserving all
+existing IDs, panes, filters, lazy-loading, handlers, diagnostics, and ARIA
+behavior. The tab-rail keyboard auto-scroll behavior also had to include these
+two additional rails.
+
+Changes:
+
+1. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Added RED-first assertions for Health canonical card hierarchy, `tab-content p-3`,
+   removal of `ob-tab-content`, and inclusion of `settingsRunsTabs` and `healthTabs`
+   in the Settings tab-rail auto-scroll list.
+2. tests/units/front/test_settings_runs_page.py
+   Added RED-first assertions that Runs keeps existing tab/pane IDs while using
+   canonical card-integrated markup, removes `ob-tab-content`, and removes
+   `text-primary`/`text-success` icon forcing from the Runs tab rail.
+3. src/front/templates/partials/settings/_settings_runs.html
+   Kept the Domain filter above the tab card, wrapped Runs tabs/content in
+   `card h-100` + `card-body p-0 ob-tabs-wrap`, added `nav-fill`, switched to
+   `tab-content p-3`, and removed per-icon primary/success color classes.
+4. src/front/templates/partials/settings/_settings_health.html
+   Wrapped Health tabs/content in the same canonical hierarchy, added `nav-fill`,
+   and switched to `tab-content p-3` while preserving all existing IDs, tab targets,
+   lazy-loaded panes, refresh actions, and ARIA attributes.
+5. src/front/static/config/js/settings.js
+   Extended the existing Settings-only nearest-scroll rail list to include
+   `settingsRunsTabs` and `healthTabs` in the `shown.bs.tab` and `focusin`
+   auto-scroll wiring.
+6. docs/superpowers/plans/2026-09-02-settings-lakehouse-health-permissions.md
+   Updated Task 5 execution checkboxes to record completed RED/GREEN/full-suite
+   steps and delivery state.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/settings/_settings_health.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- tests/units/front/test_settings_runs_page.py
+- docs/superpowers/plans/2026-09-02-settings-lakehouse-health-permissions.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` (RED) → 6 failed, 98 passed in 1.99s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` (GREEN) → 104 passed, 0 failed in 2.15s; `uv run --frozen pytest -q -m "not scenario"` → 5836 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.68s.
