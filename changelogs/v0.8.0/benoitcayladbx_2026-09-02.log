@@ -221,7 +221,7 @@ Changes:
 1. docs/user-guide.md
    Added explicit `R2RML VIEW` exclusion in Lakehouse Health "does not check" scope.
 2. .superpowers/sdd/task-4-report.md
-   Removed stale analytics/LTTB content and retained only Settings Lakehouse Health delivery evidence with pending Neo4j note.
+   Removed stale analytics/LTTB content and retained only Settings Lakehouse Health delivery evidence; Neo4j evidence was subsequently confirmed and is recorded below.
 3. changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
    Restored all prior sections to pre-`fe74c5a9` content and appended this standalone Task 4 section without rewriting prior history.
 
