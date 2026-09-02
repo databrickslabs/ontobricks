@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from back.core.graphdb.delta import _table_naming, materialize
+from back.core.graphdb.delta import health
 
 
 def _domain(name="MyDomain", version=1, catalog="cat", schema="sch"):
@@ -201,3 +202,73 @@ class TestSettingsHealthSummary:
 
     def test_defaults_the_materialization_to_table(self):
         assert self._summary()["materialization"] == "table"
+
+
+class TestSchemaPermissionSummary:
+    def test_schema_permission_normalizes_and_preserves_inherited_source(self):
+        summary = health.schema_permission_summary(
+            "main",
+            "graph",
+            "app-client-id",
+            [
+                {"privilege": "USE_CATALOG", "inherited_from": "main"},
+                {"privilege": "USE_SCHEMA", "inherited_from": ""},
+            ],
+        )
+
+        assert summary["permissions"][0] == {
+            "name": "USE CATALOG",
+            "granted": True,
+            "inherited_from": "main",
+        }
+        assert summary["permissions"][1] == {
+            "name": "USE SCHEMA",
+            "granted": True,
+            "inherited_from": "",
+        }
+        assert summary["operational"] is False
+
+    def test_schema_permission_all_privileges_satisfies_required_set(self):
+        summary = health.schema_permission_summary(
+            "main",
+            "graph",
+            "app-client-id",
+            [{"privilege": "ALL_PRIVILEGES", "inherited_from": "metastore"}],
+        )
+
+        assert summary["operational"] is True
+        assert [p["name"] for p in summary["permissions"]] == [
+            "USE CATALOG",
+            "USE SCHEMA",
+            "CREATE TABLE",
+            "CREATE VIEW",
+            "SELECT",
+            "MODIFY",
+        ]
+        assert all(p["granted"] for p in summary["permissions"])
+        assert all(p["inherited_from"] == "metastore" for p in summary["permissions"])
+
+    def test_schema_permission_required_order_and_name_normalization(self):
+        summary = health.schema_permission_summary(
+            "main",
+            "graph",
+            "app-client-id",
+            [
+                {"privilege": "CREATE_VIEW", "inherited_from": ""},
+                {"privilege": "CREATE TABLE", "inherited_from": ""},
+                {"privilege": "USE_SCHEMA", "inherited_from": ""},
+                {"privilege": "MODIFY", "inherited_from": ""},
+                {"privilege": "SELECT", "inherited_from": ""},
+                {"privilege": "USE CATALOG", "inherited_from": ""},
+            ],
+        )
+
+        assert [p["name"] for p in summary["permissions"]] == [
+            "USE CATALOG",
+            "USE SCHEMA",
+            "CREATE TABLE",
+            "CREATE VIEW",
+            "SELECT",
+            "MODIFY",
+        ]
+        assert summary["operational"] is True

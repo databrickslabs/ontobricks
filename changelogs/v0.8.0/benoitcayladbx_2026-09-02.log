@@ -25,3 +25,36 @@ Modified files:
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5764 passed,
 305 skipped, 6 deselected, 1 xfailed, 0 failed in 44.69s; targeted regression
 test → 3 passed; `bash -n scripts/bootstrap/lakebase-perms.sh` → passed.
+
+## Add schema permission evaluator primitives
+
+Context: Settings Lakehouse Health Task 1 needs permission-only building blocks
+that later tasks can consume without inspecting domain assets. This adds a
+defensive Unity Catalog effective-permissions client and a pure permission
+evaluator with deterministic output.
+
+Changes:
+
+1. src/back/core/databricks/uc/UnityCatalog.py
+   Add `get_effective_schema_permissions` with exact principal query filtering,
+   defensive privilege parsing (objects and strings), normalization, and 403/404
+   diagnostic handling.
+2. src/back/core/graphdb/delta/health.py
+   Add `REQUIRED_SCHEMA_PERMISSIONS` and `schema_permission_summary` to
+   normalize grants, expand `ALL PRIVILEGES`, preserve inherited sources, and
+   compute operational readiness without domain asset probes.
+3. tests/units/core/test_unity_catalog.py
+   Add RED/GREEN coverage for endpoint URL/params, principal filtering,
+   response normalization, diagnostics, and non-diagnostic error propagation.
+4. tests/units/graphdb/delta/test_delta_package.py
+   Add evaluator coverage for required-order output, underscore/space
+   normalization, inherited grants, and `ALL PRIVILEGES`.
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/graphdb/delta/health.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/graphdb/delta/test_delta_package.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py -k effective_schema` → 5 passed; `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_package.py -k schema_permission` → 3 passed; `uv run --frozen pytest -q -m "not scenario"` → 5806 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 50.34s.

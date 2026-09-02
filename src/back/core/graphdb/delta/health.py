@@ -9,6 +9,57 @@ from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
 
 logger = get_logger(__name__)
 
+REQUIRED_SCHEMA_PERMISSIONS = (
+    "USE CATALOG",
+    "USE SCHEMA",
+    "CREATE TABLE",
+    "CREATE VIEW",
+    "SELECT",
+    "MODIFY",
+)
+
+
+def _normalize_permission_name(value: Any) -> str:
+    return str(value or "").strip().replace("_", " ").upper()
+
+
+def schema_permission_summary(
+    catalog: str, schema: str, principal: str, assignments: Any
+) -> Dict[str, Any]:
+    """Evaluate required schema permissions from normalized assignments."""
+    _ = (catalog, schema, principal)
+    raw_assignments = assignments if isinstance(assignments, list) else []
+    grants: Dict[str, str] = {}
+    has_all_privileges = False
+
+    for item in raw_assignments:
+        if not isinstance(item, dict):
+            continue
+        privilege = _normalize_permission_name(item.get("privilege"))
+        inherited_from = str(item.get("inherited_from") or "").strip()
+        if not privilege:
+            continue
+        if privilege == "ALL PRIVILEGES":
+            has_all_privileges = True
+            for required in REQUIRED_SCHEMA_PERMISSIONS:
+                grants.setdefault(required, inherited_from)
+            continue
+        if privilege in REQUIRED_SCHEMA_PERMISSIONS:
+            grants.setdefault(privilege, inherited_from)
+
+    permissions = [
+        {
+            "name": required,
+            "granted": has_all_privileges or required in grants,
+            "inherited_from": grants.get(required, ""),
+        }
+        for required in REQUIRED_SCHEMA_PERMISSIONS
+    ]
+    return {
+        "permissions": permissions,
+        "operational": all(item["granted"] for item in permissions),
+    }
+
 
 def probe_table_status(store: DeltaFlatStore, table_fqn: str) -> Dict[str, Any]:
     """Return existence, count, and optional ``DESCRIBE DETAIL`` metadata."""

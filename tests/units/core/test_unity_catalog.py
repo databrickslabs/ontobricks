@@ -2,6 +2,7 @@
 
 import importlib
 import pytest
+import requests
 from unittest.mock import MagicMock, Mock, patch
 
 _unity_catalog_mod = importlib.import_module("back.core.databricks.uc.UnityCatalog")
@@ -393,6 +394,112 @@ class TestCreateVolumeRest:
         )
         uc = UnityCatalog(auth)
         assert uc.create_volume("main", "default", "v") is False
+
+
+class TestGetEffectiveSchemaPermissions:
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_calls_endpoint_with_exact_principal_param(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {"privilege_assignments": []}
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        assert out == {"accessible": True, "assignments": [], "error": None}
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        assert args[0].endswith(
+            "/api/2.1/unity-catalog/effective-permissions/SCHEMA/main.graph"
+        )
+        assert kwargs["params"] == {"principal": "app-client-id"}
+        assert kwargs["timeout"] == 10
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_normalizes_privileges_and_filters_by_principal(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {
+            "privilege_assignments": [
+                {
+                    "principal": "some-group",
+                    "privileges": [
+                        {
+                            "privilege": "USE_SCHEMA",
+                            "inherited_from_name": "main.graph",
+                        }
+                    ],
+                },
+                {
+                    "principal": "app-client-id",
+                    "privileges": [
+                        {"privilege": "USE_CATALOG", "inherited_from_name": "main"},
+                        {"privilege": "SELECT"},
+                        "ALL_PRIVILEGES",
+                    ],
+                },
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        assert out == {
+            "accessible": True,
+            "assignments": [
+                {"privilege": "USE CATALOG", "inherited_from": "main"},
+                {"privilege": "SELECT", "inherited_from": ""},
+                {"privilege": "ALL PRIVILEGES", "inherited_from": ""},
+            ],
+            "error": None,
+        }
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    @pytest.mark.parametrize(
+        "status_code,expected_error",
+        [
+            (404, "Schema not found in Unity Catalog"),
+            (
+                403,
+                "Insufficient privileges to inspect effective schema permissions",
+            ),
+        ],
+    )
+    def test_effective_schema_returns_diagnostic_on_404_or_403(
+        self, mock_get, auth_with_warehouse, status_code, expected_error
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = status_code
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        assert out == {"accessible": False, "assignments": [], "error": expected_error}
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_raises_on_non_diagnostic_request_error(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("boom")
+        mock_get.return_value = mock_resp
+
+        uc = UnityCatalog(auth_with_warehouse)
+        with pytest.raises(requests.HTTPError, match="boom"):
+            uc.get_effective_schema_permissions("main", "graph", "app-client-id")
 
 
 class TestUnityCatalogSqlInjectionGuards:

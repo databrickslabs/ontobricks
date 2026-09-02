@@ -37,6 +37,13 @@ class UnityCatalog:
         if not self._auth.warehouse_id:
             raise ValidationError(MSG_WAREHOUSE_ID_REQUIRED)
 
+    @staticmethod
+    def _normalize_privilege_name(value: Any) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        return raw.replace("_", " ").upper()
+
     def get_catalogs(self) -> List[str]:
         """Return the names of all accessible catalogs."""
         self._require_warehouse()
@@ -387,6 +394,82 @@ class UnityCatalog:
         except Exception as exc:
             logger.exception("Error listing volumes: %s", exc)
             return []
+
+    def get_effective_schema_permissions(
+        self, catalog: str, schema: str, principal: str
+    ) -> Dict[str, Any]:
+        """Return effective schema privileges for one principal."""
+        if not self._auth.host or not self._auth.has_valid_auth():
+            return {
+                "accessible": False,
+                "assignments": [],
+                "error": "Not authenticated",
+            }
+
+        host = self._auth.host.rstrip("/")
+        headers = self._auth.get_auth_headers()
+        url = (
+            f"{host}/api/2.1/unity-catalog/effective-permissions/"
+            f"SCHEMA/{catalog}.{schema}"
+        )
+        response = requests.get(
+            url, headers=headers, params={"principal": principal}, timeout=10
+        )
+        if response.status_code == 404:
+            return {
+                "accessible": False,
+                "assignments": [],
+                "error": "Schema not found in Unity Catalog",
+            }
+        if response.status_code == 403:
+            return {
+                "accessible": False,
+                "assignments": [],
+                "error": "Insufficient privileges to inspect effective schema permissions",
+            }
+        response.raise_for_status()
+
+        payload = response.json() if response.content else {}
+        raw_assignments = payload.get("privilege_assignments", []) or []
+        if isinstance(raw_assignments, dict):
+            raw_assignments = [raw_assignments]
+
+        assignments: List[Dict[str, str]] = []
+        for entry in raw_assignments:
+            if not isinstance(entry, dict):
+                continue
+            entry_principal = entry.get("principal")
+            if entry_principal is not None and str(entry_principal) != principal:
+                continue
+
+            raw_privileges = entry.get("privileges", []) or []
+            if isinstance(raw_privileges, (str, dict)):
+                raw_privileges = [raw_privileges]
+
+            for priv in raw_privileges:
+                inherited_from = ""
+                privilege_name = ""
+                if isinstance(priv, dict):
+                    privilege_name = self._normalize_privilege_name(
+                        priv.get("privilege") or priv.get("privilege_name")
+                    )
+                    inherited_from = str(
+                        priv.get("inherited_from_name")
+                        or priv.get("inherited_from")
+                        or ""
+                    ).strip()
+                elif isinstance(priv, str):
+                    privilege_name = self._normalize_privilege_name(priv)
+                if not privilege_name:
+                    continue
+                assignments.append(
+                    {
+                        "privilege": privilege_name,
+                        "inherited_from": inherited_from,
+                    }
+                )
+
+        return {"accessible": True, "assignments": assignments, "error": None}
 
     def check_schema_access(self, catalog: str, schema: str) -> Dict[str, Any]:
         """Check whether *catalog*.*schema* exists and the caller has USE SCHEMA on it.
