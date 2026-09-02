@@ -12,6 +12,54 @@ Before starting, ensure you have:
 - SQL Warehouse ID
 - Catalog and schema with tables to map
 
+## Settings: Lakehouse Health (Registry permissions)
+
+The **Settings → Lakehouse → Health** tab validates whether the application
+principal has the Unity Catalog permissions required to operate on the saved
+Registry location (`catalog.schema`).
+
+### What Health checks
+
+Health uses the Unity Catalog effective-permissions API on the configured
+Registry schema and evaluates this operational permission set:
+
+- `USE CATALOG`
+- `USE SCHEMA`
+- `CREATE TABLE`
+- `CREATE VIEW`
+- `SELECT`
+- `MODIFY`
+
+`ALL PRIVILEGES` is expanded and treated as satisfying the full set. Inherited
+grants (for example from catalog-level assignments) are accepted.
+
+### Principal resolution
+
+In Databricks Apps, Health checks permissions for `DATABRICKS_CLIENT_ID`.
+Outside Databricks Apps, it falls back to the authenticated Databricks user.
+The resolved principal is shown in the Health panel.
+
+### Operational status semantics
+
+- **Operational** means all six required permissions are granted.
+- **Missing permissions** means at least one required permission is not granted.
+- API/auth/network issues are shown as diagnostic Health results and do not
+  represent domain data problems.
+
+### What Health does not check
+
+The Health tab is intentionally domain-independent. It does not inspect:
+
+- domain assets or Objects inventory
+- data-table or inferred-table existence
+- row counts
+- SQL Warehouse state
+- materialization mode
+
+Use the **Lakehouse → Objects** tab for asset inventory and object-level
+visibility. Health answers only one question: "Can this principal operate on
+the configured Registry schema?"
+
 ## Application Workflow
 
 OntoBricks follows a 3-step workflow:
