@@ -120,6 +120,31 @@ class TestTripleStoreDatabricksHealthService:
             "main", "graph", "me@databricks.com"
         )
 
+    def test_skips_permission_check_when_principal_cannot_be_resolved(self):
+        client = _client(client_id="")
+        client.workspace.get_current_user_email.return_value = ""
+
+        with patch(
+            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            return_value=("https://adb", "tok", {"catalog": "main", "schema": "graph"}),
+        ), patch(
+            "back.objects.domain.SettingsService.DatabricksClient",
+            return_value=client,
+            create=True,
+        ):
+            result = SettingsService.triple_store_databricks_health_result(
+                MagicMock(), MagicMock()
+            )
+
+        assert result["success"] is True
+        assert result["registry_configured"] is True
+        assert result["principal"] == ""
+        assert result["accessible"] is False
+        assert result["operational"] is False
+        assert result["permissions"] == []
+        assert "principal could not be resolved" in str(result["error"]).lower()
+        client.catalog.get_effective_schema_permissions.assert_not_called()
+
     def test_returns_registry_not_configured_diagnostic_without_rest_call(self):
         client = _client(client_id="app-client-id")
 
@@ -166,6 +191,28 @@ class TestTripleStoreDatabricksHealthService:
         assert result["accessible"] is True
         assert result["operational"] is False
         assert result["error"] is None
+
+    def test_normalizes_successful_error_field_to_null_or_string(self):
+        client = _client(client_id="app-client-id")
+        client.catalog.get_effective_schema_permissions.return_value = {
+            "accessible": False,
+            "assignments": [],
+            "error": {"raw": "diagnostic"},
+        }
+        with patch(
+            "back.objects.domain.SettingsService.resolve_app_registry_context",
+            return_value=("https://adb", "tok", {"catalog": "main", "schema": "graph"}),
+        ), patch(
+            "back.objects.domain.SettingsService.DatabricksClient",
+            return_value=client,
+            create=True,
+        ):
+            result = SettingsService.triple_store_databricks_health_result(
+                MagicMock(), MagicMock()
+            )
+
+        assert isinstance(result["error"], str)
+        assert "diagnostic" in result["error"]
 
     def test_request_failures_are_mapped_to_infrastructure_error(self):
         client = _client(client_id="app-client-id")

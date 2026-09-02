@@ -109,3 +109,35 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
 Tests: `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (RED) → 5 failed, 1 passed in 1.25s; `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (GREEN) → 6 passed in 1.09s; `uv run --frozen pytest -q -m "not scenario"` → 5818 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.26s.
+
+## Guard unresolved schema-permission principal
+
+Context: The Task 2 implementation still attempted the effective-permissions
+REST call when both `DATABRICKS_CLIENT_ID` and current-user fallback were
+empty, which made the diagnostic path dependent on UC API behavior. This
+follow-up adds an explicit guard that returns a configured HTTP-200 diagnostic
+and skips the permission call when principal resolution fails.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Added an early-return guard after principal resolution and before the
+   effective-permissions REST call, returning `success=true`,
+   `principal=""`, `accessible=false`, `operational=false`, empty
+   permissions, and a clear English message that principal resolution failed
+   and the permission check was skipped.
+2. src/back/objects/domain/SettingsService.py
+   Normalized the successful response `error` field to preserve the
+   null-or-string contract (`None` stays null; non-null values become string).
+3. tests/units/settings/test_delta_health_permissions.py
+   Added strict RED/GREEN coverage for `client_id=""` and missing current user,
+   asserting the service skips effective-permissions calls and returns the
+   configured diagnostic payload; added a contract test for successful error
+   field normalization.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_delta_health_permissions.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (RED) → 2 failed, 6 passed in 1.30s; `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (GREEN) → 8 passed in 1.12s; `uv run --frozen pytest -q -m "not scenario"` → 5820 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 42.83s.

@@ -1724,11 +1724,30 @@ class SettingsService:
             principal = (
                 client.auth.client_id or client.workspace.get_current_user_email() or ""
             ).strip()
+            if not principal:
+                return {
+                    "success": True,
+                    "registry_configured": True,
+                    "registry_catalog": catalog,
+                    "registry_schema": schema,
+                    "storage_location": storage_location,
+                    "principal": "",
+                    "accessible": False,
+                    "operational": False,
+                    "permissions": [],
+                    "error": (
+                        "Principal could not be resolved; effective-permissions "
+                        "check was skipped."
+                    ),
+                }
+
             effective = client.catalog.get_effective_schema_permissions(
                 catalog, schema, principal
             )
             accessible = bool(effective.get("accessible", False))
             assignments = effective.get("assignments", [])
+            raw_error = effective.get("error")
+            normalized_error = None if raw_error is None else str(raw_error)
             summary = schema_permission_summary(catalog, schema, principal, assignments)
             return {
                 "success": True,
@@ -1740,7 +1759,7 @@ class SettingsService:
                 "accessible": accessible,
                 "operational": bool(summary.get("operational", False)) and accessible,
                 "permissions": summary.get("permissions", []),
-                "error": effective.get("error"),
+                "error": normalized_error,
             }
         except Exception as exc:
             logger.warning("triple_store_databricks_health failed: %s", exc)
