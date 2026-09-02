@@ -448,8 +448,8 @@ class UnityCatalog:
         for entry in raw_assignments:
             if not isinstance(entry, dict):
                 continue
-            entry_principal = entry.get("principal")
-            if entry_principal is not None and str(entry_principal) != principal:
+            entry_principal = str(entry.get("principal") or "").strip()
+            if not entry_principal or entry_principal != principal:
                 continue
 
             raw_privileges = entry.get("privileges", []) or []

@@ -241,3 +241,46 @@ Browser evidence:
 - Neo4j verification completed at 390px on HEAD `93fba1a1`: `neo4jTabs` uses identical `nav nav-tabs ob-tabs nav-fill` with card hierarchy and active underline; ArrowRight/ArrowLeft with wrapping switched focus/panes correctly; focused tabs stayed contained; `scrollWidth=clientWidth=341` and `scrollLeft=0` because both tabs fit; zero console warnings/errors, page errors, and request failures.
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/settings/test_delta_health_permissions.py` → see latest run in this delivery commit.
+
+## Apply final review hardening fixes
+
+Context: Final review requested one focused hardening set for Settings Lakehouse
+permissions health. The scope was to remove obsolete domain-asset health code,
+fail closed on effective-permissions principal parsing, make frontend test
+function extraction robust (no fixed truncation), and keep pagination/401
+behavior unchanged while documenting the single-principal API rationale in the
+delivery report.
+
+Changes:
+
+1. src/back/core/graphdb/delta/health.py
+   Removed obsolete `settings_health_summary` production helper and kept
+   `probe_table_status`/`probe_from_client` intact because active callers still
+   use them.
+2. tests/units/graphdb/delta/test_delta_package.py
+   Removed orphaned `settings_health_summary` tests and retained/expanded pure
+   `schema_permission_summary` coverage.
+3. src/back/core/databricks/uc/UnityCatalog.py
+   Hardened `get_effective_schema_permissions` to discard assignments when the
+   entry principal is missing, empty, or mismatched with the requested principal.
+4. tests/units/core/test_unity_catalog.py
+   Updated defensive test coverage to enforce fail-closed principal filtering.
+5. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Replaced fixed-length function slicing with brace-aware extraction and added
+   regression coverage proving no hard truncation while preventing spill into
+   subsequent code blocks.
+6. .superpowers/sdd/final-fix-report.md
+   Added the final hardening report with implementation notes, test evidence,
+   unchanged pagination/401 confirmation, and the API single-principal
+   page-guarantee rationale.
+
+Modified files:
+- src/back/core/graphdb/delta/health.py
+- tests/units/graphdb/delta/test_delta_package.py
+- src/back/core/databricks/uc/UnityCatalog.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py::TestGetEffectiveSchemaPermissions::test_effective_schema_discards_missing_or_mismatched_principals tests/units/front/test_settings_lakehouse_health_permissions.py::TestLakehouseHealthCopyAndRenderer::test_function_body_helper_is_not_hard_truncated` (RED) → 2 failed in 1.00s; `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/graphdb/delta/test_delta_package.py tests/units/settings/test_delta_health_permissions.py` (GREEN) → 89 passed, 0 failed in 1.38s; `uv run --frozen pytest -q -m "not scenario"` → 5831 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.93s.

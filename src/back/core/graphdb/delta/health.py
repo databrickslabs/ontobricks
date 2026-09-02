@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from back.core.logging import get_logger
 from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
@@ -119,64 +119,3 @@ def probe_from_client(client: Any, table_fqn: str) -> Dict[str, Any]:
             "error": "Databricks client not configured",
         }
     return probe_table_status(DeltaFlatStore(client), table_fqn)
-
-
-def settings_health_summary(
-    domain: Any,
-    settings: Optional[Any] = None,
-    registry_cfg: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Payload for Settings → Lakehouse triple-store health card."""
-    from back.core.graphdb.GraphDBFactory import GraphDBFactory
-    from back.core.graphdb.delta import _table_naming
-    from back.core.graphdb.delta.DeltaBase import create_databricks_client
-
-    reg = registry_cfg if isinstance(registry_cfg, dict) else {}
-    registry_catalog = (reg.get("catalog") or "").strip()
-    registry_schema = (reg.get("schema") or "").strip()
-    storage_location = (
-        f"{registry_catalog}.{registry_schema}"
-        if registry_catalog and registry_schema
-        else ""
-    )
-
-    client = create_databricks_client(domain, settings)
-    view = ""
-    data = ""
-    inferred = ""
-    domain_name = ((getattr(domain, "info", None) or {}).get("name") or "").strip()
-    try:
-        view = _table_naming.view_fqn(domain, settings)
-        data = _table_naming.data_table_fqn(domain, settings)
-        inferred = _table_naming.inferred_table_fqn(domain, settings)
-    except Exception:  # noqa: BLE001
-        pass
-    view_status = (
-        probe_from_client(client, view) if view else {"error": "View FQN not resolved"}
-    )
-    data_status = (
-        probe_from_client(client, data)
-        if data
-        else {"error": "Data table FQN not resolved"}
-    )
-    return {
-        "success": client is not None,
-        "warehouse_configured": client is not None,
-        "warehouse_id": getattr(client, "warehouse_id", "") if client else "",
-        "registry_catalog": registry_catalog,
-        "registry_schema": registry_schema,
-        "storage_location": storage_location,
-        "registry_configured": bool(storage_location),
-        "active_domain": domain_name,
-        # ``table`` or ``view``: whether ``…_data`` is a materialized copy of
-        # the gateway view or a pass-through over it. The card labels the
-        # relation from this, since a count on a view is a live query.
-        "materialization": GraphDBFactory.resolve_lakehouse_materialization(
-            domain, settings
-        ),
-        "view_fqn": view,
-        "data_table_fqn": data,
-        "inferred_table_fqn": inferred,
-        "view": view_status,
-        "data_table": data_status,
-    }

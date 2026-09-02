@@ -18,8 +18,75 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _function_body(source: str, signature: str, span: int = 5200) -> str:
+def _function_body(source: str, signature: str, span: int | None = None) -> str:
     start = source.index(signature)
+    if span is None:
+        body_start = source.index("{", start)
+        depth = 0
+        in_single = False
+        in_double = False
+        in_template = False
+        in_line_comment = False
+        in_block_comment = False
+        escaped = False
+
+        for idx in range(body_start, len(source)):
+            ch = source[idx]
+            nxt = source[idx + 1] if idx + 1 < len(source) else ""
+
+            if in_line_comment:
+                if ch == "\n":
+                    in_line_comment = False
+                continue
+            if in_block_comment:
+                if ch == "*" and nxt == "/":
+                    in_block_comment = False
+                    continue
+                continue
+            if in_single:
+                if ch == "'" and not escaped:
+                    in_single = False
+                escaped = ch == "\\" and not escaped
+                continue
+            if in_double:
+                if ch == '"' and not escaped:
+                    in_double = False
+                escaped = ch == "\\" and not escaped
+                continue
+            if in_template:
+                if ch == "`" and not escaped:
+                    in_template = False
+                escaped = ch == "\\" and not escaped
+                continue
+
+            if ch == "/" and nxt == "/":
+                in_line_comment = True
+                continue
+            if ch == "/" and nxt == "*":
+                in_block_comment = True
+                continue
+            if ch == "'":
+                in_single = True
+                escaped = False
+                continue
+            if ch == '"':
+                in_double = True
+                escaped = False
+                continue
+            if ch == "`":
+                in_template = True
+                escaped = False
+                continue
+
+            if ch == "{":
+                depth += 1
+                continue
+            if ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return source[start : idx + 1]
+                continue
+        raise ValueError(f"Function block for signature not closed: {signature}")
     return source[start : start + span]
 
 
@@ -30,6 +97,23 @@ def _health_tab_block() -> str:
 
 
 class TestLakehouseHealthCopyAndRenderer:
+    def test_function_body_helper_is_not_hard_truncated(self):
+        signature = "async function loadDeltaTripleStoreHealth(options)"
+        source = (
+            "prefix\n"
+            + signature
+            + " {\n"
+            + "  const payload = `"
+            + ("x" * 7000)
+            + "tail-marker`;\n"
+            + "  return payload;\n"
+            + "}\n"
+            + "const after = 1;\n"
+        )
+        body = _function_body(source, signature)
+        assert "tail-marker" in body
+        assert "const after = 1;" not in body
+
     def test_health_copy_describes_registry_permission_probe_only(self):
         block = _health_tab_block()
         normalized = block.lower()

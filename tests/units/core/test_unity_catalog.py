@@ -490,7 +490,7 @@ class TestGetEffectiveSchemaPermissions:
         }
 
     @patch.object(_unity_catalog_mod.requests, "get")
-    def test_effective_schema_keeps_principal_less_assignments(
+    def test_effective_schema_discards_missing_or_mismatched_principals(
         self, mock_get, auth_with_warehouse
     ):
         mock_resp = MagicMock()
@@ -500,6 +500,7 @@ class TestGetEffectiveSchemaPermissions:
         mock_resp.json.return_value = {
             "privilege_assignments": [
                 {"privileges": [{"privilege": "USE_SCHEMA"}]},
+                {"principal": "", "privileges": [{"privilege": "CREATE_VIEW"}]},
                 {"principal": "other-principal", "privileges": [{"privilege": "SELECT"}]},
             ]
         }
@@ -510,7 +511,7 @@ class TestGetEffectiveSchemaPermissions:
         )
         assert out == {
             "accessible": True,
-            "assignments": [{"privilege": "USE SCHEMA", "inherited_from": ""}],
+            "assignments": [],
             "error": None,
         }
 

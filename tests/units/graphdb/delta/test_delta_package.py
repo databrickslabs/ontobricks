@@ -1,6 +1,6 @@
 """Tests for graphdb/delta table naming and materialize SQL."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -157,51 +157,6 @@ class TestApplyDataRelation:
             materialize.apply_data_relation(
                 client, "c.s.v", "c.s.v_data", mode="view"
             )
-
-
-class TestSettingsHealthSummary:
-    @staticmethod
-    def _summary(info=None):
-        from back.core.graphdb.delta.health import settings_health_summary
-
-        domain = MagicMock()
-        domain.info = info if info is not None else {}
-        domain.delta = {}
-        domain.current_version = 1
-        # No warehouse: the card's registry and materialization fields are
-        # resolved without one, and a MagicMock domain would otherwise have
-        # the SQL connector dial out with mock credentials.
-        with patch(
-            "back.core.graphdb.delta.DeltaBase.create_databricks_client",
-            return_value=None,
-        ):
-            return settings_health_summary(
-                domain,
-                registry_cfg={"catalog": "reg_cat", "schema": "reg_sch"},
-            )
-
-    def test_includes_registry_location_without_domain_tables(self):
-        summary = self._summary()
-        assert summary["registry_catalog"] == "reg_cat"
-        assert summary["registry_schema"] == "reg_sch"
-        assert summary["storage_location"] == "reg_cat.reg_sch"
-        assert summary["registry_configured"] is True
-
-    def test_reports_the_materialization_so_the_card_can_label_data(self):
-        """The card says "Data TABLE"; on a view-only domain that is wrong."""
-        assert (
-            self._summary(
-                {
-                    "name": "Dom",
-                    "graph_backend": "databricks",
-                    "lakehouse_materialization": "view",
-                }
-            )["materialization"]
-            == "view"
-        )
-
-    def test_defaults_the_materialization_to_table(self):
-        assert self._summary()["materialization"] == "table"
 
 
 class TestSchemaPermissionSummary:
