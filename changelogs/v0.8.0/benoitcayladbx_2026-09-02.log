@@ -1,0 +1,27 @@
+## Harden Lakebase credential error handling
+
+Context: PR #157 correctly switched credential minting to the dedicated
+Databricks CLI command, but malformed successful output still terminated
+silently under `set -e`. The follow-up preserves the contributor's original
+commit while making every credential failure observable and safe.
+
+Changes:
+
+1. scripts/bootstrap/lakebase-perms.sh
+   Capture CLI stderr separately from credential JSON, handle malformed JSON
+   without triggering an early shell exit, and avoid printing credential
+   response bodies.
+2. tests/units/scripts/test_lakebase_perms.py
+   Add a regression test proving malformed credential JSON reports diagnostics.
+3. CONTRIBUTORS.md
+   Credit @lrubakhin for the Lakebase credential minting and diagnostics fix.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- tests/units/scripts/test_lakebase_perms.py
+- CONTRIBUTORS.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5764 passed,
+305 skipped, 6 deselected, 1 xfailed, 0 failed in 44.69s; targeted regression
+test → 3 passed; `bash -n scripts/bootstrap/lakebase-perms.sh` → passed.

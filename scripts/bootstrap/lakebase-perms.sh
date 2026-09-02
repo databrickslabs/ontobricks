@@ -196,16 +196,38 @@ echo "Acting as: ${PGUSER}"
 echo "Apps     : ${APPS[*]}"
 echo
 
-# Mint a Lakebase JWT via the Autoscaling Postgres API. The legacy
-# ``/api/2.0/database/credentials`` mint cannot scope tokens to
-# Autoscaling-only project endpoints.
-PGPASSWORD="$(databricks api post /api/2.0/postgres/credentials \
-    --json "{\"endpoint\":\"${ENDPOINT_PATH}\"}" \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')"
-if [[ -z "$PGPASSWORD" ]]; then
-    echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}'." >&2
+# Mint a Lakebase JWT via `databricks postgres generate-database-credential`
+# (verified on Databricks CLI 1.14.1+). --output json is required: the CLI's
+# default output format is text/table unless the user's config or
+# DATABRICKS_OUTPUT_FORMAT already forces JSON, and without it the parser
+# below dies silently under `set -euo pipefail`.
+CRED_ERR_FILE="$(mktemp)"
+if ! CRED_JSON="$(databricks postgres generate-database-credential "${ENDPOINT_PATH}" --output json 2>"$CRED_ERR_FILE")"; then
+    CRED_ERROR="$(cat "$CRED_ERR_FILE")"
+    rm -f "$CRED_ERR_FILE"
+    echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}' (CLI exited non-zero)." >&2
+    [[ -n "$CRED_ERROR" ]] && printf '%s\n' "$CRED_ERROR" >&2
     _lakebase_print_diag_hints \
-        "postgres credentials API failed (endpoint: ${ENDPOINT_PATH})" \
+        "postgres generate-database-credential failed (endpoint: ${ENDPOINT_PATH})" \
+        "${INSTANCE}" "${BRANCH}" "${DATABASE}"
+    exit 1
+fi
+CRED_WARNING="$(cat "$CRED_ERR_FILE")"
+rm -f "$CRED_ERR_FILE"
+PGPASSWORD="$(printf '%s' "$CRED_JSON" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    data = {}
+token = data.get("token") if isinstance(data, dict) else ""
+print(token or "", end="")
+')"
+if [[ -z "$PGPASSWORD" ]]; then
+    echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}' — CLI succeeded but response was not valid JSON or had no token field." >&2
+    [[ -n "$CRED_WARNING" ]] && printf '%s\n' "$CRED_WARNING" >&2
+    _lakebase_print_diag_hints \
+        "postgres generate-database-credential returned unparseable/empty credential (endpoint: ${ENDPOINT_PATH})" \
         "${INSTANCE}" "${BRANCH}" "${DATABASE}"
     exit 1
 fi
