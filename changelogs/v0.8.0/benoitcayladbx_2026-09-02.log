@@ -71,3 +71,41 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
 Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py -k effective_schema` → 10 passed, 36 deselected, 1 warning in 0.77s; `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_package.py -k schema_permission` → 4 passed, 19 deselected, 1 warning in 0.80s; `uv run --frozen pytest -q -m "not scenario"` → 5812 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 45.03s.
+
+## Implement Lakehouse Health Task 2
+
+Context: Settings Lakehouse Health Task 2 requires replacing the domain/table
+probe payload with a domain-independent Unity Catalog schema-permissions
+diagnostic using app-level context resolution only. The service now resolves
+the Registry context through app credentials, identifies the principal from
+`DATABRICKS_CLIENT_ID` or authenticated current-user fallback, and keeps
+network/API failures on the centralized InfrastructureError path while missing
+grants remain HTTP-200 diagnostics.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Reworked `triple_store_databricks_health_result` to use
+   `resolve_app_registry_context(settings)`, instantiate `DatabricksClient`
+   without warehouse/domain/table dependencies, evaluate permissions via
+   `get_effective_schema_permissions` + `schema_permission_summary`, short-circuit
+   unconfigured Registry locations without REST calls, and map request failures
+   to `InfrastructureError`.
+2. src/api/routers/internal/settings.py
+   Updated the `/settings/triple-store/databricks-health` docstring to describe
+   Registry schema effective-permissions diagnostics while preserving the
+   existing `map_route_errors` wrapper.
+3. tests/units/settings/test_delta_health_permissions.py
+   Added strict TDD coverage for app-context resolution, forbidden dependency
+   non-usage (`get_domain`, `create_databricks_client`, table naming helpers),
+   app-client-id and current-user principal resolution, registry-unconfigured
+   diagnostics with no REST call, missing-grants HTTP-200 behavior, request
+   failure InfrastructureError mapping, and route-level error mapping behavior.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- tests/units/settings/test_delta_health_permissions.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (RED) → 5 failed, 1 passed in 1.25s; `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (GREEN) → 6 passed in 1.09s; `uv run --frozen pytest -q -m "not scenario"` → 5818 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.26s.

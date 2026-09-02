@@ -17,6 +17,7 @@ from back.core.errors import (
 from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
+from back.core.databricks import DatabricksClient
 from back.core.databricks.constants import PERMISSIONS_APPS_PATH
 from back.core.databricks.lakebase.grants import resolve_mcp_app_name
 from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
@@ -1696,10 +1697,57 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        from back.core.graphdb.delta.health import settings_health_summary
+        from back.core.graphdb.delta.health import schema_permission_summary
 
-        domain, _, _, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
-        return settings_health_summary(domain, settings, registry_cfg=registry_cfg)
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        reg = registry_cfg if isinstance(registry_cfg, dict) else {}
+        catalog = (reg.get("catalog") or "").strip()
+        schema = (reg.get("schema") or "").strip()
+        storage_location = f"{catalog}.{schema}" if catalog and schema else ""
+
+        if not storage_location:
+            return {
+                "success": True,
+                "registry_configured": False,
+                "registry_catalog": catalog,
+                "registry_schema": schema,
+                "storage_location": "",
+                "principal": "",
+                "accessible": False,
+                "operational": False,
+                "permissions": [],
+                "error": "Registry catalog/schema is not configured (Settings -> Registry)",
+            }
+
+        try:
+            client = DatabricksClient(host=host, token=token)
+            principal = (
+                client.auth.client_id or client.workspace.get_current_user_email() or ""
+            ).strip()
+            effective = client.catalog.get_effective_schema_permissions(
+                catalog, schema, principal
+            )
+            accessible = bool(effective.get("accessible", False))
+            assignments = effective.get("assignments", [])
+            summary = schema_permission_summary(catalog, schema, principal, assignments)
+            return {
+                "success": True,
+                "registry_configured": True,
+                "registry_catalog": catalog,
+                "registry_schema": schema,
+                "storage_location": storage_location,
+                "principal": principal,
+                "accessible": accessible,
+                "operational": bool(summary.get("operational", False)) and accessible,
+                "permissions": summary.get("permissions", []),
+                "error": effective.get("error"),
+            }
+        except Exception as exc:
+            logger.warning("triple_store_databricks_health failed: %s", exc)
+            raise InfrastructureError(
+                "inspect effective schema permissions failed",
+                detail=str(exc),
+            ) from exc
 
     @staticmethod
     def triple_store_databricks_objects_result(

@@ -995,7 +995,7 @@ async def get_triple_store_databricks_health(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Probe SQL Warehouse + UC Delta triple-store artefacts."""
+    """Report effective permissions on the Registry UC schema for the app principal."""
     with map_route_errors("Databricks triple store health", logger):
         return config_service.triple_store_databricks_health_result(
             session_mgr, settings
