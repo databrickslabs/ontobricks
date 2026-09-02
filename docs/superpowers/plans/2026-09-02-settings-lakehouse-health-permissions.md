@@ -402,7 +402,7 @@ uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permi
 uv run --frozen pytest -q -m "not scenario"
 ```
 
-- [ ] **Step 7: Browser-test**
+- [x] **Step 7: Browser-test**
 
 At desktop and 390 px, verify both rails match Lakehouse/Lakebase/Neo4j,
 Bootstrap switching and lazy loading still work, keyboard focus remains
