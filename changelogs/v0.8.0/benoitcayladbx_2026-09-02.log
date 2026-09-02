@@ -238,6 +238,6 @@ Browser evidence:
 - Desktop and 390px tab rails passed.
 - Mobile focus blocker remained fixed (`Lakehouse scrollLeft 0→129`, `Lakebase 0→368`).
 - Refresh returned HTTP 200 with live-region status announcements and zero console errors.
-- Neo4j browser evidence pending parent tester verification.
+- Neo4j verification completed at 390px on HEAD `93fba1a1`: `neo4jTabs` uses identical `nav nav-tabs ob-tabs nav-fill` with card hierarchy and active underline; ArrowRight/ArrowLeft with wrapping switched focus/panes correctly; focused tabs stayed contained; `scrollWidth=clientWidth=341` and `scrollLeft=0` because both tabs fit; zero console warnings/errors, page errors, and request failures.
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/settings/test_delta_health_permissions.py` → see latest run in this delivery commit.
