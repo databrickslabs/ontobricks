@@ -141,3 +141,42 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
 Tests: `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (RED) → 2 failed, 6 passed in 1.30s; `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (GREEN) → 8 passed in 1.12s; `uv run --frozen pytest -q -m "not scenario"` → 5820 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 42.83s.
+
+## Implement Task 3 Lakehouse permission-health UI
+
+Context: Task 3 completes the Settings Lakehouse Health migration to the
+permission-only backend response shape and applies the canonical card-integrated
+tab rails to Lakehouse, Lakebase, and Neo4j without changing IDs, handlers, or
+Bootstrap/ARIA behavior.
+
+Changes:
+
+1. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Added strict RED-first frontend contracts for permission-only Health copy,
+   `loadDeltaTripleStoreHealth` field usage, icon+text status semantics, and
+   canonical tab-rail hierarchy (`card h-100`, `card-body p-0 ob-tabs-wrap`,
+   `nav nav-tabs ob-tabs nav-fill`, `tab-content p-3`) with `ob-tab-content`
+   removed from the three targeted groups.
+2. src/front/templates/settings.html
+   Replaced Lakehouse Health description to focus on effective permissions for
+   Registry `catalog.schema` and principal; applied canonical tab-card wrappers
+   and classes to Lakehouse/Lakebase/Neo4j while preserving existing tab/button/
+   pane IDs, modal placement, ARIA attributes, and tab behavior.
+3. src/front/static/config/js/settings.js
+   Reworked `loadDeltaTripleStoreHealth` to consume only permission-focused
+   fields (`registry_catalog`, `registry_schema`, `principal`, `accessible`,
+   `operational`, `permissions`, `error`), render one row per permission with
+   inherited source, escape all server-provided values, and expose overall
+   status via icon + text (not color-only).
+4. tests/units/front/test_lakehouse_materialization_ui.py
+   Updated the legacy Settings-health expectation now that Health no longer
+   depends on materialization/view-count behavior.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- tests/units/front/test_lakehouse_materialization_ui.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py` (RED) → 9 failed, 0 passed in 0.17s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/settings/test_delta_warehouse_config.py tests/units/settings/test_graph_engine_config.py` (GREEN) → 52 passed, 0 failed in 0.78s; `uv run --frozen pytest -q -m "not scenario"` → 5828 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 45.23s.

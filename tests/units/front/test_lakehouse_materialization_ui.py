@@ -165,14 +165,10 @@ class TestBothSavePathsSendTheField:
 
 
 class TestThePagesNameTheObjectCorrectly:
-    def test_the_health_card_labels_data_from_the_mode(self):
+    def test_the_settings_health_card_no_longer_depends_on_materialization(self):
         js = _read(SETTINGS_JS)
-        assert "data.materialization === 'view'" in js
-        assert "'VIEW'" in js and "'TABLE'" in js
-
-    def test_the_health_card_explains_that_the_count_is_live(self):
-        js = _read(SETTINGS_JS)
-        assert "live query" in js
+        assert "data.materialization === 'view'" not in js
+        assert "live query" not in js
 
     def test_the_build_page_labels_its_target_from_the_mode(self):
         html = _read(BUILD_HTML)

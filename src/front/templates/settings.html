@@ -102,8 +102,9 @@
                     </div>
 
                     <div id="deltaGraphPanel" style="display:none;">
-
-                        <ul class="nav nav-tabs ob-tabs" id="deltaTabs" role="tablist">
+                        <div class="card h-100">
+                            <div class="card-body p-0 ob-tabs-wrap">
+                        <ul class="nav nav-tabs ob-tabs nav-fill" id="deltaTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="dttab-overview" data-bs-toggle="tab"
                                         data-bs-target="#dtpane-overview" type="button" role="tab"
@@ -134,7 +135,7 @@
                             </li>
                         </ul>
 
-                        <div class="tab-content ob-tab-content" id="deltaTabContent">
+                        <div class="tab-content p-3" id="deltaTabContent">
 
                             <!-- ── TAB 1 · Overview ── -->
                             <div class="tab-pane fade show active" id="dtpane-overview" role="tabpanel" aria-labelledby="dttab-overview">
@@ -213,8 +214,8 @@
                             <!-- ── TAB 4 · Health ── -->
                             <div class="tab-pane fade" id="dtpane-health" role="tabpanel" aria-labelledby="dttab-health">
                                 <p class="small text-muted mb-3">
-                                    Probes the SQL Warehouse and, when a domain is open in the session, the active
-                                    domain&rsquo;s VIEW and <code>_data</code> table.
+                                    Checks effective Unity Catalog permissions for the saved Registry
+                                    <code>catalog.schema</code> and the checked principal.
                                 </p>
                                 <button type="button" class="btn btn-sm btn-outline-primary" id="btnDeltaTripleStoreHealth">
                                     <i class="bi bi-arrow-clockwise me-1"></i> Refresh status
@@ -223,6 +224,8 @@
                             </div>
 
                         </div><!-- /#deltaTabContent -->
+                            </div>
+                        </div>
                     </div><!-- /#deltaGraphPanel -->
                 </div>
             </div>
@@ -253,9 +256,11 @@
                     </div>
 
                     <div id="lakebaseGraphPanel" style="display:none;">
+                        <div class="card h-100">
+                            <div class="card-body p-0 ob-tabs-wrap">
 
                         <!-- Tab strip -->
-                        <ul class="nav nav-tabs ob-tabs" id="lakebaseTabs" role="tablist">
+                        <ul class="nav nav-tabs ob-tabs nav-fill" id="lakebaseTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="lktab-connection" data-bs-toggle="tab"
                                         data-bs-target="#lkpane-connection" type="button" role="tab"
@@ -300,7 +305,7 @@
                             </li>
                         </ul>
 
-                        <div class="tab-content ob-tab-content" id="lakebaseTabContent">
+                        <div class="tab-content p-3" id="lakebaseTabContent">
 
                             <!-- ── TAB 1 · Connection ── -->
                             <div class="tab-pane fade show active" id="lkpane-connection" role="tabpanel" aria-labelledby="lktab-connection">
@@ -529,6 +534,8 @@
                             </div>
 
                         </div><!-- /#lakebaseTabContent -->
+                            </div>
+                        </div>
                     </div><!-- /#lakebaseGraphPanel -->
 
                     <!-- ── Provision new graph DB modal ── -->
@@ -642,8 +649,10 @@
                         <span class="text-muted small">Loading Neo4j settings…</span>
                     </div>
 
+                    <div class="card h-100">
+                        <div class="card-body p-0 ob-tabs-wrap">
                     <!-- Tab strip (parity with the Lakebase panel) -->
-                    <ul class="nav nav-tabs ob-tabs" id="neo4jTabs" role="tablist">
+                    <ul class="nav nav-tabs ob-tabs nav-fill" id="neo4jTabs" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" id="n4tab-connection" data-bs-toggle="tab"
                                     data-bs-target="#n4pane-connection" type="button" role="tab"
@@ -660,7 +669,7 @@
                         </li>
                     </ul>
 
-                    <div class="tab-content ob-tab-content" id="neo4jTabContent">
+                    <div class="tab-content p-3" id="neo4jTabContent">
 
                     <!-- ── TAB 1 · Connections (master–detail) ── -->
                     <div class="tab-pane fade show active" id="n4pane-connection" role="tabpanel" aria-labelledby="n4tab-connection">
@@ -810,6 +819,8 @@
                     </div><!-- /#n4pane-objects -->
 
                     </div><!-- /#neo4jTabContent -->
+                        </div>
+                    </div>
                 </div>
             </div>
 

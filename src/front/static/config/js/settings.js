@@ -2196,62 +2196,66 @@ document.addEventListener('DOMContentLoaded', function () {
                     '</div>';
                 return;
             }
-            if (!data.warehouse_configured) {
-                out.innerHTML =
-                    '<div class="alert alert-warning mb-0 py-2">' +
-                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
-                    'SQL Warehouse is not configured. Select one on the <strong>SQL Warehouse</strong> tab ' +
-                    'or set the global warehouse under <strong>Settings → Databricks</strong>.' +
-                    '</div>';
-                return;
+
+            const permissions = Array.isArray(data.permissions) ? data.permissions : [];
+            const probeReachable = !!data.accessible;
+            const isOperational = !!data.operational;
+            const statusClass = isOperational ? 'text-success' : 'text-danger';
+            const statusIcon = isOperational ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+            const statusLabel = isOperational ? 'Operational' : 'Missing permissions';
+            const probeIcon = probeReachable ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger';
+            const probeLabel = probeReachable ? 'Reachable' : 'Unreachable';
+            const registryCatalog = escapeHtmlSettings(String(data.registry_catalog || ''));
+            const registrySchema = escapeHtmlSettings(String(data.registry_schema || ''));
+            const principal = escapeHtmlSettings(String(data.principal || ''));
+            const details = [];
+
+            permissions.forEach((item) => {
+                const name = escapeHtmlSettings(String((item && item.name) || ''));
+                const granted = !!(item && item.granted);
+                const inheritedFrom = escapeHtmlSettings(String((item && item.inherited_from) || ''));
+                const grantedClass = granted ? 'text-success' : 'text-danger';
+                const grantedIcon = granted ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+                const grantedLabel = granted ? 'Granted' : 'Missing';
+                const inheritedLabel = inheritedFrom || '—';
+                details.push(
+                    '<tr>'
+                    + '<td class="font-monospace small">' + name + '</td>'
+                    + '<td><span class="' + grantedClass + '"><i class="bi ' + grantedIcon + ' me-1"></i>' + grantedLabel + '</span></td>'
+                    + '<td class="font-monospace small">' + inheritedLabel + '</td>'
+                    + '</tr>'
+                );
+            });
+
+            let html = '<dl class="row small mb-3">';
+            html += '<dt class="col-sm-3">Registry</dt><dd class="col-sm-9 font-monospace">'
+                + registryCatalog + '.' + registrySchema + '</dd>';
+            html += '<dt class="col-sm-3">Principal</dt><dd class="col-sm-9 font-monospace">'
+                + principal + '</dd>';
+            html += '<dt class="col-sm-3">Permission probe</dt><dd class="col-sm-9">'
+                + '<span><i class="bi ' + probeIcon + ' me-1"></i>' + probeLabel + '</span></dd>';
+            html += '</dl>';
+
+            html += '<div class="small fw-semibold mb-2">Required permissions</div>';
+            if (details.length) {
+                html += '<div class="table-responsive"><table class="table table-sm table-hover mb-2">'
+                    + '<thead class="table-light"><tr>'
+                    + '<th>Permission</th><th>Status</th><th>Inherited from</th>'
+                    + '</tr></thead><tbody>'
+                    + details.join('')
+                    + '</tbody></table></div>';
+            } else {
+                html += '<p class="small text-muted mb-2">No permission details returned.</p>';
             }
 
-            const dt = data.data_table || {};
-            const viewErr = (data.view && data.view.error) ? data.view.error : '';
-            const dataErr = dt.error ? dt.error : '';
-            let html = '<dl class="row mb-0">';
-            if (data.warehouse_id) {
-                html += '<dt class="col-sm-3">Warehouse</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.warehouse_id) + '</dd>';
-            }
-            if (data.view_fqn) {
-                html += '<dt class="col-sm-3">R2RML VIEW</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.view_fqn) + '</dd>';
-            }
-            // In view-only materialization ``…_data`` is a pass-through view,
-            // so calling it a table would misdescribe both the object and the
-            // cost of the count reported just below it.
-            const dataIsView = data.materialization === 'view';
-            const dataKind = dataIsView ? 'VIEW' : 'TABLE';
-            if (data.data_table_fqn) {
-                html += '<dt class="col-sm-3">Data ' + dataKind + '</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.data_table_fqn) + '</dd>';
-            }
-            if (data.inferred_table_fqn) {
-                html += '<dt class="col-sm-3">Inferred TABLE</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.inferred_table_fqn) + '</dd>';
-            }
-            if (data.data_table_fqn) {
-                const exists = dt.exists ? 'yes' : 'no';
-                const count = dt.count != null ? dt.count : '—';
-                html += '<dt class="col-sm-3">Data ' + dataKind.toLowerCase() + '</dt><dd class="col-sm-9">exists: ' +
-                    escapeHtmlSettings(exists) + ' · triples: <strong>' + escapeHtmlSettings(String(count)) +
-                    '</strong></dd>';
-            }
-            html += '</dl>';
-            if (dataIsView && data.data_table_fqn) {
-                html += '<p class="text-muted small mt-2 mb-0">' +
-                    '<i class="bi bi-info-circle me-1"></i>' +
-                    'This domain uses view-only materialization: no triples are copied, and the ' +
-                    'count above is a live query against the source tables.</p>';
-            }
-            if (!data.active_domain) {
-                html += '<p class="text-muted mt-2 mb-0">Open a domain to see resolved FQNs and row counts.</p>';
-            } else if (viewErr || dataErr) {
-                html += '<p class="text-warning mt-2 mb-0">' +
-                    escapeHtmlSettings(viewErr || dataErr) + '</p>';
-            } else if (!data.data_table_fqn) {
-                html += '<p class="text-muted mt-2 mb-0">Could not derive table names for the active domain.</p>';
+            html += '<p class="mb-0 fw-semibold ' + statusClass + '">'
+                + '<i class="bi ' + statusIcon + ' me-1"></i>' + statusLabel + '</p>';
+
+            if (data.error) {
+                html += '<p class="small text-warning mt-2 mb-0">'
+                    + '<i class="bi bi-exclamation-triangle me-1"></i>'
+                    + escapeHtmlSettings(String(data.error))
+                    + '</p>';
             }
             out.innerHTML = html;
         } catch (e) {
