@@ -49,6 +49,19 @@ Changes:
 4. tests/units/graphdb/delta/test_delta_package.py
    Add evaluator coverage for required-order output, underscore/space
    normalization, inherited grants, and `ALL PRIVILEGES`.
+5. src/back/core/databricks/uc/UnityCatalog.py
+   Harden effective-permissions path construction with UC identifier validation
+   plus URL encoding, and keep behavior warehouse-independent for this REST call.
+6. src/back/core/graphdb/delta/health.py
+   Include `registry_catalog`, `registry_schema`, `storage_location`, and
+   `principal` in `schema_permission_summary`, and remove redundant
+   `has_all_privileges` state by driving `ALL PRIVILEGES` through the grants map.
+7. tests/units/core/test_unity_catalog.py
+   Add regressions for encoded/validated schema path, principal-less assignment
+   handling, warehouse-free auth usage, and empty-200-content responses.
+8. tests/units/graphdb/delta/test_delta_package.py
+   Add summary payload assertions for registry/principal metadata and incomplete
+   storage-location handling.
 
 Modified files:
 - src/back/core/databricks/uc/UnityCatalog.py
@@ -57,4 +70,4 @@ Modified files:
 - tests/units/graphdb/delta/test_delta_package.py
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
-Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py -k effective_schema` → 5 passed; `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_package.py -k schema_permission` → 3 passed; `uv run --frozen pytest -q -m "not scenario"` → 5806 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 50.34s.
+Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py -k effective_schema` → 10 passed, 36 deselected, 1 warning in 0.77s; `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_package.py -k schema_permission` → 4 passed, 19 deselected, 1 warning in 0.80s; `uv run --frozen pytest -q -m "not scenario"` → 5812 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 45.03s.

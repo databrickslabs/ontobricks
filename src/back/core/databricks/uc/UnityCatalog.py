@@ -8,6 +8,7 @@ volume management).
 import requests
 from databricks import sql
 from typing import Any, Dict, List
+from urllib.parse import quote
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
@@ -39,6 +40,12 @@ class UnityCatalog:
 
     @staticmethod
     def _normalize_privilege_name(value: Any) -> str:
+        """Normalize UC privilege spellings from REST payloads.
+
+        Intentionally duplicated with the pure evaluator in
+        ``back.core.graphdb.delta.health`` so each layer can normalize input
+        without introducing a cross-module dependency through the REST boundary.
+        """
         raw = str(value or "").strip()
         if not raw:
             return ""
@@ -408,9 +415,12 @@ class UnityCatalog:
 
         host = self._auth.host.rstrip("/")
         headers = self._auth.get_auth_headers()
+        catalog_name = validate_uc_identifier(catalog, role="catalog")
+        schema_name = validate_uc_identifier(schema, role="schema")
+        schema_fqn_path = quote(f"{catalog_name}.{schema_name}", safe=".")
         url = (
             f"{host}/api/2.1/unity-catalog/effective-permissions/"
-            f"SCHEMA/{catalog}.{schema}"
+            f"SCHEMA/{schema_fqn_path}"
         )
         response = requests.get(
             url, headers=headers, params={"principal": principal}, timeout=10

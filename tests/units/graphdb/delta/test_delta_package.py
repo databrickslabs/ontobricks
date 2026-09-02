@@ -227,6 +227,10 @@ class TestSchemaPermissionSummary:
             "inherited_from": "",
         }
         assert summary["operational"] is False
+        assert summary["registry_catalog"] == "main"
+        assert summary["registry_schema"] == "graph"
+        assert summary["storage_location"] == "main.graph"
+        assert summary["principal"] == "app-client-id"
 
     def test_schema_permission_all_privileges_satisfies_required_set(self):
         summary = health.schema_permission_summary(
@@ -272,3 +276,12 @@ class TestSchemaPermissionSummary:
             "MODIFY",
         ]
         assert summary["operational"] is True
+
+    def test_schema_permission_empty_registry_location_when_incomplete(self):
+        summary = health.schema_permission_summary(
+            "main",
+            "",
+            "app-client-id",
+            [{"privilege": "USE_SCHEMA", "inherited_from": ""}],
+        )
+        assert summary["storage_location"] == ""

@@ -20,6 +20,12 @@ REQUIRED_SCHEMA_PERMISSIONS = (
 
 
 def _normalize_permission_name(value: Any) -> str:
+    """Normalize evaluator input from UC REST assignments.
+
+    Intentionally duplicated with ``UnityCatalog._normalize_privilege_name``:
+    this evaluator remains pure and boundary-agnostic, avoiding a dependency
+    cycle between Databricks client code and domain health logic.
+    """
     return str(value or "").strip().replace("_", " ").upper()
 
 
@@ -27,10 +33,15 @@ def schema_permission_summary(
     catalog: str, schema: str, principal: str, assignments: Any
 ) -> Dict[str, Any]:
     """Evaluate required schema permissions from normalized assignments."""
-    _ = (catalog, schema, principal)
+    registry_catalog = (catalog or "").strip()
+    registry_schema = (schema or "").strip()
+    storage_location = (
+        f"{registry_catalog}.{registry_schema}"
+        if registry_catalog and registry_schema
+        else ""
+    )
     raw_assignments = assignments if isinstance(assignments, list) else []
     grants: Dict[str, str] = {}
-    has_all_privileges = False
 
     for item in raw_assignments:
         if not isinstance(item, dict):
@@ -40,7 +51,6 @@ def schema_permission_summary(
         if not privilege:
             continue
         if privilege == "ALL PRIVILEGES":
-            has_all_privileges = True
             for required in REQUIRED_SCHEMA_PERMISSIONS:
                 grants.setdefault(required, inherited_from)
             continue
@@ -50,12 +60,16 @@ def schema_permission_summary(
     permissions = [
         {
             "name": required,
-            "granted": has_all_privileges or required in grants,
+            "granted": required in grants,
             "inherited_from": grants.get(required, ""),
         }
         for required in REQUIRED_SCHEMA_PERMISSIONS
     ]
     return {
+        "registry_catalog": registry_catalog,
+        "registry_schema": registry_schema,
+        "storage_location": storage_location,
+        "principal": principal,
         "permissions": permissions,
         "operational": all(item["granted"] for item in permissions),
     }

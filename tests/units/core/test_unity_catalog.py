@@ -421,6 +421,31 @@ class TestGetEffectiveSchemaPermissions:
         assert kwargs["timeout"] == 10
 
     @patch.object(_unity_catalog_mod.requests, "get")
+    @patch.object(_unity_catalog_mod, "validate_uc_identifier")
+    def test_effective_schema_validates_and_url_encodes_path_segments(
+        self, mock_validate_identifier, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b'{"privilege_assignments":[]}'
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {"privilege_assignments": []}
+        mock_get.return_value = mock_resp
+        mock_validate_identifier.side_effect = ["main", "graph/ops?takeover=1"]
+
+        UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        args, kwargs = mock_get.call_args
+        assert args[0].endswith(
+            "/api/2.1/unity-catalog/effective-permissions/SCHEMA/main.graph%2Fops%3Ftakeover%3D1"
+        )
+        assert kwargs["params"] == {"principal": "app-client-id"}
+        assert mock_validate_identifier.call_args_list[0].kwargs == {"role": "catalog"}
+        assert mock_validate_identifier.call_args_list[1].kwargs == {"role": "schema"}
+
+    @patch.object(_unity_catalog_mod.requests, "get")
     def test_effective_schema_normalizes_privileges_and_filters_by_principal(
         self, mock_get, auth_with_warehouse
     ):
@@ -463,6 +488,61 @@ class TestGetEffectiveSchemaPermissions:
             ],
             "error": None,
         }
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_keeps_principal_less_assignments(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b'{"privilege_assignments":[]}'
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {
+            "privilege_assignments": [
+                {"privileges": [{"privilege": "USE_SCHEMA"}]},
+                {"principal": "other-principal", "privileges": [{"privilege": "SELECT"}]},
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+        assert out == {
+            "accessible": True,
+            "assignments": [{"privilege": "USE SCHEMA", "inherited_from": ""}],
+            "error": None,
+        }
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_does_not_require_warehouse(
+        self, mock_get, auth_no_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b'{"privilege_assignments":[]}'
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {"privilege_assignments": []}
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_no_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+        assert out == {"accessible": True, "assignments": [], "error": None}
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_handles_empty_200_content(self, mock_get, auth_with_warehouse):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b""
+        mock_resp.raise_for_status = Mock()
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+        assert out == {"accessible": True, "assignments": [], "error": None}
+        mock_resp.json.assert_not_called()
 
     @patch.object(_unity_catalog_mod.requests, "get")
     @pytest.mark.parametrize(
@@ -513,6 +593,7 @@ class TestUnityCatalogSqlInjectionGuards:
             ("get_volumes", ("main", "default;")),
             ("probe_schema_has_tables", ("cat", "sch;")),
             ("check_table_select_permission", ("cat", "sch", "tbl;")),
+            ("get_effective_schema_permissions", ("cat", "sch;", "spn")),
         ],
     )
     def test_rejects_invalid_identifiers(self, auth_with_warehouse, method, args):
