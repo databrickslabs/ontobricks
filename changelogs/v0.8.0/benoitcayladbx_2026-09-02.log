@@ -368,3 +368,35 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` → 104 passed, 0 failed in 1.89s.
+
+## Append Task 5 browser validation evidence
+
+Context: Completed Task 5 browser validation evidence capture after review
+findings closure, replacing the pending-browser note in the delivery report
+and recording final UI and interaction checks.
+
+Changes:
+
+1. .superpowers/sdd/task-5-report.md
+   Replaced the pending browser-validation concern with a completed status and
+   appended detailed desktop/mobile browser evidence for Runs and Health rails.
+2. changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+   Appended this evidence section (append-only) without rewriting prior entries.
+
+Browser evidence:
+- Desktop and 390px: identical style across the five Settings rails
+  (Lakehouse, Lakebase, Neo4j, Runs, Health).
+- Runs: 25 build rows and 21 analytics rows rendered; Domain filter remained
+  outside the tab card.
+- Health: 15 readiness checks; Diagnostics 4 groups / 20 checks; Refresh
+  performed successful `GET` updates.
+- Navigation and accessibility: click, `ArrowRight`, `ArrowLeft`, wrap, and
+  focus visibility all passed.
+- Rail metrics: desktop `scrollWidth/clientWidth/scrollLeft = 1335/1335/0`;
+  mobile `341/341/0`.
+- No page overflow; no console, page, network, or HTTP errors.
+- Only expected capability warnings observed; zero failed checks.
+
+Modified files:
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
