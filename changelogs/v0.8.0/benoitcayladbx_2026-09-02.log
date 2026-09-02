@@ -329,3 +329,42 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` (RED) → 6 failed, 98 passed in 1.99s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` (GREEN) → 104 passed, 0 failed in 2.15s; `uv run --frozen pytest -q -m "not scenario"` → 5836 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.68s.
+
+## Address Task 5 review findings
+
+Context: Before browser validation, Task 5 review requested a formatting-only
+cleanup of wrapped Runs/Health tab markup indentation and stronger structural
+tests that assert full ordered nesting in the correct scope instead of
+independent contains checks.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_runs.html
+   Re-indented wrapped tab-pane content and closing tags so visual hierarchy
+   clearly follows `card` → `card-body` → `tab-content`, with no content,
+   behavior, IDs, handlers, filters, tables, diagnostics, lazy-load, or ARIA
+   changes.
+2. src/front/templates/partials/settings/_settings_health.html
+   Re-indented wrapped tab-pane content and closing tags to mirror the same
+   visual hierarchy and preserve all existing behavior and identifiers.
+3. tests/units/front/test_settings_runs_page.py
+   Strengthened the Runs structural assertion to validate the complete ordered
+   four-level nesting inside the rendered `/settings` Runs section boundary in
+   one scoped regex check.
+4. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Strengthened the Health structural assertion to validate the complete
+   ordered four-level nesting inside the `_settings_health.html` partial with
+   explicit close-order enforcement.
+5. .superpowers/sdd/task-5-report.md
+   Appended review follow-up evidence and focused test results before browser
+   validation.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/settings/_settings_health.html
+- tests/units/front/test_settings_runs_page.py
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` → 104 passed, 0 failed in 1.89s.

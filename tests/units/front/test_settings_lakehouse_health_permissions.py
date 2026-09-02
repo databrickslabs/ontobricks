@@ -217,16 +217,12 @@ class TestSettingsCanonicalTabRails:
         pattern = re.compile(
             r'<div class="card h-100">\s*'
             r'<div class="card-body p-0 ob-tabs-wrap">[\s\S]*?'
-            r'<ul class="nav nav-tabs ob-tabs nav-fill" id="healthTabs" role="tablist">',
+            r'<ul class="nav nav-tabs ob-tabs nav-fill" id="healthTabs" role="tablist">[\s\S]*?</ul>\s*'
+            r'<div class="tab-content p-3" id="healthTabContent">[\s\S]*?</div>\s*'
+            r'(?:<!--[^>]*-->\s*)?</div>\s*</div>',
             re.DOTALL,
         )
         assert pattern.search(html), "healthTabs"
-
-        content_pattern = re.compile(
-            r'<div class="tab-content p-3" id="healthTabContent">',
-            re.DOTALL,
-        )
-        assert content_pattern.search(html), "healthTabContent"
 
     def test_health_tab_content_surface_does_not_use_ob_tab_content_class(self):
         html = _read(HEALTH_PARTIAL)
