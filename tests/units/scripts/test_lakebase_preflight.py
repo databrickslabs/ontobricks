@@ -48,3 +48,19 @@ def test_lakebase_perms_does_not_abort_when_relocation_is_denied() -> None:
     step = body[body.index("Step 1b") : body.index("Step 2: Postgres schema grants")]
     assert "EXCEPTION WHEN OTHERS THEN" in step
     assert "exit 1" not in step.split("Ensuring pgcrypto")[1]
+
+
+def test_lakebase_perms_skips_ddl_when_registry_migrations_are_current() -> None:
+    """A current app-owned registry must not execute owner-only no-op DDL."""
+    body = LAKEBASE_PERMS.read_text()
+    migration_step = body[
+        body.index("Step 2b: Registry schema migrations") : body.index(
+            "for app in", body.index("Step 2b: Registry schema migrations")
+        )
+    ]
+
+    assert "inspect_migrations" in migration_step
+    assert "Registry schema migrations already current; skipping DDL." in migration_step
+    assert migration_step.index("inspect_migrations") < migration_step.index(
+        'ALTER TABLE "${SCHEMA}".domain_versions'
+    )

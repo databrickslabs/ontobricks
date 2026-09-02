@@ -370,8 +370,39 @@ _HAS_DOMAIN_VERSIONS="$(psql "$PGCONN" -tAc \
     "SELECT 1 FROM information_schema.tables WHERE table_schema='${SCHEMA}' AND table_name='domain_versions'" \
     | tr -d '[:space:]')"
 if [[ "$_HAS_DOMAIN_VERSIONS" == "1" ]]; then
-    echo "  Applying registry schema migrations..."
-    if psql "$PGCONN" -v ON_ERROR_STOP=1 -q <<SQL
+    # PostgreSQL checks table ownership before evaluating IF NOT EXISTS.
+    # Registries initialized by the app have app-owned tables even when the
+    # schema itself is human-owned, so replaying already-current no-op DDL
+    # fails with "must be owner of table". Reuse the read-only preflight's
+    # canonical migration expectations and only invoke DDL when work remains.
+    _MIGRATIONS_CURRENT="0"
+    if _MIGRATIONS_CURRENT="$(PGCONN="$PGCONN" python3 - "$SCHEMA" <<'PY'
+import os
+import sys
+
+from scripts._internal._lakebase_preflight import inspect_migrations
+
+pending, stale, errors = inspect_migrations(os.environ.copy(), sys.argv[1])
+if errors:
+    print(
+        "Could not inspect registry migration state: " + "; ".join(errors),
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+print("1" if not pending and not stale else "0")
+PY
+)"; then
+        :
+    else
+        echo "  ⚠ migration state inspection failed; falling back to idempotent DDL" >&2
+        _MIGRATIONS_CURRENT="0"
+    fi
+
+    if [[ "$_MIGRATIONS_CURRENT" == "1" ]]; then
+        echo "  ✓ Registry schema migrations already current; skipping DDL."
+    else
+        echo "  Applying registry schema migrations..."
+        if psql "$PGCONN" -v ON_ERROR_STOP=1 -q <<SQL
 -- domain_versions.status (lifecycle column added after initial release)
 ALTER TABLE "${SCHEMA}".domain_versions
     ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'DRAFT';
@@ -620,10 +651,11 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
         registry_id, task_type, domain_name, target_key, run_ts DESC
     );
 SQL
-    then
-        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
-    else
-        echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
+        then
+            echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
+        else
+            echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
+        fi
     fi
 fi
 

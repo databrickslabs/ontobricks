@@ -400,3 +400,37 @@ Browser evidence:
 Modified files:
 - .superpowers/sdd/task-5-report.md
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+## Skip current Lakebase registry migrations
+
+Context: A deployment replayed owner-only PostgreSQL DDL even though the
+registry schema was already at the current version. App-initialized tables are
+owned by the application service principal while the schema is human-owned, so
+`ALTER TABLE ... IF NOT EXISTS` failed with `must be owner of table
+domain_versions` before determining that no change was needed.
+
+Changes:
+
+1. scripts/bootstrap/lakebase-perms.sh
+   Reused the canonical read-only migration inspection before Step 2b and skip
+   all DDL when no expected or stale registry changes remain. Inspection
+   failures preserve the previous idempotent-DDL fallback.
+2. tests/units/scripts/test_lakebase_preflight.py
+   Added a regression contract proving that migration inspection precedes DDL
+   and that current registries use the explicit skip path.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- tests/units/scripts/test_lakebase_preflight.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/scripts/test_lakebase_preflight.py`
+(RED) → 1 failed, 3 passed; `uv run --frozen pytest -q
+tests/units/scripts/test_lakebase_preflight.py tests/units/scripts/test_lakebase_perms.py`
+(GREEN) → 7 passed; `unset APP_NAME MCP_APP_NAME DATABRICKS_CONFIG_PROFILE; uv
+run --frozen pytest -q -m "not scenario"` → 5837 passed, 304 skipped, 6
+deselected, 1 xfailed, 0 failed in 42.77s.
+
+Live verification: `make bootstrap-lakebase` → exit 0 and
+`Registry schema migrations already current; skipping DDL.`; the
+`must be owner of table domain_versions` error was not emitted.
