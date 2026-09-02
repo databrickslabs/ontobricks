@@ -51,6 +51,7 @@ The resolved principal is shown in the Health panel.
 The Health tab is intentionally domain-independent. It does not inspect:
 
 - domain assets or Objects inventory
+- R2RML VIEW existence or content
 - data-table or inferred-table existence
 - row counts
 - SQL Warehouse state
