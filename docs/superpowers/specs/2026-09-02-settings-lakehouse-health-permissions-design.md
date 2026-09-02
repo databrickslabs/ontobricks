@@ -7,8 +7,8 @@ principal has the Unity Catalog permissions required to operate in the
 configured Registry `catalog.schema`. The result must not depend on the domain
 currently open in the session or inspect any domain assets.
 
-Also align the Lakehouse, Lakebase, and Neo4j tab rails with the canonical
-card-integrated `ob-tabs` design.
+Also align the Lakehouse, Lakebase, Neo4j, Runs, and system Health tab rails
+with the canonical card-integrated `ob-tabs` design.
 
 ## Health data source
 
@@ -99,8 +99,8 @@ The existing Refresh status action and branded loading indicator remain.
 
 ## Tab styling
 
-Settings → Lakehouse, Lakebase, and Neo4j use the shared card-integrated tab
-pattern:
+Settings → Lakehouse, Lakebase, Neo4j, Runs, and system Health use the shared
+card-integrated tab pattern:
 
 - outer `card h-100`
 - inner `card-body p-0 ob-tabs-wrap`
@@ -108,9 +108,17 @@ pattern:
 - body `tab-content p-3`
 
 The tabs retain Bootstrap tab behavior, existing IDs, icons, accessibility
-attributes, event handlers, and content. Remove the independent
-`ob-tab-content` surface from these three page-level tab groups. No local tab
-CSS or alternate visual state is introduced.
+attributes, event handlers, filters, tables, diagnostics, and content. Remove
+the independent `ob-tab-content` surface from these five page-level tab groups.
+Tab icons inherit the shared rail state rather than carrying independent
+primary/success colors. No local tab CSS or alternate visual state is
+introduced.
+
+All five tab rails participate in the Settings keyboard auto-scroll behavior:
+when Bootstrap focus or activation moves to a tab outside the horizontal
+viewport, the rail scrolls that tab into view with nearest alignment. This
+keeps keyboard focus visible at narrow widths without changing tab selection
+or preventing Bootstrap events.
 
 ## Testing
 
@@ -131,7 +139,12 @@ Frontend tests cover:
 - Health renderer consumes only permission-oriented fields;
 - removed domain asset labels and response fields;
 - one row per required permission and overall state;
-- Lakehouse, Lakebase, and Neo4j use the canonical card-integrated tab markup.
+- Lakehouse, Lakebase, Neo4j, Runs, and system Health use the canonical
+  card-integrated tab markup.
+- Runs and system Health preserve all existing panes, filters, tables,
+  diagnostics, handlers, and lazy loading.
+- All five Settings rails keep keyboard-focused tabs visible on narrow
+  viewports.
 
 Browser validation covers desktop and 390 px layouts, tab behavior, keyboard
 focus, permission rendering, refresh, network/console errors, and absence of

@@ -339,3 +339,81 @@ results, and browser evidence in English under v0.8.0.
 git add docs/user-guide.md changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 git commit -m "docs(settings): document schema permission health"
 ```
+
+---
+
+### Task 5: Canonical Runs and system Health tab rails
+
+**Files:**
+- Modify: `src/front/templates/partials/settings/_settings_runs.html`
+- Modify: `src/front/templates/partials/settings/_settings_health.html`
+- Modify: `src/front/static/config/js/settings.js`
+- Modify: `tests/units/front/test_settings_lakehouse_health_permissions.py`
+- Modify: `tests/units/front/test_settings_runs_page.py`
+
+**Interfaces:**
+- Consumes: shared `ob-tabs` card-integrated markup and Settings tab
+  auto-scroll behavior from Task 3.
+- Produces: matching Runs and system Health tab rails.
+
+- [ ] **Step 1: Write failing structural and behavior tests**
+
+Assert both partials use:
+
+```html
+<div class="card h-100">
+    <div class="card-body p-0 ob-tabs-wrap">
+        <ul class="nav nav-tabs ob-tabs nav-fill">
+        <div class="tab-content p-3">
+```
+
+Assert `ob-tab-content`, `text-primary`, and `text-success` are absent from
+their tab rails; existing tab/pane IDs remain; and the Settings auto-scroll
+rail list includes `settingsRunsTabs` and `healthTabs`.
+
+- [ ] **Step 2: Verify RED**
+
+```bash
+uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py
+```
+
+- [ ] **Step 3: Wrap Runs tabs**
+
+Keep the Domain filter above the card. Wrap the existing Runs rail and body in
+`card h-100` and `card-body p-0 ob-tabs-wrap`, add `nav-fill`, change the body
+to `tab-content p-3`, and let both tab icons inherit shared colors.
+
+- [ ] **Step 4: Wrap system Health tabs**
+
+Wrap the existing Databricks/Diagnostics rail and body in the same canonical
+structure, add `nav-fill`, and change the body to `tab-content p-3`. Preserve
+all readiness/diagnostic IDs, lazy loading, refresh actions, and accessibility
+attributes.
+
+- [ ] **Step 5: Extend keyboard auto-scroll**
+
+Add `settingsRunsTabs` and `healthTabs` to the existing Settings-only rail list
+used by the `shown.bs.tab` and `focusin` nearest-scroll handlers.
+
+- [ ] **Step 6: Verify GREEN and full suite**
+
+```bash
+uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py
+uv run --frozen pytest -q -m "not scenario"
+```
+
+- [ ] **Step 7: Browser-test**
+
+At desktop and 390 px, verify both rails match Lakehouse/Lakebase/Neo4j,
+Bootstrap switching and lazy loading still work, keyboard focus remains
+visible, tables/diagnostics stay contained, and no console/network errors
+occur.
+
+- [ ] **Step 8: Append changelog and commit**
+
+Append a new section to the existing v0.8.0 daily changelog and commit:
+
+```bash
+git add src/front/templates/partials/settings/_settings_runs.html src/front/templates/partials/settings/_settings_health.html src/front/static/config/js/settings.js tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py changelogs/v0.8.0/benoitcayladbx_2026-09-02.log docs/superpowers/specs/2026-09-02-settings-lakehouse-health-permissions-design.md docs/superpowers/plans/2026-09-02-settings-lakehouse-health-permissions.md
+git commit -m "feat(settings): align Runs and Health tabs"
+```
