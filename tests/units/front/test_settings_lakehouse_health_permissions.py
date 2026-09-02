@@ -80,6 +80,20 @@ class TestLakehouseHealthCopyAndRenderer:
         assert "Operational" in body
         assert "Missing permissions" in body
 
+    def test_health_response_checks_http_status_before_json_parsing(self):
+        body = _function_body(
+            _read(SETTINGS_JS), "async function loadDeltaTripleStoreHealth(options)"
+        )
+        assert "if (!resp.ok)" in body
+        assert "const data = await resp.json();" in body
+        assert "throw new Error(" in body
+
+    def test_health_result_container_is_live_status_region(self):
+        block = _health_tab_block()
+        assert 'id="deltaHealthResult"' in block
+        assert 'role="status"' in block
+        assert 'aria-live="polite"' in block
+
 
 class TestSettingsCanonicalTabRails:
     @pytest.mark.parametrize(
@@ -112,3 +126,22 @@ class TestSettingsCanonicalTabRails:
         match = re.search(rf'<div class="([^"]+)" id="{content_id}">', html)
         assert match, content_id
         assert "ob-tab-content" not in match.group(1)
+
+
+class TestSettingsTabRailScrollBehavior:
+    def test_each_settings_tab_rail_registers_bootstrap_tab_activation_listener(self):
+        js = _read(SETTINGS_JS)
+        assert "['deltaTabs', 'lakebaseTabs', 'neo4jTabs']" in js
+        assert "const rail = document.getElementById(tabsId);" in js
+        assert "rail.addEventListener('shown.bs.tab'" in js
+
+    def test_selected_tab_is_scrolled_with_nearest_inline_behavior(self):
+        js = _read(SETTINGS_JS)
+        assert "target.scrollIntoView({" in js
+        assert "inline: 'nearest'" in js
+        assert "block: 'nearest'" in js
+
+    def test_focusing_a_tab_scrolls_it_into_the_rail_viewport(self):
+        js = _read(SETTINGS_JS)
+        assert "rail.addEventListener('focusin'" in js
+        assert "sourceTarget.closest('[role=\"tab\"]')" in js

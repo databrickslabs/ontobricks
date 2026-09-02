@@ -98,6 +98,39 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Ensure the Lakebase / Delta configuration panels are visible on load.
     applyGraphDbEnginePanels();
+    setupSettingsTabRailAutoScroll();
+    function scrollTabIntoRailViewport(target) {
+        if (!target || typeof target.scrollIntoView !== 'function') return;
+        target.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest',
+        });
+    }
+
+    function setupSettingsTabRailAutoScroll() {
+        ['deltaTabs', 'lakebaseTabs', 'neo4jTabs'].forEach((tabsId) => {
+            const rail = document.getElementById(tabsId);
+            if (!rail) return;
+
+            const scrollSelected = (sourceTarget) => {
+                const candidate = sourceTarget && sourceTarget.closest
+                    ? sourceTarget.closest('[role="tab"]')
+                    : null;
+                const selected = candidate && rail.contains(candidate)
+                    ? candidate
+                    : rail.querySelector('[role="tab"][aria-selected="true"], .nav-link.active');
+                if (selected) scrollTabIntoRailViewport(selected);
+            };
+
+            rail.addEventListener('shown.bs.tab', (event) => {
+                scrollSelected(event.target);
+            });
+            rail.addEventListener('focusin', (event) => {
+                scrollSelected(event.target);
+            });
+        });
+    }
+
 
     // =====================================================================
     //  DATABRICKS TAB
@@ -2180,6 +2213,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         try {
             const resp = await fetch('/settings/triple-store/databricks-health', { credentials: 'same-origin' });
+            if (!resp.ok) {
+                throw new Error('HTTP ' + resp.status);
+            }
             const data = await resp.json();
 
             if (regLoc && !regLoc.textContent.replace(/[—\s]/g, '')) {

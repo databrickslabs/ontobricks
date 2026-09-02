@@ -180,3 +180,34 @@ Modified files:
 - changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py` (RED) → 9 failed, 0 passed in 0.17s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/settings/test_delta_warehouse_config.py tests/units/settings/test_graph_engine_config.py` (GREEN) → 52 passed, 0 failed in 0.78s; `uv run --frozen pytest -q -m "not scenario"` → 5828 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 45.23s.
+
+## Fix Task 3 browser blocker and low findings
+
+Context: Task 3 follow-up addresses the browser blocker on horizontally
+scrollable Settings tab rails and the remaining low findings on Lakehouse
+Health response handling and accessibility semantics.
+
+Changes:
+
+1. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Added RED-first contracts for standards-based nearest-inline tab rail
+   scrolling on Bootstrap activation/focus in `deltaTabs`, `lakebaseTabs`,
+   `neo4jTabs`, plus Health `resp.ok` guard and live status container semantics.
+2. src/front/static/config/js/settings.js
+   Added Settings-only tab rail auto-scroll wiring using `scrollIntoView` with
+   `{ inline: 'nearest', block: 'nearest' }` on `shown.bs.tab` and `focusin`
+   events for the three page-level rails, without changing shared tab CSS/IDs.
+3. src/front/static/config/js/settings.js
+   Hardened `loadDeltaTripleStoreHealth` to check `resp.ok` before parsing JSON
+   and throw into the existing error UI path for HTTP failures.
+4. src/front/templates/settings.html
+   Added `role="status"` and `aria-live="polite"` to `deltaHealthResult` to
+   announce Health refresh results accessibly without layout/geometry changes.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py` (RED) → 7 failed, 9 passed in 0.20s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_sidebar_content_stretch_contract.py` (GREEN) → 150 passed, 0 failed in 0.33s; `uv run --frozen pytest -q -m "not scenario"` → 5833 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.34s.
