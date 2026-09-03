@@ -1,0 +1,45 @@
+## Persist manual mapping columns and refresh status
+
+Context: Manual entity mappings could display auto-assigned ID and Label
+columns in the Mapping tab while the Status tab still reported them as
+unassigned. Manual Apply also read removed summary elements, so those live
+assignments were saved as empty values (GitHub issue #158).
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Refresh entity and relationship Status rows from the live shared-panel
+   column state whenever the mapping grid changes.
+2. src/front/static/mapping/js/mapping-manual.js
+   Persist live entity and relationship column assignments, attribute mappings,
+   exclusions, labels, and relationship direction from Manual Apply.
+3. src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Skip incomplete relationship mappings whose source or target ID is absent.
+4. tests/units/front/test_manual_mapping_column_state.py
+   Add regression contracts for live-state persistence and Status refresh.
+5. tests/units/front/test_manual_mapping_panel_host.py
+   Cover Manual Apply's use of the shared panel state instead of removed DOM
+   summary elements.
+6. tests/units/mapping/test_r2rml_generator.py
+   Cover incomplete relationship mapping suppression during R2RML generation.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- tests/units/front/test_manual_mapping_column_state.py
+- tests/units/front/test_manual_mapping_panel_host.py
+- tests/units/mapping/test_r2rml_generator.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-03.log
+
+Tests: `uv run --frozen pytest -q
+tests/units/front/test_manual_mapping_column_state.py
+tests/units/front/test_manual_mapping_panel_host.py` → 18 passed, 0 failed in
+0.18s; `uv run --frozen pytest -q -m "not scenario"` → 5843 passed, 304
+skipped, 6 deselected, 1 xfailed, 0 failed in 51.45s.
+
+Browser verification: Manual Mapping at `/mapping/?section=manual` auto-assigned
+`AS ID` and `AS Label`, immediately showed green/current Status values, and
+persisted both assignments after Apply and reload. Relationship source/target
+status also remained green. No console, failed-request, or HTTP errors were
+observed.

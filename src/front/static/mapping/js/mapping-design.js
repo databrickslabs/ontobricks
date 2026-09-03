@@ -1395,8 +1395,8 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
                             <table class="table table-sm mb-0" style="font-size:0.8rem;">
                                 <tbody>
                                     <tr><td>${epStatusIcon(epHasSql)}</td><td>SQL Query</td><td class="text-muted small">${epHasSql ? 'Defined' : 'Not defined'}</td></tr>
-                                    <tr><td>${epStatusIcon(epHasId)}</td><td>ID column</td><td class="text-muted small">${epHasId ? existingMapping.id_column : 'Not assigned'}</td></tr>
-                                    <tr><td>${epStatusIcon(epHasLabel)}</td><td>Label column</td><td class="text-muted small">${epHasLabel ? existingMapping.label_column : 'Not assigned'}</td></tr>
+                                    <tr><td id="epStatusIdIcon">${epStatusIcon(epHasId)}</td><td>ID column</td><td id="epStatusIdDetail" class="text-muted small">${epHasId ? existingMapping.id_column : 'Not assigned'}</td></tr>
+                                    <tr><td id="epStatusLabelIcon">${epStatusIcon(epHasLabel)}</td><td>Label column</td><td id="epStatusLabelDetail" class="text-muted small">${epHasLabel ? existingMapping.label_column : 'Not assigned'}</td></tr>
                                     ${attributes.length > 0 ? '<tr><td>' + epStatusIcon(epMappedAttrCount === attributes.length) + '</td><td>Attributes</td><td class="text-muted small">' + epMappedAttrCount + ' / ' + attributes.length + ' assigned</td></tr>' : ''}
                                 </tbody>
                             </table>
@@ -1553,8 +1553,8 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
 
     const rpStatusRows = `
         <tr><td>${statusIcon(hasSql)}</td><td>SQL Query</td><td class="text-muted small">${hasSql ? 'Defined' : 'Not defined'}</td></tr>
-        <tr><td>${statusIcon(hasSrcId)}</td><td>Source ID column</td><td class="text-muted small">${hasSrcId ? existingMapping.source_id_column : 'Not assigned'}</td></tr>
-        <tr><td>${statusIcon(hasTgtId)}</td><td>Target ID column</td><td class="text-muted small">${hasTgtId ? existingMapping.target_id_column : 'Not assigned'}</td></tr>
+        <tr><td id="rpStatusSourceIcon">${statusIcon(hasSrcId)}</td><td>Source ID column</td><td id="rpStatusSourceDetail" class="text-muted small">${hasSrcId ? existingMapping.source_id_column : 'Not assigned'}</td></tr>
+        <tr><td id="rpStatusTargetIcon">${statusIcon(hasTgtId)}</td><td>Target ID column</td><td id="rpStatusTargetDetail" class="text-muted small">${hasTgtId ? existingMapping.target_id_column : 'Not assigned'}</td></tr>
         ${relAttributes.length > 0 ? `<tr><td>${statusIcon(mappedAttrCount === relAttributes.length)}</td><td>Attributes</td><td class="text-muted small">${mappedAttrCount} / ${relAttributes.length} assigned</td></tr>` : ''}
     `;
 
@@ -1969,7 +1969,25 @@ function renderEntityPanelGrid() {
         th.addEventListener('click', () => showEntityColumnMenu(th, th.dataset.col));
     });
     
+    refreshEntityPanelStatus();
     updateEntityPanelSaveBtn();
+}
+
+function refreshEntityPanelStatus() {
+    const assignments = [
+        ['epStatusIdIcon', 'epStatusIdDetail', EntityPanelState.idColumn],
+        ['epStatusLabelIcon', 'epStatusLabelDetail', EntityPanelState.labelColumn]
+    ];
+    assignments.forEach(([iconId, detailId, column]) => {
+        const icon = document.getElementById(iconId);
+        const detail = document.getElementById(detailId);
+        if (icon) {
+            icon.innerHTML = column
+                ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                : '<i class="bi bi-x-circle-fill text-danger"></i>';
+        }
+        if (detail) detail.textContent = column || 'Not assigned';
+    });
 }
 
 function showEntityColumnMenu(th, column) {
@@ -2271,7 +2289,25 @@ function renderRelPanelGrid() {
         th.addEventListener('click', () => showRelColumnMenu(th, th.dataset.col));
     });
     
+    refreshRelationshipPanelStatus();
     updateRelPanelSaveBtn();
+}
+
+function refreshRelationshipPanelStatus() {
+    const assignments = [
+        ['rpStatusSourceIcon', 'rpStatusSourceDetail', RelPanelState.sourceIdColumn],
+        ['rpStatusTargetIcon', 'rpStatusTargetDetail', RelPanelState.targetIdColumn]
+    ];
+    assignments.forEach(([iconId, detailId, column]) => {
+        const icon = document.getElementById(iconId);
+        const detail = document.getElementById(detailId);
+        if (icon) {
+            icon.innerHTML = column
+                ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                : '<i class="bi bi-x-circle-fill text-danger"></i>';
+        }
+        if (detail) detail.textContent = column || 'Not assigned';
+    });
 }
 
 function showRelColumnMenu(th, column) {

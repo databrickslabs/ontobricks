@@ -134,3 +134,22 @@ class TestStaleResponseGuardStillApplies:
     def test_relationship_query_drops_responses_from_another_panel(self):
         body = _function_body(_design(), "runRelPanelQuery")
         assert "currentPanelType !== 'relationship'" in body
+
+
+class TestManualApplyUsesLivePanelState:
+    """Manual Apply must persist the column selections owned by the shared panel."""
+
+    def test_entity_apply_uses_state_instead_of_removed_summary_elements(self):
+        body = _method_body(_manual(), "saveMapping")
+        assert "EntityPanelState.idColumn" in body
+        assert "EntityPanelState.labelColumn" in body
+        assert "ontology_class_label:" in body
+        assert "document.getElementById('epSummaryId')" not in body
+        assert "document.getElementById('epSummaryLabel')" not in body
+
+    def test_relationship_apply_uses_state_instead_of_removed_summary_elements(self):
+        body = _method_body(_manual(), "saveMapping")
+        assert "RelPanelState.sourceIdColumn" in body
+        assert "RelPanelState.targetIdColumn" in body
+        assert "document.getElementById('rpSummarySource')" not in body
+        assert "document.getElementById('rpSummaryTarget')" not in body

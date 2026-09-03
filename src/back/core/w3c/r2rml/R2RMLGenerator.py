@@ -374,7 +374,7 @@ class R2RMLGenerator:
         attribute_mappings = config.get("attribute_mappings", {})
         direction = config.get("direction", "forward")  # Get relationship direction
 
-        if not property_uri:
+        if not property_uri or not source_column or not target_column:
             return
 
         # Enrich missing class labels from ontology property domain/range

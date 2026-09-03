@@ -137,6 +137,26 @@ class TestEntityMapping:
 
 
 class TestRelationshipMapping:
+    def test_missing_relationship_id_columns_skipped(self):
+        gen = R2RMLGenerator("http://test.org/ontology/")
+        mapping_config = {
+            "entities": [],
+            "relationships": [
+                {
+                    "property": "http://test.org/ontology#hasOrder",
+                    "property_label": "hasOrder",
+                    "sql_query": "SELECT customer_id, order_id FROM orders",
+                    "source_id_column": None,
+                    "target_id_column": None,
+                }
+            ],
+        }
+
+        r2rml = gen.generate_mapping(mapping_config)
+
+        assert "TriplesMap_Rel_hasOrder_0" not in r2rml
+        assert "{None}" not in r2rml
+
     def test_relationship_triples_map(self):
         gen = R2RMLGenerator("http://test.org/ontology/")
         mapping_config = {

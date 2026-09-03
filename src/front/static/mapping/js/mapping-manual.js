@@ -568,10 +568,7 @@ window.ManualModule = {
         
         try {
             if (type === 'entity') {
-                // Get values from the panel (same IDs as Designer)
                 const sqlQuery = document.getElementById('epSqlQuery')?.value?.trim();
-                const idColumn = document.getElementById('epSummaryId')?.textContent;
-                const labelColumn = document.getElementById('epSummaryLabel')?.textContent;
                 
                 if (!sqlQuery) {
                     showNotification('Please enter a SQL query first', 'warning');
@@ -579,13 +576,31 @@ window.ManualModule = {
                     saveBtn.disabled = false;
                     return;
                 }
+                if (!EntityPanelState.idColumn) {
+                    showNotification('Please assign an ID column first', 'warning');
+                    saveBtn.innerHTML = originalHtml;
+                    saveBtn.disabled = false;
+                    return;
+                }
+
+                const existingMapping = MappingState.config.entities.find(
+                    m => m.ontology_class === uri
+                );
+                const excludedAttributes = EntityPanelState.excludedAttributes || [];
+                const attributeMappings = Object.fromEntries(
+                    Object.entries(EntityPanelState.attributeMappings || {})
+                        .filter(([attr]) => !excludedAttributes.includes(attr))
+                );
                 
                 const mapping = {
+                    ...existingMapping,
                     ontology_class: uri,
-                    class_name: label || name,
+                    ontology_class_label: label || name,
                     sql_query: sqlQuery,
-                    id_column: idColumn && idColumn !== 'Not set' ? idColumn : null,
-                    label_column: labelColumn && labelColumn !== 'Not set' ? labelColumn : null
+                    id_column: EntityPanelState.idColumn,
+                    label_column: EntityPanelState.labelColumn || '',
+                    attribute_mappings: attributeMappings,
+                    excluded_attributes: excludedAttributes
                 };
                 
                 const response = await fetch('/mapping/entity/add', {
@@ -608,10 +623,7 @@ window.ManualModule = {
                     MappingState.config.entities.push(result.mapping || mapping);
                 }
             } else {
-                // Get values from the panel (same IDs as Designer)
                 const sqlQuery = document.getElementById('rpSqlQuery')?.value?.trim();
-                const sourceColumn = document.getElementById('rpSummarySource')?.textContent;
-                const targetColumn = document.getElementById('rpSummaryTarget')?.textContent;
                 
                 if (!sqlQuery) {
                     showNotification('Please enter a SQL query first', 'warning');
@@ -619,13 +631,35 @@ window.ManualModule = {
                     saveBtn.disabled = false;
                     return;
                 }
+                if (!RelPanelState.sourceIdColumn || !RelPanelState.targetIdColumn) {
+                    showNotification('Please assign source and target ID columns first', 'warning');
+                    saveBtn.innerHTML = originalHtml;
+                    saveBtn.disabled = false;
+                    return;
+                }
+
+                const existingMapping = MappingState.config.relationships.find(
+                    m => m.property === uri
+                );
+                const ontologyProperty = MappingState.loadedOntology?.properties?.find(
+                    p => p.uri === uri
+                );
+                const excludedAttributes = RelPanelState.excludedAttributes || [];
+                const attributeMappings = Object.fromEntries(
+                    Object.entries(RelPanelState.attributeMappings || {})
+                        .filter(([attr]) => !excludedAttributes.includes(attr))
+                );
                 
                 const mapping = {
+                    ...existingMapping,
                     property: uri,
-                    property_name: label || name,
+                    property_label: label || name,
                     sql_query: sqlQuery,
-                    source_id_column: sourceColumn && sourceColumn !== 'Not set' ? sourceColumn : null,
-                    target_id_column: targetColumn && targetColumn !== 'Not set' ? targetColumn : null
+                    source_id_column: RelPanelState.sourceIdColumn,
+                    target_id_column: RelPanelState.targetIdColumn,
+                    attribute_mappings: attributeMappings,
+                    excluded_attributes: excludedAttributes,
+                    direction: existingMapping?.direction || ontologyProperty?.direction || 'forward'
                 };
                 
                 const response = await fetch('/mapping/relationship/add', {
