@@ -20,6 +20,9 @@ constraint-dependencies = [
     # Pulled in transitively (fastmcp/databricks-sdk). Dependabot #60/#61.
     "pydantic-settings>=2.14.2",
     # Security floors for transitive dependencies reported by Dependabot.
+    # cryptography 50.0.0 removes the PKCS#7 Bleichenbacher oracle. The
+    # standalone MCP graph has no MLflow upper bound blocking this release.
+    "cryptography>=50.0.0",
     "mcp>=1.28.1",
     "pyasn1>=0.6.4",
 ]

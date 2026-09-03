@@ -1,3 +1,30 @@
+## Raise dependency security floors
+
+Context: Uncommitted lock/constraint drift from the public PyPI resolve:
+SQL connector, NLTK, pip, transformers, and MCP cryptography floors.
+
+Changes:
+
+1. pyproject.toml
+   Floor databricks-sql-connector 4.4.0, nltk 3.10.3, pip 26.2.0, and
+   transformers 5.10.0.
+2. src/mcp-server/pyproject.toml
+   Floor cryptography 50.0.0 on the standalone MCP graph.
+3. uv.lock
+   Relock against pypi.org/simple with files.pythonhosted.org download URLs.
+4. src/mcp-server/uv.lock
+   Relock MCP constraints, including cryptography 50.0.1.
+
+Modified files:
+- pyproject.toml
+- src/mcp-server/pyproject.toml
+- uv.lock
+- src/mcp-server/uv.lock
+- changelogs/v0.8.0/benoitcayladbx_2026-09-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5845 passed, 304
+skipped, 6 deselected, 1 xfailed, 0 failed in 45.99s (same working tree).
+
 ## Tighten Databricks Apps file sync (keep Help Center)
 
 Context: The last DAB sync uploaded 702 files. `.databricksignore` is not

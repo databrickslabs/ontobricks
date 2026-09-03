@@ -28,7 +28,9 @@ dependencies = [
     "itsdangerous>=2.1.0",
     "jinja2>=3.1.0",
     "aiofiles>=23.0.0",
-    "databricks-sql-connector>=3.0.0",
+    # 4.4.0 raises its Thrift floor to 0.24.0, fixing the current Thrift
+    # certificate-validation, memory-amplification, and allocation advisories.
+    "databricks-sql-connector>=4.4.0",
     "databricks-sdk>=0.20.0",
     # pyarrow>=23.0.1: Arrow C++ IPC use-after-free (CVE-2026-25087 /
     # GHSA-rgxp-2hwp-jwgg). The Python binding doesn't expose the affected
@@ -66,8 +68,9 @@ lakebase = [
 pitfalls = [
     "sentence-transformers>=3.0.0",
     "scikit-learn>=1.3.0",
-    # nltk 3.10.0 fixes five path-traversal and unsafe-deserialization advisories.
-    "nltk>=3.10.0",
+    # nltk 3.10.3 fixes the currently patched path traversal, sandbox escape,
+    # unsafe-deserialization, and denial-of-service advisories.
+    "nltk>=3.10.3",
     "scipy>=1.11.0",
 ]
 
@@ -127,9 +130,11 @@ constraint-dependencies = [
     "sqlparse>=0.6.0",
     "mcp>=1.28.1",
     "pillow>=12.3.0",
-    "pip>=26.1.2",
+    "pip>=26.2.0",
     "pyasn1>=0.6.4",
     "setuptools>=83.0.0",
+    # Security floors for the optional pitfalls dependency graph.
+    "transformers>=5.10.0",
     "torch>=2.13.0",
     # urllib3 2.7.0 fixes two high-severity issues:
     #   GHSA-mf9v-mfxr-j63j  decompression-bomb bypasses in streaming API parts
