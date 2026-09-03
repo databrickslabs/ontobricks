@@ -139,6 +139,12 @@ class TestStaleResponseGuardStillApplies:
 class TestManualApplyUsesLivePanelState:
     """Manual Apply must persist the column selections owned by the shared panel."""
 
+    def test_column_selection_enables_apply_in_the_manual_host(self):
+        body = _function_body(_design(), "markMappingPanelDirty")
+        assert "currentPanelHostId === 'manualPanelBody'" in body
+        assert "manualSavePanelBtn" in body
+        assert "disabled = false" in body
+
     def test_entity_apply_uses_state_instead_of_removed_summary_elements(self):
         body = _method_body(_manual(), "saveMapping")
         assert "EntityPanelState.idColumn" in body

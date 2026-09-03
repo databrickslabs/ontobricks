@@ -1116,6 +1116,10 @@ function claimMappingPanel(panelBody, type, uri) {
 
 function markMappingPanelDirty() {
     currentPanelDirty = true;
+    if (currentPanelHostId === 'manualPanelBody') {
+        const saveBtn = document.getElementById('manualSavePanelBtn');
+        if (saveBtn && window.isActiveVersion !== false) saveBtn.disabled = false;
+    }
 }
 
 /**

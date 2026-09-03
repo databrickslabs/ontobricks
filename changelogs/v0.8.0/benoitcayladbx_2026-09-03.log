@@ -3,13 +3,16 @@
 Context: Manual entity mappings could display auto-assigned ID and Label
 columns in the Mapping tab while the Status tab still reported them as
 unassigned. Manual Apply also read removed summary elements, so those live
-assignments were saved as empty values (GitHub issue #158).
+assignments were saved as empty values. Entity TriplesMaps were consequently
+omitted from R2RML exports while relationships contained `{None}` templates
+(GitHub issues #158 and #159).
 
 Changes:
 
 1. src/front/static/mapping/js/mapping-design.js
    Refresh entity and relationship Status rows from the live shared-panel
-   column state whenever the mapping grid changes.
+   column state whenever the mapping grid changes, and enable Manual Apply
+   immediately after a column assignment changes.
 2. src/front/static/mapping/js/mapping-manual.js
    Persist live entity and relationship column assignments, attribute mappings,
    exclusions, labels, and relationship direction from Manual Apply.
@@ -34,12 +37,14 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q
 tests/units/front/test_manual_mapping_column_state.py
-tests/units/front/test_manual_mapping_panel_host.py` → 18 passed, 0 failed in
-0.18s; `uv run --frozen pytest -q -m "not scenario"` → 5843 passed, 304
-skipped, 6 deselected, 1 xfailed, 0 failed in 51.45s.
+tests/units/front/test_manual_mapping_panel_host.py
+tests/units/mapping/test_r2rml_generator.py` → 46 passed, 0 failed in 0.91s;
+`uv run --frozen pytest -q -m "not scenario"` → 5844 passed, 304 skipped,
+6 deselected, 1 xfailed, 0 failed in 44.41s.
 
 Browser verification: Manual Mapping at `/mapping/?section=manual` auto-assigned
 `AS ID` and `AS Label`, immediately showed green/current Status values, and
-persisted both assignments after Apply and reload. Relationship source/target
-status also remained green. No console, failed-request, or HTTP errors were
-observed.
+enabled Apply without requiring a SQL edit. Both entity and relationship
+assignments persisted after Apply and reload. Regenerated R2RML contained 18
+TriplesMaps, including 8 entity maps, and no `{None}`. No console,
+failed-request, or HTTP errors were observed.
