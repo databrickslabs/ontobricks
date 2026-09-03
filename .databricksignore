@@ -1,10 +1,17 @@
-# OntoBricks — files excluded from Databricks bundle sync
-# Only runtime-essential files should be deployed:
-#   src/          — application code
-#   docs/         — Help Center markdown + assets (/api/help/docs/*)
-#   app.yaml      — Databricks Apps runtime config
-#   run.py        — entry point
-#   pyproject.toml / uv.lock / requirements.txt — dependency resolution
+# OntoBricks — human/test mirror of `databricks.yml` `sync.exclude`.
+#
+# Databricks Asset Bundles do **not** read this file. Deployed files are:
+#   git-tracked − .gitignore + sync.include − sync.exclude
+# Keep this list aligned with `databricks.yml` so Help Center tests and
+# reviewers have one readable checklist. Edit both together.
+#
+# Runtime payload (must ship):
+#   src/          — application code, including mcp-server/ and jobs/
+#   docs/*.md     — Help Center catalog (see src/api/routers/internal/help.py)
+#   docs/images/  — Help Center diagrams
+#   docs/screenshots/
+#   app.yaml / run.py / pyproject.toml / uv.lock / requirements.txt
+#   LICENSE.txt / NOTICE.txt
 
 # ── Virtual environments ──────────────────────────────────────
 .venv/
@@ -17,11 +24,15 @@ __pycache__/
 dist/
 build/
 
-# ── Git / IDE / CI ────────────────────────────────────────────
+# ── Git / IDE / CI / planning ─────────────────────────────────
 .git/
 .github/
 .vscode/
 .cursor/
+.claude/
+.planning/
+.hypothesis/
+.superpowers/
 .databricks/
 
 # ── Tests & coverage ─────────────────────────────────────────
@@ -29,6 +40,8 @@ build/
 .coverage
 htmlcov/
 tests/
+ci/
+artifacts/
 
 # ── Local session, logs & databases ──────────────────────────
 fastapi_session/
@@ -37,11 +50,14 @@ logs/
 .ontobricks.pid
 .ontobricks.log
 mlflow.db
+mlruns/
+mlartifacts/
 
 # ── Documentation ─────────────────────────────────────────────
 # Ship ONLY the Help Center runtime set: catalogued docs/*.md + docs/images/
 # + docs/screenshots/ (served at /api/help/docs/*). Do NOT exclude docs/ itself.
-# Everything else under docs/ is internal-only and must stay out of the bundle:
+# Do NOT exclude README.md: CLI 0.298 also applies `/README.md` recursively,
+# dropping docs/README.md (Help Center Overview).
 docs/sphinx/
 docs/superpowers/
 docs/diagrams/
@@ -56,16 +72,19 @@ licenses/
 dab/
 documentation.html
 
-# ── DAB config (not needed at runtime) ───────────────────────
+# ── DAB config (not needed at runtime in the Apps files tree) ─
 databricks.yml
 .databricksignore
+resources/
 
 # ── Old app directory (replaced by back/, front/, shared/) ──
 src/app-ARCHIVE/
 app-ARCHIVE/
+src/.coding_rules.md
 
-# ── MCP server (has its own source_code_path) ────────────────
-src/mcp-server/
+# ── MCP server ───────────────────────────────────────────────
+# Do NOT exclude src/mcp-server/. Both apps share one DAB files tree;
+# MCP source_code_path is ./src/mcp-server.
 
 # ── OS / editor artifacts ────────────────────────────────────
 .DS_Store
@@ -73,21 +92,24 @@ src/mcp-server/
 .env.example
 
 # ── Dev / deployment scripts & tooling ───────────────────────
-Makefile
+/Makefile
 pytest.ini
 scripts/
 .cursorrules
 .gitignore
-LICENSE
+.pre-commit-config.yaml
+commitlint.config.js
+mypy_baseline.txt
+changelogs/
 
-# ── Internal-only docs / repo meta (not shipped) ────────────
+# ── Internal-only docs / repo meta (root only) ───────────────
 # WARNING: do NOT use a bare "internal/" pattern here — it would
 # also match src/api/routers/internal/, which is a required module
 # and its absence breaks app startup (ModuleNotFoundError).
-AGENTS.md
-CLAUDE.md
-CONTRIBUTING.md
-README.md
-SECURITY.md
+# WARNING: do not add README.md or /README.md — both 404 Help Overview.
+/CONTRIBUTING.md
+/AGENTS.md
+/CLAUDE.md
+/SECURITY.md
+/CONTRIBUTORS.md
 releases/
-.claude/

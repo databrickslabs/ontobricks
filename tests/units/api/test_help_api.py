@@ -220,6 +220,9 @@ class TestHelpDeployBundle:
         # /api/help/docs/*, so docs/ must NOT be excluded from the bundle.
         assert "docs/" not in blocked
         assert "*.md" not in blocked
+        # CLI 0.298 applies bare and slash-anchored patterns recursively.
+        assert "README.md" not in blocked
+        assert "/README.md" not in blocked
 
     def test_databricks_yml_includes_documentation_for_help_center(self):
         bundle_path = _REPO_ROOT / "databricks.yml"
@@ -229,6 +232,8 @@ class TestHelpDeployBundle:
         assert "docs/**" in includes
         assert "docs/" not in excludes
         assert "*.md" not in excludes
+        assert "README.md" not in excludes
+        assert "/README.md" not in excludes
 
     # docs/ content that is NOT part of the Help Center runtime set (catalogued
     # *.md + images/ + screenshots/) must be kept out of the deployed bundle,
@@ -272,6 +277,38 @@ class TestHelpDeployBundle:
             assert docs_path not in excludes
             assert docs_path not in blocked
             assert docs_path not in self._NON_RUNTIME_DOCS
+
+    _NON_RUNTIME_ROOT = {
+        ".github/",
+        ".planning/",
+        "ci/",
+        "licenses/",
+        "changelogs/",
+        "resources/",
+        "databricks.yml",
+        "pytest.ini",
+        "commitlint.config.js",
+        "mypy_baseline.txt",
+        "/CONTRIBUTORS.md",
+        "src/.coding_rules.md",
+    }
+
+    def test_bundle_excludes_non_runtime_repo_meta(self):
+        """DAB only honours sync.exclude (+ .gitignore), not .databricksignore."""
+        bundle = yaml.safe_load(
+            (_REPO_ROOT / "databricks.yml").read_text(encoding="utf-8")
+        )
+        excludes = set(bundle.get("sync", {}).get("exclude", []))
+        assert self._NON_RUNTIME_ROOT <= excludes, (
+            "databricks.yml must exclude non-runtime repo meta: missing "
+            f"{self._NON_RUNTIME_ROOT - excludes}"
+        )
+        # MCP and the graph-analytics job live in the same workspace files tree.
+        assert "src/mcp-server/" not in excludes
+        assert "src/jobs/" not in excludes
+        assert "app.yaml.template" not in excludes
+        assert "/app.yaml.template" not in excludes
+        assert "src/mcp-server/app.yaml.template" not in excludes
 
 
 class TestHelpDocFetch:

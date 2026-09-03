@@ -1,3 +1,52 @@
+## Tighten Databricks Apps file sync (keep Help Center)
+
+Context: The last DAB sync uploaded 702 files. `.databricksignore` is not
+applied by the CLI — only `.gitignore` plus `databricks.yml` `sync.exclude`.
+Repo meta (`.github/`, `.planning/`, `ci/`, `licenses/`, changelogs, DAB YAML)
+was still shipped. A bare `README.md` exclude also dropped `docs/README.md`,
+so Help Center Overview 404'd.
+
+Changes:
+
+1. databricks.yml
+   Expand `sync.exclude` for non-runtime folders; keep both README files
+   because CLI 0.298 applies slash-anchored excludes recursively; document that
+   `src/mcp-server/` and `src/jobs/` must stay in the shared files tree.
+   Keep both `app.yaml.template` files because this CLI applies even an
+   anchored root-template exclude recursively, while deploy verification
+   requires the MCP template.
+2. .databricksignore
+   Align with `sync.exclude` as a human/test mirror (CLI does not read it).
+3. src/api/routers/internal/help.py
+   Point the missing-docs boot warning at `sync.exclude`.
+4. tests/units/api/test_help_api.py
+   Contract: no recursive README/template excludes, extra non-runtime
+   excludes, and MCP/jobs kept.
+5. tests/e2e/conftest.py
+   Note the Overview 404 is fixed after the next deploy.
+6. docs/deployment.md
+   Document the real sync rules and the Help Center allow-list.
+7. docs/dab-reference.md
+   Same File Sync policy, shorter form.
+
+Modified files:
+- databricks.yml
+- .databricksignore
+- src/api/routers/internal/help.py
+- tests/units/api/test_help_api.py
+- tests/e2e/conftest.py
+- docs/deployment.md
+- docs/dab-reference.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5845 passed, 304
+skipped, 6 deselected, 1 xfailed, 0 failed in 45.99s.
+
+Deployment: `make deploy` → both apps RUNNING / compute ACTIVE / deployment
+SUCCEEDED after the delayed health check; `/healthz` → HTTP 200. Synced
+payload reduced from 702 to 618 files; Help Center `docs/README.md`, MCP
+template, and graph analytics job are present.
+
 ## Persist manual mapping columns and refresh status
 
 Context: Manual entity mappings could display auto-assigned ID and Label
@@ -48,3 +97,36 @@ enabled Apply without requiring a SQL edit. Both entity and relationship
 assignments persisted after Apply and reload. Regenerated R2RML contained 18
 TriplesMaps, including 8 entity maps, and no `{None}`. No console,
 failed-request, or HTTP errors were observed.
+
+## Raise dependency security floors
+
+Context: Dependabot reported 35 open alerts in the root and standalone MCP
+lockfiles. Raise every currently patchable dependency to a safe release while
+retaining the public PyPI artifact URLs required by deployment. Three alerts
+remain upstream-blocked: unpatched NLTK and MLflow advisories, and the root
+cryptography upgrade blocked by MLflow's `<50` constraint.
+
+Changes:
+
+1. pyproject.toml
+   Raise the Databricks SQL connector, NLTK, pip, and Transformers security
+   floors to resolve the patchable root dependency alerts.
+2. uv.lock
+   Resolve the upgraded connector, NLTK, pip, Thrift, Transformers, tokenizers,
+   and safetensors releases from public PyPI artifacts.
+3. src/mcp-server/pyproject.toml
+   Require cryptography 50 or newer in the standalone MCP dependency graph.
+4. src/mcp-server/uv.lock
+   Resolve cryptography 50.0.1, removing the MCP server's PKCS#7 oracle alert.
+
+Modified files:
+- pyproject.toml
+- uv.lock
+- src/mcp-server/pyproject.toml
+- src/mcp-server/uv.lock
+- changelogs/v0.8.0/benoitcayladbx_2026-09-03.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5844 passed, 304
+skipped, 6 deselected, 1 xfailed, 0 failed in 43.46s. Both lockfiles passed
+`UV_INDEX_URL=https://pypi.org/simple uv lock --check --native-tls`; all
+artifact URLs resolve through `https://files.pythonhosted.org`.

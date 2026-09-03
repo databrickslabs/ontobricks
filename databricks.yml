@@ -58,6 +58,13 @@ workspace:
   root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${var.app_name}/${bundle.target}
 
 sync:
+  # DAB syncs git-tracked files minus .gitignore, then applies include/exclude
+  # (gitignore syntax). `.databricksignore` is a human/test mirror of this list
+  # — the CLI does **not** read it. Keep both files aligned.
+  #
+  # Runtime payload: src/ (including mcp-server + jobs), run.py, app.yaml,
+  # pyproject.toml / uv.lock / requirements.txt, LICENSE.txt / NOTICE.txt,
+  # and the Help Center set under docs/ (catalogued *.md + images/ + screenshots/).
   include:
     # app.yaml is .gitignored (it is rendered from app.yaml.template at deploy
     # time with workspace-specific values).  Explicitly include it here so DAB
@@ -65,37 +72,61 @@ sync:
     - app.yaml
     - src/mcp-server/app.yaml
     # Help Center serves markdown from docs/ at runtime (/api/help/docs/*).
+    # Force-include tracked Help Center files even if a broader ignore matches.
     - docs/**
   exclude:
     - tests/
     - data/
     - .venv/
     - .git/
+    - .github/
     - .cursor/
+    - .claude/
+    - .planning/
+    - .hypothesis/
+    - .superpowers/
     - .pytest_cache/
     - htmlcov/
     - logs/
     - fastapi_session/
     - mlruns/
     - mlartifacts/
+    - artifacts/
+    - changelogs/
+    - ci/
+    - licenses/
+    - releases/
+    - scripts/
+    # DAB still *parses* resources/*.yml locally via `include:`; this only
+    # keeps the YAML out of the Apps workspace files tree.
+    - resources/
     - "*.pid"
     - "*.log"
     - ".env"
-    - scripts/
-    - Makefile
+    - databricks.yml
+    - .databricksignore
+    - .gitignore
+    - .cursorrules
+    - .env.example
+    - .pre-commit-config.yaml
+    - pytest.ini
+    - commitlint.config.js
+    - mypy_baseline.txt
+    - /Makefile
     - CHANGELOG.md
-    # Help Center ships docs/*.md; exclude root/repo meta markdown only.
-    - README.md
-    - CONTRIBUTING.md
-    - AGENTS.md
-    - CLAUDE.md
-    - SECURITY.md
-    - releases/
-    - .claude/
+    # Keep both README.md files. CLI 0.298 applies even `/README.md`
+    # recursively, which removes docs/README.md and 404s Help Overview.
+    - /CONTRIBUTING.md
+    - /AGENTS.md
+    - /CLAUDE.md
+    - /SECURITY.md
+    - /CONTRIBUTORS.md
+    - src/.coding_rules.md
+    # Do NOT exclude src/mcp-server/ — both apps share one workspace files tree;
+    # MCP `source_code_path` is ./src/mcp-server.
+    # Do NOT exclude src/jobs/ — graph_analytics_job.py is a workspace file.
     # docs/ ships ONLY the Help Center runtime set (catalogued *.md +
-    # images/, screenshots/). Everything else under docs/ is internal-only:
-    # Sphinx sources/build, planning artifacts, diagrams, demo assets, and
-    # non-catalogued checklists/guides — keep them out of the deployed bundle.
+    # images/, screenshots/). Everything else under docs/ is internal-only.
     - docs/sphinx/
     - docs/superpowers/
     - docs/diagrams/

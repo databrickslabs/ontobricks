@@ -85,14 +85,30 @@ Resource bindings persist across redeployments.
 
 ## File Sync
 
-The `.databricksignore` at the project root excludes non-runtime files (tests, docs, data, IDE config, the MCP server source) from the main app sync. The MCP server has its own `source_code_path` pointing directly to `src/mcp-server/`.
+DAB sync = git-tracked files − `.gitignore` + `sync.include` − `sync.exclude`
+in `databricks.yml`. `.databricksignore` is a human/test mirror only.
+
+**Shipped:** `src/` (including MCP + `src/jobs/`), `run.py`, `app.yaml`,
+lockfiles, `LICENSE.txt` / `NOTICE.txt`, and the Help Center set
+(`docs/*.md` catalogued in `help.py`, plus `docs/images/` and
+`docs/screenshots/`).
+
+**Not shipped:** tests, CI, scripts, changelogs, `.github/`, `.planning/`,
+third-party `licenses/`, Sphinx/demo docs, DAB YAML under `resources/`.
+
+Do not exclude `README.md` or `/README.md`: CLI 0.298 applies both recursively
+and drops Help Center Overview (`docs/README.md`). Both README files ship.
+
+Do not exclude `src/mcp-server/`; both apps share one files tree. Keep both
+`app.yaml.template` files too: this CLI matches an anchored root-template
+exclude recursively, and the deploy guard requires the MCP template.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `databricks.yml` | Bundle definition — apps, permissions, targets |
+| `databricks.yml` | Bundle definition — apps, permissions, targets, **sync.exclude** |
 | `app.yaml` | Main app runtime config (command, env vars, resources) |
 | `src/mcp-server/app.yaml` | MCP server runtime config |
-| `.databricksignore` | Excludes non-runtime files from the bundle sync |
+| `.databricksignore` | Mirror of `sync.exclude` (CLI does not read it) |
 | `scripts/deploy.sh` | Convenience wrapper around DAB commands |

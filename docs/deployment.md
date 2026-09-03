@@ -37,10 +37,10 @@ Deployment uses **Databricks Asset Bundles (DAB)** — a declarative, repeatable
 
 | File | Purpose |
 |------|---------|
-| `databricks.yml` | DAB bundle definition — apps, permissions, targets |
+| `databricks.yml` | Bundle definition — apps, permissions, targets, **sync.exclude** |
 | `app.yaml` | Main app runtime config — command, env vars, resource declarations |
 | `src/mcp-server/app.yaml` | MCP server runtime config |
-| `.databricksignore` | Excludes non-runtime files from the bundle sync |
+| `.databricksignore` | Human/test mirror of `sync.exclude` — the CLI does **not** read it |
 | `scripts/deploy.sh` | Convenience wrapper around DAB commands |
 
 ---
@@ -1452,13 +1452,12 @@ Tracing degrades gracefully: if MLflow is not configured, agents run normally wi
 
 ```
 OntoBricks/
-├── databricks.yml          # Bundle definition (apps, permissions, targets)
-├── .databricksignore       # Excludes non-runtime files from sync
+├── databricks.yml          # Bundle definition + sync.include / sync.exclude
+├── .databricksignore       # Mirror of sync.exclude (not read by the CLI)
 ├── app.yaml                # Main app runtime config
 ├── src/mcp-server/
 │   └── app.yaml            # MCP server runtime config
-└── docs/dab-reference.md
-    └── README.md           # DAB-specific documentation
+└── docs/                   # Help Center markdown + images + screenshots
 ```
 
 ### Targets
@@ -1503,7 +1502,37 @@ make bootstrap-lakebase  # Lakebase schema grants (see scripts/bootstrap/lakebas
 
 ### File Sync
 
-The `.databricksignore` at the project root excludes non-runtime files (tests, data, IDE config, Sphinx HTML build output, etc.) from the main app sync, but **includes** `docs/` so the in-app Help Center can serve `/api/help/docs/*` in production. The MCP server has its own `source_code_path` pointing directly to `src/mcp-server/`.
+DAB uploads **git-tracked files** minus `.gitignore`, then applies
+`databricks.yml` `sync.include` / `sync.exclude` (gitignore syntax).
+`.databricksignore` is a readable copy of that exclude list for reviewers
+and unit tests — **the Databricks CLI does not apply it**.
+
+**Must ship (runtime):**
+
+| Path | Why |
+|------|-----|
+| `src/` | App code. Includes `src/mcp-server/` (MCP `source_code_path`) and `src/jobs/` (graph-analytics workspace file). |
+| `run.py`, `app.yaml`, `pyproject.toml`, `uv.lock`, `requirements.txt` | Process entry + dependency install |
+| `LICENSE.txt`, `NOTICE.txt` | Apache notices |
+| Catalogued `docs/*.md` | Help Center (`/api/help/docs/{slug}`) — allow-list in `src/api/routers/internal/help.py` |
+| `docs/images/`, `docs/screenshots/` | Help Center assets |
+
+**Must not ship:** tests, CI, scripts, changelogs, `.github/`, `.planning/`,
+`.cursor/`, `licenses/`, Sphinx/demo docs (`docs/sphinx/`, `docs/superpowers/`,
+`docs/diagrams/`, `docs/pr47-neo4j-demo/`, checklists), `resources/*.yml`
+(parsed locally by DAB, not needed in the Apps files tree), and root meta
+markdown.
+
+Most root-only patterns are anchored (`/CONTRIBUTING.md`, `/AGENTS.md`, …).
+README is the exception: CLI 0.298 applies both `README.md` and `/README.md`
+recursively, so either excludes `docs/README.md` and 404s Help Center
+**Overview**. Both README files therefore ship.
+
+Do **not** exclude `src/mcp-server/`: both apps share one workspace files
+tree; the MCP app’s `source_code_path` is `./src/mcp-server`. Both
+`app.yaml.template` files also ship: this CLI matches even an anchored
+`/app.yaml.template` recursively, while the deployment source guard requires
+`src/mcp-server/app.yaml.template`.
 
 ### Binding existing apps
 

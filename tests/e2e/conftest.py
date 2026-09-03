@@ -389,8 +389,10 @@ _LIVE_SKIP_ENV_SPECIFIC = (
     "settings/test_write_flows.py::TestSettingsSaveSessionOnly",
     "security/test_permissions_flows.py::TestPermissionMiddlewareShape"
     "::test_settings_page_is_reachable_for_admin",
-    # Help docs are served from the synced docs/ dir; the deployed bundle
-    # excludes README.md, so the catalogued "Overview" (readme) slug 404s.
+    # Help docs are served from the synced docs/ dir. A bare README.md
+    # sync.exclude used to drop docs/README.md (Overview 404). That is
+    # now `/README.md` (root only). Keep these skipped against a live
+    # instance until that instance has been redeployed with the fix.
     "help/test_help_modal_flows.py::TestHelpDocsApi::test_help_doc_fetch_round_trip",
     "help/test_help_modal_flows.py::TestHelpDocsApi::test_all_catalogued_docs_return_200",
     # The Apps gateway rejects the path-traversal URL with 400 before the app's
