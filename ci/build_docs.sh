@@ -64,7 +64,7 @@ find_sphinx_build
 if ! "$PYTHON" -c "import myst_parser" 2>/dev/null; then
     echo "Installing Sphinx dependencies (sphinx, myst-parser)..."
     "$PYTHON" -m pip install -q "sphinx>=7" "myst-parser>=3" || {
-        echo "ERROR: myst-parser is required for Topic guides. Run: uv sync   or   pip install myst-parser"
+        echo "ERROR: myst-parser is required for Topic guides. Run: uv sync --frozen   or   pip install myst-parser"
         exit 1
     }
 fi

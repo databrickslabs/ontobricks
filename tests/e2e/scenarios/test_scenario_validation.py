@@ -42,7 +42,7 @@ app + the durable domain, so it is gated the same way as the other scenarios.
 Run (against the local dev server, after the other scenarios):
 
     ONTOBRICKS_SCENARIO_LIVE=1 \\
-    uv run pytest tests/e2e/scenarios/test_scenario_validation.py \\
+    uv run --frozen pytest tests/e2e/scenarios/test_scenario_validation.py \\
         -m scenario -v -s --no-cov
 
 Override the target via env:

@@ -17,7 +17,7 @@ Per `.cursorrules`: every code change appends a section to `changelogs/<user>_<Y
 - `path/to/file.py`
 - `path/to/another.py`
 
-**Tests:** `uv run pytest tests/<scope>/` — N passed, M failed
+**Tests:** `uv run --frozen pytest tests/<scope>/` — N passed, M failed
 ```
 
 ## When to append vs create

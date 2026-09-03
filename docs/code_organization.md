@@ -329,7 +329,7 @@ The **MCP** package exposes OntoBricks capabilities (domains, status, entities, 
 ### 6.2 Layout
 
 - **`src/mcp-server/server/app.py`** — `FastMCP` server factory (`create_mcp_server`), tool/resource definitions, HTTP client helpers, response formatting; **`create_databricks_app`** builds a **combined** FastAPI app mounting MCP HTTP routes for Databricks App deployment.
-- **`src/mcp-server/server/main.py`** — CLI entry (`uv run mcp-ontobricks`) running **`combined_app`** with Uvicorn.
+- **`src/mcp-server/server/main.py`** — CLI entry (`uv run --frozen mcp-ontobricks`) running **`combined_app`** with Uvicorn.
 - **`app.yaml`** / deploy scripts (see `docs/deployment.md`) wire env vars: `ONTOBRICKS_URL`, registry volume or catalog/schema/volume, warehouse ID, etc.
 
 ### 6.3 Operating modes (from module docstring)
@@ -489,8 +489,8 @@ All logging goes through `back/core/logging/LogManager`.
 
 ## 11. Testing and Deployment
 
-- **Test framework**: `pytest` for the backend. Run with `uv run pytest -q`.
-- **Package management**: This project uses **uv** for Python package management and virtual environment management. Dependencies are declared in `pyproject.toml`. Run commands via `uv run <command>`.
+- **Test framework**: `pytest` for the backend. Run with `uv run --frozen pytest -q -m "not scenario"`.
+- **Package management**: This project uses **uv** for Python package management and virtual environment management. Dependencies are declared in `pyproject.toml`. Run routine commands via `uv run --frozen <command>`.
 - **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `app.yaml` (Databricks Asset Bundle format).
 - **Development Server**: Run via `run.py` which imports `create_app` from `shared.fastapi.main`. Uvicorn with auto-reload for local development.
 - **Changelog**: After any code change, update `/changelogs/YYYY-MM-DD.log` with a section including title, context, numbered changes with file paths, modified files list, and test results.
@@ -550,4 +550,4 @@ All logging goes through `back/core/logging/LogManager`.
 
 ---
 
-*For day-to-day contributor workflows (tests, deps, rights), see [`development.md`](development.md). For product-level architecture, see [`architecture.md`](architecture.md). For detailed coding rules and refactoring guidelines, see [`src/.coding_rules.md`](../src/.coding_rules.md).*
+*For day-to-day contributor workflows (tests, deps, rights), see [`development.md`](development.md). For product-level architecture, see [`architecture.md`](architecture.md). Detailed coding and refactoring rules live in `src/.coding_rules.md`.*

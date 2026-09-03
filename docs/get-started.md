@@ -65,7 +65,7 @@ source .venv/bin/activate  # On macOS/Linux
 # .venv\Scripts\activate   # On Windows
 
 # Install dependencies (Lakebase Postgres driver is mandatory since v0.4.0)
-uv sync --extra lakebase
+uv sync --frozen --extra lakebase
 # Or with pip:
 pip install -e ".[lakebase]"
 ```

@@ -31,13 +31,14 @@ the (now partially broken, on purpose) mapping by hand.
 Run (against the local dev server, started separately via ``scripts/start.sh``):
 
     ONTOBRICKS_SCENARIO_LIVE=1 \\
-    uv run pytest tests/e2e/scenarios/test_scenario_04_metadata_integrity.py \\
+    uv run --frozen pytest tests/e2e/scenarios/test_scenario_04_metadata_integrity.py \\
         -m scenario -v -s --no-cov
 
 This test process needs its own Databricks credentials to run the scratch-
-table DDL directly (the same ones ``scripts/start.sh`` needs, so running in
-the same shell as the dev server is enough): ``DATABRICKS_HOST``,
-``DATABRICKS_TOKEN``, ``DATABRICKS_SQL_WAREHOUSE_ID``.
+table DDL directly. Export ``DATABRICKS_CONFIG_PROFILE`` (or
+``DATABRICKS_HOST`` + ``DATABRICKS_TOKEN``) and
+``DATABRICKS_SQL_WAREHOUSE_ID`` in the pytest shell; starting the app from a
+different shell does not export those values back to the caller.
 
 Override the target / inputs via env:
     ONTOBRICKS_LIVE_BASE          base URL (default http://localhost:8000)

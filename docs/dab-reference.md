@@ -21,45 +21,47 @@ See also: [Databricks Asset Bundles docs](https://docs.databricks.com/dev-tools/
 # 1. Validate
 databricks bundle validate
 
-# 2. Deploy both apps (dev target)
-databricks bundle deploy
+# 2. Deploy both apps (configured Lakebase target)
+make deploy
 
-# 3. Start
-databricks bundle run ontobricks_app
-databricks bundle run mcp_ontobricks_app
+# Or deploy/run explicitly:
+databricks bundle deploy -t <DAB_TARGET>
+databricks bundle run ontobricks_dev_app -t <DAB_TARGET>
+databricks bundle run mcp_ontobricks_app -t <DAB_TARGET>
 
-# Or use the convenience script:
-scripts/deploy.sh --all
+# DAB_TARGET normally comes from scripts/deploy.config.sh.
 ```
 
 ## Convenience Script (`scripts/deploy.sh`)
 
 ```bash
-scripts/deploy.sh                  # validate + deploy + run main app (dev)
-scripts/deploy.sh --all            # validate + deploy + run both apps
-scripts/deploy.sh --mcp-only       # validate + deploy + run MCP only
-scripts/deploy.sh -t prod          # deploy to production target
-scripts/deploy.sh --no-run         # deploy without starting apps
-scripts/deploy.sh --bind           # also bind existing apps post-deploy
+scripts/deploy.sh                  # validate + deploy + run both apps
+scripts/deploy.sh -t dev           # explicit Volume-only target
+scripts/deploy.sh -t dev-lakebase  # legacy unsuffixed Lakebase target
+scripts/deploy.sh --no-run         # deploy without starting either app
+scripts/deploy.sh --bind           # bind existing apps during deployment
+scripts/deploy.sh --dry-run        # preflight and validate without changes
 ```
 
 ## Targets
 
 | Target | Mode | Description |
 |--------|------|-------------|
-| `dev` | development | Default. Uses the authenticated user's workspace path. |
-| `prod` | production | Explicit root path, restricted permissions. |
+| `dev` | development | Volume-only registry backend. |
+| `dev-lakebase` | development | Legacy unsuffixed Lakebase target. |
+| `dev-lakebase-<INSTANCE_ID>` | development | Generated per-instance Lakebase target used by `make deploy`. |
 
 ## Variables
 
 Override defaults with `--var` flags or in a target-specific `variables:` block:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `warehouse_id` | `66e8366e84d57752` | SQL Warehouse ID |
-| `registry_catalog` | `benoit_cayla` | Catalog for the project registry |
-| `registry_schema` | `ontobricks` | Schema for the project registry |
-| `registry_volume` | `OntoBricksRegistry` | Volume name for the project registry |
+| Variable | Description |
+|----------|-------------|
+| `app_name` / `mcp_app_name` | Main and MCP Databricks App names |
+| `warehouse_id` | SQL Warehouse bound to both apps |
+| `registry_catalog` / `registry_schema` / `registry_volume` | Unity Catalog registry Volume |
+| `lakebase_project` / `lakebase_branch` / `lakebase_database_resource_segment` | Lakebase Autoscaling binding |
+| `lakebase_registry_schema` | Postgres schema used by the registry |
 
 ```bash
 databricks bundle deploy --var warehouse_id=abc123def456

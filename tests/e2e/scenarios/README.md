@@ -30,7 +30,7 @@ make scenario-campaign
 make scenario-campaign ONTOBRICKS_LIVE_BASE=https://<app-url>
 
 # a single step, iteratively, against an already set-up registry
-ONTOBRICKS_SCENARIO_LIVE=1 uv run pytest \
+ONTOBRICKS_SCENARIO_LIVE=1 uv run --frozen pytest \
   tests/e2e/scenarios/test_scenario_03_rules_analysis.py -v -s --no-cov
 ```
 
@@ -54,6 +54,19 @@ suite in order and writes reports to `artifacts/scenarios/`:
 
 The make recipe inherits your shell environment, so exporting any of the above
 before `make scenario-campaign` works.
+
+### Scenario-specific prerequisites
+
+- `test_full_lifecycle.py` is deterministic and session-only. If a campaign
+  targets an already-running local app but the configured live bearer profile
+  is unavailable, run it independently with
+  `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest
+  tests/e2e/scenarios/test_full_lifecycle.py -m scenario -v -s --no-cov`.
+- Scenario 4 creates and drops two scratch Unity Catalog tables from the pytest
+  process. Export `DATABRICKS_CONFIG_PROFILE` and
+  `DATABRICKS_SQL_WAREHOUSE_ID` before the campaign, or run it independently
+  with those values plus `ONTOBRICKS_SCENARIO_LIVE=1` and
+  `ONTOBRICKS_LIVE_BASE`.
 
 ## Dependency chaining
 

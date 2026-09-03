@@ -32,7 +32,7 @@ it never runs in the default matrix.
 Run (against the local dev server, after scenario 1):
 
     ONTOBRICKS_SCENARIO_LIVE=1 \\
-    uv run pytest tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py \\
+    uv run --frozen pytest tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py \\
         -m scenario -v -s --no-cov
 
 Override the target via env:

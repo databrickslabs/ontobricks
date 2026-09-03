@@ -514,7 +514,7 @@ src/mcp-server/
     ├── __init__.py
     ├── app.py               # MCP tools, domain selection, text formatting,
     │                        #   URI helpers, combined FastAPI+MCP app factory
-    └── main.py              # Entry point: uv run mcp-ontobricks
+    └── main.py              # Entry point: uv run --frozen mcp-ontobricks
 ```
 
 ### Deployment
@@ -531,8 +531,8 @@ make deploy
 databricks bundle run mcp_ontobricks_app -t <DAB_TARGET>
 ```
 
-Legacy standalone script (still under `src/mcp-server/` for one-off workspace
-deploys outside the bundle):
+Legacy wrapper (still under `src/mcp-server/` for compatibility; it delegates
+to the repository DAB deployment):
 
 ```bash
 cd src/mcp-server
@@ -570,7 +570,7 @@ Or from the `mcp-server` directory:
 
 ```bash
 cd mcp-server
-uv run python -c "from server.app import create_mcp_server; create_mcp_server('standalone').run(transport='stdio')"
+uv run --frozen python -c "from server.app import create_mcp_server; create_mcp_server('standalone').run(transport='stdio')"
 ```
 
 By default the server connects to `http://localhost:8000`. Override with:

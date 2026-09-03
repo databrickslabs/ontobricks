@@ -41,7 +41,7 @@ registry).
 Run (against the local dev server, after scenarios 1 and 2):
 
     ONTOBRICKS_SCENARIO_LIVE=1 \\
-    uv run pytest tests/e2e/scenarios/test_scenario_03_rules_analysis.py \\
+    uv run --frozen pytest tests/e2e/scenarios/test_scenario_03_rules_analysis.py \\
         -m scenario -v -s --no-cov
 
 Override the target / timeouts via env:

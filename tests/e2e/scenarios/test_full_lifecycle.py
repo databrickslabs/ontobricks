@@ -23,7 +23,8 @@ auto-assign, the LLM wizard) is intentionally out of scope here — those
 belong in the live-gated suites.
 
 Run:
-    uv run pytest tests/e2e/scenarios/ -v
+    ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest \\
+        tests/e2e/scenarios/test_full_lifecycle.py -m scenario -v
 """
 
 from __future__ import annotations

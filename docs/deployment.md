@@ -163,7 +163,7 @@ OntoBricks uses Lakebase Postgres (Autoscaling) as **both** its registry store (
 
 ### D. Network Ports
 
-**Local development** (`scripts/start.sh` / `uv run python run.py`):
+**Local development** (`scripts/start.sh` / `uv run --frozen python run.py`):
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -298,7 +298,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # `--extra lakebase` is required since v0.4.0 — the registry runs on Lakebase Postgres.
 uv venv
 source .venv/bin/activate
-uv sync --extra lakebase
+uv sync --frozen --extra lakebase
 ```
 
 ### Environment Variables
@@ -373,16 +373,16 @@ in the deployed app:
 
 ```bash
 scripts/start.sh
-# Or directly: uv run python run.py
+# Or directly: uv run --frozen python run.py
 # Open http://localhost:8000
 ```
 
 ### Running Tests
 
 ```bash
-uv run pytest                                      # all tests
-uv run pytest --cov=back --cov=front --cov=shared --cov=api --cov=agents --cov-report=html   # with coverage
-uv run pytest tests/e2e/ -v                        # end-to-end tests
+uv run --frozen pytest -q -m "not scenario"        # routine full suite
+uv run --frozen pytest --cov=back --cov=front --cov=shared --cov=api --cov=agents --cov-report=html
+make scenario-campaign                             # explicit live scenario journey
 ```
 
 ---
@@ -1356,7 +1356,7 @@ For LLM clients like Cursor or Claude Desktop (stdio transport):
 
 ```bash
 cd mcp-server
-uv run python -c \
+uv run --frozen python -c \
   "from server.app import create_mcp_server; create_mcp_server('standalone').run(transport='stdio')"
 ```
 

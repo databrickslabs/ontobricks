@@ -25,6 +25,10 @@ as a release artifact:
    (`pypi-proxy.dev.databricks.com`) cold-caches and times out on freshly
    published wheels, crashing the deploy. **Never** commit a lock containing
    `pypi-proxy.dev.databricks.com` URLs.
+   `source = { registry = "https://pypi.org/simple" }` is expected: it records
+   the resolution index. Under `--frozen`, uv downloads the pinned
+   `files.pythonhosted.org` artifacts and validates their hashes; it does not
+   re-resolve from the index.
 
 2. **The dev shell defaults to the proxy.** `UV_INDEX_URL` / `PIP_INDEX_URL` are
    usually set to `https://pypi-proxy.dev.databricks.com/simple`. Any bare

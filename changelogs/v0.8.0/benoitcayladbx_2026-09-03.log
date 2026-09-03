@@ -1,3 +1,85 @@
+## Synchronize documentation and scenario guidance
+
+Context: Deployment-sync and dependency floors changed in v0.8.0, while
+several contributor, installation, license, and scenario guides still showed
+older versions or unsafe bare `uv` commands. The complete live scenario set
+also has two distinct credential modes that the campaign guide did not make
+explicit.
+
+Changes:
+
+1. README.md, CONTRIBUTING.md
+   Document frozen public-PyPI installs, bundle sync ownership, and safe local
+   commands.
+2. docs/development.md, licenses/README.md
+   Align dependency/security floors with both pyproject files; explain
+   pypi.org index metadata versus files.pythonhosted.org artifacts.
+3. docs/deployment.md, docs/get-started.md, docs/features.md,
+   docs/lakebase-graphdb.md, docs/mcp.md, docs/code_organization.md,
+   docs/DEPLOY_CHECKLIST.md
+   Replace routine bare uv commands with `--frozen`, clarify scenario
+   prerequisites, and fix Sphinx cross-references.
+4. tests/e2e/scenarios/README.md, tests/e2e/scenarios/conftest.py,
+   tests/e2e/scenarios/test_full_lifecycle.py,
+   tests/e2e/scenarios/test_scenario_01_generate_live.py,
+   tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py,
+   tests/e2e/scenarios/test_scenario_03_rules_analysis.py,
+   tests/e2e/scenarios/test_scenario_04_metadata_integrity.py,
+   tests/e2e/scenarios/test_scenario_validation.py
+   Document the complete campaign, deterministic browser run, and the explicit
+   profile/warehouse requirements for scratch-table scenario 4.
+5. .cursor/09-package-management.mdc, src/.coding_rules.md,
+   changelogs/README.md, ci/build_docs.sh
+   Keep canonical package, test, changelog, and Sphinx guidance consistent.
+6. src/back/core/external/pitfalls/utils.py
+   Update the NLTK defense-in-depth note for the 3.10.3 floor.
+7. src/mcp-server/.databricksignore
+   Mark the nested ignore list as legacy standalone-sync guidance; DAB uses
+   the root bundle configuration.
+8. docs/dab-reference.md, src/mcp-server/deploy-mcp-server.sh
+   Remove unsupported `--all`, `--mcp-only`, and `prod` guidance; make the
+   compatibility wrapper delegate correctly to the shared two-app bundle.
+
+Modified files:
+- .cursor/09-package-management.mdc
+- CONTRIBUTING.md
+- README.md
+- changelogs/README.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-03.log
+- ci/build_docs.sh
+- docs/DEPLOY_CHECKLIST.md
+- docs/code_organization.md
+- docs/dab-reference.md
+- docs/deployment.md
+- docs/development.md
+- docs/features.md
+- docs/get-started.md
+- docs/lakebase-graphdb.md
+- docs/mcp.md
+- licenses/README.md
+- src/.coding_rules.md
+- src/back/core/external/pitfalls/utils.py
+- src/mcp-server/.databricksignore
+- src/mcp-server/deploy-mcp-server.sh
+- tests/e2e/scenarios/README.md
+- tests/e2e/scenarios/conftest.py
+- tests/e2e/scenarios/test_full_lifecycle.py
+- tests/e2e/scenarios/test_scenario_01_generate_live.py
+- tests/e2e/scenarios/test_scenario_02_collab_lifecycle.py
+- tests/e2e/scenarios/test_scenario_03_rules_analysis.py
+- tests/e2e/scenarios/test_scenario_04_metadata_integrity.py
+- tests/e2e/scenarios/test_scenario_validation.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5845 passed, 304
+skipped, 6 deselected, 1 xfailed, 0 failed in 45.94s.
+
+Scenarios: `make scenario-campaign` → 4 passed, 2 environment-gated skips in
+29m42s; both gated scenarios then ran explicitly → 2 passed (9.02s and
+57.51s). Combined complete scenario set: 6 passed, 0 failed. Validation:
+13 passed checks, 0 failed, 2 informational.
+
+Documentation: `ci/build_docs.sh` → successful, 0 warnings.
+
 ## Raise dependency security floors
 
 Context: Uncommitted lock/constraint drift from the public PyPI resolve:

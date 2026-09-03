@@ -131,10 +131,15 @@ workspace. Architecture deep-dive: [architecture.md](docs/architecture.md).
 
 ```bash
 git clone <repository-url> && cd OntoBricks
-uv sync                     # resolve dependencies from pyproject.toml
+uv sync --frozen --extra lakebase  # install the committed public-PyPI lock
 cp .env.example .env        # set your Databricks host, token, warehouse ID
 scripts/start.sh            # open http://localhost:8000
 ```
+
+Always use `--frozen` for routine `uv sync` / `uv run` commands. The lock
+records package indexes as `https://pypi.org/simple` and immutable artifact
+downloads on `https://files.pythonhosted.org`; do not commit internal
+`pypi-proxy.dev.databricks.com` URLs.
 
 **Deploy to Databricks Apps**
 
@@ -150,6 +155,11 @@ idempotent deploy checklist — including one-click graph-DB provisioning and
 permission bootstrap — are in the
 **[Get Started](docs/get-started.md)** and
 **[Deployment Guide](docs/deployment.md)**.
+
+The bundle syncs only runtime source, the MCP and graph-job files, dependency
+locks, and the in-app Help Center set. `databricks.yml` `sync.exclude` is
+authoritative; `.databricksignore` is a reviewer/test mirror and is not read
+by the Databricks CLI.
 
 ## Documentation
 

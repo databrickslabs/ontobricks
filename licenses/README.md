@@ -27,34 +27,34 @@ This folder contains the license files for all external libraries used by OntoBr
 | aiofiles | >=23.0.0 | Apache-2.0 | [python/aiofiles-LICENSE.txt](python/aiofiles-LICENSE.txt) |
 | APScheduler | >=3.10 | MIT | [python/apscheduler-LICENSE.txt](python/apscheduler-LICENSE.txt) |
 | Databricks SDK | >=0.20.0 | Apache-2.0 | [python/databricks-sdk-LICENSE.txt](python/databricks-sdk-LICENSE.txt) |
-| databricks-sql-connector | >=3.0.0 | Apache-2.0 | [python/databricks-sql-connector-LICENSE.txt](python/databricks-sql-connector-LICENSE.txt) |
-| FastAPI | >=0.109.0 | MIT | [python/fastapi-LICENSE.txt](python/fastapi-LICENSE.txt) |
+| databricks-sql-connector | >=4.4.0 | Apache-2.0 | [python/databricks-sql-connector-LICENSE.txt](python/databricks-sql-connector-LICENSE.txt) |
+| FastAPI | >=0.129.0 | MIT | [python/fastapi-LICENSE.txt](python/fastapi-LICENSE.txt) |
 | ItsDangerous | >=2.1.0 | BSD-3-Clause | [python/itsdangerous-LICENSE.txt](python/itsdangerous-LICENSE.txt) |
 | Jinja2 | >=3.1.0 | BSD-3-Clause | [python/jinja2-LICENSE.txt](python/jinja2-LICENSE.txt) |
-| MLflow | >=2.19.0 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
+| MLflow | >=3.15.0 | Apache-2.0 | [python/mlflow-LICENSE.txt](python/mlflow-LICENSE.txt) |
 | NetworkX | >=3.0 | BSD-3-Clause | [python/networkx-LICENSE.txt](python/networkx-LICENSE.txt) |
 | OWL-RL | >=7.0.0 | W3C Software License | [python/owlrl-LICENSE.txt](python/owlrl-LICENSE.txt) |
-| PyArrow | >=14.0.0 | Apache-2.0 | [python/pyarrow-LICENSE.txt](python/pyarrow-LICENSE.txt) |
+| PyArrow | >=23.0.1 | Apache-2.0 | [python/pyarrow-LICENSE.txt](python/pyarrow-LICENSE.txt) |
 | Pydantic | >=2.5.0 | MIT | [python/pydantic-LICENSE.txt](python/pydantic-LICENSE.txt) |
-| Pydantic Settings | >=2.1.0 | MIT | [python/pydantic-settings-LICENSE.txt](python/pydantic-settings-LICENSE.txt) |
+| Pydantic Settings | >=2.14.2 | MIT | [python/pydantic-settings-LICENSE.txt](python/pydantic-settings-LICENSE.txt) |
 | pySHACL | >=0.26.0 | Apache-2.0 | [python/pyshacl-LICENSE.txt](python/pyshacl-LICENSE.txt) |
-| python-dotenv | >=1.0.0 | BSD-3-Clause | [python/python-dotenv-LICENSE.txt](python/python-dotenv-LICENSE.txt) |
-| python-multipart | >=0.0.6 | Apache-2.0 | [python/python-multipart-LICENSE.txt](python/python-multipart-LICENSE.txt) |
-| RDFLib | >=7.0.0 | BSD-3-Clause | [python/rdflib-LICENSE.txt](python/rdflib-LICENSE.txt) |
-| Requests | >=2.31.0 | Apache-2.0 | [python/requests-LICENSE.txt](python/requests-LICENSE.txt) |
-| Starlette | >=0.35.0 | BSD-3-Clause | [python/starlette-LICENSE.txt](python/starlette-LICENSE.txt) |
-| Strawberry GraphQL | >=0.220.0 | MIT | [python/strawberry-graphql-LICENSE.txt](python/strawberry-graphql-LICENSE.txt) |
+| python-dotenv | >=1.2.2 | BSD-3-Clause | [python/python-dotenv-LICENSE.txt](python/python-dotenv-LICENSE.txt) |
+| python-multipart | >=0.0.30 | Apache-2.0 | [python/python-multipart-LICENSE.txt](python/python-multipart-LICENSE.txt) |
+| RDFLib | >=7.6.0 | BSD-3-Clause | [python/rdflib-LICENSE.txt](python/rdflib-LICENSE.txt) |
+| Requests | >=2.33.0 | Apache-2.0 | [python/requests-LICENSE.txt](python/requests-LICENSE.txt) |
+| Starlette | >=1.3.1 | BSD-3-Clause | [python/starlette-LICENSE.txt](python/starlette-LICENSE.txt) |
+| Strawberry GraphQL | >=0.315.7 | MIT | [python/strawberry-graphql-LICENSE.txt](python/strawberry-graphql-LICENSE.txt) |
 | Uvicorn | >=0.27.0 | BSD-3-Clause | [python/uvicorn-LICENSE.txt](python/uvicorn-LICENSE.txt) |
 
 ## Python Libraries (Optional — Pitfalls Detection)
 
-> Install with `uv sync --extra pitfalls`. Heavy ML dependencies; not required for core operation.
+> Install with `uv sync --frozen --extra pitfalls`. Heavy ML dependencies; not required for core operation.
 > The detector logic (`runner.py`, `utils.py`) is vendored from [D2KLab/Ontology-Pitfalls-Detector](https://github.com/D2KLab/Ontology-Pitfalls-Detector) (Apache-2.0) and modified for OntoBricks.
 
 | Library | Version | License | File |
 |---------|---------|---------|------|
 | D2KLab Ontology-Pitfalls-Detector (vendored) | 2023 | Apache-2.0 | [python/d2klab-ontology-pitfalls-detector-LICENSE.txt](python/d2klab-ontology-pitfalls-detector-LICENSE.txt) |
-| NLTK | >=3.8.0 | Apache-2.0 | [python/nltk-LICENSE.txt](python/nltk-LICENSE.txt) |
+| NLTK | >=3.10.3 | Apache-2.0 | [python/nltk-LICENSE.txt](python/nltk-LICENSE.txt) |
 | scikit-learn | >=1.3.0 | BSD-3-Clause | [python/scikit-learn-LICENSE.txt](python/scikit-learn-LICENSE.txt) |
 | SciPy | >=1.11.0 | BSD-3-Clause | [python/scipy-LICENSE.txt](python/scipy-LICENSE.txt) |
 | sentence-transformers | >=3.0.0 | Apache-2.0 | [python/sentence-transformers-LICENSE.txt](python/sentence-transformers-LICENSE.txt) |
@@ -65,6 +65,7 @@ This folder contains the license files for all external libraries used by OntoBr
 |---------|---------|---------|------|
 | FastMCP | >=2.3.1 | Apache-2.0 | [python/fastmcp-LICENSE.txt](python/fastmcp-LICENSE.txt) |
 | HTTPX | >=0.25.0 | BSD-3-Clause | [python/httpx-LICENSE.txt](python/httpx-LICENSE.txt) |
+| cryptography | >=50.0.0 | Apache-2.0 / BSD-3-Clause | [cryptography.io](https://cryptography.io/) |
 
 > FastAPI, Uvicorn, Pydantic, and Databricks SDK are also used by the MCP server; their licenses are listed in the main application section above.
 

@@ -19,7 +19,7 @@ For the developer guide on *adding a new engine*, see `docs/graphdb-integration.
 6. [Postgres schema layout](#6-postgres-schema-layout)
 7. [Scripts reference](#7-scripts-reference)
 8. [Permissions bootstrap](#8-permissions-bootstrap)
-9. [Knowledge Graph build — step by step](#knowledge-graph-build-step-by-step)
+9. [Knowledge Graph build — step by step](#9-knowledge-graph-build--step-by-step)
 10. [Troubleshooting](#10-troubleshooting)
 
 ---
@@ -83,7 +83,7 @@ Lakebase support is an **optional extra** since v0.4.0:
 
 ```bash
 # Local development
-uv sync --extra lakebase
+uv sync --frozen --extra lakebase
 
 # Or pip
 pip install ".[lakebase]"

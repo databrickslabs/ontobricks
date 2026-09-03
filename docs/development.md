@@ -14,28 +14,28 @@ This document describes all external dependencies used by OntoBricks, including 
 
 | Package | Version | Description | License | Link |
 |---------|---------|-------------|---------|------|
-| **FastAPI** | ≥0.109.0 | Modern, fast web framework for building APIs with Python | MIT | [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) |
+| **FastAPI** | ≥0.129.0 | Modern, fast web framework for building APIs with Python | MIT | [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) |
 | **Uvicorn** | ≥0.27.0 | Lightning-fast ASGI server implementation (with `standard` extras) | BSD-3-Clause | [uvicorn.org](https://uvicorn.org/) |
-| **Starlette** | ≥0.35.0 | Lightweight ASGI toolkit (FastAPI dependency, pinned for middleware features) | BSD-3-Clause | [starlette.io](https://www.starlette.io/) |
+| **Starlette** | ≥1.3.1 | Lightweight ASGI toolkit (FastAPI dependency, pinned for middleware and security fixes) | BSD-3-Clause | [starlette.io](https://www.starlette.io/) |
 | **Jinja2** | ≥3.1.0 | Template engine for Python | BSD-3-Clause | [jinja.palletsprojects.com](https://jinja.palletsprojects.com/) |
 | **pydantic** | ≥2.5.0 | Data validation using Python type hints | MIT | [docs.pydantic.dev](https://docs.pydantic.dev/) |
-| **pydantic-settings** | ≥2.1.0 | Settings management with environment variable loading (BaseSettings) | MIT | [docs.pydantic.dev/latest/concepts/pydantic_settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
-| **python-multipart** | ≥0.0.6 | Multipart form data parsing for file uploads in FastAPI | Apache-2.0 | [pypi.org/project/python-multipart](https://pypi.org/project/python-multipart/) |
+| **pydantic-settings** | ≥2.14.2 | Settings management with environment variable loading (BaseSettings) | MIT | [docs.pydantic.dev/latest/concepts/pydantic_settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
+| **python-multipart** | ≥0.0.30 | Multipart form data parsing for file uploads in FastAPI | Apache-2.0 | [pypi.org/project/python-multipart](https://pypi.org/project/python-multipart/) |
 | **itsdangerous** | ≥2.1.0 | Cryptographic signing utilities (available for session security) | BSD-3-Clause | [palletsprojects.com/p/itsdangerous](https://palletsprojects.com/p/itsdangerous/) |
 | **aiofiles** | ≥23.0.0 | Async file I/O for Starlette static file serving | Apache-2.0 | [pypi.org/project/aiofiles](https://pypi.org/project/aiofiles/) |
-| **databricks-sql-connector** | ≥3.0.0 | Python SQL connector for Databricks SQL Warehouses | Apache-2.0 | [pypi.org/project/databricks-sql-connector](https://pypi.org/project/databricks-sql-connector/) |
+| **databricks-sql-connector** | ≥4.4.0 | Python SQL connector for Databricks SQL Warehouses | Apache-2.0 | [pypi.org/project/databricks-sql-connector](https://pypi.org/project/databricks-sql-connector/) |
 | **databricks-sdk** | ≥0.20.0 | Databricks SDK for workspace API, OAuth authentication, and auto-auth in App mode | Apache-2.0 | [pypi.org/project/databricks-sdk](https://pypi.org/project/databricks-sdk/) |
-| **pyarrow** | ≥14.0.0 | Columnar in-memory data format (required by databricks-sql-connector) | Apache-2.0 | [arrow.apache.org/docs/python](https://arrow.apache.org/docs/python/) |
+| **pyarrow** | ≥23.0.1 | Columnar in-memory data format (required by databricks-sql-connector) | Apache-2.0 | [arrow.apache.org/docs/python](https://arrow.apache.org/docs/python/) |
 | **RDFLib** | ≥7.6.0 | Python library for working with RDF (Resource Description Framework) | BSD-3-Clause | [rdflib.readthedocs.io](https://rdflib.readthedocs.io/) |
-| **python-dotenv** | ≥1.0.0 | Load environment variables from `.env` files | BSD-3-Clause | [pypi.org/project/python-dotenv](https://pypi.org/project/python-dotenv/) |
-| **requests** | ≥2.31.0 | HTTP library for Python | Apache-2.0 | [requests.readthedocs.io](https://requests.readthedocs.io/) |
+| **python-dotenv** | ≥1.2.2 | Load environment variables from `.env` files | BSD-3-Clause | [pypi.org/project/python-dotenv](https://pypi.org/project/python-dotenv/) |
+| **requests** | ≥2.33.0 | HTTP library for Python | Apache-2.0 | [requests.readthedocs.io](https://requests.readthedocs.io/) |
 | **psycopg[binary,pool]** | ≥3.2.0 | Postgres driver + connection pool used by the Lakebase Graph DB engine and the Lakebase registry backend | LGPL-3.0 | [psycopg.org/psycopg3](https://www.psycopg.org/psycopg3/) |
 | **APScheduler** | ≥3.10.0 | Advanced Python Scheduler for background jobs (used by BuildScheduler for scheduled triple store builds) | MIT | [pypi.org/project/APScheduler](https://pypi.org/project/APScheduler/) |
 | **owlrl** | ≥7.0.0 | OWL 2 RL forward-chaining reasoner — performs deductive closure on RDFLib graphs for ontology-level inference | W3C | [owl-rl.readthedocs.io](https://owl-rl.readthedocs.io/) |
 | **pyshacl** | ≥0.26.0 | W3C SHACL validator for RDFLib graphs — validates RDF data against SHACL shapes for data quality checks | Apache-2.0 | [github.com/RDFLib/pySHACL](https://github.com/RDFLib/pySHACL) |
 | **NetworkX** | ≥3.0 | Graph analysis library — server-side community detection (Louvain, Label Propagation, Greedy Modularity) on the full graph viewer | BSD-3-Clause | [networkx.org](https://networkx.org/) |
-| **strawberry-graphql[fastapi]** | ≥0.220.0 | GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI | MIT | [strawberry.rocks](https://strawberry.rocks/) |
-| **MLflow** | ≥2.19.0 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
+| **strawberry-graphql[fastapi]** | ≥0.315.7 | GraphQL library for Python — auto-generates typed schema from ontology and integrates with FastAPI | MIT | [strawberry.rocks](https://strawberry.rocks/) |
+| **MLflow** | ≥3.15.0 | ML lifecycle platform — used for agent tracing, evaluation, and the Databricks Agent Framework (ResponsesAgent) | Apache-2.0 | [mlflow.org](https://mlflow.org/) |
 
 ##### MCP Server Additional Dependencies
 
@@ -45,18 +45,19 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 |---------|---------|-------------|---------|------|
 | **fastmcp** | ≥2.3.1 | Model Context Protocol (MCP) server SDK for exposing tools to LLMs | Apache-2.0 | [gofastmcp.com](https://gofastmcp.com/) |
 | **httpx** | ≥0.25.0 | Async HTTP client (used by MCP server to call the main app REST API) | BSD-3-Clause | [www.python-httpx.org](https://www.python-httpx.org/) |
+| **cryptography** | ≥50.0.0 | MCP transitive security floor (PKCS#7 oracle fix) | Apache-2.0 / BSD-3-Clause | [cryptography.io](https://cryptography.io/) |
 
 #### Development Dependencies
 
 | Package | Version | Description | License | Link |
 |---------|---------|-------------|---------|------|
-| **pytest** | ≥7.4.0 | Testing framework for Python | MIT | [docs.pytest.org](https://docs.pytest.org/) |
+| **pytest** | ≥9.0.3 | Testing framework for Python | MIT | [docs.pytest.org](https://docs.pytest.org/) |
 | **pytest-asyncio** | ≥0.21.0 | Async test support for pytest | MIT | [pypi.org/project/pytest-asyncio](https://pypi.org/project/pytest-asyncio/) |
 | **pytest-cov** | ≥4.1.0 | Code coverage plugin for pytest | MIT | [pypi.org/project/pytest-cov](https://pypi.org/project/pytest-cov/) |
 | **httpx** | ≥0.25.0 | HTTP client for testing FastAPI applications | BSD-3-Clause | [www.python-httpx.org](https://www.python-httpx.org/) |
 | **responses** | ≥0.24.0 | Mock HTTP request/response library for unit tests | Apache-2.0 | [pypi.org/project/responses](https://pypi.org/project/responses/) |
 | **playwright** | ≥1.40.0 | Browser automation for end-to-end tests | Apache-2.0 | [playwright.dev/python](https://playwright.dev/python/) |
-| **black** | ≥23.0.0 | Python code formatter | MIT | [black.readthedocs.io](https://black.readthedocs.io/) |
+| **black** | ≥26.3.1 | Python code formatter | MIT | [black.readthedocs.io](https://black.readthedocs.io/) |
 | **flake8** | ≥6.0.0 | Python style guide enforcer | MIT | [flake8.pycqa.org](https://flake8.pycqa.org/) |
 | **Sphinx** | ≥7.0.0 | Documentation generator from docstrings (API reference) | BSD-2-Clause | [sphinx-doc.org](https://www.sphinx-doc.org/) |
 | **myst-parser** | ≥3.0.0 | Markdown support for Sphinx (MyST flavour) | MIT | [myst-parser.readthedocs.io](https://myst-parser.readthedocs.io/) |
@@ -286,12 +287,28 @@ All dependencies use permissive open-source licenses compatible with commercial 
 #### Python Dependencies
 
 ```bash
-## Update all dependencies
-uv sync --upgrade
+# Update all dependencies from the public index, then install the new lock.
+UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple \
+  uv lock --upgrade
+uv sync --frozen --extra lakebase
 
-## Update a specific package
-uv lock --upgrade-package fastapi && uv sync
+# Update a specific package.
+UV_INDEX_URL=https://pypi.org/simple PIP_INDEX_URL=https://pypi.org/simple \
+  uv lock --upgrade-package fastapi
+uv sync --frozen --extra lakebase
 ```
+
+Both `uv.lock` files are deployment artifacts. `registry =
+"https://pypi.org/simple"` identifies the package index used for resolution;
+the pinned `url = "https://files.pythonhosted.org/..."` entries are the wheel
+and source downloads used by `uv run --frozen` in Databricks Apps. Never commit
+`pypi-proxy.dev.databricks.com` URLs. For routine install, run, and test
+commands, always pass `--frozen` so uv cannot rewrite the lock.
+
+Current explicit security floors include
+`databricks-sql-connector>=4.4.0`, `nltk>=3.10.3`, `pip>=26.2.0`,
+`transformers>=5.10.0`, and `cryptography>=50.0.0` in the standalone MCP
+dependency graph. `pyproject.toml` remains authoritative.
 
 #### Frontend Dependencies
 
@@ -306,7 +323,8 @@ Frontend libraries are loaded via CDN with pinned versions. To update:
 ### Security Considerations
 
 - All CDN resources use HTTPS
-- Python packages are installed from PyPI
+- Python packages resolve through `pypi.org/simple`; frozen installs download
+  pinned artifacts from `files.pythonhosted.org`, never the internal proxy
 - Regular security audits recommended via `pip-audit`
 - Keep dependencies updated for security patches
 - **CSRF protection** is active for all state-changing requests (POST, PUT, PATCH, DELETE). The middleware (`shared/fastapi/csrf.py`) validates a `X-CSRF-Token` header against the `csrf_token` cookie. Tests bypass this via `CSRF_DISABLED=1` (set in `tests/conftest.py`).
@@ -326,7 +344,7 @@ This document describes the OntoBricks automated test suite: what is tested, how
 
 ```bash
 ## Install dev dependencies (if not already done)
-uv sync --dev
+uv sync --frozen --extra lakebase
 
 ## Run the full test suite
 .venv/bin/python -m pytest tests/
@@ -576,7 +594,7 @@ Use them to selectively run subsets:
 
 ```bash
 # Routine / agent runs — everything except the opt-in live scenarios:
-uv run pytest -q -m "not scenario"
+uv run --frozen pytest -q -m "not scenario"
 
 .venv/bin/python -m pytest -m unit
 .venv/bin/python -m pytest -m integration
@@ -599,9 +617,14 @@ make scenario-campaign ONTOBRICKS_LIVE_BASE=https://<app-url>
 This sets `ONTOBRICKS_SCENARIO_LIVE=1` + `ONTOBRICKS_SCENARIO_CHAIN=1`
 (pytest-dependency chaining: an upstream failure skips the downstream suites),
 runs them in filename order, and writes reports to `artifacts/scenarios/`
-(`campaign.xml`, `campaign.html`, `campaign_report.md`). The canonical guide —
-env vars, chaining, registry isolation, and how to add a scenario — lives in
-[`tests/e2e/scenarios/README.md`](../tests/e2e/scenarios/README.md).
+(`campaign.xml`, `campaign.html`, `campaign_report.md`). The canonical guide
+for environment variables, chaining, registry isolation, and adding scenarios
+is `tests/e2e/scenarios/README.md`.
+
+Scenario 4 additionally needs a Databricks profile/token and SQL warehouse ID
+exported in the pytest shell because it creates and drops scratch UC tables.
+The deterministic full-lifecycle browser journey can be run independently
+with `ONTOBRICKS_E2E_FAKE_CREDS=1`; see the canonical scenario guide.
 
 #### Writing New Tests
 
@@ -653,7 +676,7 @@ To integrate the test suite in a CI pipeline, use:
 
 ```bash
 ## Install dependencies
-uv sync --dev
+uv sync --frozen --extra lakebase
 
 ## Run tests with JUnit XML output (for CI reporting)
 .venv/bin/python -m pytest tests/ --junitxml=test-results.xml --cov=back --cov=front --cov=shared --cov=api --cov=agents --cov-report=xml
