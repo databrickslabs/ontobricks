@@ -35,6 +35,39 @@ class TestGlobalConfigDeltaWarehouse:
         assert "delta_warehouse_id" not in updates
         assert updates["graph_engine_config"]["lakehouse"]["warehouse_id"] == "wh-delta"
 
+    def test_get_delta_warehouse_use_sea_defaults_false(self):
+        svc = GlobalConfigService()
+        with patch.object(svc, "load", return_value=GlobalConfigService._empty()):
+            assert svc.get_delta_warehouse_use_sea("h", "t", REGISTRY_CFG) is False
+
+    def test_set_delta_warehouse_id_persists_use_sea(self):
+        svc = GlobalConfigService()
+        with patch.object(svc, "load", return_value=GlobalConfigService._empty()), patch.object(
+            svc, "_save", return_value=(True, "ok")
+        ) as mock_save:
+            ok, _ = svc.set_delta_warehouse_id(
+                "h", "t", REGISTRY_CFG, "wh-rt", use_sea=True
+            )
+        assert ok
+        lakehouse = mock_save.call_args[0][3]["graph_engine_config"]["lakehouse"]
+        assert lakehouse["warehouse_id"] == "wh-rt"
+        assert lakehouse["use_sea"] is True
+
+    def test_set_delta_warehouse_id_preserves_use_sea_when_omitted(self):
+        svc = GlobalConfigService()
+        stored = GlobalConfigService._empty()
+        stored["graph_engine_config"] = {
+            "lakehouse": {"warehouse_id": "wh-rt", "use_sea": True}
+        }
+        with patch.object(svc, "load", return_value=stored), patch.object(
+            svc, "_save", return_value=(True, "ok")
+        ) as mock_save:
+            ok, _ = svc.set_delta_warehouse_id("h", "t", REGISTRY_CFG, "wh-2")
+        assert ok
+        lakehouse = mock_save.call_args[0][3]["graph_engine_config"]["lakehouse"]
+        assert lakehouse["warehouse_id"] == "wh-2"
+        assert lakehouse["use_sea"] is True
+
 
 class TestResolveDeltaWarehouseId:
     def test_prefers_delta_warehouse_over_global(self):

@@ -166,6 +166,20 @@ class GlobalConfigService:
             self.get_graph_engine_config(host, token, registry_cfg)
         )
 
+    def get_delta_warehouse_use_sea(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> bool:
+        """Return ``graph_engine_config.lakehouse.use_sea`` (default ``False``).
+
+        ``True`` means the Lakehouse SQL client must use the Statement Execution
+        API (required for serverless Lakehouse/RT warehouses) instead of Thrift.
+        """
+        from back.core.graphdb.engine_config import resolve_lakehouse_use_sea
+
+        return resolve_lakehouse_use_sea(
+            self.get_graph_engine_config(host, token, registry_cfg)
+        )
+
     def get_default_base_uri(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> str:
@@ -405,8 +419,13 @@ class GlobalConfigService:
         token: str,
         registry_cfg: Dict[str, str],
         warehouse_id: str,
+        use_sea: Optional[bool] = None,
     ) -> Tuple[bool, str]:
-        """Persist the Lakehouse SQL warehouse under ``graph_engine_config.lakehouse``."""
+        """Persist the Lakehouse SQL warehouse under ``graph_engine_config.lakehouse``.
+
+        When *use_sea* is provided it is stored alongside ``warehouse_id``;
+        when ``None`` any previously saved ``use_sea`` value is preserved.
+        """
         from back.core.graphdb.engine_config import normalize_graph_engine_config
 
         wid = (warehouse_id or "").strip()
@@ -418,6 +437,8 @@ class GlobalConfigService:
         )
         lh = dict(nested.get("lakehouse") or {})
         lh["warehouse_id"] = wid
+        if use_sea is not None:
+            lh["use_sea"] = bool(use_sea)
         nested["lakehouse"] = lh
         return self._save(
             host,
