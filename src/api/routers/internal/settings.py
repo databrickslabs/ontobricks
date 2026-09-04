@@ -143,6 +143,7 @@ async def select_delta_warehouse(
         user_token,
         session_mgr,
         settings,
+        use_sea=bool(data.get("use_sea", False)),
     )
 
 

@@ -207,6 +207,9 @@ class TestSettingsServiceDeltaWarehouse:
             "back.objects.domain.SettingsService.global_config_service.get_delta_warehouse_id",
             return_value="wh-delta",
         ), patch(
+            "back.objects.domain.SettingsService.global_config_service.get_delta_warehouse_use_sea",
+            return_value=True,
+        ), patch(
             "back.objects.domain.SettingsService.get_domain",
             return_value=domain,
         ), patch(
@@ -217,6 +220,7 @@ class TestSettingsServiceDeltaWarehouse:
                 MagicMock(), MagicMock()
             )
         assert result["delta_warehouse_id"] == "wh-delta"
+        assert result["use_sea"] is True
         assert result["effective_delta_warehouse_id"] == "wh-delta"
         assert result["storage_location"] == "cat.sch"
         assert result["registry_configured"] is True
@@ -247,7 +251,8 @@ class TestSettingsServiceDeltaWarehouse:
             )
         assert result["success"]
         assert result["delta_warehouse_id"] == ""
-        mock_set.assert_called_once_with("h", "t", REGISTRY_CFG, "")
+        assert result["use_sea"] is False
+        mock_set.assert_called_once_with("h", "t", REGISTRY_CFG, "", use_sea=False)
 
     def test_select_delta_warehouse_persists(self):
         domain = MagicMock()
@@ -263,9 +268,12 @@ class TestSettingsServiceDeltaWarehouse:
             return_value="wh-delta",
         ):
             result = SettingsService.select_delta_warehouse(
-                "wh-delta", "a@b.com", "tok", MagicMock(), MagicMock()
+                "wh-delta", "a@b.com", "tok", MagicMock(), MagicMock(), use_sea=True
             )
         assert result["success"]
-        mock_set.assert_called_once_with("h", "t", REGISTRY_CFG, "wh-delta")
+        assert result["use_sea"] is True
+        mock_set.assert_called_once_with(
+            "h", "t", REGISTRY_CFG, "wh-delta", use_sea=True
+        )
         mock_mirror.assert_called_once()
         assert mock_mirror.call_args.kwargs.get("delta_warehouse_id") == "wh-delta"

@@ -358,12 +358,19 @@ class SettingsService:
         user_token: str,
         session_mgr: SessionManager,
         settings: Settings,
+        *,
+        use_sea: bool = False,
     ) -> Dict[str, Any]:
-        """Persist Delta triple-store warehouse selection in global config."""
+        """Persist Delta triple-store warehouse selection in global config.
+
+        *use_sea* toggles the Statement Execution API transport (required for
+        serverless Lakehouse/RT warehouses); it is stored alongside the id.
+        """
         if warehouse_id is None:
             raise ValidationError("No warehouse ID provided")
 
         wid = (warehouse_id or "").strip()
+        use_sea = bool(use_sea)
         SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         domain, host, token, registry_cfg = SettingsService._resolve_context(
@@ -374,6 +381,7 @@ class SettingsService:
             token,
             registry_cfg,
             wid,
+            use_sea=use_sea,
         )
         if not ok:
             logger.warning(
@@ -393,6 +401,7 @@ class SettingsService:
                 else "Delta SQL Warehouse cleared — using global warehouse"
             ),
             "delta_warehouse_id": wid,
+            "use_sea": use_sea,
             "effective_delta_warehouse_id": resolve_delta_warehouse_id(
                 domain, settings
             ),
@@ -1676,6 +1685,9 @@ class SettingsService:
         delta_wid = global_config_service.get_delta_warehouse_id(
             host, token, registry_cfg
         )
+        delta_use_sea = global_config_service.get_delta_warehouse_use_sea(
+            host, token, registry_cfg
+        )
         reg = registry_cfg if isinstance(registry_cfg, dict) else {}
         catalog = (reg.get("catalog") or "").strip()
         schema = (reg.get("schema") or "").strip()
@@ -1683,6 +1695,7 @@ class SettingsService:
         return {
             "success": True,
             "delta_warehouse_id": delta_wid,
+            "use_sea": delta_use_sea,
             "effective_delta_warehouse_id": resolve_delta_warehouse_id(
                 domain, settings
             ),
