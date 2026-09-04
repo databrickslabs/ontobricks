@@ -59,6 +59,7 @@ def mcp_env(monkeypatch):
     """
     try:
         from server import app as mcp_app  # type: ignore[import-not-found]
+        from server import http_client as mcp_http  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover - env without fastmcp
         pytest.skip(f"MCP server not importable: {exc}")
 
@@ -126,8 +127,10 @@ def mcp_env(monkeypatch):
         state["get_calls"].append(path)
         return {"success": True, "entity_uri": "", "action": "", "rows": []}
 
-    monkeypatch.setattr(mcp_app, "_get", fake_get)
-    monkeypatch.setattr(mcp_app, "_post", fake_post)
+    # The tool handlers resolve ``_get`` / ``_post`` through the
+    # ``server.http_client`` module object (late binding), so patch them there.
+    monkeypatch.setattr(mcp_http, "_get", fake_get)
+    monkeypatch.setattr(mcp_http, "_post", fake_post)
     monkeypatch.setenv("ONTOBRICKS_API_URL", "http://testserver")
 
     server = mcp_app.create_mcp_server("standalone")

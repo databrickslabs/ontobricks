@@ -38,6 +38,7 @@ def _text(result: Any) -> str:
 def dataset_mcp(monkeypatch):
     try:
         import server.app as app_module  # type: ignore[import-not-found]
+        import server.http_client as http_module  # type: ignore[import-not-found]
     except ImportError as exc:
         pytest.skip(f"MCP server not importable: {exc}")
 
@@ -67,11 +68,11 @@ def dataset_mcp(monkeypatch):
 
     monkeypatch.setattr(app_module.httpx, "AsyncClient", PatchedAsyncClient)
     monkeypatch.setattr(
-        app_module,
+        http_module,
         "_get_auth_headers",
         lambda mode: {"Authorization": "Bearer test"},
     )
-    monkeypatch.setattr(app_module, "_base_url", lambda mode: "http://test.local")
+    monkeypatch.setattr(http_module, "_base_url", lambda mode: "http://test.local")
     monkeypatch.setenv("REGISTRY_CATALOG", "test_cat")
     monkeypatch.setenv("REGISTRY_SCHEMA", "test_schema")
     monkeypatch.setenv("REGISTRY_VOLUME", "test_volume")

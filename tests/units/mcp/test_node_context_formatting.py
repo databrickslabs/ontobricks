@@ -9,7 +9,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MCP_SRC = REPO_ROOT / "src" / "mcp-server"
-MCP_APP = MCP_SRC / "server" / "app.py"
+# The response formatters were extracted from ``app.py`` into ``formatting.py``.
+MCP_APP = MCP_SRC / "server" / "formatting.py"
 
 if str(MCP_SRC) not in sys.path:
     sys.path.insert(0, str(MCP_SRC))
