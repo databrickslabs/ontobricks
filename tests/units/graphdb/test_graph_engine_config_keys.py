@@ -9,6 +9,7 @@ from back.core.graphdb.engine_config import (
     list_neo4j_connections,
     neo4j_section,
     normalize_graph_engine_config,
+    resolve_lakehouse_use_sea,
     resolve_lakehouse_warehouse_id,
     resolve_neo4j_connection,
 )
@@ -115,6 +116,30 @@ class TestResolveWithNested:
         flat = {"database": "neo4j", "uri": "bolt://x", "schema": "g"}
         assert resolve_postgres_database_override(flat) == ""
         assert resolve_neo4j_database(flat) == "neo4j"
+
+
+class TestLakehouseUseSea:
+    def test_default_false_when_absent(self):
+        cfg = normalize_graph_engine_config({"lakehouse": {"warehouse_id": "wh"}})
+        assert cfg["lakehouse"]["use_sea"] is False
+        assert resolve_lakehouse_use_sea(cfg) is False
+
+    def test_true_roundtrips(self):
+        cfg = normalize_graph_engine_config(
+            {"lakehouse": {"warehouse_id": "wh", "use_sea": True}}
+        )
+        assert cfg["lakehouse"]["use_sea"] is True
+        assert resolve_lakehouse_use_sea(cfg) is True
+
+    def test_truthy_string_coerced(self):
+        assert resolve_lakehouse_use_sea({"lakehouse": {"use_sea": "true"}}) is True
+        assert resolve_lakehouse_use_sea({"lakehouse": {"use_sea": "off"}}) is False
+
+    def test_empty_bucket_stays_empty(self):
+        # No warehouse + no flag must not inject a use_sea key (keeps == {} contracts).
+        assert normalize_graph_engine_config({"neo4j": {"uri": "bolt://x"}})[
+            "lakehouse"
+        ] == {}
 
 
 class TestNeo4jNamedConnections:

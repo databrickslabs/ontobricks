@@ -47,6 +47,17 @@ def _as_dict(value: Any) -> Dict[str, Any]:
     return {}
 
 
+def _coerce_bool(value: Any, *, default: bool) -> bool:
+    """Coerce a stored JSON scalar to bool, tolerating strings/ints."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return default
+
+
 def is_nested_graph_engine_config(cfg: Optional[Mapping[str, Any]]) -> bool:
     """True when *cfg* already uses a per-backend bucket."""
     if not isinstance(cfg, Mapping):
@@ -240,6 +251,10 @@ def _finalize_lakehouse_bucket(lakehouse: MutableMapping[str, Any]) -> Dict[str,
         out["warehouse_id"] = wid
     elif "warehouse_id" in out:
         out["warehouse_id"] = ""
+    # Only stamp use_sea onto a non-empty bucket so an absent Lakehouse config
+    # stays ``{}`` (callers rely on the empty-bucket contract).
+    if out:
+        out["use_sea"] = _coerce_bool(out.get("use_sea"), default=False)
     return out
 
 
@@ -298,3 +313,12 @@ def lakehouse_section(cfg: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 def resolve_lakehouse_warehouse_id(cfg: Optional[Mapping[str, Any]]) -> str:
     """Return ``lakehouse.warehouse_id`` (empty string when unset)."""
     return str(lakehouse_section(cfg).get("warehouse_id") or "").strip()
+
+
+def resolve_lakehouse_use_sea(cfg: Optional[Mapping[str, Any]]) -> bool:
+    """Return ``lakehouse.use_sea`` (default ``False`` — Thrift transport).
+
+    ``True`` selects the Statement Execution API, required for serverless
+    Lakehouse/RT SQL warehouses.
+    """
+    return _coerce_bool(lakehouse_section(cfg).get("use_sea"), default=False)
