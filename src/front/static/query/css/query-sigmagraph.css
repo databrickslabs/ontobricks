@@ -88,10 +88,6 @@
     backdrop-filter: blur(4px);
 }
 
-.ob-version-badge {
-    font-size: 0.65rem;
-}
-
 .sg-compact-select {
     width: auto;
     font-size: 0.78rem;
