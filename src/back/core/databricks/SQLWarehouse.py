@@ -245,7 +245,15 @@ class SQLWarehouse:
             return True, f"{kind} {fqn} created successfully"
         except Exception as exc:
             logger.exception("ERROR creating %s: %s", kind.lower(), exc)
-            return False, f"Failed to create {kind.lower()}: {exc}"
+            detail = str(exc)
+            if "not supported for Thrift protocol" in detail:
+                return False, (
+                    f"Failed to create {kind.lower()}: this looks like a "
+                    "Lakehouse/RT (serverless real-time) SQL warehouse. Enable "
+                    "'Lakehouse RT warehouse' in Settings -> Lakehouse -> SQL "
+                    "Warehouse, then rebuild."
+                )
+            return False, f"Failed to create {kind.lower()}: {detail}"
 
     def create_or_replace_view(
         self, catalog: str, schema: str, view_name: str, select_sql: str

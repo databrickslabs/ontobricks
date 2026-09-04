@@ -293,6 +293,25 @@ class TestCreateOrReplaceView:
         assert "Failed to create view" in msg
         assert "ddl failed" in msg
 
+    @patch(
+        "databricks.sql.connect",
+        side_effect=Exception(
+            "BAD_REQUEST: Lakehouse/RT is not supported for Thrift protocol"
+        ),
+    )
+    def test_maps_rt_thrift_error_to_actionable_hint(self, mock_connect, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-rt",
+        )
+        sw = SQLWarehouse(auth)
+        ok, msg = sw.create_or_replace_view("c", "s", "v", "SELECT 1")
+        assert ok is False
+        assert "Lakehouse RT" in msg
+        assert "Thrift" not in msg or "Lakehouse RT" in msg
+
 
 class TestCreateOrReplaceTableFromQuery:
     @patch("databricks.sql.connect")
