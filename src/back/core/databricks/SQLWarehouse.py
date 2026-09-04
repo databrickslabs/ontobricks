@@ -10,7 +10,15 @@ import threading
 import time
 from contextlib import contextmanager
 from databricks import sql
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from databricks.sql.exc import (
+    CursorAlreadyClosedError,
+    MaxRetryDurationError,
+    NonRecoverableNetworkError,
+    ServerOperationError,
+    SessionAlreadyClosedError,
+    UnsafeToRetryError,
+)
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
@@ -22,6 +30,58 @@ logger = get_logger(__name__)
 
 _POOL_MAX_SIZE = 8
 _POOL_MAX_IDLE_SECS = 300
+
+# Transient-failure retry policy. Serverless "Lakehouse/RT" warehouses reject
+# the Thrift protocol and are driven over the Statement Execution API (SEA);
+# while such a warehouse cold-starts or auto-scales, the SEA endpoint briefly
+# returns HTTP 5xx. A stale pooled connection (session recycled server-side)
+# raises similar transport errors. Both clear on a reconnect, so we retry the
+# whole borrow+execute on a *fresh* connection before surfacing the error.
+_SQL_MAX_ATTEMPTS = 3
+# Backoff (seconds) applied *between* attempts: attempt1->2, attempt2->3.
+_SQL_RETRY_BACKOFF_S = (1.5, 4.0)
+
+# Substrings (lower-cased) that mark a transient transport/warehouse failure.
+_RETRYABLE_MSG_MARKERS = (
+    "status 5",  # SEA HTTP 5xx, e.g. "...failed with status 500"
+    "http request failed",
+    "connection reset",
+    "connection aborted",
+    "broken pipe",
+    "service unavailable",
+    "temporarily_unavailable",
+    "temporarily unavailable",
+)
+# Substrings that look transient but are NOT worth retrying (config errors).
+_NON_RETRYABLE_MSG_MARKERS = ("not supported for thrift",)
+# Exception types that explicitly must never be retried.
+_NON_RETRYABLE_TYPES = (
+    ServerOperationError,  # real server-side SQL error (BAD_REQUEST, syntax, ...)
+    NonRecoverableNetworkError,
+    UnsafeToRetryError,
+    MaxRetryDurationError,
+)
+
+
+def _is_retryable_transport_error(exc: BaseException) -> bool:
+    """Return True for transient transport/warehouse failures worth a reconnect.
+
+    Retries target serverless (Lakehouse/RT) warehouse cold-start ``HTTP 5xx``
+    and stale-pool connection resets. Genuine SQL errors
+    (:class:`ServerOperationError`) and non-recoverable transport errors are
+    never retried so they surface immediately with their original message.
+    """
+    if isinstance(exc, _NON_RETRYABLE_TYPES):
+        return False
+    msg = str(exc).lower()
+    if any(marker in msg for marker in _NON_RETRYABLE_MSG_MARKERS):
+        return False
+    # A recycled session/cursor is fixed by borrowing a fresh connection.
+    if isinstance(exc, (SessionAlreadyClosedError, CursorAlreadyClosedError)):
+        return True
+    if isinstance(exc, (ConnectionError, BrokenPipeError, TimeoutError)):
+        return True
+    return any(marker in msg for marker in _RETRYABLE_MSG_MARKERS)
 
 
 class _PooledConnection:
@@ -104,6 +164,43 @@ class SQLWarehouse:
         except Exception:
             pass
 
+    def _run_with_retry(self, work: Callable[[Any], Any], *, op: str) -> Any:
+        """Borrow a connection and run ``work(conn)``, retrying on transient
+        transport failures with a *fresh* connection.
+
+        ``_borrow`` discards the (broken) connection on any exception, so each
+        retry naturally reconnects. Only errors classified as transient by
+        :func:`_is_retryable_transport_error` are retried; real SQL errors
+        propagate on the first attempt.
+        """
+        last_exc: Optional[BaseException] = None
+        for attempt in range(1, _SQL_MAX_ATTEMPTS + 1):
+            try:
+                with self._borrow() as conn:
+                    return work(conn)
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= _SQL_MAX_ATTEMPTS or not _is_retryable_transport_error(
+                    exc
+                ):
+                    raise
+                backoff = _SQL_RETRY_BACKOFF_S[
+                    min(attempt - 1, len(_SQL_RETRY_BACKOFF_S) - 1)
+                ]
+                logger.warning(
+                    "%s: transient warehouse/transport error on attempt %d/%d "
+                    "(%s) — reconnecting in %.1fs (likely a serverless "
+                    "Lakehouse/RT warehouse cold-start).",
+                    op,
+                    attempt,
+                    _SQL_MAX_ATTEMPTS,
+                    exc,
+                    backoff,
+                )
+                time.sleep(backoff)
+        # Unreachable: the loop either returns or raises. Guards type-checkers.
+        raise last_exc  # type: ignore[misc]
+
     def test_connection(self) -> Tuple[bool, str]:
         """Test connectivity to the SQL Warehouse.
 
@@ -151,22 +248,43 @@ class SQLWarehouse:
         """
         self._require_warehouse()
         bounded = bool(statement_timeout_s and int(statement_timeout_s) > 0)
-        try:
-            with self._borrow() as conn:
-                with conn.cursor() as cur:
+        # The deprecated SEA backend (mandatory for serverless Lakehouse/RT
+        # warehouses, which reject Thrift) returns HTTP 500 on a
+        # ``SET STATEMENT_TIMEOUT`` statement whenever cloud-fetch (external
+        # links) is disabled — which broke the entire graph read path
+        # ("Error querying graph"). Skip the server-side bound on SEA and rely
+        # on the client-side ``_socket_timeout`` instead. Classic Thrift
+        # warehouses keep the server-side bound unchanged.
+        if bounded and bool(getattr(self._auth, "use_sea", False)):
+            logger.debug(
+                "execute_query: skipping SET STATEMENT_TIMEOUT on SEA connection "
+                "(unsupported by the SEA backend without cloud-fetch); relying "
+                "on the client socket timeout."
+            )
+            bounded = False
+
+        def _work(conn) -> List[Dict[str, Any]]:
+            with conn.cursor() as cur:
+                if bounded:
+                    cur.execute(f"SET STATEMENT_TIMEOUT = {int(statement_timeout_s)}")
+                try:
+                    cur.execute(query)
+                    columns = [desc[0] for desc in cur.description]
+                    return [dict(zip(columns, row)) for row in cur.fetchall()]
+                finally:
                     if bounded:
-                        cur.execute(
-                            f"SET STATEMENT_TIMEOUT = {int(statement_timeout_s)}"
-                        )
-                    try:
-                        cur.execute(query)
-                        columns = [desc[0] for desc in cur.description]
-                        return [dict(zip(columns, row)) for row in cur.fetchall()]
-                    finally:
-                        if bounded:
-                            # 0 disables the per-session bound (workspace default
-                            # applies) so the recycled connection is unaffected.
+                        # 0 disables the per-session bound (workspace default
+                        # applies) so the recycled connection is unaffected.
+                        # Guarded: if the query failed on a broken connection
+                        # the reset would raise and mask the real error — the
+                        # connection is discarded by ``_borrow`` anyway.
+                        try:
                             cur.execute("SET STATEMENT_TIMEOUT = 0")
+                        except Exception:
+                            pass
+
+        try:
+            return self._run_with_retry(_work, op="execute_query")
         except Exception as exc:
             logger.exception("Error executing query: %s", exc)
             raise
@@ -206,22 +324,25 @@ class SQLWarehouse:
     def execute_statement(self, statement: str) -> bool:
         """Execute a DDL/DML *statement* without returning results."""
         self._require_warehouse()
-        try:
-            with self._borrow() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(statement)
-                # UC DDL must be committed before control-plane APIs (e.g. synced
-                # database tables) can resolve catalog.schema in the metastore.
-                commit = getattr(conn, "commit", None)
-                if callable(commit):
-                    try:
-                        commit()
-                    except Exception as commit_exc:  # noqa: BLE001
-                        logger.debug(
-                            "Ignoring commit() after DDL (autocommit driver): %s",
-                            commit_exc,
-                        )
+
+        def _work(conn) -> bool:
+            with conn.cursor() as cur:
+                cur.execute(statement)
+            # UC DDL must be committed before control-plane APIs (e.g. synced
+            # database tables) can resolve catalog.schema in the metastore.
+            commit = getattr(conn, "commit", None)
+            if callable(commit):
+                try:
+                    commit()
+                except Exception as commit_exc:  # noqa: BLE001
+                    logger.debug(
+                        "Ignoring commit() after DDL (autocommit driver): %s",
+                        commit_exc,
+                    )
             return True
+
+        try:
+            return self._run_with_retry(_work, op="execute_statement")
         except Exception as exc:
             logger.exception("Error executing statement: %s", exc)
             raise

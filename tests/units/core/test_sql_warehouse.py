@@ -6,9 +6,17 @@ from unittest.mock import Mock, MagicMock, patch
 
 _databricks_auth_mod = importlib.import_module("back.core.databricks.DatabricksAuth")
 
+from databricks.sql.exc import ServerOperationError
+
 from back.core.databricks.DatabricksAuth import DatabricksAuth
-from back.core.databricks.SQLWarehouse import SQLWarehouse
+from back.core.databricks.SQLWarehouse import (
+    SQLWarehouse,
+    _SQL_MAX_ATTEMPTS,
+    _is_retryable_transport_error,
+)
 from back.core.errors import ValidationError
+
+_SEA_500 = "Error during request to server. SEA HTTP request failed with status 500"
 
 
 def _make_connect_mock(
@@ -161,6 +169,146 @@ class TestExecuteQuery:
         sw = SQLWarehouse(auth)
         with pytest.raises(Exception, match="syntax error"):
             sw.execute_query("BAD SQL")
+
+
+class TestRetryClassifier:
+    """`_is_retryable_transport_error` must retry only transient transport
+    failures and never real SQL / config errors."""
+
+    def test_sea_5xx_is_retryable(self):
+        assert _is_retryable_transport_error(Exception(_SEA_500)) is True
+
+    def test_service_unavailable_is_retryable(self):
+        assert _is_retryable_transport_error(Exception("503 Service Unavailable")) is True
+
+    def test_connection_reset_is_retryable(self):
+        assert _is_retryable_transport_error(ConnectionResetError("connection reset by peer")) is True
+
+    def test_server_operation_error_not_retryable(self):
+        exc = ServerOperationError("BAD_REQUEST: [TABLE_OR_VIEW_NOT_FOUND] missing")
+        assert _is_retryable_transport_error(exc) is False
+
+    def test_thrift_not_supported_not_retryable(self):
+        # Config error on RT warehouse — retrying can never succeed.
+        exc = Exception("BAD_REQUEST: Lakehouse/RT is not supported for Thrift protocol")
+        assert _is_retryable_transport_error(exc) is False
+
+    def test_plain_sql_error_not_retryable(self):
+        assert _is_retryable_transport_error(Exception("syntax error near FROM")) is False
+
+
+class TestExecuteQueryRetry:
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_retries_transient_then_succeeds(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        good_conn, _ = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        # First borrow raises a transient SEA 500 (warehouse cold-start),
+        # second borrow reconnects and succeeds.
+        mock_connect.side_effect = [Exception(_SEA_500), good_conn]
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-rt"
+        )
+        sw = SQLWarehouse(auth)
+        rows = sw.execute_query("SELECT x FROM t")
+        assert rows == [{"x": 1}]
+        assert mock_connect.call_count == 2
+        _sleep.assert_called_once()
+
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_does_not_retry_real_sql_error(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_connect.side_effect = ServerOperationError("BAD_REQUEST: table not found")
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-1"
+        )
+        sw = SQLWarehouse(auth)
+        with pytest.raises(ServerOperationError):
+            sw.execute_query("SELECT * FROM missing")
+        assert mock_connect.call_count == 1
+        _sleep.assert_not_called()
+
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_gives_up_after_max_attempts(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_connect.side_effect = Exception(_SEA_500)
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-rt"
+        )
+        sw = SQLWarehouse(auth)
+        with pytest.raises(Exception, match="status 500"):
+            sw.execute_query("SELECT 1")
+        assert mock_connect.call_count == _SQL_MAX_ATTEMPTS
+
+
+class TestExecuteStatementRetry:
+    @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
+    @patch("databricks.sql.connect")
+    def test_retries_transient_then_succeeds(self, mock_connect, _sleep, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        good_conn, _ = _make_connect_mock()
+        mock_connect.side_effect = [Exception(_SEA_500), good_conn]
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com", token="tok", warehouse_id="wh-rt"
+        )
+        sw = SQLWarehouse(auth)
+        assert sw.execute_statement("CREATE OR REPLACE VIEW v AS SELECT 1") is True
+        assert mock_connect.call_count == 2
+
+
+class TestSeaStatementTimeout:
+    """On the SEA backend (Lakehouse/RT warehouses) a ``SET STATEMENT_TIMEOUT``
+    statement returns HTTP 500 when cloud-fetch is off, so it must be skipped;
+    classic Thrift warehouses keep the server-side bound."""
+
+    @patch("databricks.sql.connect")
+    def test_skips_set_timeout_on_sea(self, mock_connect, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_conn, mock_cursor = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        mock_connect.return_value = mock_conn
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-rt",
+            use_sea=True,
+        )
+        sw = SQLWarehouse(auth)
+        rows = sw.execute_query("SELECT x FROM t", statement_timeout_s=30)
+        assert rows == [{"x": 1}]
+        executed = [c.args[0] for c in mock_cursor.execute.call_args_list]
+        assert executed == ["SELECT x FROM t"]
+        assert not any("STATEMENT_TIMEOUT" in q for q in executed)
+
+    @patch("databricks.sql.connect")
+    def test_applies_set_timeout_on_thrift(self, mock_connect, monkeypatch):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        mock_conn, mock_cursor = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        mock_connect.return_value = mock_conn
+
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-1",
+            use_sea=False,
+        )
+        sw = SQLWarehouse(auth)
+        sw.execute_query("SELECT x FROM t", statement_timeout_s=30)
+        executed = [c.args[0] for c in mock_cursor.execute.call_args_list]
+        assert any("SET STATEMENT_TIMEOUT = 30" in q for q in executed)
+        assert any("SET STATEMENT_TIMEOUT = 0" in q for q in executed)
 
 
 class TestIterRows:

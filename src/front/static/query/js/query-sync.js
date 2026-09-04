@@ -32,6 +32,14 @@ let tripleStoreHasData = false;
  */
 let tripleStoreStatusUnknown = false;
 
+/**
+ * Whether `/dtwin/sync/info` served the graph status as a "pending" skeleton
+ * (cache miss) so the page could paint without waiting on the ~4-8s COUNT(*)
+ * probe. While true, the KG badges show a "checking" spinner and the real
+ * state is confirmed by a background `checkTripleStoreStatus(true)` call.
+ */
+let tripleStoreStatusPending = false;
+
 /** Whether the current caller may refresh graph data for the loaded version. */
 function _canStartBuild() {
     const permitted = !(window.OB && typeof window.OB.canRefreshGraph === 'function'
@@ -58,11 +66,26 @@ async function loadSyncInfo() {
 
         // --- Triplestore status ---
         var tsStatus = payload.triplestore_status || {};
-        tripleStoreStatusUnknown = !!(tsStatus.success && tsStatus.has_data === null);
-        tripleStoreHasData = !!(tsStatus.success && tsStatus.has_data);
-        console.log('[Sync] Consolidated triplestore status -> hasData:', tripleStoreHasData,
-            tripleStoreStatusUnknown ? '(probe inconclusive)' : '');
-        renderTripleStoreStatus(tsStatus);
+
+        // Cache miss: status was served as a non-blocking "pending" skeleton to
+        // keep the ~4-8s COUNT(*) probe off the first paint. Show a "checking"
+        // state and confirm the live count in the background — do NOT decide
+        // hasData / unknown yet, or the badge would flash "Graph not built".
+        // The rest of loadSyncInfo (rebuild warning, dt_existence, menus) still
+        // runs below; only the status verdict is deferred.
+        var statusPending = !!(payload.triplestore_status_pending || tsStatus.pending);
+        tripleStoreStatusPending = statusPending;
+        if (statusPending) {
+            console.log('[Sync] Triplestore status pending — confirming in background');
+            renderTripleStoreStatus({ success: true, has_data: null, pending: true });
+            setTimeout(function () { checkTripleStoreStatus(true); }, 50);
+        } else {
+            tripleStoreStatusUnknown = !!(tsStatus.success && tsStatus.has_data === null);
+            tripleStoreHasData = !!(tsStatus.success && tsStatus.has_data);
+            console.log('[Sync] Consolidated triplestore status -> hasData:', tripleStoreHasData,
+                tripleStoreStatusUnknown ? '(probe inconclusive)' : '');
+            renderTripleStoreStatus(tsStatus);
+        }
 
         // Guard against cache-staleness inconsistency: the shared cache timestamp
         // can make an old dt_existence entry (graph_has_data=true) appear fresh
@@ -610,6 +633,9 @@ async function checkTripleStoreStatus(refresh) {
     try {
         const response = await fetch(url, { credentials: 'same-origin' });
         const data = await response.json();
+        // The live probe has answered — clear the "pending" (background-confirm)
+        // state set by loadSyncInfo's cache-miss skeleton.
+        tripleStoreStatusPending = false;
         tripleStoreStatusUnknown = !!(data.success && data.has_data === null);
         tripleStoreHasData = !!(data.success && data.has_data);
         console.log('[Sync] Triple store status:', data, '-> hasData:', tripleStoreHasData);
@@ -617,6 +643,7 @@ async function checkTripleStoreStatus(refresh) {
     } catch (e) {
         console.error('[Sync] Error checking triple store status:', e);
         // The request itself failed, so the graph's state is equally unknown.
+        tripleStoreStatusPending = false;
         tripleStoreStatusUnknown = true;
         tripleStoreHasData = false;
         renderTripleStoreStatus(null);
@@ -645,6 +672,16 @@ function renderTripleStoreStatus(data) {
     if (!area) return;
 
     area.classList.remove('d-none');
+
+    // Pending: status served as a non-blocking skeleton; the live count is
+    // being confirmed in the background. Show a spinner instead of a verdict.
+    if (data && data.pending) {
+        area.innerHTML =
+            '<div class="small mb-0 py-1 px-2 text-muted">' +
+            '<span class="spinner-border spinner-border-sm me-1" style="width:.8rem;height:.8rem;"></span>' +
+            'Checking graph status…</div>';
+        return;
+    }
 
     if (!data || !data.success) {
         // Error checking status (e.g. Databricks not configured)
@@ -723,6 +760,8 @@ function updateDataMenus() {
                 link.setAttribute('title', 'Synchronization in progress…');
             } else if (!syncIsReady) {
                 link.setAttribute('title', 'Ontology and mapping assignments must be configured first');
+            } else if (tripleStoreStatusPending) {
+                link.setAttribute('title', 'Checking graph status…');
             } else if (!tripleStoreHasData) {
                 link.setAttribute('title', 'Triple store is empty — run Sync first');
             }
@@ -785,6 +824,11 @@ function updateKgReadyIndicators() {
     if (syncIsRunning) {
         html = '<span class="badge bg-warning-subtle text-warning border border-warning fw-normal">'
             + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Building…</span>';
+    } else if (tripleStoreStatusPending) {
+        // Status probe deferred off the first paint; confirming in background.
+        html = '<span class="badge bg-secondary-subtle text-secondary border fw-normal" '
+            + 'title="Confirming the graph status in the background…">'
+            + '<span class="spinner-border spinner-border-sm me-1 kg-status-spinner"></span>Checking…</span>';
     } else if (tripleStoreHasData) {
         html = '<span class="badge bg-success bg-opacity-10 text-success border border-success fw-normal" '
             + 'title="The Knowledge Graph is built and ready to use (backend: ' + backend + ').">'

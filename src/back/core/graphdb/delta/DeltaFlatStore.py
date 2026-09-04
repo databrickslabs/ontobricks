@@ -37,6 +37,16 @@ class DeltaFlatStore(GraphDBBackend):
     def query_dialect(self) -> str:
         return "sql"
 
+    def _distinct_count_expr(self, column: str) -> str:
+        """Use Spark's HyperLogLog counter for the stats overview.
+
+        ``approx_count_distinct`` is O(1) memory and avoids the full distinct
+        shuffle an exact ``COUNT(DISTINCT ...)`` triggers over multi-million-row
+        triple tables — turning a multi-second stats query into sub-second. The
+        default ~5% relative error is acceptable for an at-a-glance overview.
+        """
+        return f"approx_count_distinct({column})"
+
     def get_connection(self) -> Any:
         return self._client
 
@@ -231,11 +241,21 @@ class DeltaFlatStore(GraphDBBackend):
         return 0
 
     def table_exists(self, table_name: str) -> bool:
-        """Check if table exists by trying count, catch TABLE_OR_VIEW_NOT_FOUND."""
+        """Check existence with a cheap ``LIMIT 1`` probe.
+
+        A full ``COUNT(*)`` over the union graph view scans a chain of views on
+        the serverless warehouse (~4s here); a ``SELECT 1 … LIMIT 1`` short-circuits
+        after the first row (~0.8s) and answers the only question this method
+        asks — does the relation resolve? Existence is orthogonal to row count,
+        so an empty-but-present graph still returns True. Missing relations raise
+        ``TABLE_OR_VIEW_NOT_FOUND`` / "does not exist", which we map to False;
+        any other error propagates.
+        """
         if not table_name or not table_name.strip():
             return False
+        validate_table_name(table_name)
         try:
-            self.count_triples(table_name)
+            self._client.execute_query(f"SELECT 1 FROM {table_name} LIMIT 1")
             return True
         except Exception as e:
             error_msg = str(e)

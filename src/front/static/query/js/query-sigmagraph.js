@@ -34,6 +34,41 @@ var SigmaGraph = (function () {
     var _graph = null;
     var _hoveredNode = null;
     var _selectedNode = null;
+    // Search response-time readout. A pause/resume stopwatch so the seed-modal
+    // dwell (time the user spends choosing) is excluded: the clock runs during
+    // the preview query, pauses while the selection popup is open, resumes on
+    // "Explore", and stops when the graph is rendered. `_searchTimerPending`
+    // gates it to search-driven renders only (not filter/group toggles).
+    var _searchTimerPending = false;
+    var _searchTimerRunning = false;
+    var _searchElapsedMs = 0;
+    var _searchSegmentStart = 0;
+
+    function _searchTimerStart() {
+        _searchElapsedMs = 0;
+        _searchSegmentStart = performance.now();
+        _searchTimerRunning = true;
+        _searchTimerPending = true;
+    }
+    function _searchTimerPause() {
+        if (_searchTimerRunning) {
+            _searchElapsedMs += performance.now() - _searchSegmentStart;
+            _searchTimerRunning = false;
+        }
+    }
+    function _searchTimerResume() {
+        if (_searchTimerPending && !_searchTimerRunning) {
+            _searchSegmentStart = performance.now();
+            _searchTimerRunning = true;
+        }
+    }
+    function _searchTimerStop() {
+        if (_searchTimerRunning) {
+            _searchElapsedMs += performance.now() - _searchSegmentStart;
+            _searchTimerRunning = false;
+        }
+        return _searchElapsedMs;
+    }
     var _visibleTypes = new Set();
     var _visibleEdgeTypes = new Set();
     var _searchMatched = null;   // null = no search active; Set of directly matched node IDs
@@ -798,6 +833,8 @@ var SigmaGraph = (function () {
         _graph = _buildGraph(filterIds);
         if (!_graph || _graph.order === 0) {
             console.warn('[SigmaGraph] graph is empty (0 nodes)');
+            _searchTimerPending = false;
+            _searchTimerRunning = false;
             _hideLoading();
             return;
         }
@@ -920,7 +957,41 @@ var SigmaGraph = (function () {
             try { _renderer.getCamera().setState(savedCamera); } catch (_) {}
         }
 
+        // The graph is now on the canvas — close the search response-time clock
+        // (excludes any paused seed-modal dwell) and show the readout.
+        if (_searchTimerPending) {
+            _showSearchTiming(_searchTimerStop() / 1000);
+            _searchTimerPending = false;
+        }
+
         console.log('[SigmaGraph] render complete');
+    }
+
+    /**
+     * Show the last search's end-to-end response time (click → graph on canvas)
+     * as a small readout pinned to the bottom-left of the graph canvas. Updated
+     * only on search-driven renders; filter/group toggles leave it untouched.
+     */
+    function _showSearchTiming(seconds) {
+        var container = document.getElementById('sgContainer');
+        if (!container) return;
+        // Sigma positions its canvases absolutely inside the container; anchor
+        // the readout to the container so it tracks the canvas box.
+        if (getComputedStyle(container).position === 'static') {
+            container.style.position = 'relative';
+        }
+        var el = document.getElementById('sgSearchTiming');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'sgSearchTiming';
+            el.style.cssText = 'position:absolute;left:8px;bottom:8px;z-index:5;' +
+                'background:rgba(33,37,41,.78);color:#fff;font-size:11px;line-height:1;' +
+                'padding:4px 8px;border-radius:4px;pointer-events:none;' +
+                'font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;';
+            el.title = 'Time from the search click to the graph being displayed';
+            container.appendChild(el);
+        }
+        el.innerHTML = '<i class="bi bi-stopwatch me-1"></i>' + seconds.toFixed(2) + 's';
     }
 
     // -----------------------------------------------------------
@@ -1900,6 +1971,11 @@ var SigmaGraph = (function () {
 
         if (!searchValue && !entityType) return;
 
+        // Start the response-time clock at the Search click. It pauses while the
+        // seed-selection popup is open and resumes on "Explore", so the readout
+        // is click→display minus the user's selection dwell.
+        _searchTimerStart();
+
         var info = document.getElementById('sgGraphFilterInfo');
         var text = document.getElementById('sgGraphFilterInfoText');
         if (info && text) { info.classList.remove('d-none'); text.textContent = 'Searching...'; }
@@ -1970,6 +2046,9 @@ var SigmaGraph = (function () {
             }
 
             _renderSeedTable();
+
+            // Selection popup is up — pause the clock until the user explores.
+            _searchTimerPause();
 
             var modalEl = document.getElementById('sgSeedPreviewModal');
             if (modalEl) {
@@ -2084,6 +2163,9 @@ var SigmaGraph = (function () {
     async function _expandSelectedSeeds() {
         var selectedUris = _getSelectedSeedUris();
         if (selectedUris.length === 0) return;
+
+        // Resume the clock: the user has chosen — measure expand+render again.
+        _searchTimerResume();
 
         var modalEl = document.getElementById('sgSeedPreviewModal');
         if (modalEl) {

@@ -413,7 +413,8 @@ async def load_triplestore(
         )
 
         try:
-            results = store.query_triples(query_table)
+            # Blocking full-graph read — offload so it doesn't freeze the loop.
+            results = await run_blocking(store.query_triples, query_table)
         except (ValidationError, InfrastructureError, NotFoundError):
             raise
         except Exception as e:
@@ -1264,13 +1265,28 @@ async def sync_info(
             "sync_info: _schedule_sync took %.0fms", (_t.monotonic() - t_s) * 1000
         )
 
-    async def _graph_status():
-        t_s = _t.monotonic()
-        out = await dt.get_or_fetch_graph_status(settings)
-        logger.debug(
-            "sync_info: graph status took %.0fms", (_t.monotonic() - t_s) * 1000
-        )
-        return out
+    # Graph status is served cache-first for the same reason as DT existence
+    # below: a live probe is up to two full COUNT(*) scans over the union graph
+    # view (~4s each on the serverless warehouse) and used to block this
+    # endpoint — and therefore the whole KG page's first paint. On a cache miss
+    # we now return a lightweight "pending" skeleton (no probe) and let the
+    # frontend confirm the live count off the request path via
+    # `/dtwin/sync/status` whenever `triplestore_status_pending` is set.
+    cached_status = dt.get_ts_cache("status")
+    triplestore_status_pending = cached_status is None
+
+    def _pending_status() -> dict:
+        return {
+            "success": True,
+            # Tri-state stays None (unknown) — the frontend renders a "checking"
+            # spinner, not a "not built" badge, until the background probe lands.
+            "has_data": None,
+            "pending": True,
+            "count": 0,
+            "view_table": effective_view_table(domain),
+            "graph_name": effective_graph_query_table(domain, settings),
+            "reason": "Checking graph status…",
+        }
 
     # DT existence is served cache-first so the Build page paints instantly.
     # The live probe is a cold SQL-warehouse / Lakebase wake-up that used to
@@ -1281,10 +1297,8 @@ async def sync_info(
     dt_exist = cached_existence or dt.pending_dt_existence(settings)
     dt_existence_pending = True
 
-    _, ts_status = await asyncio.gather(
-        _schedule_sync(),
-        _graph_status(),
-    )
+    await _schedule_sync()
+    ts_status = cached_status if cached_status is not None else _pending_status()
 
     if domain.last_build and domain.last_build != last_build:
         last_build = domain.last_build
@@ -1303,6 +1317,7 @@ async def sync_info(
     return {
         "readiness": readiness,
         "triplestore_status": ts_status,
+        "triplestore_status_pending": triplestore_status_pending,
         "domain_info": domain_info_data,
         "dt_existence": dt_exist,
         "dt_existence_pending": dt_existence_pending,
@@ -1510,19 +1525,28 @@ async def triplestore_stats(
 
         store = _require_graph_store(domain, settings)
 
-        agg = store.get_aggregate_stats(graph_name)
+        # These are four independent blocking SQL round-trips to the graph
+        # warehouse. Run them concurrently in the sized thread pool (rather than
+        # inline and sequentially, which both froze the event loop and paid the
+        # *sum* of the query times) so total latency is ~max(query) — a big win
+        # on serverless Lakehouse/RT warehouses. CPU-only assembly (predicate
+        # classification, the cheap analytics-job check) runs on the loop after.
+        import asyncio
+
+        agg, entity_types, top_predicates, inferred_count = await asyncio.gather(
+            run_blocking(store.get_aggregate_stats, graph_name),
+            run_blocking(store.get_type_distribution, graph_name),
+            run_blocking(store.get_predicate_distribution, graph_name),
+            run_blocking(store.get_inferred_triple_count, graph_name),
+        )
+
         total_count = agg["total"]
         subject_count = agg["distinct_subjects"]
         predicate_count = agg["distinct_predicates"]
         label_count = agg["label_count"]
 
-        entity_types = store.get_type_distribution(graph_name)
-        top_predicates = store.get_predicate_distribution(graph_name)
-
         type_count = sum(int(r.get("cnt", 0)) for r in entity_types)
         relationship_count = total_count - type_count - label_count
-
-        inferred_count = store.get_inferred_triple_count(graph_name)
 
         classified = DigitalTwin(domain).classify_predicates(top_predicates)
 
@@ -2877,7 +2901,10 @@ async def dtwin_triples_find(
         raise ValidationError("Graph name not configured")
 
     try:
-        result = DigitalTwin.find_triples_bfs(
+        # BFS traversal issues multiple blocking SQL round-trips — offload it
+        # off the event loop so concurrent requests aren't stalled.
+        result = await run_blocking(
+            DigitalTwin.find_triples_bfs,
             store,
             table,
             entity_type=entity_type,
@@ -2947,20 +2974,27 @@ async def dtwin_neighbors(
     query_table = table if include_inferred else store.synced_table_name(table)
 
     try:
-        visited: set[str] = {uri}
-        frontier: set[str] = {uri}
-        for _ in range(depth):
-            if not frontier:
-                break
-            next_hop = store.expand_entity_neighbors(query_table, frontier) - visited
-            if not next_hop:
-                break
-            visited |= next_hop
-            frontier = next_hop
+        # The BFS expansion runs one blocking SQL query per hop plus a final
+        # bulk fetch. Offload the whole sequence to the thread pool so the
+        # right-click "Expand neighbours" action doesn't freeze the event loop.
+        def _expand() -> tuple[set[str], list]:
+            visited: set[str] = {uri}
+            frontier: set[str] = {uri}
+            for _ in range(depth):
+                if not frontier:
+                    break
+                next_hop = (
+                    store.expand_entity_neighbors(query_table, frontier) - visited
+                )
+                if not next_hop:
+                    break
+                visited |= next_hop
+                frontier = next_hop
 
-        rows = store.get_triples_for_subjects(query_table, list(visited))
+            rows = store.get_triples_for_subjects(query_table, list(visited))
+            return visited, _filter_neighbor_triples(rows, visited, limit)
 
-        triples = _filter_neighbor_triples(rows, visited, limit)
+        visited, triples = await run_blocking(_expand)
 
         return {
             "success": True,

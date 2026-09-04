@@ -84,3 +84,367 @@ live `databricks.sql.connect` retries with urllib3 backoff and stalls the suite.
 This is a pre-existing, environment-specific test-isolation gap (the health
 readiness probe is not mocked) and is unrelated to this change — the branch does
 not touch `health.py` or `test_routes.py`.
+
+---
+
+## Retry transient SEA transport errors on Lakehouse/RT warehouses
+
+Context: In KG → Explorer against a domain whose Delta graph store is pointed at
+a serverless "Lakehouse/RT" SQL warehouse, the UI showed `Error: Error querying
+graph` (`GET /dtwin/sync/stats` and `POST /dtwin/sync/filter` → 502). Root cause:
+the RT warehouse rejects Thrift and is driven over the Statement Execution API
+(SEA); while the serverless warehouse cold-starts/auto-scales, the SEA endpoint
+briefly returns `HTTP 500` ("SEA HTTP request failed with status 500").
+`SQLWarehouse.execute_query()` / `execute_statement()` had no retry — a single
+transient 500 was raised straight through and surfaced as `502 Error querying
+graph`. The warehouse self-heals within ~10–25s (a manual refresh worked), but
+the first interaction after an idle warehouse always failed.
+
+This change adds a bounded retry-with-reconnect around the borrow+execute path.
+Only transient transport/warehouse failures are retried (SEA 5xx, connection
+reset/broken pipe, service-unavailable, recycled session/cursor); genuine SQL
+errors (`ServerOperationError`: BAD_REQUEST, syntax, permissions) and the RT
+"not supported for Thrift protocol" config error are never retried and surface
+immediately with their original message. `iter_rows()` (build-pipeline streaming)
+is intentionally left unchanged — retrying a partially-yielded generator is
+unsafe, and builds run against an already-warm warehouse.
+
+Changes:
+1. src/back/core/databricks/SQLWarehouse.py
+   Added module-level retry policy (`_SQL_MAX_ATTEMPTS=3`,
+   `_SQL_RETRY_BACKOFF_S=(1.5, 4.0)`), marker lists, and a pure
+   `_is_retryable_transport_error(exc)` classifier. Added the
+   `_run_with_retry(work, *, op)` helper (borrow → run → reconnect on transient
+   failure with backoff). Refactored `execute_query()` and `execute_statement()`
+   to run their work through it. Guarded the `SET STATEMENT_TIMEOUT = 0` reset in
+   `execute_query()` so a failed query on a broken connection no longer masks the
+   real error.
+2. tests/units/core/test_sql_warehouse.py
+   Added `TestRetryClassifier` (SEA 5xx / service-unavailable / connection-reset
+   retryable; `ServerOperationError`, Thrift-not-supported, plain SQL errors not
+   retryable), `TestExecuteQueryRetry` (transient-then-success, no-retry on SQL
+   error, give-up after max attempts), and `TestExecuteStatementRetry`. `time.sleep`
+   is patched so the backoff adds no wall-clock time.
+
+Modified files:
+- src/back/core/databricks/SQLWarehouse.py
+- tests/units/core/test_sql_warehouse.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5867 passed, 305 skipped,
+6 deselected, 1 xfailed in ~57s (targeted `tests/units/core/test_sql_warehouse.py`
+→ 32 passed). One transient failure in
+`test_health.py::TestCheckDatabricksAuth::test_local_mode_with_cli_profile` was
+environmental — a `DATABRICKS_CONFIG_PROFILE=DEFAULT` env var exported in the dev
+shell (to launch the app) leaked into pytest; it passes once unset and is
+unrelated to this change.
+
+---
+
+## FIX: skip SET STATEMENT_TIMEOUT on SEA — the real "Error querying graph" cause
+
+Context: The retry above did NOT fix "Error querying graph" — it only delayed
+the error (3 attempts, ~10s) because the SEA `HTTP 500` was **persistent, not a
+cold-start transient**. Bisecting the connector path against the live RT
+warehouse ("Reyen Engine", REYDEN, serverless) isolated the exact trigger:
+
+- `use_sea=True` + `use_cloud_fetch=False` + a `SET STATEMENT_TIMEOUT` statement
+  → SEA `HTTP 500` (reproducible even with `SET STATEMENT_TIMEOUT` alone).
+- Same connection, two plain `SELECT`s, or the aggregate query on its own → OK.
+- With cloud-fetch ON, `SET` works — so the fault is the deprecated SEA backend
+  mishandling `SET` statements under the inline (non-external-links) disposition.
+
+The graph read path (`GraphDBBackend.get_aggregate_stats` etc. via
+`DeltaFlatStore.execute_query`) always runs the bounded variant, which issues
+`SET STATEMENT_TIMEOUT = N` before the query and `= 0` after. On a Lakehouse/RT
+warehouse with cloud-fetch disabled, that first `SET` 500s every time, so the
+Explorer stats/filter calls returned `502 Error querying graph` on every load.
+The identical statement submitted over the REST Statement Execution API
+SUCCEEDS, confirming the fault is in the connector's SEA backend, not the query
+or the warehouse.
+
+Fix: in `SQLWarehouse.execute_query()`, disable the server-side statement bound
+when the connection uses SEA (`self._auth.use_sea`) — skip both `SET
+STATEMENT_TIMEOUT` statements and rely on the client-side `_socket_timeout`.
+Classic Thrift warehouses are unchanged and keep the server-side bound. The
+retry helper from the previous section is retained as genuine defence-in-depth
+for real transient transport errors (actual cold-starts), but is no longer the
+mechanism that makes RT graph queries work.
+
+Changes:
+1. src/back/core/databricks/SQLWarehouse.py
+   `execute_query()` now sets `bounded = False` when
+   `getattr(self._auth, "use_sea", False)` is truthy (with a DEBUG log), before
+   building the work closure — so no `SET STATEMENT_TIMEOUT` is emitted on SEA.
+2. tests/units/core/test_sql_warehouse.py
+   Added `TestSeaStatementTimeout`: asserts `execute_query(..., statement_timeout_s=30)`
+   emits only the query on a `use_sea=True` auth (no `STATEMENT_TIMEOUT`), and
+   still emits `SET STATEMENT_TIMEOUT = 30/0` on a Thrift (`use_sea=False`) auth.
+
+Modified files:
+- src/back/core/databricks/SQLWarehouse.py
+- tests/units/core/test_sql_warehouse.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_sql_warehouse.py` → 34
+passed. Full `uv run --frozen pytest -q -m "not scenario"` reported below.
+
+---
+
+## PERF: stop async graph handlers from freezing the event loop
+
+Context: After the SEA fix, RT graph queries succeeded but the KG/Explorer was
+slow to show first results, and unrelated panels loaded on the same page
+(mapping, ontology, registry) all stalled ~12s in lock-step. Root cause: several
+`async def` handlers in `src/api/routers/internal/dtwin.py` called blocking SQL
+directly on the event-loop thread. A single serverless-warehouse query
+(`/sync/stats` runs four sequential COUNT/COUNT-DISTINCT queries over ~7.6M
+triples, ~5–12s) blocked the loop for its full duration, so every concurrent
+request the page fired queued behind it. The individual queries are genuinely
+slow (serverless RT + `COUNT(DISTINCT)` over millions of rows), but the freeze
+made the whole UI unresponsive rather than just that one panel.
+
+`/sync/filter` (the two-phase search that produces the first results) already
+offloaded via `run_blocking`, so the delay was mostly it being stuck behind the
+event-loop-blocking `/sync/stats`.
+
+Fix: offload the blocking SQL sections of the remaining `async` graph handlers
+to the sized thread pool (`run_blocking`), matching the pattern already used by
+`/sync/filter`, `/sync/info`, `/clusters/detect`, etc. The queries are unchanged
+(still as slow individually), but they no longer stall the event loop, so the
+page paints panels as each response lands and the perceived "time to first
+results" drops sharply.
+
+Changes:
+1. src/api/routers/internal/dtwin.py
+   - `triplestore_stats` (`GET /sync/stats`): moved the four blocking store
+     calls + payload assembly into a nested `_compute_stats()` run via
+     `await run_blocking(_compute_stats)`.
+   - `load_triplestore` (`POST /sync/load`): `store.query_triples(...)` now via
+     `run_blocking`.
+   - `dtwin_triples_find` (`GET /triples/find`): `DigitalTwin.find_triples_bfs`
+     now via `run_blocking` (multi-round-trip BFS).
+   - `dtwin_neighbors` (`GET /neighbors`): the per-hop `expand_entity_neighbors`
+     loop + `get_triples_for_subjects` bulk fetch moved into a nested
+     `_expand()` run via `run_blocking` (right-click "Expand neighbours").
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_sql_warehouse.py
+tests/units/dtwin tests/units/settings/test_analytics_toggle_invalidates_stats.py
+tests/units/front/test_analytics_stale_result_gate.py` → 356 passed. (The
+`analytics_job_configured(domain, settings)` call is kept on one line to satisfy
+the source-text assertion in `test_analytics_job_status.py`.) `tests/units/api`
+is excluded here because `test_routes.py::TestHealthRoutes::test_health_check`
+makes a live `databricks.sql.connect` probe that hangs behind an HTTP proxy — a
+pre-existing environment gap unrelated to this change.
+
+Follow-up (not done): the `/sync/stats` COUNT(DISTINCT) queries could be made
+faster with `approx_count_distinct` or by parallelizing the four round-trips,
+and the panel could lazy-load stats after the graph renders. Flagged for later.
+
+---
+
+## PERF: make `/sync/stats` genuinely fast (parallel round-trips + approx distinct)
+
+Context: Follow-up to the event-loop fix above. The stats panel was no longer
+blocking, but still slow: it fired four blocking warehouse round-trips
+*sequentially*, so its latency was the *sum* of them, and the aggregate query
+paid for an exact `COUNT(DISTINCT subject)` — a full distinct shuffle over
+~7.6M-row triple tables on the serverless RT (Reyen) warehouse. This addresses
+the two speedups flagged in the previous section.
+
+Changes:
+1. src/api/routers/internal/dtwin.py
+   - `triplestore_stats` (`GET /sync/stats`): the four independent store calls
+     (`get_aggregate_stats`, `get_type_distribution`, `get_predicate_distribution`,
+     `get_inferred_triple_count`) now run concurrently in the thread pool via
+     `asyncio.gather(run_blocking(...), ...)` instead of one sequential
+     `run_blocking(_compute_stats)`. Total latency drops from ~sum to ~max of the
+     four. CPU-only assembly (predicate classification, the cheap analytics-job
+     check) still runs on the loop afterwards; the
+     `analytics_job_configured(domain, settings)` call is kept on one line to
+     satisfy the source-text assertion in `test_analytics_job_status.py`.
+2. src/back/core/graphdb/GraphDBBackend.py
+   - New `_distinct_count_expr(column)` hook (default exact `COUNT(DISTINCT ...)`)
+     used by `get_aggregate_stats` for the subject/predicate distinct counts, so
+     backends can override the cardinality strategy without touching the query.
+3. src/back/core/graphdb/delta/DeltaFlatStore.py
+   - Override `_distinct_count_expr` to use Spark's `approx_count_distinct`
+     (HyperLogLog): O(1) memory, no distinct shuffle, turning the multi-second
+     aggregate query into sub-second on large graphs. ~5% relative error is
+     acceptable for an at-a-glance overview. Lakebase/Postgres keeps the exact
+     count (it has no built-in approximate counter and its graphs are OLTP-sized).
+
+Note on "lazy-load stats after graph renders" (third flagged item): already the
+case — stats is fetched by `loadInsights()` on the Insights section, a separate
+XHR from the Explorer graph load (`query-sigmagraph.js` → `/sync/filter`), so the
+graph never waits on stats. No frontend change needed.
+
+Modified files:
+- src/api/routers/internal/dtwin.py
+- src/back/core/graphdb/GraphDBBackend.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/graphdb
+tests/units/dtwin tests/units/core/test_sql_warehouse.py` → 491 passed.
+(`tests/units/api` still excluded — the pre-existing `test_health_check` live
+`databricks.sql.connect` probe hangs behind the HTTP proxy.)
+
+---
+
+## PERF: kill the two blocking COUNT(*) probes on the KG page's first paint
+
+Context: Direct benchmarking against the warm serverless RT (Reyen) warehouse
+showed the real cost is a **~4s floor per query** over the union graph view (a
+chain of views over a Lakebase-synced UC table) — the aggregation type barely
+matters (plain `COUNT(*)` 4.0s ≈ `approx_count_distinct` 4.1s ≈ exact
+`COUNT(DISTINCT)` 4.4s), while a `SELECT 1 … LIMIT 1` existence probe is 0.8s.
+The KG page's first paint blocked on the status probe doing **two** full
+`COUNT(*)` scans (`table_exists()` → count, then `get_status()` → count ≈ 8s)
+inline in `sync_info`'s `asyncio.gather`, which is what still felt slow. This
+targets that directly (the earlier stats parallel/approx work only helped the
+separately-loaded Insights panel, not the page paint).
+
+Changes:
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   - `table_exists`: replace the full `COUNT(*)` with a `SELECT 1 FROM … LIMIT 1`
+     existence probe (~0.8s vs ~4s). Existence is orthogonal to row count, so an
+     empty-but-present graph still returns True; `TABLE_OR_VIEW_NOT_FOUND` maps
+     to False, other errors propagate. This alone halves the status probe.
+2. src/api/routers/internal/dtwin.py
+   - `sync_info` (`GET /sync/info`): serve graph status cache-first (as DT
+     existence already is). On a cache miss, return a lightweight `pending`
+     skeleton (`has_data: null`, `pending: true`, `triplestore_status_pending`)
+     instead of running the ~8s probe inline, so the page paints immediately.
+     Removed the now-unused `_graph_status` inner coroutine and the two-way
+     `gather` (only `_schedule_sync` remains async).
+3. src/front/static/query/js/query-sync.js
+   - New `tripleStoreStatusPending` flag. `loadSyncInfo` detects the pending
+     skeleton, renders a "Checking graph status…" spinner (not a "not built"
+     verdict → no flash), and schedules a background `checkTripleStoreStatus(true)`
+     that confirms the live count off the request path (mirrors the existing
+     `dt_existence` pattern). `checkTripleStoreStatus` clears the flag on
+     answer; `renderTripleStoreStatus`, `updateKgReadyIndicators`, and
+     `updateDataMenus` all render/label the pending state.
+
+Net effect: the KG Information/Explorer page paints without waiting on the graph
+`COUNT(*)`; the triple-count badge fills in ~1-4s later in the background. The
+~4s/query warehouse floor itself is unchanged (view-chain over a synced table —
+would need materializing the graph as a real Delta table to beat, flagged but
+not done). `approx_count_distinct` (previous section) is kept but noted as ~no
+gain on this view-scan-bound graph.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/api/routers/internal/dtwin.py
+- src/front/static/query/js/query-sync.js
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/graphdb
+tests/units/dtwin tests/units/core/test_sql_warehouse.py
+tests/units/domain/test_home_service.py` → 499 passed.
+
+---
+
+## PERF: speed up the Explorer preview (the "first query" before the seed modal)
+
+Context: The Explorer's Phase-1 preview (`POST /sync/filter` `phase=preview` →
+`DigitalTwin.filter_preview`) is the first query the user waits on before the
+seed-selection modal. It was **three sequential** warehouse round-trips with a
+latent inefficiency: `find_seed_subjects` accepted a `limit` but **never applied
+it to the SQL**, so a bare entity-type filter materialised *every* instance of
+the type and serialised them all back over SEA before Python sliced to 500.
+
+Measured on the warm Reyen warehouse against the most common type (`Invoice`,
+400k instances): the unbounded seed scan was **3.1s**; the same wrapped in a
+`LIMIT 501` is **0.9s** (3.4× — and it scales with type cardinality). Merging
+the metadata pair removes another ~1s round-trip. Preview drops from ~3
+round-trips (~5s) to ~2 (~1.8s).
+
+Changes:
+1. src/back/core/graphdb/GraphDBBackend.py
+   - `find_seed_subjects`: apply the accepted `limit` server-side by wrapping the
+     (possibly UNION-ed) seed query in a derived table + `LIMIT` — portable to
+     both Spark and Postgres. The caller still asks for `max_preview+1` to detect
+     capping, so the "showing first N" behaviour is unchanged.
+   - `get_entity_metadata`: fetch `rdf:type` and `rdfs:label` in a single
+     `predicate IN (…)` scan instead of two separate queries, then split in
+     Python — halves the metadata latency on the preview path.
+
+Both methods live on the shared `GraphDBBackend` base, so the win applies to the
+Delta and Lakebase backends alike; no SQL-string assertions depend on the old
+form.
+
+Modified files:
+- src/back/core/graphdb/GraphDBBackend.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario" tests/units/graphdb
+tests/units/dtwin` → 457 passed. Live benchmark (warm Reyen): seed 3.1s→0.9s.
+
+---
+
+## UX: show the search response time on the graph canvas
+
+Context: To make the Explorer's latency visible, show how long a search took —
+from the click to the graph appearing on the canvas — as a small readout pinned
+to the bottom-left of the canvas.
+
+Changes:
+1. src/front/static/query/js/query-sigmagraph.js
+   - Added a pause/resume stopwatch (`_searchTimer{Start,Pause,Resume,Stop}` over
+     `_searchElapsedMs` / `_searchTimerRunning` / `_searchTimerPending`). The
+     clock starts on the Search click (`_executeGraphSearch`), pauses when the
+     seed-selection popup opens, resumes on the "Explore" click
+     (`_expandSelectedSeeds`), and stops when the graph is rendered — so the
+     readout is click→display minus the user's selection dwell. The single-result
+     path (no popup) is timed straight through.
+   - `_render` closes the clock once the graph is on the canvas and calls the new
+     `_showSearchTiming(seconds)`, which renders a "⏱ N.NNs" pill (absolute,
+     bottom-left, `#sgSearchTiming`) anchored to `#sgContainer`. Only
+     search-driven renders update it; filter/group toggles leave it untouched,
+     and an empty (0-node) result clears the pending flag so no stale time shows.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: frontend-only (no unit coverage for the sigma canvas); no linter errors.
+
+## Drop redundant Domain line from KG Explorer / Query / Chat headers
+
+Context: The Knowledge Graph Explorer, Query (GraphQL), and Chat section
+headers repeated "Domain: … vN Draft" under the page title. The navbar already
+shows the current domain, version, and status, so the second-header line was
+noise. Graph DB name and Switch domain stay.
+
+Changes:
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Removed the Domain / version / Draft line from the Graph Explorer subtitle.
+2. src/front/templates/partials/dtwin/_query_graphql.html
+   Same for GraphQL Playground (KG Query).
+3. src/front/templates/partials/dtwin/_query_chat.html
+   Same for Graph Chat.
+4. src/front/static/query/css/query-sigmagraph.css
+   Dropped unused `.ob-version-badge` after the Explorer badge went away.
+5. src/front/static/global/css/components.css
+   Dropped unused `.ob-badge-version` after Query/Chat badges went away.
+6. tests/units/front/test_kg_section_headers.py
+   Contract: those three templates keep Graph DB + Switch domain and must not
+   render a Domain line.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/partials/dtwin/_query_graphql.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/static/query/css/query-sigmagraph.css
+- src/front/static/global/css/components.css
+- tests/units/front/test_kg_section_headers.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5874 passed, 304 skipped, 6 deselected, 1 xfailed in 47.61s.
+

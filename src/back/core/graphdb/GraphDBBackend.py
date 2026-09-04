@@ -158,6 +158,16 @@ class GraphDBBackend(ABC):
         """
         return 0
 
+    def _distinct_count_expr(self, column: str) -> str:
+        """SQL expression for a distinct count of *column*.
+
+        Default is the exact ``COUNT(DISTINCT ...)``. Backends with a fast
+        approximate cardinality counter (e.g. Spark's ``approx_count_distinct``)
+        override this so the aggregate-stats overview doesn't pay for a full
+        distinct shuffle over multi-million-row triple tables.
+        """
+        return f"COUNT(DISTINCT {column})"
+
     def get_aggregate_stats(self, table_name: str) -> Dict[str, int]:
         """Return aggregate triple-store statistics in a single query.
 
@@ -167,8 +177,8 @@ class GraphDBBackend(ABC):
         sql = (
             f"SELECT "
             f"COUNT(*) AS total, "
-            f"COUNT(DISTINCT subject) AS distinct_subjects, "
-            f"COUNT(DISTINCT predicate) AS distinct_predicates, "
+            f"{self._distinct_count_expr('subject')} AS distinct_subjects, "
+            f"{self._distinct_count_expr('predicate')} AS distinct_predicates, "
             f"SUM(CASE WHEN predicate = '{RDF_TYPE}' THEN 1 ELSE 0 END) AS type_assertion_count, "
             f"SUM(CASE WHEN predicate = '{RDFS_LABEL}' THEN 1 ELSE 0 END) AS label_count "
             f"FROM {self._sql_relation(table_name)}"
@@ -627,24 +637,23 @@ class GraphDBBackend(ABC):
             return []
         in_clause = ", ".join(f"'{self._sql_escape(u)}'" for u in subjects)
 
-        type_sql = (
-            f"SELECT subject, object FROM {self._sql_relation(table_name)} "
-            f"WHERE predicate = '{RDF_TYPE}' AND subject IN ({in_clause})"
-        )
-        label_sql = (
-            f"SELECT subject, object FROM {self._sql_relation(table_name)} "
-            f"WHERE predicate = '{RDFS_LABEL}' AND subject IN ({in_clause})"
-        )
-
-        type_rows = self.execute_query(type_sql) or []
-        label_rows = self.execute_query(label_sql) or []
+        # Fetch type and label in a single round-trip. Two separate queries
+        # doubled the warehouse latency on the preview path (each scan of the
+        # union graph view is several seconds on a serverless warehouse); one
+        # predicate-IN scan returns both and is split in Python.
+        rows = self.execute_query(
+            f"SELECT subject, predicate, object FROM {self._sql_relation(table_name)} "
+            f"WHERE subject IN ({in_clause}) "
+            f"AND predicate IN ('{RDF_TYPE}', '{RDFS_LABEL}')"
+        ) or []
 
         types: Dict[str, str] = {}
-        for r in type_rows:
-            types.setdefault(r["subject"], r["object"])
         labels: Dict[str, str] = {}
-        for r in label_rows:
-            labels.setdefault(r["subject"], r["object"])
+        for r in rows:
+            if r["predicate"] == RDF_TYPE:
+                types.setdefault(r["subject"], r["object"])
+            elif r["predicate"] == RDFS_LABEL:
+                labels.setdefault(r["subject"], r["object"])
 
         return [
             {"uri": uri, "type": types.get(uri, ""), "label": labels.get(uri, "")}
@@ -816,6 +825,16 @@ class GraphDBBackend(ABC):
                     f"WHERE predicate = '{RDF_TYPE}' AND {_like('LOWER(subject)')}"
                 )
             sql = " UNION ".join(parts)
+
+        # Cap server-side. Without this the warehouse materialises *every*
+        # matching subject — for a bare entity-type filter that is every
+        # instance of the type (potentially millions), all serialised back over
+        # SEA before the caller slices to the preview size. Wrapping in a
+        # derived table applies the bound to the whole (possibly UNION-ed) set
+        # in both Spark and Postgres. The caller asks for max_preview+1 so it can
+        # still detect capping.
+        if limit and int(limit) > 0:
+            sql = f"SELECT subject FROM ({sql}) AS _seeds LIMIT {int(limit)}"
 
         rows = self.execute_query(sql)
         return {r["subject"] for r in rows}
