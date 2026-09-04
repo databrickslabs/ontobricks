@@ -335,34 +335,41 @@ class LakebaseAuth:
         api = getattr(self._w, "api_client", None)
         if api is None or not hasattr(api, "do"):
             return None
-        projects = (api.do("GET", "/api/2.0/postgres/projects") or {}).get(
-            "projects"
-        ) or []
-        for project in projects:
-            project_path = project.get("name") or ""
-            if not project_path:
-                continue
-            branches = (
-                api.do("GET", f"/api/2.0/postgres/{project_path}/branches") or {}
-            ).get("branches") or []
-            for branch in branches:
-                branch_path = branch.get("name") or ""
-                if not branch_path:
+        # /api/2.0/postgres/projects is paginated - a workspace with more
+        # projects than fit on one page silently hides later ones from a
+        # single unpaginated call, so we must follow next_page_token.
+        page_token: Optional[str] = None
+        while True:
+            query = {"page_token": page_token} if page_token else None
+            resp = api.do("GET", "/api/2.0/postgres/projects", query=query) or {}
+            projects = resp.get("projects") or []
+            for project in projects:
+                project_path = project.get("name") or ""
+                if not project_path:
                     continue
-                endpoints = (
-                    api.do("GET", f"/api/2.0/postgres/{branch_path}/endpoints")
-                    or {}
-                ).get("endpoints") or []
-                for endpoint in endpoints:
-                    hosts = (endpoint.get("status") or {}).get("hosts") or {}
-                    h = (hosts.get("host") or "").strip().lower()
-                    ro = (hosts.get("read_only_host") or "").strip().lower()
-                    if host in (h, ro):
-                        endpoint_path = endpoint.get("name") or ""
-                        if endpoint_path:
-                            self._endpoint_resource = endpoint_path
-                        return project_path.rsplit("/", 1)[-1]
-        return None
+                branches = (
+                    api.do("GET", f"/api/2.0/postgres/{project_path}/branches") or {}
+                ).get("branches") or []
+                for branch in branches:
+                    branch_path = branch.get("name") or ""
+                    if not branch_path:
+                        continue
+                    endpoints = (
+                        api.do("GET", f"/api/2.0/postgres/{branch_path}/endpoints")
+                        or {}
+                    ).get("endpoints") or []
+                    for endpoint in endpoints:
+                        hosts = (endpoint.get("status") or {}).get("hosts") or {}
+                        h = (hosts.get("host") or "").strip().lower()
+                        ro = (hosts.get("read_only_host") or "").strip().lower()
+                        if host in (h, ro):
+                            endpoint_path = endpoint.get("name") or ""
+                            if endpoint_path:
+                                self._endpoint_resource = endpoint_path
+                            return project_path.rsplit("/", 1)[-1]
+            page_token = resp.get("next_page_token")
+            if not page_token:
+                return None
 
     def _ensure_workspace(self) -> None:
         """Lazily build the workspace client."""
