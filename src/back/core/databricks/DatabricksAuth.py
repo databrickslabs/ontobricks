@@ -157,6 +157,7 @@ class DatabricksAuth:
         token: Optional[str] = None,
         warehouse_id: Optional[str] = None,
         use_cloud_fetch: Optional[bool] = None,
+        use_sea: Optional[bool] = None,
     ) -> None:
         self.token = token or os.getenv("DATABRICKS_TOKEN", "")
         self.warehouse_id = (
@@ -193,6 +194,10 @@ class DatabricksAuth:
             )
         else:
             self.use_cloud_fetch = bool(use_cloud_fetch)
+
+        # Statement Execution API (SEA) transport. Opt-in; required for
+        # serverless Lakehouse/RT warehouses which reject the Thrift protocol.
+        self.use_sea = bool(use_sea)
 
         if self.auth_mode == "cli":
             logger.info(
@@ -303,6 +308,8 @@ class DatabricksAuth:
             "_socket_timeout": _SQL_SOCKET_TIMEOUT,
         }
         params["use_cloud_fetch"] = self.can_use_cloud_fetch()
+        if self.use_sea:
+            params["use_sea"] = True
         if self.is_app_mode and self.client_id and self.client_secret:
             params["access_token"] = self.get_oauth_token()
         elif self.token:
@@ -384,6 +391,8 @@ class DatabricksAuth:
                 "_socket_timeout": _CLOUD_FETCH_PROBE_TIMEOUT_SECONDS,
                 "use_cloud_fetch": True,
             }
+            if self.use_sea:
+                probe_params["use_sea"] = True
             if self.is_app_mode and self.client_id and self.client_secret:
                 probe_params["access_token"] = self.get_oauth_token()
             elif self.token:

@@ -222,6 +222,29 @@ class TestGetSqlConnectionParams:
         assert params["use_cloud_fetch"] is True
         mock_oauth.assert_called()
 
+    @patch.object(DatabricksAuth, "can_use_cloud_fetch", return_value=False)
+    def test_params_include_use_sea_when_enabled(self, _mock_cf, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        auth = DatabricksAuth(
+            host="https://ws.databricks.com",
+            token="pat",
+            warehouse_id="wh-rt",
+            use_sea=True,
+        )
+        params = auth.get_sql_connection_params()
+        assert params["use_sea"] is True
+
+    @patch.object(DatabricksAuth, "can_use_cloud_fetch", return_value=False)
+    def test_params_omit_use_sea_by_default(self, _mock_cf, monkeypatch):
+        _clear_databricks_env(monkeypatch)
+        auth = DatabricksAuth(
+            host="https://ws.databricks.com",
+            token="pat",
+            warehouse_id="wh",
+        )
+        params = auth.get_sql_connection_params()
+        assert "use_sea" not in params
+
 
 class TestCloudFetchCapability:
     @staticmethod

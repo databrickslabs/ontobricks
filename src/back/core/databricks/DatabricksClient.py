@@ -35,12 +35,14 @@ class DatabricksClient:
         token: Optional[str] = None,
         warehouse_id: Optional[str] = None,
         use_cloud_fetch: Optional[bool] = None,
+        use_sea: Optional[bool] = None,
     ) -> None:
         self.auth = DatabricksAuth(
             host=host,
             token=token,
             warehouse_id=warehouse_id,
             use_cloud_fetch=use_cloud_fetch,
+            use_sea=use_sea,
         )
         self.sql = SQLWarehouse(self.auth)
         self.catalog = UnityCatalog(self.auth)
