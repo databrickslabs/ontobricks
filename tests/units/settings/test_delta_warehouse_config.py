@@ -114,6 +114,35 @@ class TestResolveDeltaWarehouseId:
         assert wid == "wh-global"
 
 
+class TestResolveLakehouseUseSea:
+    def test_reads_global_use_sea(self):
+        with patch.object(
+            DatabricksHelpers,
+            "get_databricks_host_and_token",
+            return_value=("https://h", "tok"),
+        ), patch.object(
+            DatabricksHelpers,
+            "_resolve_registry_cfg",
+            return_value=REGISTRY_CFG,
+        ), patch(
+            "back.objects.session.global_config_service.get_delta_warehouse_use_sea",
+            return_value=True,
+        ):
+            assert DatabricksHelpers.resolve_lakehouse_use_sea(MagicMock(), MagicMock()) is True
+
+    def test_defaults_false_without_registry(self):
+        with patch.object(
+            DatabricksHelpers,
+            "get_databricks_host_and_token",
+            return_value=("", ""),
+        ), patch.object(
+            DatabricksHelpers,
+            "_resolve_registry_cfg",
+            return_value={},
+        ):
+            assert DatabricksHelpers.resolve_lakehouse_use_sea(MagicMock(), MagicMock()) is False
+
+
 class TestDeltaDatabricksCredentials:
     def test_get_delta_databricks_credentials(self):
         domain = MagicMock()

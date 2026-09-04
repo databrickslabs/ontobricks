@@ -290,6 +290,38 @@ class DatabricksHelpers:
             return True
 
     @staticmethod
+    def resolve_lakehouse_use_sea(domain, settings) -> bool:
+        """Resolve the Lakehouse SEA (Statement Execution API) toggle.
+
+        Reads ``graph_engine_config.lakehouse.use_sea`` from the global config.
+        Defaults to ``False`` (Thrift) when unset or the registry is not
+        configured, so classic SQL warehouses keep their current transport.
+        Bypasses ``_resolve_global_setting`` (whose ``if val: return val`` would
+        discard an explicit ``False``), mirroring :meth:`resolve_use_cloud_fetch`.
+        """
+        from back.objects.session import global_config_service
+
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
+
+        if not host or not registry_cfg.get("catalog") or not registry_cfg.get(
+            "schema"
+        ):
+            return False
+
+        try:
+            return bool(
+                global_config_service.get_delta_warehouse_use_sea(
+                    host, token, registry_cfg
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort default resolution
+            logger.debug(
+                "Could not resolve Lakehouse use_sea, defaulting to False: %s", exc
+            )
+            return False
+
+    @staticmethod
     def resolve_analytics_job_enabled(domain, settings) -> bool:
         """Resolve whether oversized graphs may use the serverless analytics job.
 
