@@ -346,12 +346,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const select = document.getElementById('deltaWarehouseSelect');
         if (!select) return false;
         const warehouseId = select.value || '';
+        const seaEl = document.getElementById('deltaUseSea');
+        const useSea = !!(seaEl && seaEl.checked);
         try {
             const resp = await fetch('/settings/select-delta-warehouse', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ warehouse_id: warehouseId }),
+                body: JSON.stringify({ warehouse_id: warehouseId, use_sea: useSea }),
             });
             const result = await resp.json();
             if (!resp.ok || !result.success) {
@@ -360,6 +362,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
             currentDeltaWarehouseId = result.delta_warehouse_id || '';
+            if (seaEl) seaEl.checked = !!result.use_sea;
             setDeltaWarehouseStatus();
             return true;
         } catch (e) {
@@ -2116,6 +2119,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = resp.ok ? await resp.json() : {};
             currentDeltaWarehouseId = data.delta_warehouse_id || '';
             effectiveDeltaWarehouseId = data.effective_delta_warehouse_id || '';
+            const seaEl = document.getElementById('deltaUseSea');
+            if (seaEl) seaEl.checked = !!data.use_sea;
             applyDeltaRegistryLocation(data);
         } catch (e) {
             console.log('Delta warehouse state load failed', e);
