@@ -1,0 +1,86 @@
+## Lakehouse RT (Statement Execution API) support — opt-in per-warehouse toggle
+
+Context: Building the Knowledge Graph against a serverless Lakehouse/RT SQL
+warehouse failed at the R2RML VIEW creation step with `BAD_REQUEST: Lakehouse/RT
+is not supported for Thrift protocol. Please update your Databricks SQL Driver
+version ... which supports the Statement Execution API protocol`. The installed
+`databricks-sql-connector` (4.5.0) already supports the Statement Execution API
+(SEA) but defaults to the legacy Thrift backend unless the caller passes
+`use_sea=True`; RT warehouses reject Thrift. The error was also mis-reported as a
+generic "check source tables / permissions" failure, hiding the real cause.
+
+This change adds an opt-in **Lakehouse RT warehouse** checkbox under
+`Settings → Lakehouse → SQL Warehouse`. When enabled, the Lakehouse (Delta)
+graph client connects via SEA instead of Thrift. The flag is stored next to the
+Lakehouse warehouse id in `graph_engine_config.lakehouse.use_sea` and defaults to
+`False`, so existing deployments on classic SQL warehouses are unchanged.
+
+Changes:
+1. src/back/core/graphdb/engine_config.py
+   Added a `_coerce_bool` helper; `_finalize_lakehouse_bucket` now stamps a
+   normalized `use_sea` boolean onto a non-empty Lakehouse bucket (empty buckets
+   stay `{}` to preserve existing contracts). Added public
+   `resolve_lakehouse_use_sea(cfg)` (default `False`).
+2. src/back/objects/session/GlobalConfigService.py
+   Added `get_delta_warehouse_use_sea(...)`; extended `set_delta_warehouse_id(...)`
+   with an optional `use_sea` parameter that is written alongside `warehouse_id`
+   (and preserved when omitted).
+3. src/back/core/helpers/DatabricksHelpers.py, src/back/core/helpers/__init__.py
+   Added `resolve_lakehouse_use_sea(domain, settings)` (default `False`, bypasses
+   the falsy-swallowing `_resolve_global_setting`, mirroring
+   `resolve_use_cloud_fetch`) and re-exported it at package level.
+4. src/back/core/databricks/DatabricksAuth.py
+   `__init__` accepts `use_sea`; `get_sql_connection_params()` adds
+   `use_sea=True` only when enabled; the CloudFetch probe params mirror the flag.
+5. src/back/core/databricks/DatabricksClient.py
+   `__init__` accepts and forwards `use_sea` to `DatabricksAuth`.
+6. src/back/core/graphdb/delta/DeltaBase.py
+   `create_databricks_client` resolves `resolve_lakehouse_use_sea(...)` and passes
+   `use_sea` to the Delta `DatabricksClient` (session-less branch reads
+   `databricks.use_sea`).
+7. src/back/objects/domain/SettingsService.py
+   `select_delta_warehouse(..., *, use_sea=False)` persists and returns `use_sea`;
+   `get_delta_warehouse_result(...)` returns the saved `use_sea`.
+8. src/api/routers/internal/settings.py
+   `POST /settings/select-delta-warehouse` reads `use_sea` from the request body.
+9. src/front/templates/settings.html, src/front/static/config/js/settings.js
+   Added the "Lakehouse RT warehouse" checkbox on the SQL Warehouse tab; it loads
+   from `GET /settings/delta-warehouse` and is saved with the existing **Apply**
+   button (`use_sea` in the POST body).
+10. src/back/core/databricks/SQLWarehouse.py
+    `_create_or_replace` (VIEW/TABLE DDL) now maps the RT "not supported for
+    Thrift protocol" `BAD_REQUEST` to an actionable message pointing at the new
+    checkbox, instead of the generic failure text.
+11. pyproject.toml
+    Bumped version 0.8.0 → 0.8.1.
+
+Modified files:
+- src/back/core/graphdb/engine_config.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/core/databricks/DatabricksAuth.py
+- src/back/core/databricks/DatabricksClient.py
+- src/back/core/graphdb/delta/DeltaBase.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/back/core/databricks/SQLWarehouse.py
+- pyproject.toml
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/settings/test_delta_warehouse_config.py
+- tests/units/auth/test_auth.py
+- tests/units/graphdb/delta/test_delta_base.py (new)
+- tests/units/core/test_sql_warehouse.py
+- .planning/lakehouse-rt-support/PLAN.md (new)
+- changelogs/v0.8.1/benoitcayladbx_2026-09-04.log (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5847 passed, 316 skipped,
+6 deselected, 1 xfailed in ~27s. Note: the routine run requires the fake
+`test.databricks.com` warehouse probe in `tests/units/api/test_routes.py::
+TestHealthRoutes::test_health_check` to fail fast; behind an HTTP proxy that
+live `databricks.sql.connect` retries with urllib3 backoff and stalls the suite.
+This is a pre-existing, environment-specific test-isolation gap (the health
+readiness probe is not mocked) and is unrelated to this change — the branch does
+not touch `health.py` or `test_routes.py`.
