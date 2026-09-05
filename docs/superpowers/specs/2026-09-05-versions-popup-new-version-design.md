@@ -10,7 +10,10 @@ popup, with the same behavior as Domain → Versions.
 Move the create-version workflow into one globally available function owned by
 `navbar.js`. The workflow keeps the existing confirmation dialog, posts to
 `/domain/create-version`, reports progress and errors through the Notification
-Center, invalidates domain caches, and reloads the page after success.
+Center, invalidates domain caches, and reloads the page after success. Once the
+user confirms creation from the Switch Version popup, that popup closes and the
+existing branded full-page domain overlay displays **Creating and loading new
+version…** until the new version has loaded.
 
 The Domain → Versions button delegates to this shared function, removing its
 duplicate request logic. The Versions popup adds a labeled **New Version**
@@ -23,12 +26,16 @@ matching the existing version-branching contract.
 ## Error Handling
 
 Cancellation leaves the popup open and performs no request. API and network
-failures use `showNotification(..., "error")`. Successful creation invalidates
-cached domain data and reloads the current page.
+failures hide the loading overlay, reopen the Switch Version popup when creation
+originated there, and use `showNotification(..., "error")`. Successful creation
+keeps the overlay visible, invalidates cached domain data, and reloads the
+current page.
 
 ## Verification
 
 Add structural tests proving that the popup exposes the button, wires it to the
-shared action, and that Domain → Versions delegates to the same function.
-Retain the existing ungated-version assertions, then run the full non-scenario
-test suite and browser-check the popup at desktop and mobile widths.
+shared action with popup context, closes before showing the loading overlay, and
+restores the popup after a failure. Prove that Domain → Versions delegates to
+the same function without popup context. Retain the existing ungated-version
+assertions, then run the full non-scenario test suite and browser-check the
+popup at desktop and mobile widths.
