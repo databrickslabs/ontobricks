@@ -2,7 +2,7 @@
   <img src="src/front/static/global/img/ontobricks-icon.svg" alt="OntoBricks Logo" width="120" height="120">
 </p>
 
-<h1 align="center">OntoBricks 0.8.1</h1>
+<h1 align="center">OntoBricks 0.9.0</h1>
 
 <p align="center">
   <strong>Turn your Databricks tables into a living knowledge graph — in four clicks.</strong>

@@ -124,35 +124,7 @@ async function loadVersionFromList(version) {
 }
 
 async function addNewVersionFromList() {
-    const confirmed = await showConfirmDialog({
-        title: 'Create New Version',
-        message: 'This will copy the current version and increment the version number. Continue?',
-        confirmText: 'Create Version',
-        confirmClass: 'btn-primary',
-        icon: 'plus-circle'
-    });
-    if (!confirmed) return;
-
-    try {
-        showNotification('Creating new version…', 'info', 2000);
-
-        const response = await fetch('/domain/create-version', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            showNotification('Version ' + data.new_version + ' created!', 'success');
-            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
-            window.location.reload();
-        } else {
-            showNotification('Error: ' + data.message, 'error');
-        }
-    } catch (err) {
-        showNotification('Error: ' + err.message, 'error');
-    }
+    return window.createNewDomainVersion();
 }
 
 async function reloadLastSavedVersion() {

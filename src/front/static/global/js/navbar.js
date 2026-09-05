@@ -915,6 +915,57 @@ function showCloseDomainDialog(options = {}) {
 // ==========================================
 
 /**
+ * Create a new version from the current domain state.
+ *
+ * This global action is shared by the Versions popup and Domain > Versions.
+ * Branching remains available for read-only or incomplete domain versions.
+ */
+async function createNewDomainVersion(options = {}) {
+    const confirmed = await showConfirmDialog({
+        title: 'Create New Version',
+        message: 'This will copy the current version and increment the version number. Continue?',
+        confirmText: 'Create Version',
+        confirmClass: 'btn-primary',
+        icon: 'plus-circle'
+    });
+    if (!confirmed) return;
+
+    if (typeof options.closeSourceModal === 'function') {
+        options.closeSourceModal();
+    }
+    showDomainLoading('Creating and loading new version…');
+
+    try {
+        showNotification('Creating new version…', 'info', 2000);
+
+        const response = await fetch('/domain/create-version', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Version ' + data.new_version + ' created!', 'success');
+            if (typeof invalidateDomainCaches === 'function') invalidateDomainCaches();
+            window.location.reload();
+        } else {
+            hideDomainLoading();
+            if (typeof options.restoreSourceModal === 'function') {
+                options.restoreSourceModal();
+            }
+            showNotification('Error: ' + data.message, 'error');
+        }
+    } catch (err) {
+        hideDomainLoading();
+        if (typeof options.restoreSourceModal === 'function') {
+            options.restoreSourceModal();
+        }
+        showNotification('Error: ' + err.message, 'error');
+    }
+}
+
+/**
  * Switch the open domain to another version — or reload the current one — from
  * the Registry.
  *
@@ -994,6 +1045,9 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
                         </div>
                     </div>
                     <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" id="btnCreateVersionFromSwitch">
+                            <i class="bi bi-plus-circle me-1"></i> New Version
+                        </button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="button" class="btn btn-primary" id="btnConfirmSwitch" disabled>
                             <i class="bi bi-arrow-repeat"></i> Switch
@@ -1006,12 +1060,16 @@ function showSwitchDomainDialog(domainSlug, domainName, currentVersion) {
 
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     const modalEl = document.getElementById('domainSwitchModal');
-    const modal = new bootstrap.Modal(modalEl);
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
     modalEl.addEventListener('hidden.bs.modal', () => modalEl.remove());
 
     configureSwitchSaveOption();
     populateSwitchVersions(currentVersion);
+    document.getElementById('btnCreateVersionFromSwitch').addEventListener('click', () => createNewDomainVersion({
+        closeSourceModal: () => modal.hide(),
+        restoreSourceModal: () => showSwitchDomainDialog(domainSlug, domainName, currentVersion)
+    }));
 
     document.getElementById('btnConfirmSwitch').addEventListener('click', async () => {
         const select = document.getElementById('switchVersionSelect');
@@ -1521,6 +1579,7 @@ window.domainNew = domainNew;
 window.domainSave = domainSave;
 window.domainClose = domainClose;
 window.domainSwitch = domainSwitch;
+window.createNewDomainVersion = createNewDomainVersion;
 window.domainLoad = domainLoad;
 window.showDomainSaveDialog = showDomainSaveDialog;
 window.showDomainLoadDialog = showDomainLoadDialog;
