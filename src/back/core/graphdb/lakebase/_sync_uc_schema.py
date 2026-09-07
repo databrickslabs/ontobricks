@@ -10,7 +10,7 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_UC_SEGMENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]*$")
+_UC_SEGMENT_RE = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_-]*$")
 
 
 def ensure_uc_schema_for_synced_table_fqn(

@@ -1,0 +1,23 @@
+## Allow Unity Catalog table names that start with a digit
+
+Context: Loading Data Sources failed with `Invalid UC table: '5_g_subscribers'`
+because the SQL-injection identifier guard required a leading letter or
+underscore. Unity Catalog allows digit-leading names when they are
+backtick-quoted, which OntoBricks already does. The whitelist now accepts a
+leading digit while still rejecting `;`, `--`, quotes, and whitespace.
+
+Changes:
+
+1. src/back/core/databricks/uc/identifiers.py
+   Allow catalog/schema/table segments to start with a digit.
+2. src/back/core/graphdb/lakebase/_sync_uc_schema.py
+   Align the Lakebase UC schema-segment regex with the same rule.
+3. tests/units/core/test_uri_sql_helpers.py
+   Regression tests for `5_g_subscribers` validation and quoted FQN.
+
+Modified files:
+- src/back/core/databricks/uc/identifiers.py
+- src/back/core/graphdb/lakebase/_sync_uc_schema.py
+- tests/units/core/test_uri_sql_helpers.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5852 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.09s.
