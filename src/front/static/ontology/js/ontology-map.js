@@ -28,6 +28,27 @@ function _resolveLinkEndpoint(endpoint) {
     return (endpoint && typeof endpoint === 'object') ? endpoint.name : endpoint;
 }
 
+function _classHasExternalConfig(cls) {
+    return !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length);
+}
+
+function _appendMapExternalBadge(nodeSelection) {
+    nodeSelection.append('circle')
+        .attr('class', 'map-node-external-badge-bg')
+        .attr('cx', 16)
+        .attr('cy', -16)
+        .attr('r', 9)
+        .attr('role', 'img')
+        .attr('aria-label', 'Has external configuration');
+
+    nodeSelection.append('text')
+        .attr('class', 'map-node-external-badge-icon')
+        .attr('x', 16)
+        .attr('y', -16)
+        .attr('aria-hidden', 'true')
+        .text('\uf46d');
+}
+
 /**
  * Resolve the current brand primary from CSS custom properties.
  */
@@ -227,7 +248,7 @@ async function initOntologyMap() {
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
             // True when the backing class has a Dashboard, Dataset, Actions, or
             // Bridges configured under the entity panel's References tab.
-            hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
+            hasExternal: _classHasExternalConfig(cls),
             parent: cls.parent,
             // Use saved position if available, fix positions to prevent animation
             x: x,
@@ -594,20 +615,7 @@ async function initOntologyMap() {
     // and marked pointer-events: none in CSS.
     const externalBadgeNodes = nodeElements.filter(d => d.hasExternal);
 
-    externalBadgeNodes.append('circle')
-        .attr('class', 'map-node-external-badge-bg')
-        .attr('cx', 16)
-        .attr('cy', -16)
-        .attr('r', 9)
-        .attr('role', 'img')
-        .attr('aria-label', 'Has external configuration');
-
-    externalBadgeNodes.append('text')
-        .attr('class', 'map-node-external-badge-icon')
-        .attr('x', 16)
-        .attr('y', -16)
-        .attr('aria-hidden', 'true')
-        .text('\uf46d'); // bi-lightning-charge codepoint (bootstrap-icons font) — same glyph/colour as the entity panel's References tab
+    _appendMapExternalBadge(externalBadgeNodes);
 
     // Tooltip on hover
     nodeElements.append('title')
@@ -2543,8 +2551,8 @@ function refreshMapLinkDirection(name, direction) {
         if (link.name === name) link.direction = direction;
     });
     // Update the DOM element class immediately (CSS handles the marker swap)
-    if (typeof d3 !== 'undefined') {
-        d3.selectAll('.map-link').each(function(d) {
+    if (typeof d3 !== 'undefined' && ontologyMapSvg) {
+        ontologyMapSvg.selectAll('.map-link').each(function(d) {
             if (d && d.name === name) {
                 d3.select(this).classed('reverse', isReverse);
             }
@@ -2552,3 +2560,59 @@ function refreshMapLinkDirection(name, direction) {
     }
 }
 window.refreshMapLinkDirection = refreshMapLinkDirection;
+
+/**
+ * Refresh visible metadata for one existing entity without rebuilding the map.
+ * Structural changes (create, rename, delete, or inheritance) still require
+ * initOntologyMap().
+ * @param {string} name - Entity name
+ * @returns {boolean} true when an existing map node was updated
+ */
+function refreshMapNodeFromConfig(name) {
+    if (!ontologyMapSimulation || typeof d3 === 'undefined') return false;
+
+    const classData = (OntologyState?.config?.classes || []).find(cls => cls.name === name);
+    const node = ontologyMapNodes.find(candidate => candidate.name === name);
+    if (!classData || !node) return false;
+
+    node.label = classData.label || classData.name;
+    node.icon = classData.emoji || OntologyState.defaultClassEmoji || '📦';
+    node.hasExternal = _classHasExternalConfig(classData);
+
+    const nodeSelection = d3.selectAll('.map-node').filter(d => d && d.name === name);
+    if (nodeSelection.empty()) return false;
+
+    nodeSelection.select('.map-node-icon').text(node.icon);
+    nodeSelection.select('.map-node-label').text(node.label || node.name);
+    nodeSelection.select('title').text(node.label || node.name);
+    nodeSelection.selectAll('.map-node-external-badge-bg').remove();
+    nodeSelection.selectAll('.map-node-external-badge-icon').remove();
+    if (node.hasExternal) _appendMapExternalBadge(nodeSelection);
+
+    return true;
+}
+window.refreshMapNodeFromConfig = refreshMapNodeFromConfig;
+
+/**
+ * Refresh direction and label for one relationship whose endpoints and name
+ * did not change.
+ * @param {string} name - Relationship name
+ * @returns {boolean} true when an existing map link was updated
+ */
+function refreshMapRelationshipFromConfig(name) {
+    if (!ontologyMapSimulation || !ontologyMapSvg || typeof d3 === 'undefined') return false;
+
+    const property = (OntologyState?.config?.properties || []).find(prop => prop.name === name);
+    const link = ontologyMapLinks.find(candidate => candidate.name === name);
+    if (!property || !link) return false;
+
+    link.label = property.label || property.name;
+    refreshMapLinkDirection(name, property.direction);
+
+    const labelSelection = ontologyMapSvg.selectAll('.map-link-label').filter(d => d && d.name === name);
+    if (labelSelection.empty()) return false;
+    labelSelection.text(link.label);
+
+    return true;
+}
+window.refreshMapRelationshipFromConfig = refreshMapRelationshipFromConfig;

@@ -17,9 +17,10 @@ MAP_CSS = REPO_ROOT / "src/front/static/ontology/css/ontology-map.css"
 def test_node_data_computes_has_external_flag():
     js = MAP_JS.read_text(encoding="utf-8")
     assert (
-        "hasExternal: !!(cls.dashboard || cls.dataset || "
+        "return !!(cls.dashboard || cls.dataset || "
         "(cls.actions || []).length || (cls.bridges || []).length)" in js
     )
+    assert "hasExternal: _classHasExternalConfig(cls)" in js
 
 
 def test_badge_rendered_only_for_matching_nodes():
