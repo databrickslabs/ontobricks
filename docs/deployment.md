@@ -335,7 +335,7 @@ MLFLOW_TRACKING_URI=databricks
 
 # Neo4j (only for domains whose graph backend is "neo4j") — the password is
 # resolved live from a Databricks secret scope/key picked in Settings → Back
-# end → Neo4j (see docs/pr47-neo4j-demo/secret-configuration.md);
+# end → Neo4j (see docs/neo4j-requirements.md);
 # NEO4J_PASSWORD below is only read for the legacy `auth_method: "basic"`
 # configs still bound to an Apps secret resource.
 # NEO4J_PASSWORD=<bolt-password>          # legacy — in Apps, via a secret resource
@@ -362,8 +362,7 @@ in the deployed app:
   **Settings → Back end → Neo4j** (populated live via the Databricks Secrets
   API). Deploy does **not** create or bind that secret (Neo4j is optional).
 - The app's own identity (SP OAuth in Apps, PAT/CLI profile locally) needs
-  `READ` on that scope — see
-  `docs/pr47-neo4j-demo/secret-configuration.md` for the one-time
+  `READ` on that scope — see `docs/neo4j-requirements.md` and the one-time
   `databricks secrets put-acl` setup.
 - Legacy configs still bound to the `neo4j-password` Apps secret resource
   (`auth_method: "basic"` + `NEO4J_PASSWORD` env var) keep working, but that

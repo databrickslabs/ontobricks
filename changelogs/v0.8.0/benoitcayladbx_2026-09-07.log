@@ -77,3 +77,36 @@ Modified files:
 - docs/deployment.md
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 5853 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 44.79s.
+
+## Stop publishing local-only docs trees to GitHub
+
+Context: `docs/sphinx/`, `docs/superpowers/`, and `docs/pr47-neo4j-demo/` were
+git-tracked and therefore published. They stay on disk for local work but must
+not sync to GitHub. Databricks DAB already excluded them from the app payload.
+
+Changes:
+
+1. .gitignore
+   Ignore the three local-only docs trees.
+2. git index (`git rm -r --cached`)
+   Untrack the trees without deleting working-copy files.
+3. src/front/templates/settings.html
+   Point the Neo4j setup-guide link at tracked `docs/neo4j-requirements.md`.
+4. docs/neo4j-requirements.md
+   Drop the GitHub-facing pointer at the unpublished demo pack.
+5. docs/deployment.md
+   Route Neo4j secret-setup references to `docs/neo4j-requirements.md`.
+6. docs/README.md
+   Note that Sphinx sources are local-only.
+7. .cursor/07-project-conventions.mdc
+   Note that `docs/superpowers/` is gitignored.
+
+Modified files:
+- .gitignore
+- src/front/templates/settings.html
+- docs/neo4j-requirements.md
+- docs/deployment.md
+- docs/README.md
+- .cursor/07-project-conventions.mdc
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5853 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.02s

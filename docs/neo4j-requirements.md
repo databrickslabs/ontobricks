@@ -6,8 +6,10 @@ Delta backends). This document states what a Neo4j server must provide, which
 Neo4j *flavors* are supported for the first release, and the limitations users
 should know before pointing a production domain at Neo4j.
 
-For the connection/setup walk-through see `docs/pr47-neo4j-demo/`. For the
-graph model internals see the module docstrings in
+For the connection/setup walk-through, use **Settings → Back end → Neo4j**
+(secret scope + key; the app identity needs `READ` on that scope). The PR47
+demo pack under `docs/pr47-neo4j-demo/` is local-only and is not published to
+GitHub. For the graph model internals see the module docstrings in
 `src/back/core/graphdb/neo4j/`.
 
 ---

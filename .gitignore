@@ -42,6 +42,11 @@ artifacts/
 documentation/sphinx/_build/
 **/sphinx/_build/
 
+# Local-only docs — stay on disk, not published to GitHub
+docs/sphinx/
+docs/superpowers/
+docs/pr47-neo4j-demo/
+
 # OS
 .DS_Store
 Thumbs.db

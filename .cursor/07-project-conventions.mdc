@@ -44,7 +44,8 @@ scope:
 
 - Save brainstorming/planning artifacts under **`docs/superpowers/`** — plans in
   `docs/superpowers/plans/YYYY-MM-DD-<slug>.md`, design specs in
-  `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`.
+  `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`. This tree is
+  gitignored (local-only; not published to GitHub).
 - `docs/` is the single canonical docs root (Help Center markdown, Sphinx
   sources, plans/specs). Do not create a parallel top-level `documentation/`.
 
