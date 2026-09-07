@@ -12,6 +12,11 @@ from scripts._internal._lakebase_preflight import (
 
 ROOT = Path(__file__).resolve().parents[3]
 LAKEBASE_PERMS = ROOT / "scripts" / "bootstrap" / "lakebase-perms.sh"
+MIGRATION_0_8 = ROOT / "scripts" / "migrations" / "upgrade_0.7_to_0.8.sql"
+REGISTRY_SCHEMA = (
+    ROOT / "src" / "back" / "objects" / "registry" / "store" / "lakebase" / "schema.sql"
+)
+UPDATE_SCRIPT = ROOT / "scripts" / "update-deployed-app.sh"
 
 
 def test_registry_migration_expectations_cover_bootstrap_ddl() -> None:
@@ -64,3 +69,20 @@ def test_lakebase_perms_skips_ddl_when_registry_migrations_are_current() -> None
     assert migration_step.index("inspect_migrations") < migration_step.index(
         'ALTER TABLE "${SCHEMA}".domain_versions'
     )
+
+
+def test_v08_mcp_policy_migration_is_consistent_across_deployment_paths() -> None:
+    """Every supported 0.8 upgrade path must provision the canonical MCP policy."""
+    migration = MIGRATION_0_8.read_text()
+    bootstrap = LAKEBASE_PERMS.read_text()
+    schema = REGISTRY_SCHEMA.read_text()
+    updater = UPDATE_SCRIPT.read_text()
+
+    definition = "mcp_policy jsonb NOT NULL DEFAULT '{}'::jsonb"
+    assert f"ADD COLUMN IF NOT EXISTS {definition}" in migration
+    assert f"ADD COLUMN IF NOT EXISTS {definition}" in bootstrap
+    assert "mcp_policy      jsonb NOT NULL DEFAULT '{}'::jsonb" in schema
+    assert "domains.mcp_policy" in updater
+    assert "\\set ON_ERROR_STOP on" in migration
+    assert "BEGIN;" in migration
+    assert "COMMIT;" in migration

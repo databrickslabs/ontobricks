@@ -542,11 +542,11 @@ resources:
           group_name: users
 ```
 
-> **MCP `ONTOBRICKS_URL`.** `src/mcp-server/app.yaml` still holds the
-> main app URL the MCP companion calls back into (`ONTOBRICKS_URL`).
-> This is the only `app.yaml` you edit by hand. Update it after the
-> first deploy with `databricks apps get <main-app> -o json | python3
-> -c "import sys,json; print(json.load(sys.stdin)['url'])"`.
+> **MCP `ONTOBRICKS_URL`.** `scripts/deploy.sh` resolves the main app URL
+> from Databricks and renders it into `src/mcp-server/app.yaml` from
+> `src/mcp-server/app.yaml.template`. Do not edit the generated file by
+> hand. On a first deployment the URL does not exist yet; rerun
+> `make deploy` after the UI app is available to render and deploy it.
 
 > **Note** — the deployed app name no longer needs an explicit
 > `ONTOBRICKS_APP_NAME` env var. The runtime auto-detects it from the
@@ -579,7 +579,7 @@ This repository’s **`scripts/deploy.sh`** defaults to **`dev-lakebase`** (Volu
 # Deploy both apps (main + MCP) with Lakebase binding — recommended
 databricks bundle deploy -t dev-lakebase
 
-# Or use the convenience script (validate + deploy + start main app)
+# Or use the convenience script (validate + deploy + start both apps)
 scripts/deploy.sh
 
 # Volume-only registry backend (no Lakebase bind)
@@ -686,7 +686,9 @@ databricks bundle run ontobricks_dev_app -t dev-lakebase
 databricks bundle run mcp_ontobricks_app -t dev-lakebase
 ```
 
-`scripts/deploy.sh` (without `--no-run`) starts **only** the main app (`ontobricks-XXX`). Start the MCP app with `databricks bundle run mcp_ontobricks_app -t dev-lakebase`, or use **`make deploy`** then run the MCP command separately.
+`scripts/deploy.sh` (without `--no-run`) starts both the main app and the MCP
+app. The explicit bundle commands above remain useful when restarting only one
+of them.
 
 ### Step 7 — Bind resources (first deploy only)
 
@@ -1149,13 +1151,9 @@ Confirm each app's `permissions:` block (under
 `CAN_MANAGE` (defaults use `${workspace.current_user.userName}`).
 The `variables:` defaults are overridden by `deploy.config.sh`.
 
-**`src/mcp-server/app.yaml`** — update the main app URL after the
-first deploy:
-
-```yaml
-- name: ONTOBRICKS_URL
-  value: "https://<new-ontobricks-app-url>"
-```
+**`src/mcp-server/app.yaml`** is generated from
+`src/mcp-server/app.yaml.template`. The deploy script resolves the main app URL
+automatically. Do not edit the generated file.
 
 ### 5.4 — Deploy
 
@@ -1163,9 +1161,8 @@ first deploy:
 # Validate first (use the same target you will deploy)
 databricks bundle validate -t dev-lakebase
 
-# Deploy and start main app (Lakebase target); start MCP separately if needed
+# Deploy and start both apps (Lakebase target)
 scripts/deploy.sh -t dev-lakebase
-databricks bundle run mcp_ontobricks_app -t dev-lakebase
 ```
 
 ### 5.5 — Bind resources
@@ -1181,21 +1178,17 @@ databricks bundle run mcp_ontobricks_app -t dev-lakebase
 2. Go to **Settings > Registry > Initialize** (if the volume is empty)
 3. Verify both apps are **Running**: `databricks apps get ontobricks-XXX` and `databricks apps get mcp-ontobricks`
 
-### 5.7 — Update MCP server URL
+### 5.7 — Refresh the MCP server URL after the first deploy
 
-After the main app is deployed and running:
-
-```bash
-# Get the main app URL
-databricks apps get ontobricks-XXX -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])"
-```
-
-Update `ONTOBRICKS_URL` in `src/mcp-server/app.yaml` with this URL, then redeploy the bundle and restart the MCP app:
+The UI URL does not exist when a brand-new app is rendered for the first time.
+After the main app is deployed and running, rerun the deploy script:
 
 ```bash
-databricks bundle deploy -t dev-lakebase
-databricks bundle run mcp_ontobricks_app -t dev-lakebase
+make deploy
 ```
+
+The script resolves `ONTOBRICKS_URL`, regenerates the MCP `app.yaml`, deploys
+the bundle, and restarts both apps.
 
 ### New Workspace Checklist
 
@@ -1226,8 +1219,8 @@ databricks bundle run mcp_ontobricks_app -t dev-lakebase
         registry / graph / sync schema GRANTs apply against the just-
         created schemas
 [ ] 13. Verify both apps are RUNNING
-[ ] 14. Update ONTOBRICKS_URL in src/mcp-server/app.yaml with the main app URL
-[ ] 15. databricks bundle deploy -t dev-lakebase && databricks bundle run mcp_ontobricks_app -t dev-lakebase
+[ ] 14. Re-run make deploy so ONTOBRICKS_URL is resolved and rendered
+[ ] 15. Verify both apps restart successfully
 [ ] 16. Verify MCP appears in Databricks Playground
 ```
 
@@ -1272,11 +1265,8 @@ The MCP server is deployed alongside the main app by the same `databricks.yml` b
 # Deploy both app definitions (single bundle deploy)
 databricks bundle deploy -t dev-lakebase
 
-# Or the convenience script (starts main app only — start MCP separately)
+# Or the convenience script (deploys and starts both apps)
 scripts/deploy.sh -t dev-lakebase
-
-# After the main app is up, start the MCP app if needed
-databricks bundle run mcp_ontobricks_app -t dev-lakebase
 ```
 
 ### MCP `app.yaml` Configuration
@@ -1306,10 +1296,9 @@ resources:
       permission: CAN_READ_WRITE
 ```
 
-> **Important**: Update `ONTOBRICKS_URL` to match your main app's URL before deploying. Find it with:
-> ```bash
-> databricks apps get ontobricks-XXX -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['url'])"
-> ```
+> **Important:** `scripts/deploy.sh` renders `ONTOBRICKS_URL` automatically
+> once the main app has a URL. On a fresh installation, run `make deploy` a
+> second time after the UI app becomes available.
 
 ### Post-Deployment Resource Binding
 
@@ -1706,9 +1695,12 @@ The MCP app's SP needs `CAN_USE` permission on the main app. The `users` group s
 
 ### Updating
 
+For a supported 0.7.x-to-0.8.0 in-place update, follow
+[`update_to_0.8.md`](../update_to_0.8.md). Back up `scripts/deploy.config.sh`
+first (0.8 defaults use a new `DEFAULT_INSTANCE_ID`), restore it after the
+checkout, then run the updater. The updater preserves the live configuration
+and applies pending registry SQL:
+
 ```bash
-# Pull latest code and redeploy
-git pull origin main
-scripts/deploy.sh -t dev-lakebase
-databricks bundle run mcp_ontobricks_app -t dev-lakebase
+scripts/update-deployed-app.sh <UI_APP_NAME> <MCP_APP_NAME>
 ```

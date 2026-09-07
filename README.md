@@ -156,6 +156,10 @@ permission bootstrap — are in the
 **[Get Started](docs/get-started.md)** and
 **[Deployment Guide](docs/deployment.md)**.
 
+Existing 0.7.x operators should follow
+**[Updating to 0.8.0](update_to_0.8.md)** for backup, migration, deployment,
+verification, and rollback steps.
+
 The bundle syncs only runtime source, the MCP and graph-job files, dependency
 locks, and the in-app Help Center set. `databricks.yml` `sync.exclude` is
 authoritative; `.databricksignore` is a reviewer/test mirror and is not read
