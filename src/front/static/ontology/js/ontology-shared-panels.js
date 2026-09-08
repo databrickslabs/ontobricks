@@ -2893,12 +2893,16 @@ async function saveSharedEntity(options = {}) {
     };
     
     console.log('[SharedPanel] Saving - classData.dashboardParams:', JSON.stringify(classData.dashboardParams));
+
+    const isNew = sharedPanelEditIndex < 0;
+    const existingEntity = isNew ? null : (OntologyState.config.classes[sharedPanelEditIndex] || {});
+    const oldName = existingEntity?.name || sharedPanelOriginalName;
+    const isRename = !isNew && oldName !== name;
+    const parentChanged = !isNew && (existingEntity?.parent || undefined) !== classData.parent;
     
     if (sharedPanelEditIndex >= 0) {
-        const existing = OntologyState.config.classes[sharedPanelEditIndex] || {};
-        const oldName = existing.name;
         // Preserve server-assigned URI so the backend prune doesn't orphan mappings.
-        if (existing.uri) classData.uri = existing.uri;
+        if (existingEntity.uri) classData.uri = existingEntity.uri;
         OntologyState.config.classes[sharedPanelEditIndex] = classData;
         if (oldName !== name) {
             OntologyState.config.classes.forEach(c => { if (c.parent === oldName) c.parent = name; });
@@ -2916,7 +2920,13 @@ async function saveSharedEntity(options = {}) {
     await saveEntityConstraintsToServer(name, disjointWith, equivalentTo);
     
     await autoGenerateOwl();
-    if (sharedPanelOnSaveCallback) sharedPanelOnSaveCallback();
+    if (sharedPanelOnSaveCallback) {
+        sharedPanelOnSaveCallback({
+            entityName: name,
+            previousName: oldName,
+            requiresMapRebuild: isNew || isRename || parentChanged
+        });
+    }
     if (typeof updateClassesList === 'function') updateClassesList();
     
     // Refresh ConstraintsModule if loaded
@@ -3373,12 +3383,15 @@ async function saveSharedRelationship(options = {}) {
         direction
         // NOTE: constraints are stored ONLY in session_data/ontology/constraints, not here
     };
-    const isRename = sharedPanelEditIndex >= 0 && sharedPanelOriginalName && sharedPanelOriginalName !== name;
+    const isNew = sharedPanelEditIndex < 0;
+    const existingProperty = isNew ? null : (OntologyState.config.properties[sharedPanelEditIndex] || {});
+    const isRename = !isNew && sharedPanelOriginalName && sharedPanelOriginalName !== name;
+    const endpointsChanged = !isNew
+        && (existingProperty.domain !== domain || existingProperty.range !== range);
     
     if (sharedPanelEditIndex >= 0) {
-        const existingProp = OntologyState.config.properties[sharedPanelEditIndex] || {};
         // Preserve server-assigned URI so the backend prune doesn't orphan mappings.
-        if (existingProp.uri) propertyData.uri = existingProp.uri;
+        if (existingProperty.uri) propertyData.uri = existingProperty.uri;
         OntologyState.config.properties[sharedPanelEditIndex] = propertyData;
         showNotification('Relationship updated', 'success', 2000);
     } else {
@@ -3395,7 +3408,13 @@ async function saveSharedRelationship(options = {}) {
     await saveRelationshipConstraintsToServer(name, domain, constraints);
     
     await autoGenerateOwl();
-    if (sharedPanelOnSaveCallback) sharedPanelOnSaveCallback();
+    if (sharedPanelOnSaveCallback) {
+        sharedPanelOnSaveCallback({
+            relationshipName: name,
+            previousName: sharedPanelOriginalName,
+            requiresMapRebuild: isNew || isRename || endpointsChanged
+        });
+    }
     if (typeof updatePropertiesList === 'function') updatePropertiesList();
     
     // Refresh ConstraintsModule if loaded
@@ -3408,9 +3427,6 @@ async function saveSharedRelationship(options = {}) {
     const lookupName = sharedPanelOriginalName || name;
     if (typeof refreshRelationshipInDesigner === 'function') {
         refreshRelationshipInDesigner(lookupName, direction);
-    }
-    if (typeof refreshMapLinkDirection === 'function') {
-        refreshMapLinkDirection(lookupName, direction);
     }
 
     closeSharedPanel();
@@ -3555,10 +3571,44 @@ document.addEventListener('DOMContentLoaded', () => {
 // COMPATIBILITY FUNCTIONS
 // =====================================================
 
+function _isOntologyMapActive() {
+    return document.getElementById('map-section')?.classList.contains('active');
+}
+
+function refreshMapAfterEntitySave(changeInfo) {
+    if (!_isOntologyMapActive() || typeof initOntologyMap !== 'function') return;
+    if (!changeInfo) {
+        initOntologyMap();
+        return;
+    }
+    if (changeInfo.requiresMapRebuild) {
+        initOntologyMap();
+        return;
+    }
+    const refreshed = typeof refreshMapNodeFromConfig === 'function'
+        && refreshMapNodeFromConfig(changeInfo.entityName);
+    if (!refreshed) initOntologyMap();
+}
+
+function refreshMapAfterRelationshipSave(changeInfo) {
+    if (!_isOntologyMapActive() || typeof initOntologyMap !== 'function') return;
+    if (!changeInfo) {
+        initOntologyMap();
+        return;
+    }
+    if (changeInfo.requiresMapRebuild) {
+        initOntologyMap();
+        return;
+    }
+    const refreshed = typeof refreshMapRelationshipFromConfig === 'function'
+        && refreshMapRelationshipFromConfig(changeInfo.relationshipName);
+    if (!refreshed) initOntologyMap();
+}
+
 function editClassByName(className, activeTab) {
     const idx = OntologyState.config.classes.findIndex(cls => cls.name === className);
     if (idx >= 0) {
-        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        const opts = { onSave: refreshMapAfterEntitySave };
         if (activeTab) opts.activeTab = activeTab;
         if (_canEditOntologyPanel()) openEntityPanelForEdit(idx, opts);
         else openEntityPanelForView(idx, opts);
@@ -3566,7 +3616,7 @@ function editClassByName(className, activeTab) {
 }
 
 function editClass(idx, activeTab) {
-    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    const opts = { onSave: refreshMapAfterEntitySave };
     if (activeTab) opts.activeTab = activeTab;
     openEntityPanelForEdit(idx, opts);
 }
@@ -3575,7 +3625,7 @@ function viewClass(idx) { openEntityPanelForView(idx); }
 function editPropertyByName(propertyName, activeTab) {
     const idx = OntologyState.config.properties.findIndex(prop => prop.name === propertyName);
     if (idx >= 0) {
-        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        const opts = { onSave: refreshMapAfterRelationshipSave };
         if (activeTab) opts.activeTab = activeTab;
         if (_canEditOntologyPanel()) openRelationshipPanelForEdit(idx, opts);
         else openRelationshipPanelForView(idx, opts);
@@ -3583,7 +3633,7 @@ function editPropertyByName(propertyName, activeTab) {
 }
 
 function editProperty(idx, activeTab) {
-    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    const opts = { onSave: refreshMapAfterRelationshipSave };
     if (activeTab) opts.activeTab = activeTab;
     openRelationshipPanelForEdit(idx, opts);
 }

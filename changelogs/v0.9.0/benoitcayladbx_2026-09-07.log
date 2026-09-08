@@ -1,3 +1,32 @@
+## Refresh Ontology Designer metadata in place
+
+Context: Saving metadata such as an entity reference, label, icon, or
+relationship direction unnecessarily rebuilt the complete Ontology Designer
+map and displayed its loading spinner. Metadata-only saves now update the
+existing D3 elements, while topology changes retain the full rebuild.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Added targeted node and relationship refresh helpers for visible metadata
+   and scoped relationship selections to the active Designer SVG.
+2. src/front/static/ontology/js/ontology-shared-panels.js
+   Classified entity and relationship saves as metadata or structural changes
+   and selected incremental refresh or full rebuild accordingly.
+3. tests/units/front/test_ontology_map_external_badge.py
+   Updated the external-configuration badge contract for the shared predicate.
+4. tests/units/front/test_ontology_map_incremental_refresh.py
+   Added regression contracts for incremental metadata updates and structural
+   rebuild decisions.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_map_external_badge.py
+- tests/units/front/test_ontology_map_incremental_refresh.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5882 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 51.87s.
+
 ## Allow Unity Catalog table names that start with a digit
 
 Context: Loading Data Sources failed with `Invalid UC table: '5_g_subscribers'`
