@@ -43,6 +43,7 @@ function initNavbar() {
         const clean = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
         try { history.replaceState(null, '', clean); } catch (_) { /* ignore */ }
     }
+    restoreLastConfirmedDomainInfo();
     loadNavbarState();
     initSubnavActiveState();
 }
@@ -96,6 +97,37 @@ function disableCurrentSubnavDropdown(toggle) {
  * apply domain info and warehouse icon to the DOM.
  * Validation indicators have moved to the Domain Validation page.
  */
+const DOMAIN_INFO_STORAGE_KEY = 'ontobricks:last-confirmed-domain-info';
+
+function rememberDomainInfo(data) {
+    try {
+        sessionStorage.setItem(DOMAIN_INFO_STORAGE_KEY, JSON.stringify(data));
+    } catch (_) { /* sessionStorage unavailable or quota exceeded */ }
+}
+
+function clearRememberedDomainInfo() {
+    try {
+        sessionStorage.removeItem(DOMAIN_INFO_STORAGE_KEY);
+    } catch (_) { /* sessionStorage unavailable */ }
+}
+
+function restoreLastConfirmedDomainInfo() {
+    try {
+        const raw = sessionStorage.getItem(DOMAIN_INFO_STORAGE_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!domainIsLoaded(data)) {
+            clearRememberedDomainInfo();
+            return false;
+        }
+        applyDomainInfo(data);
+        return true;
+    } catch (_) {
+        clearRememberedDomainInfo();
+        return false;
+    }
+}
+
 async function loadNavbarState() {
     try {
         const state = await fetchCached('/navbar/state', 15000);
@@ -104,8 +136,7 @@ async function loadNavbarState() {
         applyBrandLogo(state.branding || {});
     } catch (error) {
         console.error('Error loading navbar state:', error);
-        updateDomainMenuVisibility(false);
-        updateMenusForDomainStatus(false);
+        restoreLastConfirmedDomainInfo();
     }
 }
 
@@ -236,6 +267,12 @@ function applyDomainInfo(data) {
     const domainName = (data.info && data.info.name) ? data.info.name : 'NewDomain';
     const version = (data.info && data.info.version) || '1';
     const status = (data.info && data.info.status) || 'DRAFT';
+
+    if (hasDomain) {
+        rememberDomainInfo(data);
+    } else {
+        clearRememberedDomainInfo();
+    }
 
     if (currentDomainNameEl) {
         if (hasDomain) {

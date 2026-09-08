@@ -1,0 +1,31 @@
+## Keep the loaded domain badge stable
+
+Context: A transient failure while refreshing `/navbar/state` incorrectly
+hid the domain name and version from the top navbar even though the domain
+remained loaded in the server session. Navigating to Settings also briefly hid
+the badge while the new page waited for its navbar request. The navbar now
+restores the last confirmed domain identity synchronously on page
+initialization and retains it until a successful response reports that the
+domain was closed or replaced.
+
+Changes:
+
+1. src/front/static/global/js/navbar.js
+   Persisted the last confirmed loaded-domain state in session storage and
+   restored it before the asynchronous navbar refresh and whenever that
+   refresh fails, instead of treating the failure as an empty session.
+2. tests/units/front/test_navbar_domain_badge_persistence.py
+   Added regression contracts for synchronous page initialization, transient
+   refresh failures, and explicit domain-state clearing.
+
+Modified files:
+- src/front/static/global/js/navbar.js
+- tests/units/front/test_navbar_domain_badge_persistence.py
+
+Tests: Targeted navbar contracts → 14 passed, 0 failed in 0.17s. Browser
+verification passed at 1920×1080 and 375×667 for failed refresh and domain
+close behavior, including navigation to Settings with a delayed navbar
+response. `uv run --frozen pytest -q -m "not scenario"` →
+5885 passed, 304 skipped, 6 deselected, 1 xfailed, 2 unrelated failures in
+tests/units/settings/test_deploy_instance_id.py because the branch default is
+`09x` while those existing tests still expect `08x`.
