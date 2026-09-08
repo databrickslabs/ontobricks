@@ -36,7 +36,7 @@
 # Lowercase alphanumeric + hyphens only (becomes part of the app name
 # and the DAB target: ``dev-lakebase-<id>``).
 # Env-overridable: ``DEFAULT_INSTANCE_ID=080 make deploy``.
-DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-08x}"
+DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-09x}"
 
 # Optional: force a DAB target instead of the auto ``ontobricks-<id>``.
 # Use only to keep managing a pre-INSTANCE_ID deploy whose local state
