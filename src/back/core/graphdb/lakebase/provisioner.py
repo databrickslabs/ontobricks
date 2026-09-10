@@ -43,6 +43,9 @@ from back.core.databricks.lakebase.grants import (
     grant_uc_catalog,
     resolve_app_service_principals,
 )
+from back.core.databricks.lakebase.LakebaseProjectService import (
+    LakebaseProjectService,
+)
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -354,9 +357,7 @@ class LakebaseGraphProvisioner:
         for _ in range(10):
             self._check_cancelled()
             try:
-                projects = (
-                    api.do("GET", "/api/2.0/postgres/projects") or {}
-                ).get("projects") or []
+                projects = LakebaseProjectService.list_projects(api)
             except Exception as exc:  # noqa: BLE001
                 last_err = str(exc)
                 projects = []
