@@ -1,7 +1,7 @@
 # OntoBricks — Release Notes V0.8.0
 
 **Release window:** August 2026<br>
-**Test status:** all changes shipped with the non-scenario suite green: 5756 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings.
+**Test status:** all changes shipped with the non-scenario suite green: 5857 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings.
 
 ---
 
@@ -89,6 +89,7 @@
 ### Graph reliability
 
 - Lakebase and SQL Warehouse reads have scoped statement timeouts.
+- Lakebase authentication, Settings discovery, and provisioning follow every Postgres project-list page, so projects beyond the API's first page resolve correctly.
 - Graph Chat result size is bounded and reports blocking-pool pressure.
 - Analytics no longer displays historical charts as if they described a graph whose live objects were deleted; run history remains available under Management → Runs.
 
@@ -188,6 +189,7 @@
 - Fixed ontology attributes, relationships, inheritance, and other structural edits being restored from stale mirrors after navigation.
 - Fixed Lakehouse Build storage labels and a JavaScript scope error on populated graphs.
 - Fixed mobile Graph Chat, Data Quality, and Logs panes blocking natural page scrolling.
+- Fixed Lakebase Autoscaling endpoint resolution failing when the bound project appeared beyond the first Postgres API page.
 
 ---
 
