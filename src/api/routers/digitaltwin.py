@@ -858,7 +858,7 @@ async def dt_triples(
 
     table = (
         effective_view_table(domain, settings).strip()
-        if be == "view"
+        if backend == "view"
         else effective_graph_query_table(domain, settings, store=store)
     )
     if not table:

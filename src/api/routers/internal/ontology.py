@@ -1322,7 +1322,7 @@ async def accept_business_rules_suggestions(
         data = await request.json()
         domain = get_domain(session_mgr)
 
-        added: Dict[str, int] = {}
+        added: dict[str, int] = {}
         rejected: list = []
         duplicates: list = []
         dirty = False
