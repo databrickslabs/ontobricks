@@ -68,7 +68,7 @@ def resolve_credentials(
     """Return ``(host, token, warehouse_id)`` for build tasks."""
     if settings is not None:
         host, token = get_databricks_host_and_token(domain, settings)
-        warehouse_id = resolve_warehouse_id(domain, settings)
+        warehouse_id = resolve_delta_warehouse_id(domain, settings)
     else:
         db = getattr(domain, "databricks", None) or {}
         host = db.get("host", "")

@@ -39,6 +39,13 @@ jobs:
       - name: Lint with flake8
         run: uv run flake8 src/ tests/ --max-line-length=100 --extend-ignore=E203,W503
 
+      # Blocking, repo-wide, and deliberately narrow: F821 is an undefined name,
+      # which is a NameError waiting for the line to execute — never a style
+      # opinion, so it needs no burn-down period. Kept separate from the advisory
+      # ruff step below so the whole-repo backlog cannot mask a new one.
+      - name: Ruff (gate — undefined names, F821)
+        run: uv run --frozen ruff check --select F821 --output-format=concise src/ tests/
+
       # M3.P1 (advisory) — ruff runs in report-only mode against the changed files
       # of the PR. The full repo currently has ~3000 lint findings; we'll burn
       # them down over time. Pre-commit hook gates NEW code (changed lines only).

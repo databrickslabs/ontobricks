@@ -486,3 +486,68 @@ class TestResolveCohortContext:
         assert graph_name == "dom_V1"
         assert store is mock_store.return_value
         assert isinstance(service, CohortService)
+
+
+# ---------------------------------------------------------------------------
+# GET /triples — backend selection
+# ---------------------------------------------------------------------------
+
+
+class TestDtTriplesBackendSelection:
+    """``backend`` picks the queried relation; neither branch may NameError.
+
+    Regression guard for the undefined ``be`` reference that made every call to
+    ``GET /api/v1/digitaltwin/triples`` raise ``NameError`` — the conditional's
+    test is evaluated whatever ``backend`` is, so the default path failed too.
+    """
+
+    def _store(self):
+        store = MagicMock()
+        store.paginated_count.return_value = 1
+        store.paginated_triples.return_value = [
+            {"subject": "s", "predicate": "p", "object": "o"}
+        ]
+        return store
+
+    @patch("api.routers.digitaltwin.effective_view_table", return_value="c.s.view_V1")
+    @patch(
+        "api.routers.digitaltwin.effective_graph_query_table",
+        return_value="c.s.graph_V1",
+    )
+    @patch("api.routers.digitaltwin.get_graphdb")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    async def test_graph_backend_queries_graph_table(
+        self, mock_resolve, mock_store, _query, _view
+    ):
+        from api.routers.digitaltwin import dt_triples
+
+        mock_resolve.return_value = MagicMock()
+        store = self._store()
+        mock_store.return_value = store
+
+        resp = await dt_triples(
+            backend="graph", session_mgr=MagicMock(), settings=MagicMock()
+        )
+
+        assert resp.total == 1
+        assert store.paginated_count.call_args[0][0] == "c.s.graph_V1"
+
+    @patch("api.routers.digitaltwin.effective_view_table", return_value="c.s.view_V1")
+    @patch(
+        "api.routers.digitaltwin.effective_graph_query_table",
+        return_value="c.s.graph_V1",
+    )
+    @patch("api.routers.digitaltwin.get_graphdb")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    async def test_view_backend_queries_view_table(
+        self, mock_resolve, mock_store, _query, _view
+    ):
+        from api.routers.digitaltwin import dt_triples
+
+        mock_resolve.return_value = MagicMock()
+        store = self._store()
+        mock_store.return_value = store
+
+        await dt_triples(backend="view", session_mgr=MagicMock(), settings=MagicMock())
+
+        assert store.paginated_count.call_args[0][0] == "c.s.view_V1"
