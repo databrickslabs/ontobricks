@@ -27,7 +27,9 @@ from back.core.helpers import (
     get_databricks_host_and_token,
     normalize_ui_branding,
     resolve_app_registry_context,
+    resolve_build_use_sea,
     resolve_delta_warehouse_id,
+    resolve_use_cloud_fetch,
     resolve_warehouse_id,
     run_blocking,
 )
@@ -174,6 +176,8 @@ class SettingsService:
         host = domain.databricks.get("host") or settings.databricks_host
         token = domain.databricks.get("token") or settings.databricks_token
         warehouse_id = resolve_warehouse_id(domain, settings)
+        warehouse_use_sea = resolve_build_use_sea(domain, settings)
+        use_cloud_fetch = resolve_use_cloud_fetch(domain, settings)
 
         has_config = bool(host and (token or settings.databricks_token))
         is_app_mode = bool(settings.databricks_host)
@@ -193,6 +197,8 @@ class SettingsService:
             "host": host,
             "token": "***" if token else None,
             "warehouse_id": warehouse_id,
+            "warehouse_use_sea": warehouse_use_sea,
+            "use_cloud_fetch": use_cloud_fetch,
             "from_env": is_app_mode,
             "is_app_mode": is_app_mode,
             "auth_mode": auth_mode,
@@ -352,6 +358,49 @@ class SettingsService:
         return {"success": True, "message": "Warehouse selected"}
 
     @staticmethod
+    def select_build_warehouse(
+        warehouse_id: Optional[str],
+        warehouse_type: Optional[str],
+        use_sea: bool,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the non-RT warehouse and transport used for build SQL."""
+        wid = (warehouse_id or "").strip()
+        if not wid:
+            raise ValidationError("No Build SQL Warehouse selected")
+        if (warehouse_type or "").strip().upper() == "REYDEN":
+            raise ValidationError(
+                "Lakehouse//RT does not support build DDL or writes. "
+                "Select a classic or serverless SQL warehouse."
+            )
+
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        domain, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        domain.databricks["warehouse_id"] = wid
+        domain.save()
+        ok, msg = global_config_service.set_build_warehouse(
+            host,
+            token,
+            registry_cfg,
+            wid,
+            use_sea=bool(use_sea),
+        )
+        if not ok:
+            raise InfrastructureError(
+                "Failed to save the Build SQL Warehouse", detail=msg
+            )
+        return {
+            "success": True,
+            "warehouse_id": wid,
+            "use_sea": bool(use_sea),
+        }
+
+    @staticmethod
     def select_delta_warehouse(
         warehouse_id: Optional[str],
         email: str,
@@ -371,6 +420,20 @@ class SettingsService:
 
         wid = (warehouse_id or "").strip()
         use_sea = bool(use_sea)
+        if use_sea:
+            if not wid:
+                raise ValidationError(
+                    "Select a Query SQL Warehouse when Lakehouse//RT is enabled"
+                )
+            build_wid = resolve_warehouse_id(get_domain(session_mgr), settings)
+            if wid == build_wid:
+                raise ValidationError(
+                    "The Lakehouse//RT Query SQL Warehouse must be different "
+                    "from the Build SQL Warehouse"
+                )
+        else:
+            # Non-RT reads deliberately share Build; remove any stale override.
+            wid = ""
         SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
         domain, host, token, registry_cfg = SettingsService._resolve_context(
@@ -398,7 +461,7 @@ class SettingsService:
             "message": (
                 "Delta SQL Warehouse selected"
                 if wid
-                else "Delta SQL Warehouse cleared — using global warehouse"
+                else "Query SQL Warehouse cleared — using Build SQL Warehouse"
             ),
             "delta_warehouse_id": wid,
             "use_sea": use_sea,
@@ -1660,6 +1723,29 @@ class SettingsService:
             logger.debug("Could not drop the cached stats payload: %s", exc)
 
         return {"success": True, "analytics_job_enabled": enabled, "source": "admin"}
+
+    @staticmethod
+    def save_use_cloud_fetch_result(
+        enabled: bool,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the global CloudFetch toggle (admin only)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        _domain, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        enabled = bool(enabled)
+        ok, msg = global_config_service.set_use_cloud_fetch(
+            host, token, registry_cfg, enabled
+        )
+        if not ok:
+            raise InfrastructureError(
+                "Failed to save the CloudFetch setting", detail=msg
+            )
+        return {"success": True, "use_cloud_fetch": enabled}
 
     # ------------------------------------------------------------------
     #  Graph DB Engine

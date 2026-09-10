@@ -457,8 +457,30 @@ class TestCreateOrReplaceView:
         sw = SQLWarehouse(auth)
         ok, msg = sw.create_or_replace_view("c", "s", "v", "SELECT 1")
         assert ok is False
-        assert "Lakehouse RT" in msg
-        assert "Thrift" not in msg or "Lakehouse RT" in msg
+        assert "Build SQL Warehouse" in msg
+        assert "non-RT" in msg
+
+    @patch(
+        "databricks.sql.connect",
+        side_effect=Exception(
+            "[UNSUPPORTED_FEATURE.CREATE_VIEW] CREATE VIEW is not supported "
+            "in Lakehouse//RT"
+        ),
+    )
+    def test_maps_rt_ddl_error_to_build_warehouse_hint(
+        self, mock_connect, monkeypatch
+    ):
+        monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="tok",
+            warehouse_id="wh-rt",
+        )
+        sw = SQLWarehouse(auth)
+        ok, msg = sw.create_or_replace_view("c", "s", "v", "SELECT 1")
+        assert ok is False
+        assert "Build SQL Warehouse" in msg
+        assert "non-RT" in msg
 
 
 class TestCreateOrReplaceTableFromQuery:
@@ -502,8 +524,18 @@ class TestGetWarehouses:
         mock_resp.raise_for_status = Mock()
         mock_resp.json.return_value = {
             "warehouses": [
-                {"id": "id1", "name": "Warehouse A", "state": "RUNNING"},
-                {"id": "id2", "name": "Warehouse B", "state": "STOPPED"},
+                {
+                    "id": "id1",
+                    "name": "Warehouse A",
+                    "state": "RUNNING",
+                    "warehouse_type": "PRO",
+                },
+                {
+                    "id": "id2",
+                    "name": "Warehouse B",
+                    "state": "STOPPED",
+                    "warehouse_type": "REYDEN",
+                },
             ],
         }
         mock_get.return_value = mock_resp
@@ -517,8 +549,13 @@ class TestGetWarehouses:
         result = sw.get_warehouses()
 
         assert len(result) == 2
-        assert result[0] == {"id": "id1", "name": "Warehouse A", "state": "RUNNING"}
-        assert result[1] == {"id": "id2", "name": "Warehouse B", "state": "STOPPED"}
+        assert result[0] == {
+            "id": "id1",
+            "name": "Warehouse A",
+            "state": "RUNNING",
+            "warehouse_type": "PRO",
+        }
+        assert result[1]["warehouse_type"] == "REYDEN"
         mock_get.assert_called_once()
         assert "sql/warehouses" in mock_get.call_args[0][0]
 

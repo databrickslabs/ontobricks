@@ -47,16 +47,19 @@ from back.core.databricks import (  # noqa: F401  — re-exported for backward c
 # Backward-compatible function wrappers
 run_blocking = DatabricksHelpers.run_blocking
 resolve_warehouse_id = DatabricksHelpers.resolve_warehouse_id
+resolve_build_warehouse_id = DatabricksHelpers.resolve_build_warehouse_id
 resolve_delta_warehouse_id = DatabricksHelpers.resolve_delta_warehouse_id
 resolve_default_base_uri = DatabricksHelpers.resolve_default_base_uri
 resolve_default_emoji = DatabricksHelpers.resolve_default_emoji
 resolve_use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch
 resolve_lakehouse_use_sea = DatabricksHelpers.resolve_lakehouse_use_sea
+resolve_build_use_sea = DatabricksHelpers.resolve_build_use_sea
 resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 resolve_analytics_job_name = DatabricksHelpers.resolve_analytics_job_name
 resolve_app_registry_context = DatabricksHelpers.resolve_app_registry_context
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
+get_build_sql_credentials = DatabricksHelpers.get_build_sql_credentials
 get_delta_databricks_credentials = DatabricksHelpers.get_delta_databricks_credentials
 get_triplestore_sql_credentials = DatabricksHelpers.get_triplestore_sql_credentials
 get_databricks_host_and_token = DatabricksHelpers.get_databricks_host_and_token
@@ -68,16 +71,19 @@ __all__ = [
     "URIHelpers",
     "run_blocking",
     "resolve_warehouse_id",
+    "resolve_build_warehouse_id",
     "resolve_delta_warehouse_id",
     "resolve_default_base_uri",
     "resolve_default_emoji",
     "resolve_use_cloud_fetch",
     "resolve_lakehouse_use_sea",
+    "resolve_build_use_sea",
     "resolve_analytics_job_enabled",
     "resolve_analytics_job_name",
     "resolve_app_registry_context",
     "get_databricks_client",
     "get_databricks_credentials",
+    "get_build_sql_credentials",
     "get_delta_databricks_credentials",
     "get_triplestore_sql_credentials",
     "get_databricks_host_and_token",

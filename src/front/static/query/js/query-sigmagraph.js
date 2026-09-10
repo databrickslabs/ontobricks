@@ -43,6 +43,12 @@ var SigmaGraph = (function () {
     var _searchTimerRunning = false;
     var _searchElapsedMs = 0;
     var _searchSegmentStart = 0;
+    var _searchTiming = {
+        previewMs: null,
+        expansionMs: null,
+        displayMs: null,
+        totalMs: null
+    };
 
     function _searchTimerStart() {
         _searchElapsedMs = 0;
@@ -68,6 +74,17 @@ var SigmaGraph = (function () {
             _searchTimerRunning = false;
         }
         return _searchElapsedMs;
+    }
+    function _resetSearchTiming() {
+        _searchTiming = {
+            previewMs: null,
+            expansionMs: null,
+            displayMs: null,
+            totalMs: null
+        };
+        _setSearchTimingExpanded(false);
+        var timingButton = document.getElementById('sgSearchTiming');
+        if (timingButton) timingButton.hidden = true;
     }
     var _visibleTypes = new Set();
     var _visibleEdgeTypes = new Set();
@@ -957,41 +974,116 @@ var SigmaGraph = (function () {
             try { _renderer.getCamera().setState(savedCamera); } catch (_) {}
         }
 
-        // The graph is now on the canvas — close the search response-time clock
-        // (excludes any paused seed-modal dwell) and show the readout.
-        if (_searchTimerPending) {
-            _showSearchTiming(_searchTimerStop() / 1000);
-            _searchTimerPending = false;
-        }
-
         console.log('[SigmaGraph] render complete');
     }
 
+    function _formatSearchTiming(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return '—';
+        return (ms / 1000).toFixed(2) + 's';
+    }
+
+    function _setSearchTimingExpanded(expanded) {
+        var el = document.getElementById('sgSearchTiming');
+        var details = document.getElementById('sgSearchTimingDetails');
+        if (!el || !details) return;
+        var isExpanded = !!expanded;
+        el.setAttribute('aria-expanded', String(isExpanded));
+        details.hidden = !isExpanded;
+    }
+
+    function _appendSearchTimingRow(list, label, ms) {
+        var term = document.createElement('dt');
+        term.textContent = label;
+        var value = document.createElement('dd');
+        value.textContent = _formatSearchTiming(ms);
+        list.appendChild(term);
+        list.appendChild(value);
+    }
+
     /**
-     * Show the last search's end-to-end response time (click → graph on canvas)
-     * as a small readout pinned to the bottom-left of the graph canvas. Updated
-     * only on search-driven renders; filter/group toggles leave it untouched.
+     * Show the latest search's total time and an accessible phase breakdown.
+     * Updated only on completed search-driven renders; ordinary canvas refreshes
+     * leave the latest record untouched.
      */
-    function _showSearchTiming(seconds) {
+    function _showSearchTiming(timing) {
         var container = document.getElementById('sgContainer');
         if (!container) return;
-        // Sigma positions its canvases absolutely inside the container; anchor
-        // the readout to the container so it tracks the canvas box.
-        if (getComputedStyle(container).position === 'static') {
-            container.style.position = 'relative';
-        }
+
         var el = document.getElementById('sgSearchTiming');
+        var details = document.getElementById('sgSearchTimingDetails');
         if (!el) {
-            el = document.createElement('div');
+            el = document.createElement('button');
             el.id = 'sgSearchTiming';
-            el.style.cssText = 'position:absolute;left:8px;bottom:8px;z-index:5;' +
-                'background:rgba(33,37,41,.78);color:#fff;font-size:11px;line-height:1;' +
-                'padding:4px 8px;border-radius:4px;pointer-events:none;' +
-                'font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;';
-            el.title = 'Time from the search click to the graph being displayed';
+            el.type = 'button';
+            el.className = 'sg-search-timing';
+            el.setAttribute('aria-controls', 'sgSearchTimingDetails');
+            el.setAttribute('aria-expanded', 'false');
+
+            var icon = document.createElement('i');
+            icon.className = 'bi bi-stopwatch';
+            icon.setAttribute('aria-hidden', 'true');
+            var total = document.createElement('span');
+            total.className = 'sg-search-timing-total';
+            el.appendChild(icon);
+            el.appendChild(total);
             container.appendChild(el);
+
+            details = document.createElement('div');
+            details.id = 'sgSearchTimingDetails';
+            details.className = 'sg-search-timing-details';
+            details.setAttribute('role', 'region');
+            details.setAttribute('aria-label', 'Latest search timing details');
+            details.hidden = true;
+            container.appendChild(details);
+
+            el.addEventListener('click', function (event) {
+                event.stopPropagation();
+                _setSearchTimingExpanded(
+                    el.getAttribute('aria-expanded') !== 'true'
+                );
+            });
+            details.addEventListener('click', function (event) {
+                event.stopPropagation();
+            });
+            document.addEventListener('click', function (event) {
+                if (
+                    !container.contains(event.target)
+                    || (!el.contains(event.target) && !details.contains(event.target))
+                ) {
+                    _setSearchTimingExpanded(false);
+                }
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    var wasExpanded = el.getAttribute('aria-expanded') === 'true';
+                    _setSearchTimingExpanded(false);
+                    if (wasExpanded) el.focus();
+                }
+            });
         }
-        el.innerHTML = '<i class="bi bi-stopwatch me-1"></i>' + seconds.toFixed(2) + 's';
+
+        el.hidden = false;
+        var totalText = _formatSearchTiming(timing.totalMs);
+        var totalEl = el.querySelector('.sg-search-timing-total');
+        if (totalEl) totalEl.textContent = totalText;
+        el.setAttribute(
+            'aria-label',
+            'Latest search total ' + totalText + '. Show timing details'
+        );
+        el.title = 'Show latest search timing details';
+
+        details.replaceChildren();
+        var heading = document.createElement('div');
+        heading.className = 'sg-search-timing-heading';
+        heading.textContent = 'Latest search';
+        details.appendChild(heading);
+        var list = document.createElement('dl');
+        _appendSearchTimingRow(list, 'Preview request', timing.previewMs);
+        _appendSearchTimingRow(list, 'Expansion request', timing.expansionMs);
+        _appendSearchTimingRow(list, 'Display', timing.displayMs);
+        _appendSearchTimingRow(list, 'Total', timing.totalMs);
+        details.appendChild(list);
+        _setSearchTimingExpanded(false);
     }
 
     // -----------------------------------------------------------
@@ -1974,6 +2066,7 @@ var SigmaGraph = (function () {
         // Start the response-time clock at the Search click. It pauses while the
         // seed-selection popup is open and resumes on "Explore", so the readout
         // is click→display minus the user's selection dwell.
+        _resetSearchTiming();
         _searchTimerStart();
 
         var info = document.getElementById('sgGraphFilterInfo');
@@ -1982,6 +2075,7 @@ var SigmaGraph = (function () {
 
         var includeInferredPreview = document.getElementById('sgShowInferred')?.checked !== false;
         try {
+            var previewStartedAt = performance.now();
             var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1996,6 +2090,7 @@ var SigmaGraph = (function () {
                 credentials: 'same-origin'
             }, 45000, 'Search request timed out');
             var data = await _parseJsonResponse(resp, 'Search request failed');
+            _searchTiming.previewMs = performance.now() - previewStartedAt;
 
             if (!data.success) {
                 if (info && text) { info.classList.remove('d-none'); text.textContent = data.message || 'Search failed.'; }
@@ -2084,6 +2179,7 @@ var SigmaGraph = (function () {
         _hideEmptyState();
 
         var includeInferred = document.getElementById('sgShowInferred')?.checked !== false;
+        var expansionStartedAt = performance.now();
         var resp = await _fetchWithTimeout('/dtwin/sync/filter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2098,6 +2194,7 @@ var SigmaGraph = (function () {
             credentials: 'same-origin'
         }, 90000, 'Graph expansion timed out');
         var data = await _parseJsonResponse(resp, 'Graph expansion failed');
+        _searchTiming.expansionMs = performance.now() - expansionStartedAt;
 
         if (!data.success) {
             _hideLoading();
@@ -2111,6 +2208,7 @@ var SigmaGraph = (function () {
             return null;
         }
 
+        var displayStartedAt = performance.now();
         lastQueryResults = { results: data.results, columns: data.columns };
 
         var libsOk = await _waitForGraphLibs(10000);
@@ -2131,6 +2229,13 @@ var SigmaGraph = (function () {
         _hoveredNode = null;
         if (highlightTerm) _pendingHighlightTerm = highlightTerm;
         _render();
+
+        if (_searchTimerPending) {
+            _searchTiming.displayMs = performance.now() - displayStartedAt;
+            _searchTiming.totalMs = _searchTimerStop();
+            _searchTimerPending = false;
+            _showSearchTiming(_searchTiming);
+        }
 
         setTimeout(function () { _applyPendingHighlight(); }, 200);
 

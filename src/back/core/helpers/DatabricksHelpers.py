@@ -218,6 +218,16 @@ class DatabricksHelpers:
         return DatabricksHelpers.resolve_warehouse_id(domain, settings)
 
     @staticmethod
+    def resolve_build_warehouse_id(domain, settings) -> str:
+        """Resolve the SQL warehouse dedicated to build DDL and writes.
+
+        The global/session/deployment warehouse is the build warehouse. This
+        intentionally never consults the Lakehouse query warehouse, which may
+        be Lakehouse//RT and therefore read-only.
+        """
+        return DatabricksHelpers.resolve_warehouse_id(domain, settings)
+
+    @staticmethod
     def _resolve_global_setting(domain, settings, getter_name: str) -> str:
         """Read a single value from the global config (UC Volume), returning '' on failure."""
         from back.objects.session import global_config_service
@@ -318,6 +328,29 @@ class DatabricksHelpers:
         except Exception as exc:  # noqa: BLE001 - best-effort default resolution
             logger.debug(
                 "Could not resolve Lakehouse use_sea, defaulting to False: %s", exc
+            )
+            return False
+
+    @staticmethod
+    def resolve_build_use_sea(domain, settings) -> bool:
+        """Resolve the transport configured for the build SQL warehouse."""
+        from back.objects.session import global_config_service
+
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        registry_cfg = DatabricksHelpers._resolve_registry_cfg(domain, settings)
+        if not host or not registry_cfg.get("catalog") or not registry_cfg.get(
+            "schema"
+        ):
+            return False
+        try:
+            return bool(
+                global_config_service.get_build_warehouse_use_sea(
+                    host, token, registry_cfg
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort config resolution
+            logger.debug(
+                "Could not resolve build use_sea, defaulting to False: %s", exc
             )
             return False
 
@@ -460,13 +493,21 @@ class DatabricksHelpers:
         return host, token, warehouse_id
 
     @staticmethod
-    def get_triplestore_sql_credentials(domain, settings) -> Tuple[str, str, str]:
-        """Return SQL credentials for triple-store builds (Delta-aware warehouse)."""
-        from back.core.graphdb.GraphDBFactory import GraphDBFactory
+    def get_build_sql_credentials(domain, settings) -> Tuple[str, str, str]:
+        """Return credentials for build DDL, requiring a build warehouse."""
+        host, token = DatabricksHelpers.get_databricks_host_and_token(domain, settings)
+        warehouse_id = DatabricksHelpers.resolve_build_warehouse_id(domain, settings)
+        if not warehouse_id:
+            raise ValidationError(
+                "No Build SQL Warehouse configured. Select one in "
+                "Settings -> Databricks before building."
+            )
+        return host, token, warehouse_id
 
-        if GraphDBFactory._resolve_triple_store_backend(domain, settings) == "databricks":
-            return DatabricksHelpers.get_delta_databricks_credentials(domain, settings)
-        return DatabricksHelpers.get_databricks_credentials(domain, settings)
+    @staticmethod
+    def get_triplestore_sql_credentials(domain, settings) -> Tuple[str, str, str]:
+        """Return credentials for the SQL VIEW and materialization build."""
+        return DatabricksHelpers.get_build_sql_credentials(domain, settings)
 
     @staticmethod
     def get_databricks_host_and_token(domain, settings) -> Tuple[str, str]:

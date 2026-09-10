@@ -837,10 +837,19 @@ When OntoBricks detects that it is running as a Databricks App with resource bin
 
 | Resource | What is locked | How to change |
 |----------|---------------|---------------|
-| `sql-warehouse` | SQL Warehouse dropdown + refresh button | Rebind the `sql-warehouse` resource in **Compute > Apps > Resources** |
+| `sql-warehouse` | Databricks-section warehouse dropdown + refresh button; the Lakehouse Build selector and transport toggle remain editable for admins | Rebind the default `sql-warehouse` resource in **Compute > Apps > Resources**, or save an admin override under **Settings → Lakehouse → SQL Warehouse** |
 | `volume` | Registry Change button | Rebind the `volume` resource in **Compute > Apps > Resources** |
 
 The **Initialize** button remains available when the volume resource is bound but the registry has not been initialized yet (no `.registry` marker). This allows first-time setup without unlocking the UI.
+
+The bound build warehouse must be a classic or serverless SQL warehouse, not
+Lakehouse//RT: Knowledge Graph builds execute `CREATE VIEW`, CTAS, and writes.
+Configure Lakehouse//RT separately under **Settings → Lakehouse → SQL
+Warehouse** when low-latency graph reads are required.
+
+That panel always shows both roles. Query is disabled and mirrors Build until
+**Use Lakehouse//RT for queries** is enabled. RT mode requires a distinct Query
+warehouse; disabling RT and applying removes the override.
 
 In **local development mode** (no Databricks App resources), all Settings controls remain fully editable.
 

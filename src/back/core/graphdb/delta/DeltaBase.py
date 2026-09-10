@@ -9,6 +9,7 @@ from back.core.helpers import (
     get_databricks_host_and_token,
     resolve_delta_warehouse_id,
     resolve_lakehouse_use_sea,
+    resolve_use_cloud_fetch,
 )
 from back.core.logging import get_logger
 
@@ -27,12 +28,17 @@ def create_databricks_client(
             host, token = get_databricks_host_and_token(domain, settings)
             warehouse_id = resolve_delta_warehouse_id(domain, settings)
             use_sea = resolve_lakehouse_use_sea(domain, settings)
+            use_cloud_fetch = resolve_use_cloud_fetch(domain, settings)
         else:
             db = getattr(domain, "databricks", None) or {}
             host = db.get("host", "")
             token = db.get("token", "")
             warehouse_id = db.get("warehouse_id", "") or db.get("sql_warehouse_id", "")
             use_sea = bool(db.get("use_sea", False))
+            use_cloud_fetch = db.get("use_cloud_fetch")
+            use_cloud_fetch = (
+                True if use_cloud_fetch is None else bool(use_cloud_fetch)
+            )
 
         if not host and not is_databricks_app():
             logger.warning("Delta graph engine: missing host")
@@ -45,7 +51,11 @@ def create_databricks_client(
             return None
 
         return DatabricksClient(
-            host=host, token=token, warehouse_id=warehouse_id, use_sea=use_sea
+            host=host,
+            token=token,
+            warehouse_id=warehouse_id,
+            use_sea=use_sea,
+            use_cloud_fetch=use_cloud_fetch,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to create DatabricksClient for Delta engine: %s", exc)

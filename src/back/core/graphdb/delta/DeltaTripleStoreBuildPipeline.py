@@ -150,12 +150,16 @@ class DeltaTripleStoreBuildPipeline:
 
     def _prepare_translation(self) -> bool:
         from back.core.databricks import DatabricksClient
+        from back.core.helpers import resolve_build_use_sea
         from back.core.w3c import sparql
         from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 
         self.tm.start_task(self.task_id, "Preparing mappings...")
         self.source_client = DatabricksClient(
-            host=self.host, token=self.token, warehouse_id=self.warehouse_id
+            host=self.host,
+            token=self.token,
+            warehouse_id=self.warehouse_id,
+            use_sea=resolve_build_use_sea(self.domain, self.settings),
         )
         entity_mappings, relationship_mappings = sparql.extract_r2rml_mappings(
             self.r2rml_content

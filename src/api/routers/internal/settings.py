@@ -126,6 +126,28 @@ async def select_warehouse(
     )
 
 
+@router.post("/select-build-warehouse")
+async def select_build_warehouse(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Select the non-RT SQL warehouse used for build DDL and writes."""
+    data = await request.json()
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.select_build_warehouse(
+        data.get("warehouse_id"),
+        data.get("warehouse_type"),
+        bool(data.get("use_sea", False)),
+        email,
+        user_token,
+        session_mgr,
+        settings,
+    )
+
+
 @router.post("/select-delta-warehouse")
 async def select_delta_warehouse(
     request: Request,
@@ -783,6 +805,23 @@ async def save_analytics_job_enabled(
         _settings_request_identity(request)
     )
     return config_service.save_analytics_job_enabled_result(
+        enabled, email, user_token, session_mgr, settings
+    )
+
+
+@router.post("/save-cloud-fetch")
+async def save_cloud_fetch(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the global CloudFetch toggle (admin only)."""
+    data = await request.json()
+    enabled = bool(data.get("use_cloud_fetch", False))
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_use_cloud_fetch_result(
         enabled, email, user_token, session_mgr, settings
     )
 

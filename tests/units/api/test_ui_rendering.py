@@ -259,6 +259,15 @@ class TestSettingsPage:
     def test_warehouse_select(self, client):
         html = _html(client, "/settings")
         assert _find(_tags(html), id_="settingsWarehouseSelect") is not None
+        assert "Build SQL Warehouse" in html
+        assert _find(_tags(html), id_="buildUseSea") is not None
+        assert _find(_tags(html), id_="useCloudFetch") is not None
+        assert "Query SQL Warehouse" in html
+        lakehouse_build = _find(
+            _tags(html), tag="select", id_="deltaBuildWarehouseSelect"
+        )
+        assert lakehouse_build is not None
+        assert "disabled" not in lakehouse_build
 
     def test_test_connection_button(self, client):
         html = _html(client, "/settings")

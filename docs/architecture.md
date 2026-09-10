@@ -272,10 +272,19 @@ To add a new generation template, add an entry to `WIZARD_TEMPLATES` in `src/sha
 
 | Setting | Description | Modified By |
 |---------|-------------|-------------|
-| `warehouse_id` | SQL Warehouse ID used by all backends and API calls | Admin only |
+| `warehouse_id` | Build SQL Warehouse ID used for mapping views, DDL, and materialization | Admin only |
+| `warehouse_use_sea` | Whether the build warehouse uses the Statement Execution API transport | Admin only |
+| `use_cloud_fetch` | Whether SQL clients download result files via CloudFetch (default on) | Admin only |
+| `graph_engine_config.lakehouse.warehouse_id` | Optional Lakehouse query warehouse, including Lakehouse//RT | Admin only |
+| `graph_engine_config.lakehouse.use_sea` | Query transport; required for Lakehouse//RT | Admin only |
 | `default_base_uri` | Default ontology base URI domain | Admin only |
 | `default_emoji` | Default class icon emoji (e.g. `📦`) | Admin only |
 | `ui_branding` | Versioned object: `app_title`, `primary_color`, `logo_data_url` (empty = bundled favicon) | Admin only (`GET`/`POST /settings/ui-branding`) |
+
+Without an RT query override, `resolve_delta_warehouse_id()` intentionally
+falls back to the Build SQL Warehouse. The Settings UI represents this by
+disabling Query and mirroring Build. RT mode requires a distinct query
+warehouse; disabling it persists an empty Lakehouse warehouse ID.
 
 The service caches the document in memory with a TTL. Persistence goes through
 the active `RegistryStore` (`save_global_config` / `load_global_config`), so

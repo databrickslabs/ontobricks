@@ -59,7 +59,7 @@
 
                     <div class="mb-4">
                         <label class="form-label fw-semibold">
-                            SQL Warehouse
+                            Build SQL Warehouse
                             <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
                                 <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
                             </span>
@@ -72,7 +72,34 @@
                                 <i class="bi bi-arrow-clockwise"></i>
                             </button>
                         </div>
-                        <small class="text-muted" id="warehouseHelp">Required for Unity Catalog operations. Stored globally for all users.</small>
+                        <small class="text-muted" id="warehouseHelp">
+                            Required for Knowledge Graph views and materialization. Lakehouse//RT
+                            warehouses cannot be used because builds execute DDL and writes.
+                        </small>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="buildUseSea">
+                            <label class="form-check-label small" for="buildUseSea">
+                                Use Statement Execution API for builds
+                            </label>
+                            <div class="form-text small">
+                                Enable when the selected serverless warehouse requires the
+                                Statement Execution API instead of Thrift.
+                            </div>
+                        </div>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="useCloudFetch" checked>
+                            <label class="form-check-label small" for="useCloudFetch">
+                                Use CloudFetch
+                                <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                    <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                                </span>
+                            </label>
+                            <div class="form-text small">
+                                Download large SQL result files from Databricks storage. Disable
+                                this when Databricks Apps cannot reach the CloudFetch endpoint
+                                (Explorer searches then time out after retries).
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-0">
@@ -150,11 +177,11 @@
                                         where all triple-store objects live for every domain.
                                     </p>
                                     <p class="mb-0">
-                                        Pick a dedicated SQL Warehouse on the <strong>SQL Warehouse</strong> tab for Lakehouse graph
-                                        queries and builds. When unset, the global warehouse from
-                                        <strong>Settings → Databricks</strong> is used. After mapping is ready, run
-                                        <strong>Knowledge Graph → Build</strong> to create the R2RML VIEW and materialize the
-                                        <code>_data</code> Delta table.
+                                        Pick a dedicated Query SQL Warehouse on the <strong>SQL Warehouse</strong>
+                                        tab for Lakehouse graph reads. When unset, the Build SQL Warehouse from
+                                        <strong>Settings → Databricks</strong> is also used for reads. Builds always
+                                        use that non-RT Build SQL Warehouse to create the R2RML VIEW and materialize
+                                        the <code>_data</code> Delta table.
                                     </p>
                                 </div>
                             </div>
@@ -162,17 +189,43 @@
                             <!-- ── TAB 2 · SQL Warehouse ── -->
                             <div class="tab-pane fade" id="dtpane-warehouse" role="tabpanel" aria-labelledby="dttab-warehouse">
                                 <p class="small text-muted mb-3">
-                                    Used only when <strong>Lakehouse</strong> is the graph backend — graph queries,
-                                    health probes, and Lakehouse builds run against this warehouse. Click <strong>Apply</strong>
+                                    Used only when <strong>Lakehouse</strong> is the graph backend — graph queries
+                                    and health probes run against this warehouse. Build DDL always uses the
+                                    separate Build SQL Warehouse. Click <strong>Apply</strong>
                                     to persist the selection in the registry.
                                 </p>
-                                <label for="deltaWarehouseSelect" class="form-label small fw-semibold mb-1">Warehouse</label>
+                                <label for="deltaBuildWarehouseSelect"
+                                       class="form-label small fw-semibold mb-1">
+                                    Build SQL Warehouse
+                                </label>
+                                <select id="deltaBuildWarehouseSelect"
+                                        class="form-select form-select-sm mb-2"></select>
+                                <div class="form-text small mb-3">
+                                    Builds require DDL and write support, so Lakehouse//RT warehouses
+                                    are excluded. The selection applies to all users.
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="deltaUseSea">
+                                    <label class="form-check-label small" for="deltaUseSea">
+                                        Use Lakehouse//RT for queries
+                                    </label>
+                                    <div class="form-text small">
+                                        Enables a separate Query SQL Warehouse and connects through the
+                                        Statement Execution API. Turning this off restores Build as Query.
+                                    </div>
+                                </div>
+
                                 <div id="deltaWarehouseLoading"
                                      class="d-flex align-items-center gap-2 text-muted small py-1">
                                     <span class="spinner-border spinner-border-sm" role="status"
                                           aria-hidden="true"></span>
                                     <span>Loading warehouses…</span>
                                 </div>
+                                <label for="deltaWarehouseSelect"
+                                       class="form-label small fw-semibold mb-1">
+                                    Query SQL Warehouse
+                                </label>
                                 <div id="deltaWarehouseControls"
                                      class="d-none d-flex flex-wrap gap-2 align-items-center">
                                     <select id="deltaWarehouseSelect"
@@ -191,17 +244,6 @@
                                 <p class="text-muted mb-0 mt-2" id="deltaWarehouseHelp">
                                     <span id="deltaEffectiveWarehouse"></span>
                                 </p>
-                                <div class="form-check mt-3">
-                                    <input class="form-check-input" type="checkbox" id="deltaUseSea">
-                                    <label class="form-check-label small" for="deltaUseSea">
-                                        Lakehouse RT warehouse
-                                    </label>
-                                    <div class="form-text small">
-                                        Required for serverless <strong>Lakehouse/RT</strong> warehouses.
-                                        Connects via the Statement Execution API instead of Thrift. Leave
-                                        unchecked for classic SQL warehouses. Saved with <strong>Apply</strong>.
-                                    </div>
-                                </div>
                             </div>
 
                             <!-- ── TAB 3 · Objects ── -->

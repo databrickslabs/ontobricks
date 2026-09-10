@@ -153,8 +153,14 @@ class GlobalConfigService:
     def get_warehouse_id(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> str:
-        """Return the globally configured SQL Warehouse ID (or empty string)."""
+        """Return the globally configured build SQL Warehouse ID."""
         return self.get(host, token, registry_cfg, "warehouse_id")
+
+    def get_build_warehouse_use_sea(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> bool:
+        """Return whether builds use the Statement Execution API."""
+        return bool(self.get(host, token, registry_cfg, "warehouse_use_sea", False))
 
     def get_delta_warehouse_id(
         self, host: str, token: str, registry_cfg: Dict[str, str]
@@ -283,8 +289,28 @@ class GlobalConfigService:
         registry_cfg: Dict[str, str],
         warehouse_id: str,
     ) -> Tuple[bool, str]:
-        """Persist a new SQL Warehouse ID in the global config file."""
+        """Persist a new build SQL Warehouse ID in the global config file."""
         return self._save(host, token, registry_cfg, {"warehouse_id": warehouse_id})
+
+    def set_build_warehouse(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        warehouse_id: str,
+        *,
+        use_sea: bool,
+    ) -> Tuple[bool, str]:
+        """Persist the build warehouse and its SQL connector transport."""
+        return self._save(
+            host,
+            token,
+            registry_cfg,
+            {
+                "warehouse_id": (warehouse_id or "").strip(),
+                "warehouse_use_sea": bool(use_sea),
+            },
+        )
 
     def set_default_base_uri(
         self,
@@ -613,6 +639,7 @@ class GlobalConfigService:
         return {
             "version": 1,
             "warehouse_id": "",
+            "warehouse_use_sea": False,
             "default_base_uri": "",
             "default_emoji": "",
             "navbar_logo": "",

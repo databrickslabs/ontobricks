@@ -1,3 +1,258 @@
+## Separate build and Lakehouse query warehouses
+
+Context: Lakehouse//RT accepts read queries only and rejects the `CREATE VIEW`,
+CTAS, and write statements used by Knowledge Graph builds. Build SQL was
+incorrectly routed through the Lakehouse query warehouse after enabling the
+Statement Execution API, causing builds to fail with
+`UNSUPPORTED_FEATURE.CREATE_VIEW`.
+
+Changes:
+
+1. src/back/core/helpers/DatabricksHelpers.py
+   Added dedicated build warehouse and transport resolution, and prevented
+   build credentials from falling back to the Lakehouse query warehouse.
+2. src/back/objects/session/GlobalConfigService.py
+   Persisted the build Statement Execution API setting independently from the
+   Lakehouse query transport.
+3. src/back/objects/domain/SettingsService.py
+   Added build warehouse persistence and rejected Lakehouse//RT as build
+   compute.
+4. src/api/routers/internal/settings.py
+   Added the endpoint used to save the dedicated build warehouse settings.
+5. src/back/objects/digitaltwin/_build_pipeline.py
+   Routed the general Knowledge Graph build client through the build transport.
+6. src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+   Routed the Databricks-only build client through the build transport.
+7. src/back/core/databricks/SQLWarehouse.py
+   Exposed warehouse types to Settings and mapped RT DDL failures to actionable
+   Build SQL Warehouse guidance.
+8. src/front/templates/settings.html
+   Separated Build SQL Warehouse and Query SQL Warehouse responsibilities in
+   the Settings UI.
+9. src/front/static/config/js/settings.js
+   Persisted the build transport independently and disabled RT warehouses in
+   the build selector.
+10. docs/architecture.md, docs/deployment.md, docs/get-started.md
+    Documented the build/query warehouse split and RT read-only limitation.
+11. tests/units/settings/test_delta_warehouse_config.py,
+    tests/back/core/digitaltwin/test_build_pipeline_units.py,
+    tests/units/graphdb/delta/test_delta_build_pipeline.py,
+    tests/units/core/test_sql_warehouse.py, tests/units/api/test_ui_rendering.py
+    Added regression coverage for persistence, routing, validation, diagnostics,
+    and Settings markup.
+12. docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md,
+    docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+    Recorded the approved design and implementation sequence.
+
+Modified files:
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/objects/digitaltwin/_build_pipeline.py
+- src/back/core/graphdb/delta/DeltaTripleStoreBuildPipeline.py
+- src/back/core/databricks/SQLWarehouse.py
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- docs/architecture.md
+- docs/deployment.md
+- docs/get-started.md
+- docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md
+- docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+- tests/units/settings/test_delta_warehouse_config.py
+- tests/back/core/digitaltwin/test_build_pipeline_units.py
+- tests/units/graphdb/delta/test_delta_build_pipeline.py
+- tests/units/core/test_sql_warehouse.py
+- tests/units/api/test_ui_rendering.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5898 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.16s.
+
+UI verification: Settings rendered correctly at 1920×1080 and 375×667 with
+separate build/query controls and no console or network errors.
+
+## Coordinate Build and Query warehouse selectors
+
+Context: The Lakehouse Settings panel exposed only the Query warehouse, so the
+relationship between Build and Query compute was not visible. Query must use
+Build by default and expose a separate selection only when an administrator
+enables Lakehouse//RT.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Added read-only Build and conditional Query dropdowns to the Lakehouse SQL
+   Warehouse tab and clarified the RT toggle.
+2. src/front/static/config/js/settings.js
+   Mirrored Build into a disabled Query selector by default, enabled only RT
+   warehouses in query override mode, and cleared the override when RT is
+   disabled.
+3. src/back/objects/domain/SettingsService.py
+   Required a distinct Query warehouse in RT mode and normalized non-RT saves
+   to an empty override so reads fall back to Build.
+4. tests/units/settings/test_delta_warehouse_config.py
+   Added regression coverage for required, distinct, and cleared query
+   overrides.
+5. tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_settings_warehouse_split.py
+   Added markup and JavaScript contracts for the coordinated selectors.
+6. docs/architecture.md, docs/deployment.md, docs/get-started.md
+   Documented the default mirroring and RT-enabled query override behavior.
+7. docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md,
+   docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+   Updated the approved design and plan with the corrected interaction.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_delta_warehouse_config.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_settings_warehouse_split.py
+- docs/architecture.md
+- docs/deployment.md
+- docs/get-started.md
+- docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md
+- docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5903 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.52s.
+
+UI verification: Build remained read-only; Query mirrored Build while RT was
+off, exposed only the distinct RT warehouse while enabled, and restored Build
+when disabled at desktop and 375px mobile widths. No console or request errors.
+
+## Make the Lakehouse Build warehouse editable
+
+Context: The Lakehouse SQL Warehouse tab displayed Build as read-only, forcing
+administrators to leave the panel to change build compute. The same tab must
+own both warehouse selections while preserving their non-RT and RT roles.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Enabled the Build SQL Warehouse selector and clarified that it excludes RT.
+2. src/front/static/config/js/settings.js
+   Populated Build with non-RT warehouses, persisted it before Query on Apply,
+   mirrored Build into Query when RT is off, and displayed the existing
+   Lakehouse configuration spinner immediately when the tab opens.
+3. src/back/objects/domain/SettingsService.py
+   Allowed an administrator's persisted Build selection to override the
+   Databricks App resource default.
+4. tests/units/api/test_ui_rendering.py,
+   tests/units/front/test_settings_warehouse_split.py,
+   tests/units/settings/test_delta_warehouse_config.py
+   Added regression coverage for editability, persistence, resource-default
+   override, RT filtering, and tab loading state.
+5. docs/deployment.md, docs/get-started.md,
+   docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md,
+   docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+   Updated the documented interaction and administrator override behavior.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/back/objects/domain/SettingsService.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/front/test_settings_warehouse_split.py
+- tests/units/settings/test_delta_warehouse_config.py
+- docs/deployment.md
+- docs/get-started.md
+- docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md
+- docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5906 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.07s.
+
+UI verification: The SQL Warehouse tab showed the Lakehouse configuration
+spinner immediately; Build remained editable with non-RT choices at desktop
+and mobile widths, and no console or warehouse-request errors occurred.
+
+## Add a Settings toggle to disable CloudFetch
+
+Context: Explorer searches on ontobricks-09x used the Lakehouse//RT query
+warehouse and finished SQL in hundreds of milliseconds, then timed out in the
+browser while CloudFetch retried downloads from
+`us-west-2.storage.cloud.databricks.com` (`connection refused`). Admins needed
+a global way to turn CloudFetch off without a redeploy.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Added an admin-only **Use CloudFetch** checkbox under Settings → Databricks.
+2. src/front/static/config/js/settings.js
+   Hydrated the checkbox from `/settings/current` and persisted both on and
+   off through the shared Save handler.
+3. src/back/objects/domain/SettingsService.py
+   Exposed `use_cloud_fetch` in the current-config payload and saved it to
+   global config (admin only).
+4. src/api/routers/internal/settings.py
+   Added `POST /settings/save-cloud-fetch`.
+5. src/back/core/graphdb/delta/DeltaBase.py
+   Passed the resolved CloudFetch flag into the Explorer/query SQL client.
+6. docs/architecture.md, docs/get-started.md
+   Documented the global CloudFetch setting and the Apps egress workaround.
+7. tests/units/settings/test_cloud_fetch_toggle.py,
+   tests/units/graphdb/delta/test_delta_base.py,
+   tests/units/api/test_ui_rendering.py,
+   tests/units/settings/test_delta_warehouse_config.py
+   Added contracts for persistence, UI wiring, and query-client propagation.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/back/core/graphdb/delta/DeltaBase.py
+- docs/architecture.md
+- docs/get-started.md
+- tests/units/settings/test_cloud_fetch_toggle.py
+- tests/units/graphdb/delta/test_delta_base.py
+- tests/units/api/test_ui_rendering.py
+- tests/units/settings/test_delta_warehouse_config.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5914 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.59s.
+
+## Isolate Databricks saves from unloaded Lakehouse controls
+
+Context: Saving the global CloudFetch option succeeded, but the shared Settings
+handler also validated the Lakehouse//RT Query warehouse before its dropdown
+had been loaded. This produced a false "Select a Query SQL Warehouse" error
+when saving from Settings → Databricks. The Query selector also restricted its
+options to RT warehouses instead of presenting the Build selector's workspace
+list.
+
+Changes:
+
+1. src/front/static/config/js/settings.js
+   Tracks successful Query warehouse hydration and only persists that selection
+   from the shared Save handler after its controls have loaded. Populates Query
+   with all workspace warehouses except the selected Build warehouse.
+2. tests/units/settings/test_cloud_fetch_toggle.py
+   Added regression coverage ensuring a Databricks save does not validate an
+   unloaded Lakehouse Query warehouse.
+3. tests/units/front/test_settings_warehouse_split.py
+   Added a contract for the shared Build/Query warehouse option list.
+4. docs/get-started.md,
+   docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md,
+   docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+   Documented Query list population and distinct warehouse validation.
+
+Modified files:
+- src/front/static/config/js/settings.js
+- tests/units/settings/test_cloud_fetch_toggle.py
+- tests/units/front/test_settings_warehouse_split.py
+- docs/get-started.md
+- docs/superpowers/specs/2026-09-10-build-query-warehouse-split-design.md
+- docs/superpowers/plans/2026-09-10-build-query-warehouse-split.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5920 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 46.05s.
+
 ## Follow all Lakebase project pages
 
 Context: Lakebase authentication, Settings discovery, and provisioning only
@@ -37,3 +292,45 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5918 passed,
 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.35s.
+
+## Explain Explorer search duration
+
+Context: Explorer displayed only one end-to-end search duration. Users could
+not distinguish time spent finding seeds, expanding the graph, and preparing
+the Sigma display.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Added latest-search phase timing for Preview request, Expansion request,
+   Display, and Total, preserving the exclusion of seed-selection dwell.
+   Replaced the passive duration label with an accessible button and dismissible
+   details panel.
+2. src/front/static/query/css/query-sigmagraph.css
+   Added token-based styling for the canvas-anchored timing button and panel at
+   desktop and mobile widths.
+3. tests/units/front/test_explorer_search_timing.py
+   Added test-first contracts for timing boundaries, latest-only state,
+   accessibility, dismissal behavior, and removal of inline styles.
+4. docs/get-started.md
+   Documented the clickable Explorer timing breakdown.
+5. docs/superpowers/specs/2026-09-10-explorer-search-timing-details-design.md,
+   docs/superpowers/plans/2026-09-10-explorer-search-timing-details.md
+   Recorded the approved design and implementation sequence.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_explorer_search_timing.py
+- docs/get-started.md
+- docs/superpowers/specs/2026-09-10-explorer-search-timing-details-design.md
+- docs/superpowers/plans/2026-09-10-explorer-search-timing-details.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-10.log
+
+Tests: `env -u APP_NAME -u MCP_APP_NAME -u DATABRICKS_CONFIG_PROFILE uv run
+--frozen pytest -q -m "not scenario"` → 5928 passed, 304 skipped, 6
+deselected, 1 xfailed, 32 warnings in 62.01s.
+
+UI verification: Automated browser validation was interrupted before
+completion; syntax, focused interaction contracts, responsive CSS constraints,
+and the full test suite passed.

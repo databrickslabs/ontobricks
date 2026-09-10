@@ -29,3 +29,20 @@ response. `uv run --frozen pytest -q -m "not scenario"` →
 5885 passed, 304 skipped, 6 deselected, 1 xfailed, 2 unrelated failures in
 tests/units/settings/test_deploy_instance_id.py because the branch default is
 `09x` while those existing tests still expect `08x`.
+
+## Align deploy instance-id tests with 09x
+
+Context: DEFAULT_INSTANCE_ID in scripts/deploy.config.sh is now 09x for this
+0.9.0 instance. The unit tests still expected the previous 08x suffix and
+failed on default identity derivation.
+
+Changes:
+
+1. tests/units/settings/test_deploy_instance_id.py
+   Updated default INSTANCE_ID, app names, and DAB target assertions from
+   08x to 09x.
+
+Modified files:
+- tests/units/settings/test_deploy_instance_id.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5887 passed, 304 skipped, 6 deselected, 1 xfailed in 44.57s.

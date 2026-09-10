@@ -19,6 +19,8 @@ class TestCreateDatabricksClientUseSea:
             delta_base, "resolve_delta_warehouse_id", return_value="wh-rt"
         ), patch.object(
             delta_base, "resolve_lakehouse_use_sea", return_value=True
+        ), patch.object(
+            delta_base, "resolve_use_cloud_fetch", return_value=False
         ), patch(
             "back.core.databricks.DatabricksClient", FakeClient
         ):
@@ -27,6 +29,7 @@ class TestCreateDatabricksClientUseSea:
         assert client is not None
         assert captured.get("use_sea") is True
         assert captured.get("warehouse_id") == "wh-rt"
+        assert captured.get("use_cloud_fetch") is False
 
     def test_defaults_use_sea_false(self):
         captured = {}
@@ -41,6 +44,8 @@ class TestCreateDatabricksClientUseSea:
             delta_base, "resolve_delta_warehouse_id", return_value="wh-1"
         ), patch.object(
             delta_base, "resolve_lakehouse_use_sea", return_value=False
+        ), patch.object(
+            delta_base, "resolve_use_cloud_fetch", return_value=True
         ), patch(
             "back.core.databricks.DatabricksClient", FakeClient
         ):

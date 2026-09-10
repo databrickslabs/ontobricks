@@ -57,20 +57,20 @@ DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
 # Unity Catalog
 DEFAULT_REGISTRY_CATALOG="benoit_cayla"
 # UC schema for the Volume registry
-DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_08_repository"
+DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_09_repository"
 DEFAULT_REGISTRY_VOLUME="registry"
 
 # Lakebase Autoscaling project + branch
-DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-08-registry"
+DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-09-registry"
 DEFAULT_LAKEBASE_BRANCH="production"
 # Postgres database (datname) on the shared Lakebase instance — the value of
 # status.postgres_database from list-databases (underscores OK). Do NOT copy the
 # hyphenated database_id from the resource path name; those differ when the
 # datname contains underscores (API uses hyphens only in database_id / RFC-1123).
 # Each app gets its own SCHEMA inside this database.
-DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_08_registry_db"
+DEFAULT_LAKEBASE_DATABASE="ontobricks_demo_09_registry_db"
 # Postgres schema inside the Lakebase database, Each instance should have its own schema for isolation.
-DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_08_registry_sc"
+DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo_09_registry_sc"
 # Example — reuse existing schema: DEFAULT_LAKEBASE_SCHEMA="ontobricks_demo"
 
 # ── 0c. Derived defaults (auto-computed — do NOT edit) ────────────────

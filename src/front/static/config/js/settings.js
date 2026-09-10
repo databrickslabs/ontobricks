@@ -10,7 +10,11 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentWarehouseId = null;
     let currentDeltaWarehouseId = null;
     let effectiveDeltaWarehouseId = '';
+    let deltaWarehouseOptions = [];
     let warehouseLocked = false;
+    let buildWarehouseHydrated = false;
+    let cloudFetchHydrated = false;
+    let deltaWarehouseHydrated = false;
     // graphDbLoaded → the triple-store backend value is loaded (all the Back End
     // sub-page needs). graphEngineConfigLoaded → the graph engine + JSON config
     // textarea are loaded (needed by a Lakebase Save and by the heavy cascade).
@@ -168,6 +172,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
             currentWarehouseId = data.warehouse_id;
             warehouseLocked = !!data.warehouse_locked;
+            const buildUseSea = document.getElementById('buildUseSea');
+            if (buildUseSea) buildUseSea.checked = !!data.warehouse_use_sea;
+            const useCloudFetch = document.getElementById('useCloudFetch');
+            if (useCloudFetch) {
+                useCloudFetch.checked = data.use_cloud_fetch !== false;
+                cloudFetchHydrated = true;
+            }
 
             if (warehouseLocked) {
                 const whSelect = document.getElementById('settingsWarehouseSelect');
@@ -183,6 +194,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 await loadWarehouseSelect(data.warehouse_id);
             }
+            buildWarehouseHydrated = true;
 
             const hostDisplay = document.getElementById('currentHostDisplay');
             if (data.host) {
@@ -214,7 +226,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
                     const opt = document.createElement('option');
                     opt.value = wh.id;
-                    opt.textContent = wh.name + stateLabel;
+                    opt.dataset.warehouseType = wh.warehouse_type || '';
+                    if ((wh.warehouse_type || '').toUpperCase() === 'REYDEN') {
+                        opt.disabled = true;
+                        opt.textContent = wh.name + ' (Lakehouse//RT — query only)';
+                    } else {
+                        opt.textContent = wh.name + stateLabel;
+                    }
                     select.appendChild(opt);
                 });
             } else if (data.error) {
@@ -248,20 +266,89 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!warehouseId) return '';
         return (
             warehouseNameFromSelect(document.getElementById('deltaWarehouseSelect'), warehouseId)
+            || warehouseNameFromSelect(document.getElementById('deltaBuildWarehouseSelect'), warehouseId)
             || warehouseNameFromSelect(document.getElementById('settingsWarehouseSelect'), warehouseId)
             || warehouseId
         );
+    }
+
+    function appendWarehouseOption(select, warehouse, suffix = '') {
+        const opt = document.createElement('option');
+        opt.value = warehouse.id || '';
+        opt.dataset.warehouseType = warehouse.warehouse_type || '';
+        opt.textContent = (warehouse.name || warehouse.id || '(not configured)') + suffix;
+        select.appendChild(opt);
+    }
+
+    function syncLakehouseWarehouseControls() {
+        const buildSelect = document.getElementById('deltaBuildWarehouseSelect');
+        const querySelect = document.getElementById('deltaWarehouseSelect');
+        const useRt = !!document.getElementById('deltaUseSea')?.checked;
+        const buildId = (currentWarehouseId || '').trim();
+        if (!buildSelect || !querySelect) return;
+
+        buildSelect.innerHTML = '';
+        const buildPlaceholder = document.createElement('option');
+        buildPlaceholder.value = '';
+        buildPlaceholder.textContent = '— Select a Build SQL Warehouse —';
+        buildSelect.appendChild(buildPlaceholder);
+        deltaWarehouseOptions
+            .filter((wh) => (wh.warehouse_type || '').toUpperCase() !== 'REYDEN')
+            .forEach((wh) => {
+                const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
+                appendWarehouseOption(buildSelect, wh, stateLabel);
+            });
+        const buildWarehouse = deltaWarehouseOptions.find((wh) => wh.id === buildId) || {
+            id: buildId,
+            name: buildId || '(not configured)',
+        };
+        if (
+            buildId
+            && !Array.from(buildSelect.options).some((option) => option.value === buildId)
+        ) {
+            appendWarehouseOption(buildSelect, buildWarehouse, ' (saved)');
+        }
+        buildSelect.value = buildId;
+
+        querySelect.innerHTML = '';
+        if (!useRt) {
+            appendWarehouseOption(querySelect, buildWarehouse);
+            querySelect.value = buildId;
+        } else {
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '— Select a Lakehouse//RT warehouse —';
+            querySelect.appendChild(placeholder);
+            deltaWarehouseOptions
+                .filter((wh) => wh.id !== buildId)
+                .forEach((wh) => {
+                    const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
+                    appendWarehouseOption(querySelect, wh, stateLabel);
+                });
+            querySelect.value = currentDeltaWarehouseId || '';
+        }
+        querySelect.disabled = !useRt;
+        setDeltaWarehouseStatus();
     }
 
     function setDeltaWarehouseStatus() {
         const effectiveEl = document.getElementById('deltaEffectiveWarehouse');
         if (!effectiveEl) return;
 
-        const savedId = (currentDeltaWarehouseId || '').trim();
-        if (savedId) {
-            const name = resolveDeltaWarehouseDisplayName(savedId);
+        const useRt = !!document.getElementById('deltaUseSea')?.checked;
+        const selectedId = (
+            document.getElementById('deltaWarehouseSelect')?.value
+            || currentDeltaWarehouseId
+            || ''
+        ).trim();
+        if (useRt && selectedId) {
+            const name = resolveDeltaWarehouseDisplayName(selectedId);
             effectiveEl.textContent =
-                'Current SQL Warehouse used for Lakehouse queries: ' + name;
+                'Lakehouse//RT queries use: ' + name;
+            return;
+        }
+        if (useRt) {
+            effectiveEl.textContent = 'Select a Lakehouse//RT Query SQL Warehouse.';
             return;
         }
 
@@ -269,8 +356,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (fallbackId) {
             const name = resolveDeltaWarehouseDisplayName(fallbackId);
             effectiveEl.textContent =
-                'Current SQL Warehouse used for Lakehouse queries: ' + name
-                + ' (same as global warehouse)';
+                'Queries use the Build SQL Warehouse: ' + name;
             return;
         }
 
@@ -280,13 +366,17 @@ document.addEventListener('DOMContentLoaded', function () {
     function setDeltaWarehouseLoading(loading) {
         const loadingEl = document.getElementById('deltaWarehouseLoading');
         const controls = document.getElementById('deltaWarehouseControls');
+        const buildSelect = document.getElementById('deltaBuildWarehouseSelect');
         const select = document.getElementById('deltaWarehouseSelect');
         const refreshBtn = document.getElementById('btnRefreshDeltaWarehouses');
         const applyBtn = document.getElementById('btnApplyDeltaWarehouse');
+        const useRt = !!document.getElementById('deltaUseSea')?.checked;
         if (loadingEl) loadingEl.classList.toggle('d-none', !loading);
         if (controls) controls.classList.toggle('d-none', loading);
+        if (buildSelect) buildSelect.disabled = loading;
         if (select) select.setAttribute('aria-busy', loading ? 'true' : 'false');
-        if (refreshBtn) refreshBtn.disabled = loading;
+        if (select) select.disabled = loading || !useRt;
+        if (refreshBtn) refreshBtn.disabled = loading || !useRt;
         if (applyBtn) applyBtn.disabled = loading;
     }
 
@@ -298,37 +388,11 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch('/settings/warehouses', { credentials: 'same-origin' });
             const data = await response.json();
-
-            select.innerHTML = '<option value="">— same as global warehouse —</option>';
-
-            if (data.warehouses && data.warehouses.length > 0) {
-                data.warehouses.forEach(wh => {
-                    const stateLabel = wh.state === 'RUNNING' ? ' (running)' : '';
-                    const opt = document.createElement('option');
-                    opt.value = wh.id;
-                    opt.textContent = wh.name + stateLabel;
-                    select.appendChild(opt);
-                });
-            } else if (data.error) {
-                select.innerHTML = '<option value="">Error: ' + escapeHtmlSettings(data.error) + '</option>';
-            } else {
-                select.innerHTML = '<option value="">No warehouses available</option>';
-            }
-
-            if (preselectId) {
-                const hasOpt = Array.from(select.options).some((o) => o.value === preselectId);
-                if (!hasOpt) {
-                    const wh = (data.warehouses || []).find((w) => w.id === preselectId);
-                    const savedOpt = document.createElement('option');
-                    savedOpt.value = preselectId;
-                    savedOpt.textContent = wh ? wh.name : preselectId + ' (saved)';
-                    select.appendChild(savedOpt);
-                }
-                select.value = preselectId;
-            } else {
-                select.value = '';
-            }
-            setDeltaWarehouseStatus();
+            deltaWarehouseOptions = data.warehouses || [];
+            currentDeltaWarehouseId = preselectId || '';
+            effectiveDeltaWarehouseId = effectiveId || currentWarehouseId || '';
+            syncLakehouseWarehouseControls();
+            deltaWarehouseHydrated = true;
         } catch (error) {
             console.error('Error loading Delta warehouses:', error);
             select.innerHTML = '<option value="">Error loading warehouses</option>';
@@ -339,21 +403,100 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('btnRefreshDeltaWarehouses')?.addEventListener(
         'click',
-        () => loadDeltaWarehouseSelect(currentDeltaWarehouseId)
+        () => loadDeltaWarehouseSelect(currentDeltaWarehouseId, effectiveDeltaWarehouseId)
     );
+    document.getElementById('dttab-warehouse')?.addEventListener('shown.bs.tab', async function () {
+        setGraphDbHeavyLoading(true);
+        try {
+            await loadDeltaWarehouseSelect(
+                currentDeltaWarehouseId,
+                effectiveDeltaWarehouseId
+            );
+        } finally {
+            setGraphDbHeavyLoading(false);
+        }
+    });
+    document.getElementById('deltaUseSea')?.addEventListener('change', function () {
+        if (!this.checked) currentDeltaWarehouseId = '';
+        syncLakehouseWarehouseControls();
+        setDeltaWarehouseLoading(false);
+    });
+    document.getElementById('deltaWarehouseSelect')?.addEventListener('change', function () {
+        currentDeltaWarehouseId = this.value || '';
+        setDeltaWarehouseStatus();
+    });
+    document.getElementById('deltaBuildWarehouseSelect')?.addEventListener('change', function () {
+        currentWarehouseId = this.value || '';
+        if (!document.getElementById('deltaUseSea')?.checked) {
+            currentDeltaWarehouseId = '';
+        }
+        syncLakehouseWarehouseControls();
+        setDeltaWarehouseLoading(false);
+    });
+
+    async function saveBuildWarehouseSelection(errors) {
+        const lakehouseBuild = document.getElementById('deltaBuildWarehouseSelect');
+        const globalBuild = document.getElementById('settingsWarehouseSelect');
+        const buildSelect = lakehouseBuild?.value ? lakehouseBuild : globalBuild;
+        if (!buildSelect) return false;
+        const warehouseId = buildSelect.value || '';
+        if (!warehouseId) {
+            if (errors) errors.push('Select a Build SQL Warehouse');
+            return false;
+        }
+        const selected = Array.from(buildSelect.options)
+            .find((option) => option.value === warehouseId);
+        const warehouseType = selected?.dataset?.warehouseType || '';
+        const useSea = !!document.getElementById('buildUseSea')?.checked;
+        try {
+            const resp = await fetch('/settings/select-build-warehouse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    warehouse_id: warehouseId,
+                    warehouse_type: warehouseType,
+                    use_sea: useSea,
+                }),
+            });
+            const result = await resp.json();
+            if (!resp.ok || !result.success) {
+                const msg = result.message || result.detail || 'Failed to save Build warehouse';
+                if (errors) errors.push('Build warehouse: ' + msg);
+                return false;
+            }
+            currentWarehouseId = result.warehouse_id || warehouseId;
+            return true;
+        } catch (e) {
+            if (errors) errors.push('Build warehouse: ' + e.message);
+            return false;
+        }
+    }
 
     async function saveDeltaWarehouseSelection(errors) {
-        const select = document.getElementById('deltaWarehouseSelect');
-        if (!select) return false;
-        const warehouseId = select.value || '';
+        const querySelect = document.getElementById('deltaWarehouseSelect');
         const seaEl = document.getElementById('deltaUseSea');
-        const useSea = !!(seaEl && seaEl.checked);
+        if (!querySelect || !seaEl) return false;
+        const useRt = !!seaEl.checked;
+        const warehouseId = useRt ? querySelect.value : '';
+        if (useRt && !warehouseId) {
+            if (errors) errors.push('Select a Query SQL Warehouse for Lakehouse//RT');
+            return false;
+        }
+        if (useRt && warehouseId === currentWarehouseId) {
+            if (errors) {
+                errors.push(
+                    'Query SQL Warehouse must be different from the Build SQL Warehouse'
+                );
+            }
+            return false;
+        }
         try {
             const resp = await fetch('/settings/select-delta-warehouse', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ warehouse_id: warehouseId, use_sea: useSea }),
+                body: JSON.stringify({ warehouse_id: warehouseId, use_sea: useRt }),
             });
             const result = await resp.json();
             if (!resp.ok || !result.success) {
@@ -363,7 +506,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             currentDeltaWarehouseId = result.delta_warehouse_id || '';
             if (seaEl) seaEl.checked = !!result.use_sea;
-            setDeltaWarehouseStatus();
+            syncLakehouseWarehouseControls();
+            setDeltaWarehouseLoading(false);
             return true;
         } catch (e) {
             if (errors) errors.push('Lakehouse warehouse: ' + e.message);
@@ -377,13 +521,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!select) return;
         btn.disabled = true;
         const errors = [];
-        const ok = await saveDeltaWarehouseSelection(errors);
+        const buildOk = await saveBuildWarehouseSelection(errors);
+        const ok = buildOk && await saveDeltaWarehouseSelection(errors);
         btn.disabled = false;
         if (ok) {
             showNotification(
                 currentDeltaWarehouseId
                     ? 'Lakehouse SQL Warehouse saved to registry'
-                    : 'Lakehouse warehouse cleared — using global warehouse',
+                    : 'Lakehouse warehouse cleared — using Build SQL Warehouse',
                 'success',
                 2500
             );
@@ -3885,7 +4030,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             // Persist the Delta SQL-warehouse selection via its dedicated endpoint.
-            await saveDeltaWarehouseSelection(errors);
+            if (deltaWarehouseHydrated) {
+                await saveDeltaWarehouseSelection(errors);
+            }
 
             if (!ta) {
                 applyGraphDbEnginePanels();
@@ -4323,20 +4470,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const errors = [];
 
-        // 1. Save warehouse (skip when locked by Databricks App resource)
-        const whId = document.getElementById('settingsWarehouseSelect').value;
-        if (whId && !warehouseLocked) {
+        // 1. Save the dedicated build warehouse and transport.
+        if (buildWarehouseHydrated) {
+            await saveBuildWarehouseSelection(errors);
+        }
+
+        // 1b. Save CloudFetch (unchecked must persist, but only after hydrate).
+        const cloudFetchInput = document.getElementById('useCloudFetch');
+        if (cloudFetchInput && !cloudFetchHydrated) {
+            errors.push(
+                'CloudFetch: current value could not be read, so it was left '
+                + 'unchanged. Reload the page and try again.'
+            );
+        }
+        if (cloudFetchInput && cloudFetchHydrated) {
             try {
-                const resp = await fetch('/settings/save', {
+                const resp = await fetch('/settings/save-cloud-fetch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ warehouse_id: whId })
+                    body: JSON.stringify({ use_cloud_fetch: cloudFetchInput.checked })
                 });
                 const r = await resp.json();
-                if (r.success) currentWarehouseId = whId;
-                else errors.push('Warehouse: ' + r.message);
-            } catch (e) { errors.push('Warehouse: ' + e.message); }
+                if (!r.success) errors.push('CloudFetch: ' + r.message);
+            } catch (e) { errors.push('CloudFetch: ' + e.message); }
         }
 
         // 2. Save base URI

@@ -145,6 +145,49 @@ class TestInit:
         assert pipe.base_uri == "http://my-base/"
 
 
+# --- _prepare_translation ------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPrepareTranslation:
+    def test_source_client_uses_configured_build_transport(self) -> None:
+        pipe = _make_pipeline(r2rml_content="mapping")
+
+        with (
+            patch("back.core.databricks.DatabricksClient") as client_cls,
+            patch(
+                "back.core.helpers.resolve_build_use_sea",
+                return_value=True,
+            ),
+            patch(
+                "back.core.w3c.sparql.extract_r2rml_mappings",
+                return_value=([{"entity": "Customer"}], []),
+            ),
+            patch(
+                "back.objects.digitaltwin.DigitalTwin.DigitalTwin."
+                "augment_mappings_from_config",
+                side_effect=lambda mappings, *_args: mappings,
+            ),
+            patch(
+                "back.objects.digitaltwin.DigitalTwin.DigitalTwin."
+                "augment_relationships_from_config",
+                side_effect=lambda mappings, *_args: mappings,
+            ),
+            patch(
+                "back.core.w3c.sparql.translate_sparql_to_spark",
+                return_value={"success": True, "sql": "SELECT 1"},
+            ),
+        ):
+            assert pipe._prepare_translation() is True
+
+        client_cls.assert_called_once_with(
+            host="host",
+            token="token",
+            warehouse_id="wh-1",
+            use_sea=True,
+        )
+
+
 # --- _log_phase ----------------------------------------------------------
 
 

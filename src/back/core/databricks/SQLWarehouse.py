@@ -367,12 +367,15 @@ class SQLWarehouse:
         except Exception as exc:
             logger.exception("ERROR creating %s: %s", kind.lower(), exc)
             detail = str(exc)
-            if "not supported for Thrift protocol" in detail:
+            if (
+                "not supported for Thrift protocol" in detail
+                or "UNSUPPORTED_FEATURE.CREATE_VIEW" in detail
+                or "CREATE VIEW is not supported in Lakehouse//RT" in detail
+            ):
                 return False, (
-                    f"Failed to create {kind.lower()}: this looks like a "
-                    "Lakehouse/RT (serverless real-time) SQL warehouse. Enable "
-                    "'Lakehouse RT warehouse' in Settings -> Lakehouse -> SQL "
-                    "Warehouse, then rebuild."
+                    f"Failed to create {kind.lower()}: Lakehouse//RT is read-only "
+                    "and cannot execute build DDL. Select a non-RT Build SQL "
+                    "Warehouse in Settings -> Databricks, then rebuild."
                 )
             return False, f"Failed to create {kind.lower()}: {detail}"
 
@@ -392,7 +395,8 @@ class SQLWarehouse:
         """List available SQL Warehouses.
 
         Uses the Databricks SDK in app mode, falling back to REST API.
-        Returns list of dicts with ``id``, ``name``, ``state`` keys.
+        Returns list of dicts with ``id``, ``name``, ``state``, and
+        ``warehouse_type`` keys.
         """
         logger.debug("Host: %s, App mode: %s", self._auth.host, self._auth.is_app_mode)
 
@@ -410,6 +414,12 @@ class SQLWarehouse:
                             "id": wh.id,
                             "name": wh.name,
                             "state": str(wh.state) if wh.state else "UNKNOWN",
+                            "warehouse_type": (
+                                getattr(wh.warehouse_type, "value", None)
+                                or str(wh.warehouse_type)
+                                if wh.warehouse_type
+                                else ""
+                            ),
                         }
                     )
                 logger.info("Found %d warehouses via SDK", len(warehouses))
@@ -441,6 +451,7 @@ class SQLWarehouse:
                         "id": wh["id"],
                         "name": wh["name"],
                         "state": wh.get("state", "UNKNOWN"),
+                        "warehouse_type": wh.get("warehouse_type", ""),
                     }
                 )
             logger.info("Found %d warehouses via REST", len(warehouses))
