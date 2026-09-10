@@ -135,6 +135,57 @@ class TestInstanceNameResolution:
         auth._w = fake_w
         assert auth.instance_name == _FAKE_PROJECT_ID
 
+    def test_resolves_project_from_second_api_page(self, autoscaling_pg_env):
+        auth = LakebaseAuth()
+        fake_w = MagicMock()
+        project_queries = []
+
+        def do(method, path, *args, **kwargs):
+            assert method == "GET"
+            if path == "/api/2.0/postgres/projects":
+                query = kwargs.get("query") or {}
+                project_queries.append(query)
+                if query.get("page_token") == "page-2":
+                    return {"projects": [{"name": f"projects/{_FAKE_PROJECT_ID}"}]}
+                return {
+                    "projects": [{"name": "projects/unrelated"}],
+                    "next_page_token": "page-2",
+                }
+            if path.endswith("projects/unrelated/branches"):
+                return {"branches": []}
+            if path.endswith(f"projects/{_FAKE_PROJECT_ID}/branches"):
+                return {
+                    "branches": [
+                        {
+                            "name": (
+                                f"projects/{_FAKE_PROJECT_ID}/branches/production"
+                            )
+                        }
+                    ]
+                }
+            if path.endswith("/branches/production/endpoints"):
+                return {
+                    "endpoints": [
+                        {
+                            "name": (
+                                f"projects/{_FAKE_PROJECT_ID}/branches/"
+                                "production/endpoints/primary"
+                            ),
+                            "status": {"hosts": {"host": _FAKE_PGHOST}},
+                        }
+                    ]
+                }
+            raise AssertionError(f"unexpected call {method} {path}")
+
+        fake_w.api_client.do.side_effect = do
+        auth._w = fake_w
+
+        assert auth.instance_name == _FAKE_PROJECT_ID
+        assert project_queries == [
+            {"page_size": 100},
+            {"page_size": 100, "page_token": "page-2"},
+        ]
+
     def test_resolution_is_cached(self, monkeypatch, autoscaling_pg_env):
         auth = LakebaseAuth()
         fake_w = MagicMock()

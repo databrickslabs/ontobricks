@@ -48,6 +48,9 @@ import time
 from typing import Optional
 
 from back.core.databricks.lakebase.constants import TOKEN_TTL_S as _TOKEN_TTL_S
+from back.core.databricks.lakebase.LakebaseProjectService import (
+    LakebaseProjectService,
+)
 from back.core.errors import ValidationError
 from back.core.logging import get_logger
 
@@ -234,10 +237,9 @@ class LakebaseAuth:
 
         if not project_id:
             raise ValidationError(
-                f"No Lakebase Autoscaling endpoint matched PGHOST={host!r}. "
-                f"Confirm the Apps ``postgres`` resource binding points "
-                f"at an Autoscaling project (legacy Provisioned "
-                f"instances are not supported)."
+                f"No Lakebase Autoscaling endpoint matched PGHOST={host!r} "
+                f"among all listed projects. "
+                f"Confirm the Apps ``postgres`` resource binding and endpoint host."
             )
 
         self._instance_name = project_id
@@ -335,9 +337,7 @@ class LakebaseAuth:
         api = getattr(self._w, "api_client", None)
         if api is None or not hasattr(api, "do"):
             return None
-        projects = (api.do("GET", "/api/2.0/postgres/projects") or {}).get(
-            "projects"
-        ) or []
+        projects = LakebaseProjectService.list_projects(api)
         for project in projects:
             project_path = project.get("name") or ""
             if not project_path:

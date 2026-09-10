@@ -1,0 +1,39 @@
+## Follow all Lakebase project pages
+
+Context: Lakebase authentication, Settings discovery, and provisioning only
+read the first page returned by the Postgres List Projects API. Workspaces
+with more projects than the default page size could not resolve projects on
+later pages and surfaced a misleading endpoint mismatch.
+
+Changes:
+
+1. src/back/core/databricks/lakebase/LakebaseProjectService.py
+   Added a shared raw-API project listing service that follows every pagination token.
+2. src/back/core/databricks/lakebase/LakebaseAuth.py
+   Used paginated project discovery for endpoint matching and clarified the no-match error.
+3. src/back/objects/domain/SettingsService.py
+   Returned Lakebase projects from all pages in Settings.
+4. src/back/core/graphdb/lakebase/provisioner.py
+   Resolved newly provisioned projects across all project-list pages.
+5. tests/units/core/test_lakebase_project_service.py
+   Covered page-token request and aggregation behavior.
+6. tests/units/auth/test_lakebase_auth.py
+   Added a regression for an endpoint hosted by a page-two project.
+7. tests/units/settings/test_lakebase_projects.py
+   Covered multi-page Settings project discovery.
+8. tests/units/settings/test_lakebase_provision.py
+   Added a regression for provisioning project resolution on page two.
+
+Modified files:
+- src/back/core/databricks/lakebase/LakebaseProjectService.py
+- src/back/core/databricks/lakebase/LakebaseAuth.py
+- src/back/objects/domain/SettingsService.py
+- src/back/core/graphdb/lakebase/provisioner.py
+- tests/units/core/test_lakebase_project_service.py
+- tests/units/auth/test_lakebase_auth.py
+- tests/units/settings/test_lakebase_projects.py
+- tests/units/settings/test_lakebase_provision.py
+- changelogs/v0.9.0/benoitcayladbx_2026-09-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5918 passed,
+304 skipped, 6 deselected, 1 xfailed, 32 warnings in 43.35s.

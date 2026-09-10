@@ -2726,11 +2726,15 @@ class SettingsService:
         try:
             from databricks.sdk import WorkspaceClient
 
+            from back.core.databricks.lakebase.LakebaseProjectService import (
+                LakebaseProjectService,
+            )
+
             w = WorkspaceClient()
             api = getattr(w, "api_client", None)
             if api is None or not hasattr(api, "do"):
                 raise InfrastructureError("Databricks SDK api_client unavailable")
-            raw = (api.do("GET", "/api/2.0/postgres/projects") or {}).get("projects") or []
+            raw = LakebaseProjectService.list_projects(api)
             projects = []
             for p in raw:
                 name = p.get("name") or ""
