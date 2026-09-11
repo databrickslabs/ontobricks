@@ -99,3 +99,32 @@ def test_workspace_map_css_uses_shell_tokens():
     assert "--db-hover-indigo" in block
     assert "--db-primary-light" in block
     assert not re.search(r"#[0-9A-Fa-f]{3,8}", block)
+
+
+def test_navbar_opens_workspace_map_from_domain_badge():
+    js = _read(NAVBAR_JS)
+    assert "function openWorkspaceMap(" in js
+    assert "function bindWorkspaceMapTrigger(" in js
+    assert "bindWorkspaceMapTrigger();" in js
+    open_block = js[js.index("function openWorkspaceMap(") :][:800]
+    bind_block = js[js.index("function bindWorkspaceMapTrigger(") :][:600]
+    assert "event.preventDefault()" in open_block
+    assert "Modal.getOrCreateInstance" in open_block
+    assert "domainL1Link" in bind_block
+
+
+def test_navbar_highlights_current_workspace_map_item():
+    js = _read(NAVBAR_JS)
+    assert "function highlightWorkspaceMapCurrent(" in js
+    assert "data-workspace-map-item" in js
+    assert "data-workspace-map-default" in js
+    assert "is-current" in js
+    assert "aria-current" in js
+
+
+def test_navbar_syncs_workspace_map_title_and_status():
+    js = _read(NAVBAR_JS)
+    assert "function syncWorkspaceMapTitle(" in js
+    assert "workspaceMapDomainLabel" in js
+    apply_block = js[js.index("function applyDomainInfo(") :][:1800]
+    assert "applyDomainStatusBadge(mapLabel" in apply_block

@@ -46,7 +46,63 @@ function initNavbar() {
     restoreLastConfirmedDomainInfo();
     loadNavbarState();
     initSubnavActiveState();
+    bindWorkspaceMapTrigger();
 }
+
+/**
+ * Replace the L1 Domain link navigation with the all-workspace menu map.
+ */
+function bindWorkspaceMapTrigger() {
+    const link = document.getElementById('domainL1Link');
+    if (!link || link.dataset.workspaceMapBound === 'true') return;
+    link.dataset.workspaceMapBound = 'true';
+    link.addEventListener('click', openWorkspaceMap);
+}
+
+function openWorkspaceMap(event) {
+    if (event) event.preventDefault();
+    const modalElement = document.getElementById('workspaceMapModal');
+    if (!modalElement || typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+    syncWorkspaceMapTitle();
+    highlightWorkspaceMapCurrent();
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+function syncWorkspaceMapTitle() {
+    const source = document.getElementById('currentDomainName');
+    const target = document.getElementById('workspaceMapDomainLabel');
+    if (source && target) target.textContent = source.textContent;
+}
+
+function highlightWorkspaceMapCurrent() {
+    const path = window.location.pathname;
+    const section = new URLSearchParams(window.location.search).get('section')
+        || (window.location.hash || '').replace(/^#/, '');
+
+    document.querySelectorAll('[data-workspace-map-item]').forEach((anchor) => {
+        anchor.classList.remove('is-current');
+        anchor.removeAttribute('aria-current');
+
+        let target;
+        try {
+            target = new URL(anchor.getAttribute('href') || '', window.location.origin);
+        } catch (_) {
+            return;
+        }
+        if (!path.startsWith(target.pathname)) return;
+
+        const targetSection = target.searchParams.get('section') || '';
+        const matchesSection = targetSection && section === targetSection;
+        const matchesDefault = !section
+            && anchor.getAttribute('data-workspace-map-default') === 'true';
+        if (matchesSection || matchesDefault) {
+            anchor.classList.add('is-current');
+            anchor.setAttribute('aria-current', 'page');
+        }
+    });
+}
+
+window.openWorkspaceMap = openWorkspaceMap;
 
 /**
  * Mark the correct Level-2 subnav link as active based on the current URL
@@ -282,6 +338,12 @@ function applyDomainInfo(data) {
             currentDomainNameEl.textContent = 'Domain';
             applyDomainStatusBadge(currentDomainNameEl, null);
         }
+    }
+
+    const mapLabel = document.getElementById('workspaceMapDomainLabel');
+    if (mapLabel) {
+        mapLabel.textContent = hasDomain ? `${domainName} V${version}` : 'Domain';
+        applyDomainStatusBadge(mapLabel, hasDomain ? status : null);
     }
 
     if (domainSectionName) {
