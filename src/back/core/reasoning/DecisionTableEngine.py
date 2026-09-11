@@ -48,18 +48,33 @@ class DecisionTableEngine:
             return False
 
     @staticmethod
+    def _dialect_for_store(store) -> str:
+        """Best-effort SQL dialect detection from the store's class name."""
+        name = type(store).__name__.lower()
+        return "postgres" if "lakebase" in name or "postgres" in name else "databricks"
+
+    @staticmethod
     def _build_uri_map(ontology: Dict) -> Dict[str, str]:
         uri_map: Dict[str, str] = {}
         base_uri = ontology.get("base_uri", "")
         sep = "" if base_uri.endswith("#") or base_uri.endswith("/") else "#"
         data_ns = base_uri.rstrip("#").rstrip("/") + "/" if base_uri else ""
+
+        base_ns = base_uri.rstrip("#").rstrip("/") if base_uri else ""
         for cls in ontology.get("classes", []):
             name = cls.get("name", "") or cls.get("localName", "")
             uri = cls.get("uri", "")
-            if not uri and name:
+            if base_ns and uri and not uri.startswith(base_ns):
+                # URI obsoleta de un Base URI anterior (p.ej. el dominio se
+                # re-baso tras crear la clase) - se reconstruye contra el
+                # base_uri actual, igual que ya se hace con las propiedades.
+                local = uri_local_name(uri)
+                uri = base_uri + sep + local
+            elif not uri and name:
                 uri = base_uri + sep + name
             if name:
                 uri_map[name.lower()] = uri
+
         for prop in ontology.get("properties", []):
             name = prop.get("name", "") or prop.get("localName", "")
             uri = prop.get("uri", "")
@@ -142,6 +157,7 @@ class DecisionTableEngine:
         if not rows:
             logger.debug("Decision table '%s': no rows defined, skipping", dt_name)
             return result
+        dialect = self._dialect_for_store(store)
         logger.debug(
             "Decision table '%s': target_class_uri=%s, inputs=%s",
             dt_name,
@@ -157,30 +173,15 @@ class DecisionTableEngine:
         has_output = bool(output_prop_uri)
         if row_logic == "and" or not has_output:
             self._execute_combined(
-                dt,
-                store,
-                table_name,
-                base_uri,
-                result,
-                dt_name,
-                output_prop_uri,
-                output_prop_name,
-                rows,
-                output_default_val,
+                dt, store, table_name, base_uri, result, dt_name,
+                output_prop_uri, output_prop_name, rows, output_default_val,
+                dialect,
             )
         else:
             self._execute_per_row(
-                dt,
-                store,
-                table_name,
-                base_uri,
-                result,
-                dt_name,
-                output_prop_uri,
-                output_prop_name,
-                rows,
-                hit_policy,
-                output_default_val,
+                dt, store, table_name, base_uri, result, dt_name,
+                output_prop_uri, output_prop_name, rows, hit_policy, output_default_val,
+                dialect,
             )
         return result
 
@@ -196,9 +197,10 @@ class DecisionTableEngine:
         output_prop_name,
         rows,
         output_default_val="",
+        dialect="databricks",
     ):
         tbl_ref = store.sql_table_reference(table_name)
-        query = self.build_violation_sql(dt, tbl_ref, base_uri)
+        query = self.build_violation_sql(dt, tbl_ref, base_uri, dialect)
         if not query:
             logger.warning("Decision table '%s': query builder returned None", dt_name)
             return
@@ -212,7 +214,7 @@ class DecisionTableEngine:
         for subj in self._run_query(store, query, dt_name):
             msg = f"Matches decision table '{dt_name}'"
             if action_val and output_prop_name:
-                msg += f" → {output_prop_name} = {action_val}"
+                msg += f" -> {output_prop_name} = {action_val}"
             result.violations.append(
                 RuleViolation(
                     rule_name=dt_name,
@@ -246,6 +248,7 @@ class DecisionTableEngine:
         rows,
         hit_policy,
         output_default_val="",
+        dialect="databricks",
     ):
         seen: set = set()
         for ri, row in enumerate(rows):
@@ -254,7 +257,7 @@ class DecisionTableEngine:
             single_dt["rows"] = [row]
             single_dt["row_logic"] = "or"
             tbl_ref = store.sql_table_reference(table_name)
-            query = self.build_violation_sql(single_dt, tbl_ref, base_uri)
+            query = self.build_violation_sql(single_dt, tbl_ref, base_uri, dialect)
             if not query:
                 continue
             logger.debug(
@@ -266,7 +269,7 @@ class DecisionTableEngine:
                 seen.add(subj)
                 msg = f"Row {ri + 1} of '{dt_name}'"
                 if action_val and output_prop_name:
-                    msg += f" → {output_prop_name} = {action_val}"
+                    msg += f" -> {output_prop_name} = {action_val}"
                 result.violations.append(
                     RuleViolation(
                         rule_name=dt_name,
@@ -300,13 +303,14 @@ class DecisionTableEngine:
             logger.error("Decision table query failed for '%s': %s", dt_name, e)
         return subjects
 
-    def build_violation_sql(self, dt, table, base_uri):
+    def build_violation_sql(self, dt, table, base_uri, dialect="databricks"):
         target_cls_uri = dt.get("target_class_uri", "")
         inputs = dt.get("input_columns", [])
         rows = dt.get("rows", [])
         if not target_cls_uri or not inputs or not rows:
             return None
         joins = []
+        joined_aliases = set()
         base_where = [
             f"t0.predicate = '{RDF_TYPE}'",
             f"t0.object = '{self._esc_sql(target_cls_uri)}'",
@@ -315,7 +319,19 @@ class DecisionTableEngine:
             alias = f"inp{i}"
             prop_uri = inp.get("property_uri", "")
             if not prop_uri:
+                # Input column has no property mapped (e.g. left blank in the
+                # decision table editor) — skip the join. Any row condition
+                # referencing this column's alias is skipped below too, so
+                # we never emit a WHERE clause referencing a table that was
+                # never joined ("missing FROM-clause entry" in Postgres).
+                logger.warning(
+                    "Decision table input column %d ('%s') has no property_uri — "
+                    "its conditions will be ignored",
+                    i,
+                    inp.get("property", inp.get("label", "")),
+                )
                 continue
+            joined_aliases.add(alias)
             joins.append(
                 f"INNER JOIN {table} {alias} ON {alias}.subject = t0.subject "
                 f"AND {alias}.predicate = '{self._esc_sql(prop_uri)}'"
@@ -330,13 +346,15 @@ class DecisionTableEngine:
                 if op == "any" or not val:
                     continue
                 alias = f"inp{j}"
+                if alias not in joined_aliases:
+                    continue
                 sql_op = DT_OP_SQL.get(op)
                 if sql_op is None:
                     continue
                 if self._is_numeric(val):
                     v_expr = val
                     lhs = (
-                        sql_numeric(f"{alias}.object")
+                        sql_numeric(f"{alias}.object", dialect=dialect)
                         if op in DT_NUMERIC_OPS
                         else f"{alias}.object"
                     )
