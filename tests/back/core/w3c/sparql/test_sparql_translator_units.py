@@ -340,3 +340,74 @@ class TestCapabilityBoundaryOnPublicTranslator:
         assert "person_manages" in sql
         assert "'http://ex/worksWith' AS predicate" in sql
         assert "'http://ex/manages' AS predicate" in sql
+
+
+@pytest.mark.unit
+class TestOptionalRelationshipSemantics:
+    def test_optional_single_relationship_keeps_left_join_without_presence_filter(
+        self, translator_entity_mappings, translator_relationship_mappings
+    ):
+        query = (
+            "SELECT ?s ?peer WHERE { "
+            "?s a <http://ex/Person> . "
+            "OPTIONAL { ?s <http://ex/worksWith> ?peer } "
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings, translator_relationship_mappings)
+        assert result["success"] is True
+        sql = result["sql"]
+        assert "LEFT JOIN" in sql
+        assert "IS NOT NULL" not in sql
+        assert " OR " not in sql
+
+    def test_optional_two_relationships_use_distinct_aliases_without_presence_filter(
+        self, translator_entity_mappings, translator_relationship_mappings
+    ):
+        query = (
+            "SELECT ?s ?peer ?report WHERE { "
+            "?s a <http://ex/Person> . "
+            "?peer a <http://ex/Person> . "
+            "?report a <http://ex/Person> . "
+            "OPTIONAL { ?s <http://ex/worksWith> ?peer } "
+            "OPTIONAL { ?s <http://ex/manages> ?report } "
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings, translator_relationship_mappings)
+        assert result["success"] is True
+        sql = result["sql"]
+        assert "LEFT JOIN" in sql
+        assert "optrel_s_0" in sql
+        assert "optrel_s_1" in sql
+        assert "IS NOT NULL" not in sql
+        assert " OR " not in sql
+
+    def test_optional_relationship_shape_does_not_force_match_in_where_clause(
+        self, translator_entity_mappings, translator_relationship_mappings
+    ):
+        query = (
+            "SELECT ?s ?peer WHERE { "
+            "?s a <http://ex/Person> . "
+            "OPTIONAL { ?s <http://ex/worksWith> ?peer } "
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings, translator_relationship_mappings)
+        assert result["success"] is True
+        sql = result["sql"]
+        where_sql = sql.split("WHERE", maxsplit=1)[1]
+        assert "IS NOT NULL" not in where_sql
+        assert " OR " not in where_sql
+
+    def test_optional_column_value_does_not_add_presence_filter(
+        self, translator_entity_mappings
+    ):
+        query = (
+            "SELECT ?s ?name WHERE { "
+            "?s a <http://ex/Person> . "
+            "OPTIONAL { ?s <http://ex/name> ?name } "
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings)
+        assert result["success"] is True
+        sql = result["sql"]
+        assert "IS NOT NULL" not in sql
+        assert " OR " not in sql
