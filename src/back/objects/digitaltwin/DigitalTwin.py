@@ -3577,6 +3577,23 @@ class DigitalTwin:
             max_entities,
         )
 
+        single_statement_expand = getattr(
+            store, "expand_and_fetch_subgraph", None
+        )
+        if callable(single_statement_expand):
+            payload = single_statement_expand(
+                graph_name,
+                list(entity_set),
+                depth if include_rels else 0,
+                max_entities,
+                max_triples,
+            )
+            return {
+                "phase": "expand",
+                **payload,
+                "initial_count": initial_count,
+            }
+
         if include_rels and depth > 0:
             current_level = set(entity_set)
             for d in range(depth):
