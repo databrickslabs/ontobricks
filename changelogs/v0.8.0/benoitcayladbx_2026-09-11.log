@@ -1,0 +1,36 @@
+## Fix undefined names and enforce F821
+
+Context: `GET /api/v1/digitaltwin/triples` raised `NameError` for every request
+because its backend selection referenced undefined variable `be`. Three more
+undefined names prevented enabling a focused repository-wide F821 quality gate.
+This change resolves GitHub issue #163 and rebases pull request #164 onto develop.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Select the view or graph table using the documented `backend` parameter.
+2. src/api/routers/internal/ontology.py
+   Use the built-in generic `dict` for the evaluated local annotation.
+3. src/back/core/external/pitfalls/runner.py
+   Import the lazily loaded sentiment analyzer under `TYPE_CHECKING`.
+4. src/back/core/graphdb/delta/DeltaBase.py
+   Resolve the Delta warehouse with the existing Delta-specific helper.
+5. tests/units/dtwin/test_digitaltwin_api.py
+   Cover graph and view backend table selection and the reported NameError.
+6. .github/workflows/ci.yml
+   Add a blocking, frozen, repository-wide Ruff F821 gate.
+
+Modified files:
+- .github/workflows/ci.yml
+- changelogs/v0.8.0/benoitcayladbx_2026-09-11.log
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/ontology.py
+- src/back/core/external/pitfalls/runner.py
+- src/back/core/graphdb/delta/DeltaBase.py
+- tests/units/dtwin/test_digitaltwin_api.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5859 passed, 304
+skipped, 6 deselected, 1 xfailed, 23 warnings in 46.48s.
+`uv run --frozen ruff check --select F821 --output-format=concise src tests`
+-> all checks passed. The two triples regression tests failed with `NameError`
+before the fix and passed after it.
