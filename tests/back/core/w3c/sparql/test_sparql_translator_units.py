@@ -101,16 +101,16 @@ class TestReturnShape:
     def test_successful_translation_returns_sql(self, entity_mappings):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings)
-        if result.get("success"):
-            assert "sql" in result
-            assert isinstance(result["sql"], str)
-            assert len(result["sql"]) > 0
+        assert result["success"], result
+        assert "sql" in result
+        assert isinstance(result["sql"], str)
+        assert len(result["sql"]) > 0
 
     def test_successful_translation_returns_variables(self, entity_mappings):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings)
-        if result.get("success"):
-            assert "variables" in result
+        assert result["success"], result
+        assert "variables" in result
 
 
 @pytest.mark.unit
@@ -136,21 +136,21 @@ class TestLimit:
     def test_limit_appears_in_sql(self, entity_mappings):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings, limit=42)
-        if result.get("success"):
-            assert "LIMIT 42" in result["sql"] or "limit 42" in result["sql"].lower()
+        assert result["success"], result
+        assert "LIMIT 42" in result["sql"] or "limit 42" in result["sql"].lower()
 
     def test_default_limit_respected(self, entity_mappings):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings, limit=5)
-        if result.get("success"):
-            assert "5" in result["sql"]
+        assert result["success"], result
+        assert "5" in result["sql"]
 
     @pytest.mark.parametrize("n", [1, 100, 1000])
     def test_various_limits(self, entity_mappings, n):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings, limit=n)
-        if result.get("success"):
-            assert str(n) in result["sql"]
+        assert result["success"], result
+        assert str(n) in result["sql"]
 
 
 @pytest.mark.unit
@@ -222,19 +222,19 @@ class TestEntityMappingsRespected:
     def test_catalog_schema_in_output(self, entity_mappings, mapping):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings)
-        if result.get("success"):
-            sql_lower = result["sql"].lower()
-            # The fully-qualified table name from the mapping appears in the SQL.
-            for entity in mapping["entities"]:
-                if entity["ontology_class"] == "http://test.org/ontology#Customer":
-                    assert entity["table"].lower() in sql_lower or entity["catalog"].lower() in sql_lower
-                    break
+        assert result["success"], result
+        sql_lower = result["sql"].lower()
+        # The fully-qualified table name from the mapping appears in the SQL.
+        for entity in mapping["entities"]:
+            if entity["ontology_class"] == "http://test.org/ontology#Customer":
+                assert entity["table"].lower() in sql_lower or entity["catalog"].lower() in sql_lower
+                break
 
     def test_table_name_in_output(self, entity_mappings):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings)
-        if result.get("success"):
-            assert "customers" in result["sql"].lower()
+        assert result["success"], result
+        assert "customers" in result["sql"].lower()
 
 
 @pytest.mark.unit
@@ -244,25 +244,25 @@ class TestSqlSafety:
     def test_no_statement_terminator_breaks(self, entity_mappings):
         sparql = "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer> }"
         result = _translate(sparql, entity_mappings)
-        if result.get("success"):
-            sql = result["sql"]
-            # We allow ; as a terminator at the end, but not as a multi-statement separator.
-            stripped = sql.strip().rstrip(";")
-            assert ";" not in stripped, f"multi-statement SQL emitted: {sql}"
+        assert result["success"], result
+        sql = result["sql"]
+        # We allow ; as a terminator at the end, but not as a multi-statement separator.
+        stripped = sql.strip().rstrip(";")
+        assert ";" not in stripped, f"multi-statement SQL emitted: {sql}"
 
     def test_dangerous_iri_does_not_inject_sql(self, entity_mappings):
         """An IRI containing SQL fragments should not break out of the FROM clause."""
         sparql = (
             "SELECT ?s WHERE { ?s a <http://test.org/ontology#Customer'; DROP TABLE x; --> }"
         )
-        # Translator may reject this as malformed SPARQL; what matters is no raise + no
-        # `DROP TABLE` reaching the output.
+        # Translator may reject this as malformed SPARQL; if it accepts the input,
+        # generated SQL must still be free of injected statements.
         try:
             result = _translate(sparql, entity_mappings)
-        except Exception:
+        except ValidationError:
             return  # Acceptable — rejected at parse time.
-        if result.get("success"):
-            assert "DROP TABLE" not in result["sql"].upper()
+        assert result["success"], result
+        assert "DROP TABLE" not in result["sql"].upper()
 
 
 @pytest.mark.unit

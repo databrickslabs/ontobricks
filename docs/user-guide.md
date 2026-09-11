@@ -706,6 +706,12 @@ Right-click any entity node and pick **Expand neighbours (N hops)** to enrich th
 - Newly added entities are merged with the existing graph, briefly ringed with a highlight, and the camera zooms to frame them.
 - The same context menu still exposes the existing **View Dashboard**, **Dataset preview**, **Actions**, **Bridges** and **Compute virtual attributes** entries when configured for the entity's class.
 
+**Spark SPARQL support boundary (fail-closed):**
+
+- The Spark translator accepts this subset only: `SELECT`/`SELECT *`, `DISTINCT`, `LIMIT`, basic graph patterns, `OPTIONAL` on supported patterns, string filters (`CONTAINS`, string equality, `STRSTARTS`, `STRENDS`), predicate `IN`, literal `BIND`, and the specialized relationship `UNION` pattern used by the Explorer relationship filter.
+- Unsupported constructs are rejected with a validation error instead of being partially translated: `GROUP BY`, `HAVING`, `ORDER BY`, `OFFSET`, numeric or complex filters, property paths, subqueries, `MINUS`, `VALUES`, `SERVICE`, `GRAPH`, arbitrary `UNION`, and non-literal `BIND`.
+- The local RDFLib execution path is not an equivalent fallback for Spark execution because it queries the mapping graph, not warehouse triples from your Databricks data.
+
 **Data Clusters:**
 
 The Graph Viewer includes a **Data Clusters** panel (in the View tab) for detecting communities in the graph:

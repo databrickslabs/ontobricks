@@ -50,3 +50,64 @@ Modified files:
 - src/back/core/w3c/sparql/SparqlCapabilityValidator.py
 
 Tests: uv run --frozen pytest -q tests/back/core/w3c/sparql/test_sparql_capability_validator.py -> 22 passed in 1.36s; uv run --frozen pytest -q -m "not scenario" -> 5882 passed, 304 skipped, 6 deselected in 51.90s
+
+## Integrate fail-closed validator in translator
+
+Context:
+Task 2 required integrating the Spark SPARQL capability boundary into the
+public translator entrypoint while preserving supported query behavior. The
+change followed strict TDD: translator-level unsupported-shape regression tests
+were added first and confirmed red, then the validator call was integrated and
+the targeted suites were rerun to green.
+
+Changes:
+
+1. tests/back/core/w3c/sparql/test_sparql_translator_units.py
+   Added translator-level fail-closed regressions for GROUP BY, numeric/complex
+   FILTER, and property paths; added positive coverage for basic BGP, supported
+   string FILTER, literal BIND, and the accepted specialized UNION+BIND shape.
+2. src/back/core/w3c/sparql/SparqlTranslator.py
+   Imported and invoked `SparqlCapabilityValidator.validate()` at the start of
+   `translate_sparql_to_spark` before query normalization/parsing.
+
+Modified files:
+- tests/back/core/w3c/sparql/test_sparql_translator_units.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+
+Tests: uv run --frozen pytest -q tests/back/core/w3c/sparql/test_sparql_translator_units.py -> 5 failed, 24 passed (RED expected); uv run --frozen pytest -q tests/back/core/w3c/sparql/test_sparql_capability_validator.py tests/back/core/w3c/sparql/test_sparql_translator_units.py -> 51 passed; uv run --frozen pytest -q -m "not scenario" -> 5890 passed, 304 skipped, 6 deselected in 49.09s
+
+## Harden Spark translator assertions and docs boundary
+
+Context:
+Task 4 completed the verification hardening and documentation pass for the
+Spark SPARQL fail-closed rollout on `0.8.1`. The unit tests now fail loudly on
+unexpected translator outcomes, exception swallowing was tightened to explicit
+validation failure handling, and the docs now describe the exact supported
+Spark subset plus the no-equivalent-fallback fact for local RDFLib execution.
+
+Changes:
+
+1. `tests/back/core/w3c/sparql/test_sparql_translator_units.py`
+   Replaced all nine `if result.get("success")` guards with mandatory
+   `assert result["success"], result` assertions, then executed SQL/shape
+   checks unconditionally; replaced broad exception swallowing in the SQL
+   injection test with explicit `ValidationError` handling.
+2. `docs/architecture.md`
+   Documented the fail-closed Spark SPARQL capability boundary with the exact
+   supported subset, explicit rejected construct families, and clarified that
+   local RDFLib execution is not a warehouse-data fallback.
+3. `docs/user-guide.md`
+   Added a user-facing "Spark SPARQL support boundary (fail-closed)" section in
+   the Explorer guidance, including supported operators, rejected operators,
+   and the no-equivalent-fallback statement for local RDFLib execution.
+
+Modified files:
+- tests/back/core/w3c/sparql/test_sparql_translator_units.py
+- docs/architecture.md
+- docs/user-guide.md
+- changelogs/v0.8.1/benoitcayladbx_2026-09-11.log
+
+Tests:
+- `uv run --frozen pytest -q tests/back/core/w3c/sparql` -> 57 passed, 1 warning
+- `uv run --frozen ruff check src/back/core/w3c/sparql/SparqlCapabilityValidator.py src/back/core/w3c/sparql/SparqlTranslator.py tests/back/core/w3c/sparql` -> failed with 9 findings in pre-existing translator/validator files (`UP035`, `I001`, `UP045`, `F541`, `W291`, `B007`)
+- `uv run --frozen pytest -q -m "not scenario"` -> 5896 passed, 304 skipped, 6 deselected, 32 warnings
