@@ -89,3 +89,13 @@ def test_mapping_and_kg_items_carry_graph_gate():
     kg_column = html.split('data-workspace-map-col="digitaltwin"', 1)[1]
     assert "nav-requires-graph" in mapping_column
     assert "nav-requires-graph" in kg_column
+
+
+def test_workspace_map_css_uses_shell_tokens():
+    css = _read(COMPONENTS_CSS)
+    assert ".ob-workspace-map-grid" in css
+    assert ".ob-workspace-map-item.is-current" in css
+    block = css[css.index("Workspace map modal") : css.index("/* Local color")]
+    assert "--db-hover-indigo" in block
+    assert "--db-primary-light" in block
+    assert not re.search(r"#[0-9A-Fa-f]{3,8}", block)
