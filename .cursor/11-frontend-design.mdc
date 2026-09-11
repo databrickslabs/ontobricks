@@ -210,6 +210,7 @@ the entire app chrome — never duplicate or substitute any of it:
 | Notification Center dropdown | `#notifCenterDropdown` (bell) | a per-page notif list |
 | Task Tracker dropdown | `#taskTrackerDropdown` (hourglass) | a per-page task panel |
 | Help Center modal | included via `partials/layout/help_modal.html` | a custom help dialog |
+| Workspace Map modal | included via `partials/layout/_workspace_map_modal.html`, opened from `#domainL1Link` | a duplicate workspace launcher |
 | UC File Browser modal | included via `partials/layout/uc_file_browser_modal.html` | another file picker |
 | Body data attributes | `data-app-role`, `data-domain-role`, `data-app-mode` | re-fetching them |
 | Bootstrap JS bundle | loaded after `{% block content %}` | re-loading Bootstrap |
@@ -472,6 +473,12 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
   separator, and the Domain link (`#domainL1Link`).
 - `#domainL1Link` is disabled (`.ob-nav-disabled`, `pointer-events: none`)
   when no domain is loaded. Do not enable it from page code.
+- When a domain is loaded, clicking `#domainL1Link` opens
+  `#workspaceMapModal`: a four-column map of the Domain, Ontology, Mapping,
+  and Knowledge Graph menus driven by `menu_config.json`. It does not
+  navigate to `/domain/`. Markup stays in
+  `partials/layout/_workspace_map_modal.html`; `openWorkspaceMap()` in
+  `navbar.js` owns the behavior. The L2 dropdowns remain available.
 - Other menus (Knowledge Graph / digitaltwin) may be hidden via
   `"navbar_hidden": true` in `menu_config.json`.
 - Visual contract: white L1 surface, warm one-pixel divider, dark text, indigo
