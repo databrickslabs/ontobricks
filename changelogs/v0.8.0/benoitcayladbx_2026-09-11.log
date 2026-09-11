@@ -34,3 +34,25 @@ skipped, 6 deselected, 1 xfailed, 23 warnings in 46.48s.
 `uv run --frozen ruff check --select F821 --output-format=concise src tests`
 -> all checks passed. The two triples regression tests failed with `NameError`
 before the fix and passed after it.
+
+---
+
+## Complete v0.8.0 release notes for September follow-up
+
+Context: `releases/ReleaseNotes_V0.8.0.md` stopped at the August freeze and
+omitted Analytics LTTB, Lakehouse Health, Mapping preview cache, MCP server
+split, digit-leading UC names, Ontology Designer in-place refresh, and the
+digitaltwin triples NameError / F821 gate.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.8.0.md
+   Extend the window and test status; add a September follow-up section that
+   does not claim v0.9.0 Lakehouse//RT work.
+
+Modified files:
+- releases/ReleaseNotes_V0.8.0.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5859 passed, 304
+skipped, 6 deselected, 1 xfailed, 23 warnings in 45.37s.
