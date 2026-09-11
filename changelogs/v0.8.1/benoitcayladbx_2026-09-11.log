@@ -23,3 +23,30 @@ Modified files:
 - tests/back/core/w3c/sparql/test_sparql_capability_validator.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 5874 passed, 304 skipped, 6 deselected in 48.36s
+
+## Address Task 1 review findings
+
+Context:
+The Task 1 review reported missing positive coverage for accepted algebra
+shapes and one incorrect annotation in the parser exception path. This update
+adds all requested positive validator tests, fixes OPTIONAL/LeftJoin acceptance
+for RDFLib's `TrueFilter` node shape, removes the incorrect `no cover` pragma,
+and verifies/removes the suspect `GroupGraphPatternSub -> SERVICE` mapping.
+
+Changes:
+
+1. tests/back/core/w3c/sparql/test_sparql_capability_validator.py
+   Added positive tests for accepted LIMIT, OPTIONAL/LeftJoin, all allowed
+   FILTER shapes (CONTAINS, STR equals, STRSTARTS, STRENDS, predicate IN), and
+   the accepted specialized relationship-UNION shape.
+2. src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+   Fixed LeftJoin handling to accept RDFLib `TrueFilter` nodes, removed
+   incorrect `# pragma: no cover`, removed `GroupGraphPatternSub -> SERVICE`
+   mapping, and documented RDFLib's lowercase `values` node in ToMultiSet
+   handling.
+
+Modified files:
+- tests/back/core/w3c/sparql/test_sparql_capability_validator.py
+- src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+
+Tests: uv run --frozen pytest -q tests/back/core/w3c/sparql/test_sparql_capability_validator.py -> 22 passed in 1.36s; uv run --frozen pytest -q -m "not scenario" -> 5882 passed, 304 skipped, 6 deselected in 51.90s

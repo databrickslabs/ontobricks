@@ -18,6 +18,73 @@ def test_rejects_invalid_syntax() -> None:
         SparqlCapabilityValidator.validate("SELECT WHERE { ?s ?p ?o")
 
 
+def test_accepts_limit_clause() -> None:
+    query = "SELECT ?s WHERE { ?s <http://ex/p> ?o } LIMIT 10"
+    SparqlCapabilityValidator.validate(query)
+
+
+def test_accepts_optional_pattern_left_join_shape() -> None:
+    query = (
+        "SELECT ?s ?label WHERE { "
+        "?s <http://ex/p> ?o . "
+        "OPTIONAL { ?s <http://www.w3.org/2000/01/rdf-schema#label> ?label } "
+        "}"
+    )
+    SparqlCapabilityValidator.validate(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        (
+            "SELECT ?s WHERE { "
+            "?s <http://ex/name> ?name "
+            "FILTER(CONTAINS(LCASE(STR(?name)), \"ann\")) "
+            "}"
+        ),
+        (
+            "SELECT ?s WHERE { "
+            "?s <http://ex/name> ?name "
+            "FILTER(STR(?name) = \"Ann\") "
+            "}"
+        ),
+        (
+            "SELECT ?s WHERE { "
+            "?s <http://ex/name> ?name "
+            "FILTER(STRSTARTS(LCASE(STR(?name)), \"an\")) "
+            "}"
+        ),
+        (
+            "SELECT ?s WHERE { "
+            "?s <http://ex/name> ?name "
+            "FILTER(STRENDS(LCASE(STR(?name)), \"nn\")) "
+            "}"
+        ),
+        (
+            "SELECT ?s ?predicate WHERE { "
+            "?s ?predicate ?o "
+            "FILTER(?predicate IN (<http://ex/p>, <http://ex/q>)) "
+            "}"
+        ),
+    ],
+)
+def test_accepts_supported_filter_shapes(query: str) -> None:
+    SparqlCapabilityValidator.validate(query)
+
+
+def test_accepts_specialized_relationship_union_shape() -> None:
+    query = (
+        "SELECT ?subject ?predicate ?object WHERE { "
+        "{ ?subject <http://ex/worksWith> ?object . "
+        "BIND(<http://ex/worksWith> AS ?predicate) } "
+        "UNION "
+        "{ ?subject <http://ex/manages> ?object . "
+        "BIND(<http://ex/manages> AS ?predicate) } "
+        "}"
+    )
+    SparqlCapabilityValidator.validate(query)
+
+
 @pytest.mark.parametrize(
     ("query", "feature"),
     [

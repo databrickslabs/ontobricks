@@ -25,7 +25,6 @@ class SparqlCapabilityValidator:
         "Minus": "MINUS",
         "Graph": "GRAPH",
         "ServiceGraphPattern": "SERVICE",
-        "GroupGraphPatternSub": "SERVICE",
         "values": "VALUES",
     }
 
@@ -33,7 +32,7 @@ class SparqlCapabilityValidator:
     def validate(cls, query: str) -> None:
         try:
             algebra = prepareQuery(query).algebra
-        except Exception as exc:  # pragma: no cover - parser internals vary
+        except Exception as exc:
             raise ValidationError("Invalid SPARQL query.", detail=str(exc)) from exc
 
         cls._validate_node(algebra)
@@ -69,7 +68,11 @@ class SparqlCapabilityValidator:
             cls._validate_bgp(node)
             return
         if name == "LeftJoin":
-            if node.get("expr") != "TrueFilter":
+            expr = node.get("expr")
+            if not (
+                expr == "TrueFilter"
+                or (isinstance(expr, CompValue) and expr.name == "TrueFilter")
+            ):
                 cls._unsupported("unsupported SPARQL construct")
             cls._validate_node(node.get("p1"))
             cls._validate_node(node.get("p2"))
@@ -98,6 +101,7 @@ class SparqlCapabilityValidator:
             return
         if name == "ToMultiSet":
             inner = node.get("p")
+            # RDFLib uses a lowercase algebra node name "values" here.
             if isinstance(inner, CompValue) and inner.name == "values":
                 cls._unsupported("VALUES")
             cls._unsupported("subquery")
