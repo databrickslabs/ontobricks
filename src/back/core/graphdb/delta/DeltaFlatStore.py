@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional
 
 from back.core.graphdb.GraphDBBackend import GraphDBBackend
+from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
 from back.core.graphdb.delta import _table_naming, materialize
 from back.core.helpers import sql_escape as _escape_sql_string, validate_table_name
 from back.core.logging import get_logger
@@ -304,6 +305,129 @@ class DeltaFlatStore(GraphDBBackend):
         if sql_service is not None and hasattr(sql_service, "execute_query"):
             return sql_service.execute_query(query, statement_timeout_s=timeout_s)
         return self._client.execute_query(query)
+
+    @staticmethod
+    def _expansion_level_ctes(
+        relation: str, depth: int, max_entities: int
+    ) -> list[str]:
+        """Build fixed-depth, de-duplicated BFS levels for one SQL statement."""
+        ctes: list[str] = []
+        for level in range(1, depth + 1):
+            previous = f"level_{level - 1}"
+            visited = f"visited_{level}"
+            visited_union = " UNION ALL ".join(
+                f"SELECT entity FROM level_{prior}" for prior in range(level)
+            )
+            ctes.extend(
+                [
+                    f"{visited} AS ({visited_union})",
+                    (
+                        f"level_{level}_candidates AS ("
+                        f"SELECT t.object AS entity FROM {relation} t "
+                        f"JOIN {previous} frontier "
+                        f"ON t.subject = frontier.entity "
+                        f"WHERE t.object LIKE 'http%' "
+                        f"AND t.predicate != '{RDF_TYPE}' "
+                        f"AND t.predicate != '{RDFS_LABEL}' "
+                        f"UNION ALL "
+                        f"SELECT t.subject AS entity FROM {relation} t "
+                        f"JOIN {previous} frontier "
+                        f"ON t.object = frontier.entity "
+                        f"WHERE t.predicate != '{RDF_TYPE}' "
+                        f"AND t.predicate != '{RDFS_LABEL}')"
+                    ),
+                    (
+                        f"level_{level} AS ("
+                        f"SELECT DISTINCT candidate.entity "
+                        f"FROM level_{level}_candidates candidate "
+                        f"JOIN {relation} typed "
+                        f"ON typed.subject = candidate.entity "
+                        f"AND typed.predicate = '{RDF_TYPE}' "
+                        f"LEFT ANTI JOIN {visited} "
+                        f"ON {visited}.entity = candidate.entity "
+                        f"LIMIT {max_entities})"
+                    ),
+                ]
+            )
+        return ctes
+
+    def expand_and_fetch_subgraph(
+        self,
+        table_name: str,
+        selected_uris: list[str],
+        depth: int,
+        max_entities: int,
+        max_triples: int,
+    ) -> dict[str, Any]:
+        """Expand and fetch a bounded Delta subgraph in one SQL statement."""
+        if not selected_uris:
+            raise ValueError("At least one selected URI is required")
+        depth = max(0, int(depth))
+        max_entities = max(1, int(max_entities))
+        max_triples = max(1, int(max_triples))
+
+        relation = self._sql_relation(table_name)
+        seed_values = ", ".join(
+            f"('{self._sql_escape(uri)}')" for uri in dict.fromkeys(selected_uris)
+        )
+        ctes = [f"level_0(entity) AS (VALUES {seed_values})"]
+        ctes.extend(self._expansion_level_ctes(relation, depth, max_entities))
+
+        levels = " UNION ALL ".join(
+            f"SELECT entity FROM level_{level}" for level in range(depth + 1)
+        )
+        ctes.extend(
+            [
+                (
+                    "entity_probe AS ("
+                    f"SELECT DISTINCT entity FROM ({levels}) discovered "
+                    f"LIMIT {max_entities + 1})"
+                ),
+                (
+                    "entities AS ("
+                    f"SELECT entity FROM entity_probe LIMIT {max_entities})"
+                ),
+                (
+                    "entity_stats AS ("
+                    "SELECT COUNT(*) AS _ob_expanded_count FROM entity_probe)"
+                ),
+            ]
+        )
+        sql = (
+            "WITH "
+            + ", ".join(ctes)
+            + " "
+            + "SELECT triples.subject, triples.predicate, triples.object, "
+            + "stats._ob_expanded_count "
+            + f"FROM {relation} triples "
+            + "JOIN entities ON entities.entity = triples.subject "
+            + "CROSS JOIN entity_stats stats "
+            + f"LIMIT {max_triples + 1}"
+        )
+
+        rows = self.execute_query(sql) or []
+        discovered_count = (
+            int(rows[0].get("_ob_expanded_count") or 0)
+            if rows
+            else min(len(set(selected_uris)), max_entities)
+        )
+        triple_capped = len(rows) > max_triples
+        triples = [
+            {
+                "subject": row.get("subject", ""),
+                "predicate": row.get("predicate", ""),
+                "object": row.get("object", ""),
+            }
+            for row in rows[:max_triples]
+        ]
+        entity_capped = discovered_count > max_entities
+        return {
+            "results": triples,
+            "count": len(triples),
+            "expanded_count": min(discovered_count, max_entities),
+            "capped": entity_capped or triple_capped,
+            "timeout_capped": False,
+        }
 
     def get_inferred_triple_count(self, table_name: str) -> int:
         if self._domain is None:
