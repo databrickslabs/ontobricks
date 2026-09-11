@@ -1,0 +1,63 @@
+{# Workspace map opened from #domainL1Link; menu_config.json stays authoritative. #}
+{% set domain_m = namespace(v=none) %}
+{% set ontology_m = namespace(v=none) %}
+{% set mapping_m = namespace(v=none) %}
+{% set kg_m = namespace(v=none) %}
+{% for menu in menu_config.menus %}
+    {% if menu.id == 'domain' %}{% set domain_m.v = menu %}{% endif %}
+    {% if menu.id == 'ontology' %}{% set ontology_m.v = menu %}{% endif %}
+    {% if menu.id == 'assignment' %}{% set mapping_m.v = menu %}{% endif %}
+    {% if menu.id == 'digitaltwin' %}{% set kg_m.v = menu %}{% endif %}
+{% endfor %}
+{% set workspace_map_menus = [domain_m.v, ontology_m.v, mapping_m.v, kg_m.v] %}
+
+<div class="modal fade" id="workspaceMapModal" tabindex="-1"
+     aria-labelledby="workspaceMapTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+        <div class="modal-content ob-workspace-map">
+            <div class="modal-header">
+                <h5 class="modal-title" id="workspaceMapTitle">
+                    <i class="bi bi-box me-2"></i>
+                    <span id="workspaceMapDomainLabel">Domain</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="ob-workspace-map-grid">
+                    {% for menu in workspace_map_menus %}
+                    {% if menu %}
+                    <section class="ob-workspace-map-col"
+                             data-workspace-map-col="{{ menu.id }}">
+                        <h6 class="ob-workspace-map-col-head">
+                            <i class="bi {{ menu.icon }}"></i>
+                            <span>{{ menu.label }}</span>
+                        </h6>
+                        {% for group in menu.groups %}
+                        {% if not group.sidebar_only|default(false)
+                              and group.id != 'domain-design' %}
+                        {% if group.title %}
+                        <div class="ob-workspace-map-group">
+                            <i class="bi {{ group.icon }}"></i>
+                            <span>{{ group.title }}</span>
+                        </div>
+                        {% endif %}
+                        {% for item in group['items'] %}
+                        <a class="ob-workspace-map-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}{% if item.hidden_in_view_mode|default(false) %} view-mode-hidden{% endif %}{% if menu.id in ['assignment', 'digitaltwin'] %} nav-requires-graph{% endif %}"
+                           data-workspace-map-item
+                           {% if item.default|default(false) %}data-workspace-map-default="true"{% endif %}
+                           href="{{ item.route if item.route else menu.route ~ '?section=' ~ item.id }}">
+                            <i class="bi {{ item.icon }}"></i>
+                            <span>{{ item.label }}</span>
+                        </a>
+                        {% endfor %}
+                        {% endif %}
+                        {% endfor %}
+                    </section>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
