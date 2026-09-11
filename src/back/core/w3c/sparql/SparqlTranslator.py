@@ -262,6 +262,22 @@ class SparqlTranslator:
             where_content, prefixes
         )
 
+        if SparqlTranslator._is_specialized_relationship_union_query(
+            patterns, relationship_filter, select_vars
+        ):
+            return SparqlTranslator._build_generic_triples_query(
+                entity_mappings,
+                select_vars,
+                is_distinct,
+                limit,
+                relationship_mappings,
+                None,
+                None,
+                None,
+                relationship_filter,
+                dialect=dialect,
+            )
+
         # Build SQL from patterns
         return SparqlTranslator._build_spark_sql(
             patterns,
@@ -2128,6 +2144,27 @@ class SparqlTranslator:
             relationship_filter,
             dialect=dialect,
         )
+
+    @staticmethod
+    def _is_specialized_relationship_union_query(
+        patterns, relationship_filter, select_vars
+    ) -> bool:
+        """Detect specialized UNION+BIND relationship shape accepted by validator."""
+        if not relationship_filter or not patterns or not select_vars:
+            return False
+        if set(select_vars) != {"subject", "predicate", "object"}:
+            return False
+        allowed = set(relationship_filter)
+        for pattern in patterns:
+            if not (
+                pattern.get("subject_is_var")
+                and pattern.get("object_is_var")
+                and not pattern.get("predicate_is_var")
+            ):
+                return False
+            if pattern.get("predicate") not in allowed:
+                return False
+        return True
 
     @staticmethod
     def _spark_standard_init_graph_state(

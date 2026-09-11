@@ -79,7 +79,7 @@ class SparqlCapabilityValidator:
             return
         if name == "Filter":
             if not cls._is_allowed_filter_expr(node.get("expr")):
-                cls._unsupported("numeric FILTER")
+                cls._unsupported(cls._unsupported_filter_feature(node.get("expr")))
             cls._validate_node(node.get("p"))
             return
         if name == "Join":
@@ -177,6 +177,14 @@ class SparqlCapabilityValidator:
         if not isinstance(values, list) or not values:
             return False
         return all(isinstance(value, URIRef) for value in values)
+
+    @classmethod
+    def _unsupported_filter_feature(cls, expr) -> str:
+        if isinstance(expr, CompValue) and expr.name == "RelationalExpression":
+            op = (expr.get("op") or "").upper()
+            if op in {">", "<", ">=", "<="}:
+                return "numeric FILTER"
+        return "complex FILTER"
 
     @classmethod
     def _validate_union(cls, node: CompValue) -> None:

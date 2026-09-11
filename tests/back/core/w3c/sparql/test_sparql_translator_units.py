@@ -59,8 +59,6 @@ def translator_entity_mappings() -> dict:
             "predicates": {
                 "http://ex/name": {"type": "column", "column": "name"},
                 "http://ex/age": {"type": "column", "column": "age"},
-                "http://ex/worksWith": {"type": "column", "column": "peer_id"},
-                "http://ex/manages": {"type": "column", "column": "report_id"},
             },
         }
     }
@@ -283,7 +281,7 @@ class TestCapabilityBoundaryOnPublicTranslator:
             (
                 "SELECT ?s WHERE { ?s <http://ex/name> ?name . "
                 "FILTER(CONTAINS(LCASE(STR(?name)), \"an\") && STRSTARTS(LCASE(STR(?name)), \"a\")) }",
-                "numeric FILTER",
+                "complex FILTER",
             ),
             (
                 "SELECT ?s WHERE { ?s <http://ex/worksWith>+ ?o }",
@@ -325,7 +323,7 @@ class TestCapabilityBoundaryOnPublicTranslator:
         assert result["success"] is True
         assert "'Person' AS kind" in result["sql"] or '"Person" AS kind' in result["sql"]
 
-    def test_accepts_relationship_filter_union(self, translator_entity_mappings):
+    def test_accepts_relationship_filter_union(self, translator_entity_mappings, translator_relationship_mappings):
         query = (
             "PREFIX : <http://ex/> "
             "SELECT ?subject ?predicate ?object WHERE { "
@@ -334,6 +332,11 @@ class TestCapabilityBoundaryOnPublicTranslator:
             "{ ?subject :manages ?object . BIND(:manages AS ?predicate) } "
             "}"
         )
-        result = _translate(query, translator_entity_mappings)
+        result = _translate(query, translator_entity_mappings, translator_relationship_mappings)
         assert result["success"] is True
-        assert result["sql"]
+        assert result["variables"] == ["subject", "predicate", "object"]
+        sql = result["sql"]
+        assert "person_works_with" in sql
+        assert "person_manages" in sql
+        assert "'http://ex/worksWith' AS predicate" in sql
+        assert "'http://ex/manages' AS predicate" in sql

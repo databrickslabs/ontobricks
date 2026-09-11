@@ -94,6 +94,20 @@ def test_accepts_specialized_relationship_union_shape() -> None:
         ),
         ("SELECT ?s WHERE { ?s <http://ex/p> ?o } ORDER BY ?s", "ORDER BY"),
         ("SELECT ?s WHERE { ?s <http://ex/p> ?o FILTER(?o > 5) }", "numeric FILTER"),
+        (
+            "SELECT ?s WHERE { "
+            "?s <http://ex/name> ?name "
+            "FILTER(CONTAINS(LCASE(STR(?name)), \"an\") && STRSTARTS(LCASE(STR(?name)), \"a\")) "
+            "}",
+            "complex FILTER",
+        ),
+        (
+            "SELECT ?s WHERE { "
+            "?s <http://ex/name> ?name "
+            "FILTER(STR(?name) != \"Ann\") "
+            "}",
+            "complex FILTER",
+        ),
         ("SELECT ?s WHERE { ?s <http://ex/p>+ ?o }", "property paths"),
         (
             "SELECT ?s WHERE { ?s <http://ex/p> ?o . { SELECT ?o WHERE { ?o ?x ?y } } }",
