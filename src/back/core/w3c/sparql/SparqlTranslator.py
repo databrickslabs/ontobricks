@@ -10,6 +10,7 @@ from back.core.helpers import (
     extract_local_name as _extract_local,
     sql_cast as _sql_cast,
 )
+from back.core.w3c.sparql.SparqlCapabilityValidator import SparqlCapabilityValidator
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 
 logger = get_logger(__name__)
@@ -166,6 +167,8 @@ class SparqlTranslator:
         Returns:
             dict: Translation result with SQL and variables
         """
+        SparqlCapabilityValidator.validate(sparql_query)
+
         # Normalize query
         query = " ".join(sparql_query.split())
 
@@ -258,6 +261,22 @@ class SparqlTranslator:
         relationship_filter = SparqlTranslator._parse_relationship_filters(
             where_content, prefixes
         )
+
+        if SparqlTranslator._is_specialized_relationship_union_query(
+            patterns, relationship_filter, select_vars
+        ):
+            return SparqlTranslator._build_generic_triples_query(
+                entity_mappings,
+                select_vars,
+                is_distinct,
+                limit,
+                relationship_mappings,
+                None,
+                None,
+                None,
+                relationship_filter,
+                dialect=dialect,
+            )
 
         # Build SQL from patterns
         return SparqlTranslator._build_spark_sql(
@@ -1817,7 +1836,6 @@ class SparqlTranslator:
         var_to_table_alias,
         joined_entity_vars,
         from_tables,
-        optional_rel_conditions,
     ) -> bool:
         if not (
             pattern["subject_is_var"]
@@ -1847,9 +1865,11 @@ class SparqlTranslator:
         source_col = rel.get("subject_column")
         target_col = rel.get("object_column")
         if rel_sql and source_col and target_col:
-            rel_alias = (
-                f"optrel_{pattern['subject_var']}_{len(optional_rel_conditions)}"
+            rel_alias_prefix = f"optrel_{pattern['subject_var']}_"
+            rel_alias_index = sum(
+                1 for join_sql in from_tables if f" AS {rel_alias_prefix}" in join_sql
             )
+            rel_alias = f"{rel_alias_prefix}{rel_alias_index}"
             subject_id = subject_mapping.get("id_column", "id")
             object_id = object_mapping.get("id_column", "id")
             if pattern["object_var"] in joined_entity_vars:
@@ -1873,7 +1893,6 @@ class SparqlTranslator:
                 )
                 from_tables.append(join_clause)
                 logger.debug("Added optional relationship LEFT JOIN: %s", rel_alias)
-            optional_rel_conditions.append(f"{rel_alias}.{source_col} IS NOT NULL")
         return True
 
     @staticmethod
@@ -1887,7 +1906,6 @@ class SparqlTranslator:
         var_to_column,
         mappings,
         dialect,
-        optional_rel_conditions,
     ) -> None:
         pred_uri = pattern["predicate"]
         if not (relationship_mappings and pattern["object_is_var"]):
@@ -1940,8 +1958,6 @@ class SparqlTranslator:
                     "Mapped %s to raw column: %s.%s", obj_var, rel_alias, object_col
                 )
             from_tables.append(join_clause)
-            optional_rel_conditions.append(f"{rel_alias}.{subject_col} IS NOT NULL")
-            logger.debug("Added relationship to OR conditions: %s", rel_alias)
             target_entity_mapping = None
             for class_uri, class_mapping in mappings.items():
                 if class_mapping.get("id_column") == object_col or object_col.endswith(
@@ -2011,7 +2027,6 @@ class SparqlTranslator:
         is_distinct,
         from_tables,
         where_conditions,
-        optional_rel_conditions,
         limit,
     ) -> str:
         if not select_columns:
@@ -2033,12 +2048,6 @@ class SparqlTranslator:
         from_clause = ", ".join(main_tables)
         if join_clauses:
             from_clause += " " + " ".join(join_clauses)
-        if optional_rel_conditions:
-            or_condition = "(" + " OR ".join(optional_rel_conditions) + ")"
-            where_conditions.append(or_condition)
-            logger.debug(
-                "Added OR condition for optional relationships: %s", or_condition
-            )
         where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
         limit_clause = f"\nLIMIT {limit}" if limit else ""
         return f"""SELECT {distinct_str}{', '.join(select_columns)}
@@ -2125,6 +2134,31 @@ class SparqlTranslator:
             relationship_filter,
             dialect=dialect,
         )
+
+    @staticmethod
+    def _is_specialized_relationship_union_query(
+        patterns, relationship_filter, select_vars
+    ) -> bool:
+        """Detect specialized UNION+BIND relationship shape accepted by validator."""
+        if not relationship_filter or not patterns or not select_vars:
+            return False
+        if set(select_vars) != {"subject", "predicate", "object"}:
+            return False
+        allowed = set(relationship_filter)
+        for pattern in patterns:
+            if not (
+                pattern.get("subject_is_var")
+                and pattern.get("object_is_var")
+                and not pattern.get("predicate_is_var")
+            ):
+                return False
+            if pattern.get("subject_var") != "subject":
+                return False
+            if pattern.get("object_var") != "object":
+                return False
+            if pattern.get("predicate") not in allowed:
+                return False
+        return True
 
     @staticmethod
     def _spark_standard_init_graph_state(
@@ -2269,8 +2303,7 @@ class SparqlTranslator:
         joined_entity_vars,
         from_tables,
         var_to_column,
-    ) -> list:
-        optional_rel_conditions = []
+    ) -> None:
         for pattern in optional_patterns:
             if SparqlTranslator._spark_optional_entity_to_entity_left_joins(
                 pattern,
@@ -2279,7 +2312,6 @@ class SparqlTranslator:
                 var_to_table_alias,
                 joined_entity_vars,
                 from_tables,
-                optional_rel_conditions,
             ):
                 continue
             if pattern["subject_is_var"] and pattern["subject_var"] in var_to_mapping:
@@ -2304,9 +2336,7 @@ class SparqlTranslator:
                             var_to_column,
                             mappings,
                             dialect,
-                            optional_rel_conditions,
                         )
-        return optional_rel_conditions
 
     @staticmethod
     def _build_spark_sql(
@@ -2380,18 +2410,16 @@ class SparqlTranslator:
             where_conditions,
             rdf_type,
         )
-        optional_rel_conditions = (
-            SparqlTranslator._spark_standard_apply_optional_pattern_joins(
-                optional_patterns,
-                relationship_mappings,
-                mappings,
-                dialect,
-                var_to_mapping,
-                var_to_table_alias,
-                joined_entity_vars,
-                from_tables,
-                var_to_column,
-            )
+        SparqlTranslator._spark_standard_apply_optional_pattern_joins(
+            optional_patterns,
+            relationship_mappings,
+            mappings,
+            dialect,
+            var_to_mapping,
+            var_to_table_alias,
+            joined_entity_vars,
+            from_tables,
+            var_to_column,
         )
 
         select_columns = SparqlTranslator._spark_build_select_columns_list(
@@ -2402,7 +2430,6 @@ class SparqlTranslator:
             is_distinct,
             from_tables,
             where_conditions,
-            optional_rel_conditions,
             limit,
         )
         return {"success": True, "sql": sql, "variables": select_vars}

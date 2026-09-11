@@ -165,9 +165,13 @@ LIMIT 100
 
 **OntoBricks SPARQL-to-SQL Translation**:
 - `SparqlTranslator` (`src/back/core/w3c/sparql/SparqlTranslator.py`) implements the translator
+- `SparqlCapabilityValidator` (`src/back/core/w3c/sparql/SparqlCapabilityValidator.py`) enforces a fail-closed Spark subset before SQL generation
 - Parses SPARQL patterns (subject, predicate, object)
 - Maps patterns to table columns using R2RML mappings
 - Generates Spark SQL with JOINs, UNION ALL, and STACK functions
+- Supported Spark subset: `SELECT`/`SELECT *`, `DISTINCT`, `LIMIT`, basic graph patterns, `OPTIONAL` on supported patterns, string `FILTER` (`CONTAINS`, string equality, `STRSTARTS`, `STRENDS`), predicate `IN`, literal `BIND`, and the specialized relationship `UNION` shape
+- Rejected by design: `GROUP BY`, `HAVING`, `ORDER BY`, `OFFSET`, numeric/complex filters, property paths, subqueries, `MINUS`, `VALUES`, `SERVICE`, `GRAPH`, arbitrary `UNION`, and non-literal `BIND`
+- The local RDFLib path is not a warehouse-data fallback: it operates on mapping graphs, not Databricks source data
 
 ### 5. Query Processing Pipeline (inspired by SANSA)
 
