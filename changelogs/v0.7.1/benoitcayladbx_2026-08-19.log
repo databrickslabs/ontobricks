@@ -1,0 +1,46 @@
+## Align e2e Home / Explorer assertions with current UI
+
+Context: Explicit `pytest tests/e2e` (no auto-skip) failed three assertions
+left over from the old Home KPI/workflow-card layout and the Knowledge Graph
+sidebar rename to "Explorer".
+
+Changes:
+
+1. tests/e2e/dtwin/test_dtwin_flows.py
+   Accept "Explorer" as the sigmagraph sidebar label.
+2. tests/e2e/navigation/test_navigation_flows.py
+   Replace stale `.workflow-card` / `#classCount` checks with All Domains
+   gateway + New Domain CTA assertions.
+
+Modified files:
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/e2e/navigation/test_navigation_flows.py
+- changelogs/v0.7.1/benoitcayladbx_2026-08-19.log
+
+Tests: e2e `uv run --frozen pytest tests/e2e -q --ignore=tests/e2e/scenarios` → 258 passed in 118.78s; unit `uv run --frozen pytest -q -m "not scenario and not e2e and not live_integration"` → 4798 passed, 280 deselected, 1 xfailed in 33.98s
+
+## Fix temporal-predicate false positives (remove xfail)
+
+Context: `has_temporal_predicates` matched keywords as bare substrings, so
+short tokens like `dt` / `at` fired inside `assignedTo` / `locatedIn`. The
+suite carried a strict xfail for that false positive.
+
+Changes:
+
+1. src/back/core/graph_analysis/profiles.py
+   Match temporal keywords as whole camelCase / snake_case tokens.
+2. src/back/core/graph_analysis/models.py
+   Docstring aligned with token matching.
+3. tests/units/core/test_profiles.py
+   Drop `@pytest.mark.xfail`; cover `assignedTo` / `locatedIn` / `status`.
+4. documentation/user-guide.md
+   Temporal profile wording updated to token matching.
+
+Modified files:
+- src/back/core/graph_analysis/profiles.py
+- src/back/core/graph_analysis/models.py
+- tests/units/core/test_profiles.py
+- documentation/user-guide.md
+- changelogs/v0.7.1/benoitcayladbx_2026-08-19.log
+
+Tests: uv run --frozen pytest -q -m "not scenario and not e2e and not live_integration" → 4799 passed, 280 deselected, 23 warnings in 32.89s (0 xfailed)

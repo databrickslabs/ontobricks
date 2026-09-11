@@ -1,0 +1,45 @@
+## Fix MCP SP resolution + UC grants on first deploy (#137)
+
+Context: After `./scripts/deploy.sh` with instance-suffixed apps
+(`ontobricks-07x` / `mcp-ontobricks-07x`), Registry → Initialize looked up
+the bare `mcp-ontobricks` name and skipped MCP grants. Control-plane
+re-grants (`CAN_USE` / UC `ALL_PRIVILEGES`) also warned because the app SP
+lacks MANAGE, and UC catalog grants in `lakebase-perms.sh` ran only after
+the schema-existence guard — so a first deploy exited before granting them.
+
+Changes:
+
+1. src/back/core/databricks/lakebase/grants.py
+   Added `resolve_mcp_app_name` (`mcp-{APP_NAME}`, matching deploy.config.sh);
+   clarified CAN_USE / UC warning text to point at bootstrap instead of
+   implying privileges are missing.
+2. src/back/core/databricks/lakebase/__init__.py
+   Re-exported `resolve_mcp_app_name`.
+3. src/back/objects/domain/SettingsService.py
+   Registry + graph provision grant lists now use `resolve_mcp_app_name`.
+4. app.yaml.template
+   Inject `MCP_APP_NAME` into the running app env at deploy time.
+5. scripts/bootstrap/lakebase-perms.sh
+   Move UC catalog `ALL_PRIVILEGES` grants before the schema-existence
+   guard so first deploy still applies them.
+6. src/front/templates/settings.html
+   Clear hardcoded `mcp-ontobricks` default on the graph-provision MCP
+   field so blank derives `mcp-{main app}`.
+7. documentation/deployment.md
+   Document MCP naming, first-deploy UC grant timing, and why elevating
+   the app SP to CAN_MANAGE is the wrong fix.
+8. tests/units/settings/test_mcp_app_name_resolution.py
+   Unit coverage for MCP name derivation and registry grant app list.
+
+Modified files:
+- src/back/core/databricks/lakebase/grants.py
+- src/back/core/databricks/lakebase/__init__.py
+- src/back/objects/domain/SettingsService.py
+- app.yaml.template
+- scripts/bootstrap/lakebase-perms.sh
+- src/front/templates/settings.html
+- documentation/deployment.md
+- tests/units/settings/test_mcp_app_name_resolution.py
+- changelogs/v0.7.1/benoitcayladbx_2026-08-14.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4798 passed, 276 skipped, 5 deselected, 1 xfailed in 40.06s

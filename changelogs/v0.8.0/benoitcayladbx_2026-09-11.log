@@ -56,3 +56,45 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5859 passed, 304
 skipped, 6 deselected, 1 xfailed, 23 warnings in 45.37s.
+
+---
+
+## Resolve the v0.8.0 release merge conflicts
+
+Context: Pull request #165 from `develop` to `master` conflicted where the
+v0.7.1 release changed files that had newer v0.8.0 equivalents. The resolution
+preserves the v0.8.0 application, deployment, documentation, and legacy Neo4j
+secret-removal behavior while incorporating non-conflicting fixes from master.
+
+Changes:
+
+1. README.md, app.yaml.template, databricks.yml, pyproject.toml
+   Retain the v0.8.0 product version and current deployment configuration.
+2. scripts/bootstrap/lakebase-perms.sh
+   Retain the newer pgcrypto-aware registry initialization diagnostics.
+3. src/back/objects/domain/SettingsService.py
+   Retain the v0.8.0 Databricks permissions dependencies.
+4. tests/units/settings/test_deploy_app_rename_guard.py
+   Retain coverage proving the removed Neo4j secret is not rebound.
+5. src/back/core/graph_analysis/profiles.py, docs/user-guide.md
+   Incorporate master's temporal predicate token-boundary fix and documentation.
+6. releases/ReleaseNotes_V0.8.0.md
+   Record the post-merge test total with the former xfail now passing.
+
+Modified files:
+- README.md
+- app.yaml.template
+- databricks.yml
+- pyproject.toml
+- scripts/bootstrap/lakebase-perms.sh
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_deploy_app_rename_guard.py
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/profiles.py
+- tests/units/core/test_profiles.py
+- docs/user-guide.md
+- releases/ReleaseNotes_V0.8.0.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5860 passed, 304
+skipped, 6 deselected, 23 warnings in 46.12s.

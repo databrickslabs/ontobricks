@@ -1,7 +1,7 @@
 # OntoBricks — Release Notes V0.8.0
 
 **Release window:** August – September 2026<br>
-**Test status:** all changes shipped with the non-scenario suite green: 5859 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings.
+**Test status:** all changes shipped with the non-scenario suite green: 5860 passed, 304 skipped, 6 deselected, 23 warnings.
 
 ---
 
