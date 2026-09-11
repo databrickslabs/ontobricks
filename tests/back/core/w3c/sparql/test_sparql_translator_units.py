@@ -341,6 +341,47 @@ class TestCapabilityBoundaryOnPublicTranslator:
         assert "'http://ex/worksWith' AS predicate" in sql
         assert "'http://ex/manages' AS predicate" in sql
 
+    @pytest.mark.parametrize("predicate_var", ["predicate", "p", "pred"])
+    def test_accepts_predicate_in_aliases(
+        self, translator_entity_mappings, predicate_var
+    ):
+        query = (
+            "SELECT ?subject ?object WHERE { "
+            f"?subject ?{predicate_var} ?object . "
+            f"FILTER(?{predicate_var} IN (<http://ex/name>, <http://ex/age>)) "
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings)
+        assert result["success"] is True
+        assert result["sql"]
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            (
+                "PREFIX : <http://ex/> "
+                "SELECT ?s ?predicate ?o WHERE { "
+                "{ ?subject :worksWith ?object . BIND(:worksWith AS ?predicate) } "
+                "UNION "
+                "{ ?subject :manages ?object . BIND(:manages AS ?predicate) } "
+                "}"
+            ),
+            (
+                "PREFIX : <http://ex/> "
+                "SELECT ?subject ?p ?object WHERE { "
+                "{ ?subject :worksWith ?object . BIND(:worksWith AS ?predicate) } "
+                "UNION "
+                "{ ?subject :manages ?object . BIND(:manages AS ?predicate) } "
+                "}"
+            ),
+        ],
+    )
+    def test_rejects_non_specialized_relationship_union_with_capability_error(
+        self, translator_entity_mappings, translator_relationship_mappings, query
+    ):
+        with pytest.raises(ValidationError, match="UNION"):
+            _translate(query, translator_entity_mappings, translator_relationship_mappings)
+
 
 @pytest.mark.unit
 class TestOptionalRelationshipSemantics:

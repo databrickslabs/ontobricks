@@ -137,3 +137,47 @@ Tests:
 - `uv run --frozen ruff check src/back/core/w3c/sparql/SparqlCapabilityValidator.py src/back/core/w3c/sparql/SparqlTranslator.py` -> failed with 7 findings, all pre-existing in `SparqlTranslator.py` (`UP045`, `F541`, `W291`, `B007` x4); no feature-introduced lint findings remain
 - `uv run --frozen pytest -q tests/back/core/w3c/sparql` -> 57 passed, 1 warning
 - `uv run --frozen pytest -q -m "not scenario"` -> 5896 passed, 304 skipped, 6 deselected, 32 warnings
+
+## Apply final-review hardenings before port
+
+Context:
+Applied the two actionable final-review hardenings requested for branch/worktree
+`0.8.1` before porting: keep translator-compatible predicate-IN aliases accepted
+by the validator, and tighten specialized relationship-UNION validation so
+non-specialized UNION shapes fail at capability validation time (instead of
+failing later with unrelated mapping errors). Work was done test-first with
+explicit RED then GREEN verification.
+
+Changes:
+
+1. `tests/back/core/w3c/sparql/test_sparql_capability_validator.py`
+   Added positive tests for `FILTER(?predicate|?p|?pred IN (...))` URI lists and
+   added negative tests proving non-specialized UNION variants are rejected with
+   the `UNION` capability error.
+2. `tests/back/core/w3c/sparql/test_sparql_translator_units.py`
+   Added public-translator positive tests for `predicate/p/pred` IN aliases and
+   added negative tests proving unsupported non-specialized UNION shapes raise
+   capability `ValidationError` containing `UNION`.
+3. `src/back/core/w3c/sparql/SparqlCapabilityValidator.py`
+   Extended allowed IN-variable aliases to `predicate`, `p`, and `pred`; carried
+   projected SELECT variables through validation traversal; and tightened UNION
+   acceptance to the translator-compatible specialized shape only
+   (`SELECT ?subject ?predicate ?object` plus branch variable naming
+   `?subject ... ?object` with `BIND(... AS ?predicate)`).
+4. `src/back/core/w3c/sparql/SparqlTranslator.py`
+   Tightened `_is_specialized_relationship_union_query` to require exact branch
+   variable naming (`subject`, `object`) in addition to existing projected
+   variables and predicate constraints, keeping validator and translator aligned.
+
+Modified files:
+- src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- tests/back/core/w3c/sparql/test_sparql_capability_validator.py
+- tests/back/core/w3c/sparql/test_sparql_translator_units.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-11.log
+
+Tests:
+- `uv run --frozen pytest -q tests/back/core/w3c/sparql/test_sparql_capability_validator.py tests/back/core/w3c/sparql/test_sparql_translator_units.py` (RED phase) -> 9 failed, 59 passed (expected before fixes)
+- `uv run --frozen pytest -q tests/back/core/w3c/sparql/test_sparql_capability_validator.py tests/back/core/w3c/sparql/test_sparql_translator_units.py` (GREEN phase) -> 68 passed, 1 warning
+- `uv run --frozen ruff check src/back/core/w3c/sparql/SparqlCapabilityValidator.py src/back/core/w3c/sparql/SparqlTranslator.py tests/back/core/w3c/sparql/test_sparql_capability_validator.py tests/back/core/w3c/sparql/test_sparql_translator_units.py` -> failed with 7 findings, all pre-existing in `SparqlTranslator.py` (`UP045`, `F541`, `W291`, `B007` x4)
+- `uv run --frozen pytest -q -m "not scenario"` -> 5907 passed, 304 skipped, 6 deselected, 32 warnings

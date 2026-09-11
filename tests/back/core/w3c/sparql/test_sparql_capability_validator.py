@@ -72,6 +72,17 @@ def test_accepts_supported_filter_shapes(query: str) -> None:
     SparqlCapabilityValidator.validate(query)
 
 
+@pytest.mark.parametrize("predicate_var", ["predicate", "p", "pred"])
+def test_accepts_supported_predicate_in_aliases(predicate_var: str) -> None:
+    query = (
+        "SELECT ?s ?o WHERE { "
+        f"?s ?{predicate_var} ?o "
+        f"FILTER(?{predicate_var} IN (<http://ex/p>, <http://ex/q>)) "
+        "}"
+    )
+    SparqlCapabilityValidator.validate(query)
+
+
 def test_accepts_specialized_relationship_union_shape() -> None:
     query = (
         "SELECT ?subject ?predicate ?object WHERE { "
@@ -130,4 +141,41 @@ def test_accepts_specialized_relationship_union_shape() -> None:
 )
 def test_rejects_unsupported_constructs(query: str, feature: str) -> None:
     with pytest.raises(ValidationError, match=feature):
+        SparqlCapabilityValidator.validate(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        (
+            "SELECT ?s ?predicate ?o WHERE { "
+            "{ ?subject <http://ex/worksWith> ?object . "
+            "BIND(<http://ex/worksWith> AS ?predicate) } "
+            "UNION "
+            "{ ?subject <http://ex/manages> ?object . "
+            "BIND(<http://ex/manages> AS ?predicate) } "
+            "}"
+        ),
+        (
+            "SELECT ?subject ?p ?object WHERE { "
+            "{ ?subject <http://ex/worksWith> ?object . "
+            "BIND(<http://ex/worksWith> AS ?predicate) } "
+            "UNION "
+            "{ ?subject <http://ex/manages> ?object . "
+            "BIND(<http://ex/manages> AS ?predicate) } "
+            "}"
+        ),
+        (
+            "SELECT ?subject ?predicate ?object WHERE { "
+            "{ ?s <http://ex/worksWith> ?o . "
+            "BIND(<http://ex/worksWith> AS ?predicate) } "
+            "UNION "
+            "{ ?s <http://ex/manages> ?o . "
+            "BIND(<http://ex/manages> AS ?predicate) } "
+            "}"
+        ),
+    ],
+)
+def test_rejects_non_specialized_relationship_union_variants(query: str) -> None:
+    with pytest.raises(ValidationError, match="UNION"):
         SparqlCapabilityValidator.validate(query)

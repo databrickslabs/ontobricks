@@ -38,31 +38,37 @@ class SparqlCapabilityValidator:
         cls._validate_node(algebra)
 
     @classmethod
-    def _validate_node(cls, node) -> None:
+    def _validate_node(
+        cls, node, projected_vars: set[str] | None = None
+    ) -> None:
         if isinstance(node, CompValue):
-            cls._validate_comp_value(node)
+            cls._validate_comp_value(node, projected_vars)
             return
         if isinstance(node, (list, tuple, set)):
             for child in node:
-                cls._validate_node(child)
+                cls._validate_node(child, projected_vars)
 
     @classmethod
-    def _validate_comp_value(cls, node: CompValue) -> None:
+    def _validate_comp_value(
+        cls, node: CompValue, projected_vars: set[str] | None = None
+    ) -> None:
         name = node.name
         if name == "SelectQuery":
-            cls._validate_node(node.get("p"))
+            next_projected = cls._projected_vars_from_node(node.get("PV")) or projected_vars
+            cls._validate_node(node.get("p"), next_projected)
             return
         if name == "Project":
-            cls._validate_node(node.get("p"))
+            next_projected = cls._projected_vars_from_node(node.get("PV")) or projected_vars
+            cls._validate_node(node.get("p"), next_projected)
             return
         if name == "Distinct":
-            cls._validate_node(node.get("p"))
+            cls._validate_node(node.get("p"), projected_vars)
             return
         if name == "Slice":
             start = node.get("start")
             if start not in (None, 0):
                 cls._unsupported("OFFSET")
-            cls._validate_node(node.get("p"))
+            cls._validate_node(node.get("p"), projected_vars)
             return
         if name == "BGP":
             cls._validate_bgp(node)
@@ -74,13 +80,13 @@ class SparqlCapabilityValidator:
                 or (isinstance(expr, CompValue) and expr.name == "TrueFilter")
             ):
                 cls._unsupported("unsupported SPARQL construct")
-            cls._validate_node(node.get("p1"))
-            cls._validate_node(node.get("p2"))
+            cls._validate_node(node.get("p1"), projected_vars)
+            cls._validate_node(node.get("p2"), projected_vars)
             return
         if name == "Filter":
             if not cls._is_allowed_filter_expr(node.get("expr")):
                 cls._unsupported(cls._unsupported_filter_feature(node.get("expr")))
-            cls._validate_node(node.get("p"))
+            cls._validate_node(node.get("p"), projected_vars)
             return
         if name == "Join":
             cls._unsupported(cls._join_feature(node))
@@ -94,10 +100,10 @@ class SparqlCapabilityValidator:
                 cls._unsupported("GROUP BY")
             if not isinstance(expr, Literal):
                 cls._unsupported("non-literal BIND")
-            cls._validate_node(parent)
+            cls._validate_node(parent, projected_vars)
             return
         if name == "Union":
-            cls._validate_union(node)
+            cls._validate_union(node, projected_vars)
             return
         if name == "ToMultiSet":
             inner = node.get("p")
@@ -152,7 +158,11 @@ class SparqlCapabilityValidator:
             return cls._is_str_var(left) and isinstance(right, Literal)
 
         if op == "IN":
-            return isinstance(left, Variable) and str(left) == "predicate" and cls._all_uris(right)
+            return (
+                isinstance(left, Variable)
+                and str(left) in {"predicate", "p", "pred"}
+                and cls._all_uris(right)
+            )
 
         return False
 
@@ -187,13 +197,28 @@ class SparqlCapabilityValidator:
         return "complex FILTER"
 
     @classmethod
-    def _validate_union(cls, node: CompValue) -> None:
+    def _validate_union(
+        cls, node: CompValue, projected_vars: set[str] | None
+    ) -> None:
         branches = cls._collect_union_branches(node)
         if not branches:
+            cls._unsupported("UNION")
+        if projected_vars != {"subject", "predicate", "object"}:
             cls._unsupported("UNION")
         for branch in branches:
             if not cls._is_allowed_relationship_union_branch(branch):
                 cls._unsupported("UNION")
+
+    @staticmethod
+    def _projected_vars_from_node(projected_vars_node) -> set[str] | None:
+        if not isinstance(projected_vars_node, list):
+            return None
+        names = set()
+        for var in projected_vars_node:
+            if not isinstance(var, Variable):
+                return None
+            names.add(str(var))
+        return names
 
     @classmethod
     def _join_feature(cls, node: CompValue) -> str:
@@ -244,6 +269,8 @@ class SparqlCapabilityValidator:
         if isinstance(predicate, Path):
             return False
         if not isinstance(subject, Variable) or not isinstance(obj, Variable):
+            return False
+        if str(subject) != "subject" or str(obj) != "object":
             return False
         if not isinstance(predicate, URIRef):
             return False

@@ -2150,6 +2150,10 @@ class SparqlTranslator:
                 and not pattern.get("predicate_is_var")
             ):
                 return False
+            if pattern.get("subject_var") != "subject":
+                return False
+            if pattern.get("object_var") != "object":
+                return False
             if pattern.get("predicate") not in allowed:
                 return False
         return True
