@@ -47,6 +47,7 @@ def test_filter_expand_uses_single_statement_capability():
     assert result["initial_count"] == 1
     assert result["expanded_count"] == 2
     assert result["phase"] == "expand"
+    assert result["columns"] == ["subject", "predicate", "object"]
 
 
 def test_filter_expand_disables_traversal_when_relationships_are_excluded():

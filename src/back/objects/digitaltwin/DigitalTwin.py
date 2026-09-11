@@ -3591,6 +3591,7 @@ class DigitalTwin:
             return {
                 "phase": "expand",
                 **payload,
+                "columns": ["subject", "predicate", "object"],
                 "initial_count": initial_count,
             }
 
