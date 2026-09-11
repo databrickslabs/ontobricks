@@ -8,6 +8,7 @@ volume management).
 import requests
 from databricks import sql
 from typing import Any, Dict, List
+from urllib.parse import quote
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
@@ -36,6 +37,19 @@ class UnityCatalog:
     def _require_warehouse(self) -> None:
         if not self._auth.warehouse_id:
             raise ValidationError(MSG_WAREHOUSE_ID_REQUIRED)
+
+    @staticmethod
+    def _normalize_privilege_name(value: Any) -> str:
+        """Normalize UC privilege spellings from REST payloads.
+
+        Intentionally duplicated with the pure evaluator in
+        ``back.core.graphdb.delta.health`` so each layer can normalize input
+        without introducing a cross-module dependency through the REST boundary.
+        """
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        return raw.replace("_", " ").upper()
 
     def get_catalogs(self) -> List[str]:
         """Return the names of all accessible catalogs."""
@@ -141,8 +155,11 @@ class UnityCatalog:
         actions. Returns an empty list on error.
 
         Each dict has ``name``, ``full_name``, ``comment``, ``input_params``
-        (parameter names in declaration order), ``param_count`` and
-        ``returns_table`` (True for table-valued functions).
+        (parameter names in declaration order), ``param_count``,
+        ``returns_table`` (True for table-valued functions), ``return_type``
+        and ``return_columns``: the ``RETURNS TABLE`` result columns in
+        declaration order, each ``{"name", "data_type"}``. A scalar function
+        has an empty ``return_columns`` and its type in ``return_type``.
         """
         catalog_q = quote_uc_identifier(catalog, role="catalog")
         try:
@@ -171,6 +188,9 @@ class UnityCatalog:
                 with conn.cursor() as cur:
                     cur.execute(query, (schema,))
                     rows = cur.fetchall()
+                    return_columns = self._fetch_return_columns(
+                        cur, catalog_q, schema
+                    )
         except Exception as exc:
             logger.exception("Error listing functions: %s", exc)
             return []
@@ -181,6 +201,8 @@ class UnityCatalog:
             if not name:
                 continue
             input_params = [p for p in (row[3] or "").split(",") if p]
+            data_type = str(row[1] or "").strip()
+            returns_table = data_type.upper() == "TABLE_TYPE"
             functions.append(
                 {
                     "name": name,
@@ -188,10 +210,62 @@ class UnityCatalog:
                     "comment": row[2] or "",
                     "input_params": input_params,
                     "param_count": len(input_params),
-                    "returns_table": str(row[1] or "").upper() == "TABLE_TYPE",
+                    "returns_table": returns_table,
+                    "return_type": "TABLE" if returns_table else data_type,
+                    "return_columns": (
+                        return_columns.get(name, []) if returns_table else []
+                    ),
                 }
             )
         return functions
+
+    @staticmethod
+    def _fetch_return_columns(
+        cur: Any, catalog_q: str, schema: str
+    ) -> Dict[str, List[Dict[str, str]]]:
+        """Return the ``RETURNS TABLE`` columns of each function in *schema*.
+
+        Result columns live in ``routine_columns``, not in ``parameters``:
+        Databricks only lists the declared arguments there, so a table function
+        contributes no row for what it returns. Hence a second statement, which
+        also avoids the row multiplication a single join of arguments and
+        result columns would cause.
+
+        Soft-fails to an empty mapping: the action picker only needs the input
+        parameter count, so a metastore that cannot answer this must not cost
+        the caller its function list.
+        """
+        query = f"""
+            SELECT r.routine_name, c.column_name, c.full_data_type
+            FROM {catalog_q}.information_schema.routines r
+            JOIN {catalog_q}.information_schema.routine_columns c
+                   ON  c.specific_catalog = r.specific_catalog
+                   AND c.specific_schema  = r.specific_schema
+                   AND c.specific_name    = r.specific_name
+            WHERE r.routine_schema = ?
+            ORDER BY r.routine_name, c.ordinal_position
+        """
+        try:
+            cur.execute(query, (schema,))
+            rows = cur.fetchall()
+        except Exception as exc:  # noqa: BLE001 — soft-fail is the contract
+            logger.warning(
+                "list_functions: could not read return columns of %s: %s",
+                schema,
+                exc,
+            )
+            return {}
+
+        columns: Dict[str, List[Dict[str, str]]] = {}
+        for row in rows:
+            routine = (row[0] or "").strip()
+            col_name = (row[1] or "").strip()
+            if not routine or not col_name:
+                continue
+            columns.setdefault(routine, []).append(
+                {"name": col_name, "data_type": str(row[2] or "").strip()}
+            )
+        return columns
 
     def probe_schema_has_tables(self, catalog: str, schema: str) -> int:
         """Return the number of tables in *catalog*.*schema* via information_schema.
@@ -207,7 +281,7 @@ class UnityCatalog:
                 with conn.cursor() as cur:
                     cur.execute(
                         f"SELECT count(*) FROM {catalog_q}.information_schema.tables "
-                        "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
+                        "WHERE table_schema = ? AND table_type = 'BASE TABLE'",
                         (schema_val,),
                     )
                     row = cur.fetchone()
@@ -280,11 +354,14 @@ class UnityCatalog:
             params = self._auth.get_sql_connection_params()
             with sql.connect(**params) as conn:
                 with conn.cursor() as cur:
+                    # Databricks SQL Connector (use_inline_params=False) only
+                    # rewrites qmark ``?`` placeholders — pyformat ``%s`` is
+                    # sent to the warehouse verbatim and raises PARSE_SYNTAX_ERROR.
                     query = (
                         f"SELECT comment FROM {catalog_q}.information_schema.tables "
-                        "WHERE table_catalog = %s "
-                        "AND table_schema = %s "
-                        "AND table_name = %s"
+                        "WHERE table_catalog = ? "
+                        "AND table_schema = ? "
+                        "AND table_name = ?"
                     )
                     cur.execute(query, (catalog_val, schema_val, table_val))
                     row = cur.fetchone()
@@ -324,6 +401,85 @@ class UnityCatalog:
         except Exception as exc:
             logger.exception("Error listing volumes: %s", exc)
             return []
+
+    def get_effective_schema_permissions(
+        self, catalog: str, schema: str, principal: str
+    ) -> Dict[str, Any]:
+        """Return effective schema privileges for one principal."""
+        if not self._auth.host or not self._auth.has_valid_auth():
+            return {
+                "accessible": False,
+                "assignments": [],
+                "error": "Not authenticated",
+            }
+
+        host = self._auth.host.rstrip("/")
+        headers = self._auth.get_auth_headers()
+        catalog_name = validate_uc_identifier(catalog, role="catalog")
+        schema_name = validate_uc_identifier(schema, role="schema")
+        schema_fqn_path = quote(f"{catalog_name}.{schema_name}", safe=".")
+        url = (
+            f"{host}/api/2.1/unity-catalog/effective-permissions/"
+            f"SCHEMA/{schema_fqn_path}"
+        )
+        response = requests.get(
+            url, headers=headers, params={"principal": principal}, timeout=10
+        )
+        if response.status_code == 404:
+            return {
+                "accessible": False,
+                "assignments": [],
+                "error": "Schema not found in Unity Catalog",
+            }
+        if response.status_code == 403:
+            return {
+                "accessible": False,
+                "assignments": [],
+                "error": "Insufficient privileges to inspect effective schema permissions",
+            }
+        response.raise_for_status()
+
+        payload = response.json() if response.content else {}
+        raw_assignments = payload.get("privilege_assignments", []) or []
+        if isinstance(raw_assignments, dict):
+            raw_assignments = [raw_assignments]
+
+        assignments: List[Dict[str, str]] = []
+        for entry in raw_assignments:
+            if not isinstance(entry, dict):
+                continue
+            entry_principal = str(entry.get("principal") or "").strip()
+            if not entry_principal or entry_principal != principal:
+                continue
+
+            raw_privileges = entry.get("privileges", []) or []
+            if isinstance(raw_privileges, (str, dict)):
+                raw_privileges = [raw_privileges]
+
+            for priv in raw_privileges:
+                inherited_from = ""
+                privilege_name = ""
+                if isinstance(priv, dict):
+                    privilege_name = self._normalize_privilege_name(
+                        priv.get("privilege") or priv.get("privilege_name")
+                    )
+                    inherited_from = str(
+                        priv.get("inherited_from_name")
+                        or priv.get("inherited_from")
+                        or ""
+                    ).strip()
+                elif isinstance(priv, str):
+                    privilege_name = self._normalize_privilege_name(priv)
+                if not privilege_name:
+                    continue
+                assignments.append(
+                    {
+                        "privilege": privilege_name,
+                        "inherited_from": inherited_from,
+                    }
+                )
+
+        return {"accessible": True, "assignments": assignments, "error": None}
 
     def check_schema_access(self, catalog: str, schema: str) -> Dict[str, Any]:
         """Check whether *catalog*.*schema* exists and the caller has USE SCHEMA on it.

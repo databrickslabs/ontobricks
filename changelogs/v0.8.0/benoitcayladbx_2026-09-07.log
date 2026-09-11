@@ -1,0 +1,112 @@
+## Allow Unity Catalog table names that start with a digit
+
+Context: Loading Data Sources failed with `Invalid UC table: '5_g_subscribers'`
+because the SQL-injection identifier guard required a leading letter or
+underscore. Unity Catalog allows digit-leading names when they are
+backtick-quoted, which OntoBricks already does. The whitelist now accepts a
+leading digit while still rejecting `;`, `--`, quotes, and whitespace.
+
+Changes:
+
+1. src/back/core/databricks/uc/identifiers.py
+   Allow catalog/schema/table segments to start with a digit.
+2. src/back/core/graphdb/lakebase/_sync_uc_schema.py
+   Align the Lakebase UC schema-segment regex with the same rule.
+3. tests/units/core/test_uri_sql_helpers.py
+   Regression tests for `5_g_subscribers` validation and quoted FQN.
+
+Modified files:
+- src/back/core/databricks/uc/identifiers.py
+- src/back/core/graphdb/lakebase/_sync_uc_schema.py
+- tests/units/core/test_uri_sql_helpers.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5852 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.09s.
+
+## Document the 0.8 deployment upgrade path
+
+Context: OntoBricks 0.8 needs an explicit operator path for both fresh
+installations and in-place upgrades from 0.7.x. The existing additive SQL
+migration was verified against the canonical registry schema and automatic
+Lakebase bootstrap, while deployment documentation was aligned with the live
+two-app deploy behavior.
+
+Changes:
+
+1. update_to_0.8.md
+   Add the English fresh-install and 0.7.x upgrade guide, including backup,
+   automatic and manual migration, verification, rollback, and troubleshooting.
+2. README.md
+   Link existing 0.7.x operators to the 0.8 update guide.
+3. docs/deployment.md
+   Correct MCP startup and generated `app.yaml` instructions and document the
+   in-place updater.
+4. scripts/update-deployed-app.sh
+   Document the v0.8 `domains.mcp_policy` migration in the automatic SQL step.
+5. tests/units/scripts/test_lakebase_preflight.py
+   Verify that the canonical schema, standalone migration, bootstrap, and
+   updater stay aligned on the transactional 0.8 MCP policy change.
+6. docs/superpowers/plans/2026-09-07-update-to-0.8.md
+   Record the reviewed implementation and verification plan.
+
+Modified files:
+- update_to_0.8.md
+- README.md
+- docs/deployment.md
+- scripts/update-deployed-app.sh
+- tests/units/scripts/test_lakebase_preflight.py
+- docs/superpowers/plans/2026-09-07-update-to-0.8.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5853 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 43.97s.
+
+## Document deploy.config.sh backup on the 0.8 upgrade path
+
+Context: The 0.8 upgrade guide only copied `scripts/deploy.config.sh` in a
+one-liner. Pulling 0.8 overwrites local defaults (`DEFAULT_INSTANCE_ID=08x`),
+which would create new apps instead of upgrading the live 0.7.x instance.
+
+Changes:
+
+1. update_to_0.8.md
+   Spell out backup, restore-after-checkout, keep the live instance knobs,
+   and restore the file on rollback.
+2. docs/deployment.md
+   Point the Updating section at that `deploy.config.sh` backup/restore step.
+
+Modified files:
+- update_to_0.8.md
+- docs/deployment.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5853 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 44.79s.
+
+## Stop publishing local-only docs trees to GitHub
+
+Context: `docs/sphinx/`, `docs/superpowers/`, and `docs/pr47-neo4j-demo/` were
+git-tracked and therefore published. They stay on disk for local work but must
+not sync to GitHub. Databricks DAB already excluded them from the app payload.
+
+Changes:
+
+1. .gitignore
+   Ignore the three local-only docs trees.
+2. git index (`git rm -r --cached`)
+   Untrack the trees without deleting working-copy files.
+3. src/front/templates/settings.html
+   Point the Neo4j setup-guide link at tracked `docs/neo4j-requirements.md`.
+4. docs/neo4j-requirements.md
+   Drop the GitHub-facing pointer at the unpublished demo pack.
+5. docs/deployment.md
+   Route Neo4j secret-setup references to `docs/neo4j-requirements.md`.
+6. docs/README.md
+   Note that Sphinx sources are local-only.
+7. .cursor/07-project-conventions.mdc
+   Note that `docs/superpowers/` is gitignored.
+
+Modified files:
+- .gitignore
+- src/front/templates/settings.html
+- docs/neo4j-requirements.md
+- docs/deployment.md
+- docs/README.md
+- .cursor/07-project-conventions.mdc
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5853 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.02s

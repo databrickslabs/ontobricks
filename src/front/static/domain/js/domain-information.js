@@ -5,6 +5,47 @@
 
 let currentDomainFolder = null;
 
+// The hidden select remains the single persistence-compatible value source.
+// Native radio cards mirror it and dispatch its existing change pipeline.
+function syncGraphBackendCards() {
+    const backendSelect = document.getElementById('domainGraphBackend');
+    if (!backendSelect) return;
+    document.querySelectorAll('.domain-backend-option').forEach(option => {
+        option.checked = option.value === backendSelect.value;
+    });
+}
+
+function syncGraphBackendCardEditability() {
+    const backendSelect = document.getElementById('domainGraphBackend');
+    if (!backendSelect) return;
+    const readOnly = [
+        'read-only-version',
+        'role-viewer',
+        'read-only-locked'
+    ].some(className => document.body.classList.contains(className));
+    document.querySelectorAll('.domain-backend-option').forEach(option => {
+        option.disabled = readOnly || backendSelect.disabled;
+    });
+}
+
+function initGraphBackendCards() {
+    const backendSelect = document.getElementById('domainGraphBackend');
+    if (!backendSelect) return;
+    document.querySelectorAll('.domain-backend-option').forEach(option => {
+        option.addEventListener('change', () => {
+            if (!option.checked) return;
+            backendSelect.value = option.value;
+            backendSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+    syncGraphBackendCards();
+    syncGraphBackendCardEditability();
+    new MutationObserver(syncGraphBackendCardEditability).observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class']
+    });
+}
+
 // Show the Neo4j connection selector only when the backend is Neo4j.
 function toggleNeo4jDatabaseSection() {
     const backend = (document.getElementById('domainGraphBackend') || {}).value;
@@ -18,6 +59,42 @@ function syncNeo4jConnectionSection() {
     toggleNeo4jDatabaseSection();
     const backend = (document.getElementById('domainGraphBackend') || {}).value;
     if (backend === 'neo4j') loadNeo4jDatabases();
+}
+
+// Show the materialization picker only for Lakehouse: it is the one backend
+// whose ..._data relation can be a view rather than a copy.
+function toggleLakehouseMaterializationSection() {
+    const backend = (document.getElementById('domainGraphBackend') || {}).value;
+    const section = document.getElementById('lakehouseMaterializationSection');
+    if (!section) return;
+    section.classList.toggle('d-none', backend !== 'databricks');
+}
+
+// A "No Backend" domain is ontology-only: every graph MCP tool is unchecked
+// and locked, and the explanatory notice is revealed. Switching back to a real
+// backend re-enables (and re-checks) the graph tools to their default state.
+function applyGraphlessConstraints() {
+    const backend = (document.getElementById('domainGraphBackend') || {}).value;
+    const graphless = backend === 'none';
+    syncGraphBackendCards();
+
+    const notice = document.getElementById('noBackendNotice');
+    if (notice) notice.classList.toggle('d-none', !graphless);
+
+    [
+        'graphBackendMigrationNotice',
+        'dualKnowledgeGraphSection',
+        'tripleStoreGatewaySection'
+    ].forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (section) section.classList.toggle('d-none', graphless);
+    });
+
+    document.querySelectorAll('.js-mcp-tool[data-requires-graph="true"]').forEach(el => {
+        el.disabled = graphless;
+        el.checked = !graphless;
+    });
+    if (typeof syncMcpSelectAll === 'function') syncMcpSelectAll();
 }
 
 // Populate the Neo4j connection dropdown from Settings named connections.
@@ -389,6 +466,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (graphBackendEl) {
             graphBackendEl.addEventListener('change', refreshDtNamesFromForm);
             graphBackendEl.addEventListener('change', syncNeo4jConnectionSection);
+            graphBackendEl.addEventListener('change', toggleLakehouseMaterializationSection);
+            graphBackendEl.addEventListener('change', applyGraphlessConstraints);
             graphBackendEl.addEventListener('change', () => {
                 graphBackendEl.dataset.userEdited = '1';
             });
@@ -398,7 +477,16 @@ document.addEventListener('DOMContentLoaded', async function() {
                 neo4jDbElInit.dataset.userEdited = '1';
             });
         }
+        const materializationElInit = document.getElementById('domainLakehouseMaterialization');
+        if (materializationElInit) {
+            materializationElInit.addEventListener('change', () => {
+                materializationElInit.dataset.userEdited = '1';
+            });
+        }
+        initGraphBackendCards();
         syncNeo4jConnectionSection();
+        toggleLakehouseMaterializationSection();
+        applyGraphlessConstraints();
         const refreshDbBtn = document.getElementById('btnRefreshNeo4jDatabases');
         if (refreshDbBtn) {
             refreshDbBtn.addEventListener('click', () => loadNeo4jDatabases(true));
@@ -416,6 +504,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             // whether this is the latest version. Older DRAFT versions edit.
             const editable = (statusData.status || 'DRAFT') === 'DRAFT';
             updateVersionStatusUI(editable, statusData.version, statusData.has_registry);
+            syncGraphBackendCardEditability();
             populateVersionDropdown(statusData.available_versions, statusData.version);
             const sf = statusData.domain_folder || statusData.project_folder;
             if (sf) {
@@ -439,6 +528,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (graphBackendEl && !graphBackendEl.dataset.userEdited
                     && infoData.info && infoData.info.graph_backend) {
                 graphBackendEl.value = infoData.info.graph_backend;
+                syncGraphBackendCards();
             }
             const neo4jDbEl = document.getElementById('domainNeo4jDatabase');
             if (neo4jDbEl && !neo4jDbEl.dataset.userEdited
@@ -450,12 +540,20 @@ document.addEventListener('DOMContentLoaded', async function() {
                 neo4jDbEl.value = saved;
                 neo4jDbEl.dataset.savedValue = saved;
             }
+            const materializationEl = document.getElementById('domainLakehouseMaterialization');
+            if (materializationEl && !materializationEl.dataset.userEdited
+                    && infoData.info && infoData.info.lakehouse_materialization) {
+                materializationEl.value = infoData.info.lakehouse_materialization;
+                materializationEl.dataset.savedValue = infoData.info.lakehouse_materialization;
+            }
             // Runs after the saved value is known, so the freshly fetched
             // option list keeps it selected. Safe even when the user already
             // edited the field: it reads the select's *current* value first
             // (see `_loadNeo4jConnectionOptions`) and only falls back to
             // `dataset.savedValue` when the select has nothing of its own.
             syncNeo4jConnectionSection();
+            toggleLakehouseMaterializationSection();
+            applyGraphlessConstraints();
         }
 
         // The DT panel reads catalog/schema from the dropdown rendering of

@@ -1,0 +1,35 @@
+## Fix silent failure in lakebase-perms.sh credential minting (PR #156 review)
+Context: PR #156 replaced the broken `databricks api post
+/api/2.0/postgres/credentials` call with `databricks postgres
+generate-database-credential`, but review feedback identified two
+remaining gaps: (1) the subcommand's output format is not guaranteed to
+be JSON without `--output json` — the CLI defaults to text/table unless
+the user's local config or DATABRICKS_OUTPUT_FORMAT already forces JSON,
+so the same silent JSONDecodeError death could recur on a differently
+configured machine; (2) the credential-minting call still had no error
+handling — a CLI failure (non-zero exit) or an unparseable response
+produced no diagnostic output at all, just a bare exit 1.
+Changes:
+1. scripts/bootstrap/lakebase-perms.sh
+   Added `--output json` to force JSON output explicitly. Captured
+   stdout+stderr from the CLI call and check its exit status directly
+   rather than only checking whether PGPASSWORD ended up empty. On CLI
+   failure or unparseable JSON, print the actual CLI error text before
+   calling _lakebase_print_diag_hints and exiting 1. Updated the
+   preceding comment to reference the current `postgres
+   generate-database-credential` subcommand (verified on CLI 1.14.1+)
+   instead of the legacy Autoscaling REST API description.
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- changelogs/v0.8.0/lrubakhin_2026-09-01.log
+Tests: Manual verification on Windows 11 (Git Bash / MINGW64, Databricks
+CLI v1.14.1), against develop branch:
+- Happy path: `bash scripts/bootstrap/lakebase-perms.sh -i ontobricks-db
+  -b production -d ontobricks_registry -s ontobricks_registry -a "" -a
+  ""` — completes successfully, applies schema migrations, skips
+  permission grants for non-existent apps as expected.
+- Failure path: temporarily forced ENDPOINT_PATH to a nonexistent
+  endpoint and re-ran — before this fix, silent exit 1 with zero output;
+  after this fix, prints "ERROR: Failed to mint a Lakebase JWT..." plus
+  the CLI's actual error text ("Error: Endpoint '...' not found") plus
+  full diagnostic hints, then exits 1.

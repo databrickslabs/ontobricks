@@ -123,7 +123,49 @@ class TestRegistryCfgFromDomain:
         domain = _make_domain(
             registry={"catalog": "s_cat", "schema": "s_sch", "volume": "s_vol"}
         )
-        settings = _make_settings()
+        settings = _make_settings(
+            registry_catalog="", registry_schema="", registry_volume=""
+        )
+        c = RegistryCfg.from_domain(domain, settings)
+        assert c.catalog == "s_cat"
+        assert c.schema == "s_sch"
+        assert c.volume == "s_vol"
+
+    def test_settings_override_legacy_session_registry(self, monkeypatch):
+        """Configured env must beat the seeded session ``OntoBricksRegistry``."""
+        self._patch_no_lakebase_row(monkeypatch)
+        domain = _make_domain(
+            registry={
+                "catalog": "",
+                "schema": "",
+                "volume": "OntoBricksRegistry",
+            }
+        )
+        settings = _make_settings(
+            registry_catalog="wl_internal",
+            registry_schema="ontobricks_registry",
+            registry_volume="ontology",
+        )
+        c = RegistryCfg.from_domain(
+            domain, settings, prefer_volume_binding=True
+        )
+        assert c.catalog == "wl_internal"
+        assert c.schema == "ontobricks_registry"
+        assert c.volume == "ontology"
+
+    def test_custom_session_volume_survives_default_settings_volume(
+        self, monkeypatch
+    ):
+        """Pydantic default ``OntoBricksRegistry`` must not hide a UI volume."""
+        self._patch_no_lakebase_row(monkeypatch)
+        domain = _make_domain(
+            registry={"catalog": "s_cat", "schema": "s_sch", "volume": "s_vol"}
+        )
+        settings = _make_settings(
+            registry_catalog="",
+            registry_schema="",
+            registry_volume=_DEFAULT_VOLUME,
+        )
         c = RegistryCfg.from_domain(domain, settings)
         assert c.catalog == "s_cat"
         assert c.schema == "s_sch"
@@ -708,7 +750,9 @@ class TestFromContext:
         )
         mock_creds.return_value = ("https://host", "tok")
         domain = _make_domain(registry={"catalog": "c", "schema": "s", "volume": "v"})
-        settings = _make_settings()
+        settings = _make_settings(
+            registry_catalog="", registry_schema="", registry_volume=""
+        )
 
         with patch.object(
             RegistryService, "_build_store", return_value=MagicMock()

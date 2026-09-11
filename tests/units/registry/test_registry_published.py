@@ -116,3 +116,37 @@ def test_list_mcp_domains_filters_published_via_metadata():
     names = {d["name"] for d in items}
     assert names == {"pub"}
     invalidate_registry_cache()
+
+
+def test_list_mcp_domains_reports_latest_published_graph_backend():
+    svc = _svc()
+    svc.list_domain_details_cached = lambda: (
+        True,
+        [
+            {
+                "name": "ontology_only",
+                "description": "Ontology without a graph",
+                "versions": [
+                    {
+                        "version": "2",
+                        "status": "PUBLISHED",
+                        "graph_backend": "none",
+                        "last_build": "",
+                    },
+                    {
+                        "version": "1",
+                        "status": "PUBLISHED",
+                        "graph_backend": "lakebase",
+                        "last_build": "2026-08-01T00:00:00Z",
+                    },
+                ],
+            }
+        ],
+        "",
+    )
+
+    ok, items, _ = svc.list_mcp_domains()
+
+    assert ok
+    assert items[0]["graph_backend"] == "none"
+    assert items[0]["has_graph"] is False

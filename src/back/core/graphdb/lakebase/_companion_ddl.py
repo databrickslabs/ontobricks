@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from back.core.errors import InfrastructureError
 from back.core.helpers import safe_identifier, sql_cast
 
 # Lakeflow synced-table PK (object_hash comes from the Delta warehouse view).
@@ -77,9 +78,76 @@ def _idx_name(table: str, suffix: str) -> str:
     return base[:63]
 
 
+# ``CREATE EXTENSION`` without a SCHEMA clause installs into the first schema
+# on the session ``search_path`` — for pooled connections that is the *graph*
+# schema, not ``public``. Because ``IF NOT EXISTS`` then becomes a permanent
+# no-op, renaming the graph schema strands ``digest()`` out of reach forever.
+# Install into ``public`` (always on the pool's search_path) and relocate a
+# stranded extension, falling back to the current schema when the role may not
+# write to ``public``. Nested EXCEPTION blocks run as subtransactions, so a
+# permission failure cannot abort the caller's transaction.
+_PGCRYPTO_ENSURE_REACHABLE = """
+DO $$
+DECLARE ext_schema text;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pgcrypto') THEN
+        BEGIN
+            EXECUTE 'CREATE EXTENSION pgcrypto WITH SCHEMA public';
+        EXCEPTION WHEN OTHERS THEN
+            BEGIN
+                EXECUTE 'CREATE EXTENSION pgcrypto';
+            EXCEPTION WHEN OTHERS THEN NULL;
+            END;
+        END;
+    END IF;
+
+    SELECT n.nspname INTO ext_schema
+    FROM pg_extension e
+    JOIN pg_namespace n ON n.oid = e.extnamespace
+    WHERE e.extname = 'pgcrypto';
+
+    IF ext_schema IS NOT NULL
+       AND NOT (ext_schema = ANY (current_schemas(true))) THEN
+        BEGIN
+            EXECUTE 'ALTER EXTENSION pgcrypto SET SCHEMA public';
+        EXCEPTION WHEN OTHERS THEN
+            BEGIN
+                EXECUTE format(
+                    'ALTER EXTENSION pgcrypto SET SCHEMA %I', current_schema()
+                );
+            EXCEPTION WHEN OTHERS THEN NULL;
+            END;
+        END;
+    END IF;
+END $$
+"""
+
+
 def ensure_pgcrypto(cur: Any) -> None:
-    """Enable ``digest()`` for generated ``object_hash`` columns."""
-    cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
+    """Make ``digest()`` resolvable for generated ``object_hash`` columns.
+
+    Installs ``pgcrypto`` into ``public`` and relocates a previously
+    misplaced install, then verifies ``digest`` resolves on the current
+    ``search_path`` so Builds fail with an actionable message instead of
+    ``function digest(text, unknown) does not exist``.
+    """
+    cur.execute(_PGCRYPTO_ENSURE_REACHABLE)
+    cur.execute(
+        "SELECT 1 FROM pg_proc p "
+        "JOIN pg_namespace n ON n.oid = p.pronamespace "
+        "WHERE p.proname = 'digest' "
+        "  AND pg_catalog.has_function_privilege(p.oid, 'EXECUTE') "
+        "  AND n.nspname = ANY (current_schemas(true)) "
+        "LIMIT 1"
+    )
+    if cur.fetchone() is None:
+        raise InfrastructureError(
+            "Postgres function digest() is unavailable — pgcrypto is missing, or "
+            "installed in a schema outside the connection search_path and could "
+            "not be relocated to public. Run `make bootstrap-lakebase` as a "
+            "workspace admin (Step 1b installs and pins pgcrypto to public) on "
+            "the graph database, then retry the Build."
+        )
 
 
 def wrap_triple_view_sql_for_lakeflow(spark_sql: str) -> str:

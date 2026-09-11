@@ -60,6 +60,12 @@ REST and GraphQL under `/api/v1/...` (GraphQL at `/api/v1/graphql/...`; same han
 
 Pass Databricks credentials in the JSON body or headers as documented per REST operation. GraphQL uses the browser session when called from the UI; external tools should use the same host and session cookie or call from an authenticated context.
 
+## Domain backends
+
+Published domain summaries expose `graph_backend` (`none`, `lakebase`,
+`databricks`, or `neo4j`) and `has_graph`. `none` is ontology-only;
+`has_graph` becomes true after a successful graph build.
+
 ---
 *OpenAPI for programmatic access only — UI HTML routes are not listed here.*
 """
@@ -77,7 +83,8 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
     {
         "name": "Domain",
         "description": "**Domain API** — Registry domain list and domain design artifacts "
-        "(OWL ontology, R2RML, generated Spark SQL).",
+        "(OWL ontology, R2RML, generated Spark SQL), including `graph_backend` "
+        "configuration and `has_graph` availability metadata.",
     },
     {
         "name": "Knowledge Graph",
@@ -92,8 +99,9 @@ EXTERNAL_OPENAPI_TAGS: List[Dict[str, str]] = [
     },
     {
         "name": "GraphQL",
-        "description": "**GraphQL API** — List domains, GraphiQL playground, execute queries, and SDL "
-        "for the auto-generated ontology-backed schema.",
+        "description": "**GraphQL API** — List domains with a materialized graph, "
+        "open GraphiQL, execute queries, and retrieve SDL for the "
+        "auto-generated ontology-backed schema.",
     },
 ]
 

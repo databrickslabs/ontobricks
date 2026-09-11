@@ -1,5 +1,6 @@
 <!-- Entities Hierarchy Section -->
 <!-- JS: /static/ontology/js/ontology-entities.js -->
+<div class="content-section">
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div class="me-auto">
         <h4 class="mb-1"><i class="bi bi-list-nested me-2"></i>Entities (Hierarchy)</h4>
@@ -14,19 +15,20 @@
                 <i class="bi bi-arrows-collapse"></i>
             </button>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-primary ontology-edit-btn" onclick="openEntityPanel()">
-            <i class="bi bi-plus-circle me-1"></i> Add Entity
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                title="Open the ontology discussion" onclick="openOntologyDiscussion()">
+        <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                title="Open the ontology discussion" aria-label="Open the ontology discussion"
+                onclick="openOntologyDiscussion()">
             <i class="bi bi-chat-dots"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-primary ontology-edit-btn" onclick="openEntityPanel()">
+            <i class="bi bi-plus-circle me-1"></i> Add Entity
         </button>
     </div>
 </div>
-<div class="card border-0 shadow-sm ob-ontology-panel-card">
+<div class="card border-0 ob-ontology-panel-card ob-split-shell">
     <div class="card-body p-0 ob-ontology-panel-card-body">
         <div id="ontology-entities-container" class="ob-ontology-entities-row">
-            <div class="entities-content ob-ontology-entities-main">
+            <div class="entities-content ob-ontology-entities-main ob-split-pane">
                 <p class="text-muted small mb-3">View the entity inheritance hierarchy. Click on an entity to view its details and attributes in the right panel.</p>
                 <div id="classHierarchyTree">
                     <div class="text-muted small">No entities defined yet</div>
@@ -35,4 +37,5 @@
             <!-- Detail panel will be injected here by JS -->
         </div>
     </div>
+</div>
 </div>

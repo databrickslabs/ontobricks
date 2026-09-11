@@ -8,6 +8,30 @@ scope:
 
 ### Code Style and Structure
 
+**English-only artifacts (always, regardless of the user's language)**
+
+Write these in **English**. Never French or any other language. If you touch
+non-English text in one of these places, rewrite it in English and keep the
+meaning.
+
+- **Code comments and docstrings** — `#` / `//` / `/* */` / `<!-- -->` / `--`
+  in Python, JS, CSS, HTML, SQL, shell, YAML, TOML.
+- **`/changelogs/`** — titles, `Context:`, per-file lines, the whole section.
+  The conversation language does not change this.
+- **Logs** — `logger.*` message templates (and any other operator-facing log
+  line in code). Format stays `%-style` (see Logging Security below).
+- **Audit trail** — any string persisted or displayed as review/audit history:
+  default comments, AI insights saved to the trail, change-audit event text
+  in code or tests.
+- **Traces** — MLflow spans, eval traces, and similar telemetry descriptions.
+- **Agent notes** — commit messages, review output, PLAN.md / SPEC.md prose.
+
+Prefer a clear identifier over a comment that merely translates the next
+line. Comments explain *why*, not *what*.
+
+This does **not** force user-facing UI strings into English; product copy
+follows existing localisation. It **does** apply to everything listed above.
+
 **Backend (Python/FastAPI)**
 
 - Follow a layered structure: routes (HTTP) → domain classes (`back/objects`) → core infrastructure (`back/core`).
@@ -26,6 +50,7 @@ scope:
 - **Logging Security**:
   - NEVER use f-strings or `.format()` in logging statements with dynamic variables.
   - Always use %-style formatting: `logger.error("Error for user %s", user_email, exc_info=True)`.
+  - Log message templates are **English** (see §English-only artifacts).
   - Never use `print()` — always use `from back.core.logging import get_logger`.
 
 - **Dependency Injection**:

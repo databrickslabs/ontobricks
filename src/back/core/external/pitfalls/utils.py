@@ -49,9 +49,9 @@ def _assert_safe_nltk_resource(resource_path: str) -> None:
     ``nltk.data.find()`` in nltk<=3.9.4 runs its unsafe-path regex against the
     still-encoded string and only decodes ``%xx`` afterwards, so percent-encoded
     separators/traversal (``%2f``, ``%2e%2e``) bypass the check and read
-    arbitrary files. All our callers pass hardcoded resource names, so this
-    guard is defense-in-depth that makes the flaw unreachable until we can pin
-    nltk>=3.10.0.
+    arbitrary files. All our callers pass hardcoded resource names; the
+    project now pins nltk>=3.10.3, and this guard remains defense-in-depth
+    against future decoder regressions.
     """
     if "%" in resource_path or ".." in resource_path or resource_path.startswith(("/", "\\")):
         raise ValueError(f"Unsafe NLTK resource path rejected: {resource_path!r}")

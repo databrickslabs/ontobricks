@@ -51,6 +51,50 @@ class TestGetCurrentUserEmail:
         assert svc.get_current_user_email() == ""
 
 
+class TestGetCurrentUserGroups:
+    @patch("requests.get")
+    def test_success(self, mock_get, clean_databricks_env):
+        mock_get.return_value = MagicMock(status_code=200)
+        mock_get.return_value.raise_for_status = MagicMock()
+        mock_get.return_value.json.return_value = {
+            "userName": "me@co.com",
+            "groups": [
+                {"display": "data-eng", "value": "1"},
+                {"display": "admins", "value": "2"},
+                {"value": "3"},
+            ],
+        }
+
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+        svc = WorkspaceService(auth)
+        assert svc.get_current_user_groups() == ["data-eng", "admins"]
+        assert "/scim/v2/Me" in mock_get.call_args[0][0]
+
+    @patch("requests.get")
+    def test_no_groups(self, mock_get, clean_databricks_env):
+        mock_get.return_value = MagicMock(status_code=200)
+        mock_get.return_value.raise_for_status = MagicMock()
+        mock_get.return_value.json.return_value = {"userName": "me@co.com"}
+
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+        svc = WorkspaceService(auth)
+        assert svc.get_current_user_groups() == []
+
+    @patch("requests.get")
+    def test_failure(self, mock_get, clean_databricks_env):
+        mock_get.return_value = MagicMock(status_code=403)
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError()
+
+        auth = DatabricksAuth(host="https://h.com", token="tok")
+        svc = WorkspaceService(auth)
+        assert svc.get_current_user_groups() == []
+
+    def test_no_auth(self, clean_databricks_env):
+        auth = DatabricksAuth(host="https://h.com", token="")
+        svc = WorkspaceService(auth)
+        assert svc.get_current_user_groups() == []
+
+
 class TestListUsers:
     @patch("requests.get")
     def test_success_with_pagination(self, mock_get, clean_databricks_env):

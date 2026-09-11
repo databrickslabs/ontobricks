@@ -38,8 +38,14 @@ htmlcov/
 # Live scenario campaign reports (make scenario-campaign)
 artifacts/
 
-# Sphinx build output (ci/build_docs.sh) — regenerate, never commit
-docs/sphinx/_build/
+# Sphinx HTML/doctree output — regenerate locally, never commit
+documentation/sphinx/_build/
+**/sphinx/_build/
+
+# Local-only docs — stay on disk, not published to GitHub
+docs/sphinx/
+docs/superpowers/
+docs/pr47-neo4j-demo/
 
 # OS
 .DS_Store
@@ -104,3 +110,12 @@ syncs/
 # Superpowers brainstorming visual-companion session files
 .superpowers/
 .worktrees/
+
+# .planning/ tracks SPECs, eval datasets, and ROADMAP (AI-feature PR gate).
+# Local design explorations stay out of git: mockups, screenshots, renders,
+# implementation plans. Images under .planning/ are regenerable and heavy.
+.planning/ui-refresh/
+.planning/**/*.png
+.planning/**/*.jpg
+.planning/**/*.gif
+.planning/**/*.webp

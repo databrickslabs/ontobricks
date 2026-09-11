@@ -48,11 +48,12 @@ body.full-width-layout {
     display: flex;
     height: calc(100vh - var(--ob-chrome-height, 60px));
     max-height: calc(100vh - var(--ob-chrome-height, 60px));
-    gap: 0;
+    gap: 0.5rem;
     width: 100%;
     max-width: 100vw;
     margin: 0;
-    padding: 0;
+    padding: 0.5rem;
+    box-sizing: border-box;
     overflow: hidden;
 }
 
@@ -62,11 +63,19 @@ body.full-width-layout {
 .sidebar-nav {
     width: 200px;
     min-width: 200px;
-    border-right: 1px solid var(--border-color, rgba(255,255,255,0.1));
+    background: var(--db-surface-warm);
+    /* Framed card floating on the page, same language as the split-panel panes:
+       1px hairline, --db-radius-card on all four corners. The shell now owns
+       the 0.5rem outer gutter (padding + gap), so the nav aligns within it with
+       no margin of its own and simply fills the shell height. */
+    margin: 0;
+    height: 100%;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-card);
     padding: 0.5rem 0;
     flex-shrink: 0;
     overflow-y: auto;
-    height: 100%;
+    overflow-x: hidden;
     transition: width 0.25s ease, min-width 0.25s ease;
     display: flex;
     flex-direction: column;
@@ -77,7 +86,7 @@ body.full-width-layout {
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: var(--text-muted, #6c757d);
+    color: var(--db-text-muted);
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -88,9 +97,12 @@ body.full-width-layout {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.35rem 1rem;
-    color: #666;
+    padding: 0.35rem 0.65rem;
+    margin: 0 0.35rem;
+    color: var(--db-text-secondary);
+    border-radius: 9px;
     border-left: 3px solid transparent;
+    position: relative;
     transition: all 0.2s ease;
     font-size: 0.82rem;
     text-decoration: none;
@@ -99,13 +111,29 @@ body.full-width-layout {
 }
 
 .sidebar-nav .nav-link:hover {
-    background: rgba(0, 0, 0, 0.1);
-    color: #333;
+    background: var(--db-hover-indigo);
+    color: var(--db-text);
 }
 
 .sidebar-nav .nav-link.active {
-    background: rgba(0, 0, 0, 0.15);
-    color: #000;
+    background: var(--db-primary-light);
+    color: var(--db-primary-selected-text);
+    font-weight: 650;
+}
+
+.sidebar-nav .nav-link.active::before {
+    content: "";
+    position: absolute;
+    left: -0.35rem;
+    top: 5px;
+    bottom: 5px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--db-primary);
+}
+
+.sidebar-nav .nav-link.active i {
+    color: var(--db-primary-selected-text);
 }
 
 /* Disabled sidebar items (requires domain saved to UC) */
@@ -113,7 +141,7 @@ body.full-width-layout {
     opacity: 0.4;
     pointer-events: none;
     cursor: not-allowed;
-    color: #999;
+    color: var(--db-text-muted);
 }
 
 /* Sync gating: empty triple store — match prior inline pointer-events/opacity */
@@ -124,8 +152,8 @@ body.full-width-layout {
 
 .sidebar-nav .nav-link.sidebar-disabled:hover {
     background: none;
-    color: #999;
-    border-left-color: #333;
+    color: var(--db-text-muted);
+    border-left-color: transparent;
     font-weight: 500;
 }
 
@@ -148,14 +176,14 @@ body.full-width-layout {
     border: none;
     background: transparent;
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: 9px;
     transition: background 0.15s ease;
     width: calc(100% - 0.8rem);
     overflow: hidden;
 }
 
 .sidebar-toggle:hover {
-    background: transparent;
+    background: var(--db-hover-warm);
 }
 
 .sidebar-toggle i {
@@ -163,13 +191,13 @@ body.full-width-layout {
     min-width: 20px;
     text-align: center;
     flex-shrink: 0;
-    color: #555;
+    color: var(--db-text-muted);
 }
 
 .sidebar-toggle .sidebar-toggle-label {
     font-size: 0.75rem;
     font-weight: 600;
-    color: #555;
+    color: var(--db-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     transition: opacity 0.2s ease;
@@ -223,10 +251,14 @@ body.full-width-layout {
 .sidebar-content {
     flex: 1;
     min-width: 0;
-    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* The shell owns the vertical gutter. Keeping only the horizontal inset
+       aligns each page heading with the top edge of the sidebar card. */
+    padding: 0 0.5rem;
     overflow-y: auto;
     overflow-x: hidden;
-    max-height: calc(100vh - var(--ob-chrome-height, 60px));
     transition: width 0.25s ease;
 }
 
@@ -243,6 +275,8 @@ body.full-width-layout {
 .sidebar-section.active {
     display: flex;
     flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
 }
 
 .sidebar-section .card {
@@ -256,13 +290,11 @@ body.full-width-layout {
 .sidebar-content:has(#graphql-section.active),
 .sidebar-content:has(#dataquality-section.active) {
     overflow: hidden;
-    padding: 0.5rem;
+    padding: 0 0.5rem;
 }
 
 #sigmagraph-section.active,
 #graphql-section.active {
-    height: calc(100vh - 80px);
-    max-height: calc(100vh - 80px);
     overflow: hidden;
 }
 
@@ -273,23 +305,10 @@ body.full-width-layout {
 }
 
 #logs-section.active {
-    height: calc(100vh - var(--ob-chrome-height, 60px));
     overflow: hidden;
-    padding: 0.5rem 1rem;
+    padding: 0 1rem;
     box-sizing: border-box;
 }
-
-/* ==========================================================================
-   Other Sections - Standard display
-   ========================================================================== */
-#owl-section.active,
-#entities-section.active,
-#relationships-section.active,
-#rules-section.active,
-#r2rml-section.active {
-    display: block;
-}
-
 
 /* Sections that use .content-section wrappers: stretch to fill the parent */
 .sidebar-section > .content-section {
@@ -329,7 +348,7 @@ body.full-width-layout {
 .sidebar-content:has(#results-section.active),
 .sidebar-content:has(#sql-section.active) {
     overflow: hidden;
-    padding: 0.5rem;
+    padding: 0 0.5rem;
     display: flex;
     flex-direction: column;
 }
@@ -341,83 +360,97 @@ body.full-width-layout {
     flex-direction: column !important;
     flex: 1 1 0 !important;
     min-height: 0 !important;
-    max-height: 100% !important;
     overflow: hidden !important;
+}
+
+/* One shared title/subtitle-to-content rhythm for every sidebar page. This
+   intentionally overrides template-level Bootstrap `mb-4` utilities. */
+.sidebar-layout .section-header {
+    margin-bottom: 0.5rem !important;
+}
+
+/* Section headers inherit 1rem of global top padding. Remove that structural
+   inset on desktop so the complete title box, including its icon, meets the
+   sidebar card's top border without overlapping the L2 navbar. */
+@media (min-width: 769px) {
+    .sidebar-layout .section-header {
+        padding-top: 0;
+    }
 }
 
 /* Read-only mode no longer steals vertical space — the indicator is
    now a navbar pill (see ``#readOnlyNavBadge``) instead of a sticky
    banner under the navbar. The sidebar therefore shares the same
    ``--ob-chrome-height`` as edit mode, so no read-only overrides are
-   needed here. */
-
-body:is(.read-only-version, .role-viewer) #design-section #ontology-designer-canvas-wrapper {
-    height: calc(100vh - 200px);
-}
+   needed here. The former Designer read-only viewport-height override
+   is gone: pane sizing now flows from the shared flex chain. */
 
 /* ==========================================================================
-   Sidebar User / Role Footer
-   Pinned to the bottom of the sidebar via margin-top: auto
+   Mobile — restore natural document flow
+   The fixed-height / overflow-hidden shell only makes sense on desktop where
+   the sidebar sits beside the content. On narrow viewports the sidebar stacks
+   above the content and the page scrolls as a normal document.
    ========================================================================== */
-.sidebar-user {
-    margin-top: auto;
-    padding-top: 0.4rem;
-    border-top: 1px solid var(--border-color, rgba(0,0,0,0.08));
-    flex-shrink: 0;
-}
+@media (max-width: 768px) {
+    .sidebar-layout {
+        flex-direction: column;
+        height: auto;
+        max-height: none;
+        overflow: visible;
+    }
 
-.sidebar-user-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 1rem;
-    cursor: default;
-}
+    .sidebar-nav {
+        width: 100%;
+        min-width: 0;
+        height: auto;
+    }
 
-.sidebar-user-icon {
-    font-size: 1.15rem;
-    color: #666;
-    min-width: 20px;
-    text-align: center;
-    flex-shrink: 0;
-}
+    /* Natural flow must beat the desktop `:has()` overflow overrides. Those
+       carry ID-level specificity via `:has(#…-section.active)`, so plain
+       `.sidebar-content` cannot reach them — the reset replicates each `:has()`
+       selector to match specificity and land later in source order. */
+    .sidebar-content,
+    .sidebar-content:has(#sigmagraph-section.active),
+    .sidebar-content:has(#graphql-section.active),
+    .sidebar-content:has(#dataquality-section.active),
+    .sidebar-content:has(#logs-section.active),
+    .sidebar-content:has(#editor-section.active),
+    .sidebar-content:has(#results-section.active),
+    .sidebar-content:has(#sql-section.active) {
+        flex: none;
+        min-height: 0;
+        max-height: none;
+        overflow: visible;
+        overflow-y: visible;
+    }
 
-.sidebar-user-details {
-    overflow: hidden;
-    min-width: 0;
-    transition: opacity 0.2s ease;
-}
+    .sidebar-section.active {
+        flex: none;
+        min-height: 0;
+        height: auto;
+        overflow: visible;
+    }
 
-.sidebar-user-email {
-    font-size: 0.7rem;
-    color: #555;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 130px;
-    font-weight: 500;
-}
+    /* Graph / logs panes drop their fixed height and hidden overflow so the
+       page scrolls as one document. Same-or-higher specificity, later in
+       source, so no `!important` is required here. */
+    #sigmagraph-section.active,
+    #graphql-section.active,
+    #logs-section.active {
+        height: auto;
+        max-height: none;
+        overflow: visible;
+    }
 
-.sidebar-user-badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.2rem;
-    margin-top: 0.25rem;
+    /* Query panes carry `!important` flex/overflow on desktop, so the mobile
+       reset must also use `!important` to win. */
+    #editor-section.active,
+    #results-section.active,
+    #sql-section.active {
+        flex: none !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
 }
-
-.sidebar-role-badge {
-    font-size: 0.6rem;
-    padding: 0.1rem 0.35rem;
-    border-radius: 3px;
-}
-
-/* Collapsed state: icon-only, hide text */
-.sidebar-nav.collapsed .sidebar-user-info {
-    justify-content: center;
-    padding: 0.4rem 0;
-}
-
-.sidebar-nav.collapsed .sidebar-user-details {
-    display: none;
-}
-

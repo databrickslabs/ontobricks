@@ -26,6 +26,10 @@ auto_assignment:
   f1_class_coverage: 0.95
   latency_p95_seconds: 4.0
   cost_per_call_usd: 0.01
+  # Contract checks on the live-trace / audit-report surface (SPEC §3.1).
+  # Pass/fail, excluded from the weighted aggregate below.
+  trace_step_order: 1.0
+  audit_report_parity: 1.0
   aggregate: 0.90
 
 auto_icon_assign:

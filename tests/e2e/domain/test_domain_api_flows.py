@@ -25,6 +25,7 @@ Covered:
   POST /domain/clear
   POST /domain/design-views/create
   POST /domain/design-views/save-current
+  POST /domain/metadata/removal-impact
 """
 
 from __future__ import annotations
@@ -151,4 +152,35 @@ class TestDomainWriteEndpoints:
 
     def test_design_view_save_current_contract(self, page, live_server):
         resp = self._post(page, live_server, "/domain/design-views/save-current", {})
+        _assert_contract(resp)
+
+    def test_removal_impact_contract(self, page, live_server):
+        resp = self._post(
+            page,
+            live_server,
+            "/domain/metadata/removal-impact",
+            {"table_names": ["cat.sch.customers"]},
+        )
+        _assert_contract(resp)
+
+    def test_removal_impact_reports_no_impact_on_empty_session(
+        self, page, live_server
+    ):
+        """A fresh session has no mappings, so nothing can be orphaned."""
+        resp = self._post(
+            page,
+            live_server,
+            "/domain/metadata/removal-impact",
+            {"table_names": ["cat.sch.customers"]},
+        )
+        assert resp.status == 200, resp.text()
+        payload = _json(resp)
+        assert payload["impact"] == {}
+        assert payload["affected_table_count"] == 0
+        assert payload["affected_mapping_count"] == 0
+
+    def test_removal_impact_empty_list_contract(self, page, live_server):
+        resp = self._post(
+            page, live_server, "/domain/metadata/removal-impact", {"table_names": []}
+        )
         _assert_contract(resp)

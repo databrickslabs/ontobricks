@@ -7,15 +7,12 @@ body.ontology-page {
     /* Marker class for page-specific JS behaviors */
 }
 
-/* OWL section - full height cards */
+/* OWL section - fill the shared sidebar flex pane. No overflow clamp: the
+   inner `#owlPreview` textarea is the native scroller, so clipping the card
+   would hide long Turtle content. */
 #owl-section .card {
-    min-height: calc(100vh - 120px);
-}
-
-/* Ontology graph container sizing */
-#ontologyGraph {
-    height: calc(100vh - 180px);
-    min-height: 400px;
+    flex: 1;
+    min-height: 0;
 }
 
 /* ==========================================================================
@@ -27,7 +24,8 @@ body.ontology-page {
 #relationships-section.active {
     display: flex !important;
     flex-direction: column;
-    height: calc(100vh - 95px);
+    flex: 1 1 0;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -402,8 +400,9 @@ body.ontology-page {
 
 #ontology-designer-canvas-wrapper {
     position: relative;
-    height: calc(100vh - 160px);
-    min-height: 400px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 /* ==========================================================================
@@ -516,5 +515,22 @@ body.ontology-page {
 
 .ob-axiom-count-badge {
     font-size: 0.65rem;
+}
+
+@media (max-width: 768px) {
+    #entities-section.active,
+    #relationships-section.active {
+        flex: none;
+        overflow: visible;
+    }
+
+    #design-section .content-section {
+        flex: none;
+    }
+
+    #ontology-designer-canvas-wrapper {
+        flex: none;
+        min-height: 400px;
+    }
 }
 

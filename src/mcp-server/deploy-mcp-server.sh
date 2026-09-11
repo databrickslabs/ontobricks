@@ -2,17 +2,17 @@
 set -euo pipefail
 
 # ── MCP Server Deployment (via DAB) ────────────────────────────────
-# Wrapper that deploys the MCP companion server using the project-root
-# Databricks Asset Bundle.
+# Compatibility wrapper that deploys the shared project-root Databricks Asset
+# Bundle (main + MCP apps), then starts both unless --no-run is supplied.
 #
 # Usage:
-#   ./deploy-mcp-server.sh              # deploy + run (dev)
-#   ./deploy-mcp-server.sh -t prod      # deploy + run (prod)
+#   ./deploy-mcp-server.sh              # configured target from deploy.config.sh
+#   ./deploy-mcp-server.sh -t dev       # explicit Volume-only target
 #   ./deploy-mcp-server.sh --no-run     # deploy without starting
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TARGET="dev"
+TARGET=""
 NO_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -24,7 +24,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "=== Deploying mcp-ontobricks via DAB ==="
+args=()
+if [[ -n "$TARGET" ]]; then
+    args+=(-t "$TARGET")
+fi
+if [[ "$NO_RUN" == true ]]; then
+    args+=(--no-run)
+fi
+
+echo "=== Deploying OntoBricks + MCP via the shared DAB bundle ==="
 
 cd "$PROJECT_ROOT"
-exec scripts/deploy.sh --mcp-only -t "$TARGET" ${NO_RUN:+--no-run}
+exec scripts/deploy.sh "${args[@]}"

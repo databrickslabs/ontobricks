@@ -28,6 +28,9 @@ class TestDeltaObjectHelpers:
         assert object_base("triplestore_foo_V1_data") == "triplestore_foo_V1"
         assert object_base("triplestore_foo_V1_inferred") == "triplestore_foo_V1"
         assert object_base("triplestore_foo_V1_graph") == "triplestore_foo_V1"
+        # An analytics snapshot only outlives its run when that run died, and
+        # grouping it is what surfaces the leftover for purging.
+        assert object_base("triplestore_foo_V1_analytics") == "triplestore_foo_V1"
 
     def test_uc_object_kind(self):
         assert uc_object_kind("VIEW") == "view"
@@ -52,6 +55,27 @@ class TestDeltaObjectHelpers:
             "triplestore_a_V1_inferred",
         ]
         assert items[0]["full_name"] == "reg_cat.reg_sch.triplestore_a_V1_graph"
+
+    def test_a_view_only_domain_drops_data_before_the_gateway(self):
+        """``_data`` is a view here, and it reads from the gateway view.
+
+        Dropping the gateway first would leave ``_data`` dangling mid-purge,
+        so it has to sort between ``_graph`` and the gateway.
+        """
+        raw = [
+            {"name": "triplestore_a_V1", "table_type": "VIEW"},
+            {"name": "triplestore_a_V1_data", "table_type": "VIEW"},
+            {"name": "triplestore_a_V1_graph", "table_type": "VIEW"},
+            {"name": "triplestore_a_V1_inferred", "table_type": "MANAGED"},
+        ]
+        groups = group_triplestore_objects(raw, "reg_cat", "reg_sch")
+        names = [i["name"] for i in groups["triplestore_a_V1"]["sorted_items"]]
+        assert names == [
+            "triplestore_a_V1_graph",
+            "triplestore_a_V1_data",
+            "triplestore_a_V1",
+            "triplestore_a_V1_inferred",
+        ]
 
 
 class TestAnalyticsObjectHelpers:

@@ -55,7 +55,7 @@ Please be respectful and professional in all interactions. We're building a coll
 
 ```bash
 # Install all Python dependencies (managed by uv via pyproject.toml)
-uv sync
+uv sync --frozen --extra lakebase
 ```
 
 ### 2. Configure Environment
@@ -76,7 +76,7 @@ set ``DATABRICKS_CONFIG_PROFILE`` to select a non-default profile.
 
 ```bash
 # Run the app locally with auto-reload
-uv run python run.py
+uv run --frozen python run.py
 ```
 
 - App: http://localhost:8000
@@ -168,8 +168,8 @@ Before committing, ensure:
    ```
 
 2. **`uv.lock` is unchanged** — `git status` must show it clean. Always pass
-   `--frozen` to `uv run`; without it uv re-resolves against the internal pypi
-   proxy and rewrites every URL in the lockfile, which breaks deploys.
+   `--frozen` to `uv run`; without it uv re-resolves against the internal PyPI
+   proxy and replaces the pinned `files.pythonhosted.org` artifact URLs.
 
 3. **Commit message follows convention**
 
@@ -199,7 +199,7 @@ Special prefixes:
 |--------|-------------|
 | New SHACL validation feature | `feat/ontology-shacl-validation` |
 | Fix R2RML nested property bug | `fix/mapping-r2rml-nested-props` |
-| Update API docs | `documentation/api-digital-twin-endpoints` |
+| Update API docs | `docs/api-digital-twin-endpoints` |
 | Extract SPARQL service | `refactor/backend-sparql-service` |
 | Bump Lakebase client version | `build/graphdb-lakebase-client-bump` |
 | Prepare v0.3.0 release | `release/0.3.0` |
@@ -366,9 +366,10 @@ async def get_ontology_classes(
 
 ### Running Tests
 
-Always pass `--frozen`. Without it, `uv run` re-resolves dependencies against the
-internal pypi proxy and silently rewrites every URL in `uv.lock`, which breaks
-the next deploy (the container installs verbatim from the lock).
+Always pass `--frozen`. Without it, `uv run` re-resolves dependencies against
+the internal PyPI proxy and replaces the public `files.pythonhosted.org`
+artifact URLs in `uv.lock`, which breaks the next deploy (the container
+installs verbatim from the lock).
 
 ```bash
 # Run all tests

@@ -78,7 +78,7 @@ def test_create_table_issues_schema_ddl_and_indexes(auth):
     # Union view must be created.
     assert any("CREATE OR REPLACE VIEW" in s and "mydomain_v1" in s for s in executed)
     assert any("CREATE INDEX" in s for s in executed)
-    assert any("CREATE EXTENSION IF NOT EXISTS pgcrypto" in s for s in executed)
+    assert any("CREATE EXTENSION pgcrypto WITH SCHEMA public" in s for s in executed)
     assert any("object_hash" in s and "digest" in s for s in create_tables)
     assert any("PRIMARY KEY (subject, predicate, object_hash)" in s for s in create_tables)
 
@@ -755,7 +755,8 @@ def test_upgrade_legacy_triple_table_adds_object_hash_and_pk():
     )
 
     cur = MagicMock()
-    cur.fetchone.side_effect = [(1,), None]
+    # table exists, missing object_hash, then digest() present after ensure_pgcrypto
+    cur.fetchone.side_effect = [(1,), None, (1,)]
 
     upgrade_legacy_triple_table_to_object_hash(cur, "cust360auto_v5__app")
 
@@ -770,7 +771,8 @@ def test_create_triple_table_migrates_legacy_before_indexes():
     from back.core.graphdb.lakebase._companion_ddl import _create_triple_table
 
     cur = MagicMock()
-    cur.fetchone.side_effect = [(1,), None]
+    # table exists, missing object_hash, then digest() present after ensure_pgcrypto
+    cur.fetchone.side_effect = [(1,), None, (1,)]
 
     _create_triple_table(cur, "ontobricks_graph", "g_v1__app")
 

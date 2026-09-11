@@ -27,6 +27,8 @@ PREFLIGHT = ROOT / "scripts/_internal/_deploy-preflight.sh"
 DEPLOY = ROOT / "scripts/deploy.sh"
 CONFIG = ROOT / "scripts/deploy.config.sh"
 BUNDLE = ROOT / "databricks.yml"
+APP_TEMPLATE = ROOT / "app.yaml.template"
+MAKEFILE = ROOT / "Makefile"
 
 TARGET = "dev-lakebase"
 KEY = "ontobricks_dev_app"
@@ -164,6 +166,14 @@ class TestDeployDoesNotBindNeo4jSecrets:
 
     def test_deploy_does_not_pass_neo4j_secret_scope(self):
         assert "neo4j_secret_scope" not in DEPLOY.read_text()
+
+    def test_app_manifest_does_not_reference_unbound_neo4j_secret(self):
+        app = yaml.safe_load(APP_TEMPLATE.read_text())
+        assert all(item.get("valueFrom") != "neo4j-password" for item in app["env"])
+        assert all(item.get("name") != "neo4j-password" for item in app["resources"])
+
+    def test_make_targets_do_not_pass_removed_neo4j_scope(self):
+        assert "neo4j_secret_scope" not in MAKEFILE.read_text()
 
     def test_deploy_config_does_not_export_neo4j_secret_scope(self):
         body = CONFIG.read_text()

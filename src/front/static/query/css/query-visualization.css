@@ -285,6 +285,17 @@
     word-break: break-word;
 }
 
+/* ---- Virtual attributes (node detail panel) ---- */
+.va-node-group + .va-node-group {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e9ecef;
+}
+
+.va-node-status:not(:empty) {
+    padding-top: 0.25rem;
+}
+
 .entity-relationship-item {
     padding: 0.3rem 0.4rem;
     background: #fff;

@@ -113,8 +113,9 @@ body:is(.read-only-version, .role-viewer) .ovz-rel-direction-label {
     border-radius: var(--ovz-radius-lg);
 }
 
-/* Light red header background for entities (inlined for cache-busting). */
+/* Entity headers carry the Clarity indigo-soft tint, the same fill selection
+   uses everywhere else, instead of the light red they had. */
 .ovz-entity-header {
-    background: #fdeaea;
+    background: var(--db-primary-light);
 }
 

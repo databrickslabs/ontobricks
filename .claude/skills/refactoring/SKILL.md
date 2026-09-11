@@ -43,3 +43,6 @@ and `src/.coding_rules.md §2`. The few I reach for most often:
 - Don't bundle behavioural changes with a refactor — separate commits.
 - Don't rename a public class/method without a backward-compat wrapper in `__init__.py` (`.cursor/07 §__init__.py Conventions`).
 - Don't skip the changelog (`changelog` skill).
+- Don't add or leave non-English comments, logs, changelog text, audit-trail
+  strings, or traces (`.cursor/05 §English-only artifacts`). Translate in place
+  when you touch them.

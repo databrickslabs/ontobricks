@@ -58,7 +58,8 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-_HTTP_TIMEOUT = 120
+_HTTP_TIMEOUT = 120  # fallback floor when the graph timeout can't be resolved
+_HTTP_TIMEOUT_MARGIN_S = 30
 _MAX_DEPTH = 1
 _SPARQL_DANGEROUS = re.compile(
     r"\b(DROP|DELETE|INSERT|CREATE|CLEAR|LOAD|COPY|MOVE|ADD)\b",
@@ -77,8 +78,22 @@ _ACTION_HINT = (
 
 
 def _client(ctx: ToolContext):
-    """Build a sync HTTP client bound to the loopback OntoBricks URL."""
-    return loopback_client(ctx, timeout=_HTTP_TIMEOUT)
+    """Build a sync HTTP client bound to the loopback OntoBricks URL.
+
+    The timeout is derived from the server-side graph statement timeout plus a
+    margin, so a bounded query is cancelled *server-side* (returning a clean
+    error the LLM can react to) before the loopback client gives up on a query
+    that is still running.
+    """
+    try:
+        from back.core.query_limits import get_graph_query_timeout_s
+
+        timeout = max(
+            _HTTP_TIMEOUT, get_graph_query_timeout_s() + _HTTP_TIMEOUT_MARGIN_S
+        )
+    except Exception:  # noqa: BLE001
+        timeout = _HTTP_TIMEOUT
+    return loopback_client(ctx, timeout=timeout)
 
 
 def _registry_params(ctx: ToolContext) -> dict:

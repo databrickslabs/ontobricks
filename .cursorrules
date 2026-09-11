@@ -27,6 +27,8 @@ After ANY code change (feature, fix, refactoring, review, etc.):
     - Each section must include: a title, context, numbered list of changes
       with file paths and a short description, the list of modified files,
       and the test result.
+    - Write the entire changelog section in **English**, even if the user
+      wrote in another language (see `.cursor/05 §English-only artifacts`).
 * Run the tests and report results — use `uv run --frozen pytest -q -m "not scenario"` (the `--frozen` flag is mandatory: a bare `uv run` poisons `uv.lock` and breaks the next deploy). The `tests/e2e/scenarios/` suites are opt-in; run them only when explicitly asked (see `.cursor/08-testing-and-deployment`).
 
 When asking for a code review, do all these tasks (in this order):

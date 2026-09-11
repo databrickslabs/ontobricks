@@ -14,10 +14,13 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Tuple
 
 # rdflib is always available (core dep)
 from rdflib import Graph, OWL, RDF, RDFS, URIRef
+
+if TYPE_CHECKING:  # annotation-only — nltk is imported lazily at the call site.
+    from nltk.sentiment import SentimentIntensityAnalyzer
 
 # Optional ML deps — imported lazily; None when the pitfalls extra is not installed.
 try:

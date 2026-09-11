@@ -1,0 +1,436 @@
+## Harden Lakebase credential error handling
+
+Context: PR #157 correctly switched credential minting to the dedicated
+Databricks CLI command, but malformed successful output still terminated
+silently under `set -e`. The follow-up preserves the contributor's original
+commit while making every credential failure observable and safe.
+
+Changes:
+
+1. scripts/bootstrap/lakebase-perms.sh
+   Capture CLI stderr separately from credential JSON, handle malformed JSON
+   without triggering an early shell exit, and avoid printing credential
+   response bodies.
+2. tests/units/scripts/test_lakebase_perms.py
+   Add a regression test proving malformed credential JSON reports diagnostics.
+3. CONTRIBUTORS.md
+   Credit @lrubakhin for the Lakebase credential minting and diagnostics fix.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- tests/units/scripts/test_lakebase_perms.py
+- CONTRIBUTORS.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5764 passed,
+305 skipped, 6 deselected, 1 xfailed, 0 failed in 44.69s; targeted regression
+test → 3 passed; `bash -n scripts/bootstrap/lakebase-perms.sh` → passed.
+
+## Add schema permission evaluator primitives
+
+Context: Settings Lakehouse Health Task 1 needs permission-only building blocks
+that later tasks can consume without inspecting domain assets. This adds a
+defensive Unity Catalog effective-permissions client and a pure permission
+evaluator with deterministic output.
+
+Changes:
+
+1. src/back/core/databricks/uc/UnityCatalog.py
+   Add `get_effective_schema_permissions` with exact principal query filtering,
+   defensive privilege parsing (objects and strings), normalization, and 403/404
+   diagnostic handling.
+2. src/back/core/graphdb/delta/health.py
+   Add `REQUIRED_SCHEMA_PERMISSIONS` and `schema_permission_summary` to
+   normalize grants, expand `ALL PRIVILEGES`, preserve inherited sources, and
+   compute operational readiness without domain asset probes.
+3. tests/units/core/test_unity_catalog.py
+   Add RED/GREEN coverage for endpoint URL/params, principal filtering,
+   response normalization, diagnostics, and non-diagnostic error propagation.
+4. tests/units/graphdb/delta/test_delta_package.py
+   Add evaluator coverage for required-order output, underscore/space
+   normalization, inherited grants, and `ALL PRIVILEGES`.
+5. src/back/core/databricks/uc/UnityCatalog.py
+   Harden effective-permissions path construction with UC identifier validation
+   plus URL encoding, and keep behavior warehouse-independent for this REST call.
+6. src/back/core/graphdb/delta/health.py
+   Include `registry_catalog`, `registry_schema`, `storage_location`, and
+   `principal` in `schema_permission_summary`, and remove redundant
+   `has_all_privileges` state by driving `ALL PRIVILEGES` through the grants map.
+7. tests/units/core/test_unity_catalog.py
+   Add regressions for encoded/validated schema path, principal-less assignment
+   handling, warehouse-free auth usage, and empty-200-content responses.
+8. tests/units/graphdb/delta/test_delta_package.py
+   Add summary payload assertions for registry/principal metadata and incomplete
+   storage-location handling.
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/graphdb/delta/health.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/graphdb/delta/test_delta_package.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py -k effective_schema` → 10 passed, 36 deselected, 1 warning in 0.77s; `uv run --frozen pytest -q tests/units/graphdb/delta/test_delta_package.py -k schema_permission` → 4 passed, 19 deselected, 1 warning in 0.80s; `uv run --frozen pytest -q -m "not scenario"` → 5812 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 45.03s.
+
+## Implement Lakehouse Health Task 2
+
+Context: Settings Lakehouse Health Task 2 requires replacing the domain/table
+probe payload with a domain-independent Unity Catalog schema-permissions
+diagnostic using app-level context resolution only. The service now resolves
+the Registry context through app credentials, identifies the principal from
+`DATABRICKS_CLIENT_ID` or authenticated current-user fallback, and keeps
+network/API failures on the centralized InfrastructureError path while missing
+grants remain HTTP-200 diagnostics.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Reworked `triple_store_databricks_health_result` to use
+   `resolve_app_registry_context(settings)`, instantiate `DatabricksClient`
+   without warehouse/domain/table dependencies, evaluate permissions via
+   `get_effective_schema_permissions` + `schema_permission_summary`, short-circuit
+   unconfigured Registry locations without REST calls, and map request failures
+   to `InfrastructureError`.
+2. src/api/routers/internal/settings.py
+   Updated the `/settings/triple-store/databricks-health` docstring to describe
+   Registry schema effective-permissions diagnostics while preserving the
+   existing `map_route_errors` wrapper.
+3. tests/units/settings/test_delta_health_permissions.py
+   Added strict TDD coverage for app-context resolution, forbidden dependency
+   non-usage (`get_domain`, `create_databricks_client`, table naming helpers),
+   app-client-id and current-user principal resolution, registry-unconfigured
+   diagnostics with no REST call, missing-grants HTTP-200 behavior, request
+   failure InfrastructureError mapping, and route-level error mapping behavior.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- tests/units/settings/test_delta_health_permissions.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (RED) → 5 failed, 1 passed in 1.25s; `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (GREEN) → 6 passed in 1.09s; `uv run --frozen pytest -q -m "not scenario"` → 5818 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.26s.
+
+## Guard unresolved schema-permission principal
+
+Context: The Task 2 implementation still attempted the effective-permissions
+REST call when both `DATABRICKS_CLIENT_ID` and current-user fallback were
+empty, which made the diagnostic path dependent on UC API behavior. This
+follow-up adds an explicit guard that returns a configured HTTP-200 diagnostic
+and skips the permission call when principal resolution fails.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Added an early-return guard after principal resolution and before the
+   effective-permissions REST call, returning `success=true`,
+   `principal=""`, `accessible=false`, `operational=false`, empty
+   permissions, and a clear English message that principal resolution failed
+   and the permission check was skipped.
+2. src/back/objects/domain/SettingsService.py
+   Normalized the successful response `error` field to preserve the
+   null-or-string contract (`None` stays null; non-null values become string).
+3. tests/units/settings/test_delta_health_permissions.py
+   Added strict RED/GREEN coverage for `client_id=""` and missing current user,
+   asserting the service skips effective-permissions calls and returns the
+   configured diagnostic payload; added a contract test for successful error
+   field normalization.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_delta_health_permissions.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (RED) → 2 failed, 6 passed in 1.30s; `uv run --frozen pytest -q tests/units/settings/test_delta_health_permissions.py` (GREEN) → 8 passed in 1.12s; `uv run --frozen pytest -q -m "not scenario"` → 5820 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 42.83s.
+
+## Implement Task 3 Lakehouse permission-health UI
+
+Context: Task 3 completes the Settings Lakehouse Health migration to the
+permission-only backend response shape and applies the canonical card-integrated
+tab rails to Lakehouse, Lakebase, and Neo4j without changing IDs, handlers, or
+Bootstrap/ARIA behavior.
+
+Changes:
+
+1. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Added strict RED-first frontend contracts for permission-only Health copy,
+   `loadDeltaTripleStoreHealth` field usage, icon+text status semantics, and
+   canonical tab-rail hierarchy (`card h-100`, `card-body p-0 ob-tabs-wrap`,
+   `nav nav-tabs ob-tabs nav-fill`, `tab-content p-3`) with `ob-tab-content`
+   removed from the three targeted groups.
+2. src/front/templates/settings.html
+   Replaced Lakehouse Health description to focus on effective permissions for
+   Registry `catalog.schema` and principal; applied canonical tab-card wrappers
+   and classes to Lakehouse/Lakebase/Neo4j while preserving existing tab/button/
+   pane IDs, modal placement, ARIA attributes, and tab behavior.
+3. src/front/static/config/js/settings.js
+   Reworked `loadDeltaTripleStoreHealth` to consume only permission-focused
+   fields (`registry_catalog`, `registry_schema`, `principal`, `accessible`,
+   `operational`, `permissions`, `error`), render one row per permission with
+   inherited source, escape all server-provided values, and expose overall
+   status via icon + text (not color-only).
+4. tests/units/front/test_lakehouse_materialization_ui.py
+   Updated the legacy Settings-health expectation now that Health no longer
+   depends on materialization/view-count behavior.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- tests/units/front/test_lakehouse_materialization_ui.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py` (RED) → 9 failed, 0 passed in 0.17s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/settings/test_delta_warehouse_config.py tests/units/settings/test_graph_engine_config.py` (GREEN) → 52 passed, 0 failed in 0.78s; `uv run --frozen pytest -q -m "not scenario"` → 5828 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 45.23s.
+
+## Fix Task 3 browser blocker and low findings
+
+Context: Task 3 follow-up addresses the browser blocker on horizontally
+scrollable Settings tab rails and the remaining low findings on Lakehouse
+Health response handling and accessibility semantics.
+
+Changes:
+
+1. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Added RED-first contracts for standards-based nearest-inline tab rail
+   scrolling on Bootstrap activation/focus in `deltaTabs`, `lakebaseTabs`,
+   `neo4jTabs`, plus Health `resp.ok` guard and live status container semantics.
+2. src/front/static/config/js/settings.js
+   Added Settings-only tab rail auto-scroll wiring using `scrollIntoView` with
+   `{ inline: 'nearest', block: 'nearest' }` on `shown.bs.tab` and `focusin`
+   events for the three page-level rails, without changing shared tab CSS/IDs.
+3. src/front/static/config/js/settings.js
+   Hardened `loadDeltaTripleStoreHealth` to check `resp.ok` before parsing JSON
+   and throw into the existing error UI path for HTTP failures.
+4. src/front/templates/settings.html
+   Added `role="status"` and `aria-live="polite"` to `deltaHealthResult` to
+   announce Health refresh results accessibly without layout/geometry changes.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py` (RED) → 7 failed, 9 passed in 0.20s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_sidebar_content_stretch_contract.py` (GREEN) → 150 passed, 0 failed in 0.33s; `uv run --frozen pytest -q -m "not scenario"` → 5833 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.34s.
+
+## Finalize Task 4 documentation and browser verification
+
+Context: Addressed Task 4 review findings by keeping historical changelog sections unchanged, adding a standalone documentation/browser-verification entry, and refining user-facing Health exclusions. Neo4j browser evidence remains pending and is intentionally excluded from final verification claims.
+
+Changes:
+
+1. docs/user-guide.md
+   Added explicit `R2RML VIEW` exclusion in Lakehouse Health "does not check" scope.
+2. .superpowers/sdd/task-4-report.md
+   Removed stale analytics/LTTB content and retained only Settings Lakehouse Health delivery evidence; Neo4j evidence was subsequently confirmed and is recorded below.
+3. changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+   Restored all prior sections to pre-`fe74c5a9` content and appended this standalone Task 4 section without rewriting prior history.
+
+Modified files:
+- docs/user-guide.md
+- .superpowers/sdd/task-4-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Browser evidence:
+- Settings Health endpoint HTTP 200 confirmed.
+- Direct Unity Catalog effective-permissions API succeeded for principal `benoit.cayla@databricks.com`.
+- Inherited `ALL PRIVILEGES` expanded to six operational permission rows.
+- No assets, warehouse, or domain details rendered in Health output.
+- Desktop and 390px tab rails passed.
+- Mobile focus blocker remained fixed (`Lakehouse scrollLeft 0→129`, `Lakebase 0→368`).
+- Refresh returned HTTP 200 with live-region status announcements and zero console errors.
+- Neo4j verification completed at 390px on HEAD `93fba1a1`: `neo4jTabs` uses identical `nav nav-tabs ob-tabs nav-fill` with card hierarchy and active underline; ArrowRight/ArrowLeft with wrapping switched focus/panes correctly; focused tabs stayed contained; `scrollWidth=clientWidth=341` and `scrollLeft=0` because both tabs fit; zero console warnings/errors, page errors, and request failures.
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/settings/test_delta_health_permissions.py` → see latest run in this delivery commit.
+
+## Apply final review hardening fixes
+
+Context: Final review requested one focused hardening set for Settings Lakehouse
+permissions health. The scope was to remove obsolete domain-asset health code,
+fail closed on effective-permissions principal parsing, make frontend test
+function extraction robust (no fixed truncation), and keep pagination/401
+behavior unchanged while documenting the single-principal API rationale in the
+delivery report.
+
+Changes:
+
+1. src/back/core/graphdb/delta/health.py
+   Removed obsolete `settings_health_summary` production helper and kept
+   `probe_table_status`/`probe_from_client` intact because active callers still
+   use them.
+2. tests/units/graphdb/delta/test_delta_package.py
+   Removed orphaned `settings_health_summary` tests and retained/expanded pure
+   `schema_permission_summary` coverage.
+3. src/back/core/databricks/uc/UnityCatalog.py
+   Hardened `get_effective_schema_permissions` to discard assignments when the
+   entry principal is missing, empty, or mismatched with the requested principal.
+4. tests/units/core/test_unity_catalog.py
+   Updated defensive test coverage to enforce fail-closed principal filtering.
+5. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Replaced fixed-length function slicing with brace-aware extraction and added
+   regression coverage proving no hard truncation while preventing spill into
+   subsequent code blocks.
+6. .superpowers/sdd/final-fix-report.md
+   Added the final hardening report with implementation notes, test evidence,
+   unchanged pagination/401 confirmation, and the API single-principal
+   page-guarantee rationale.
+
+Modified files:
+- src/back/core/graphdb/delta/health.py
+- tests/units/graphdb/delta/test_delta_package.py
+- src/back/core/databricks/uc/UnityCatalog.py
+- tests/units/core/test_unity_catalog.py
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py::TestGetEffectiveSchemaPermissions::test_effective_schema_discards_missing_or_mismatched_principals tests/units/front/test_settings_lakehouse_health_permissions.py::TestLakehouseHealthCopyAndRenderer::test_function_body_helper_is_not_hard_truncated` (RED) → 2 failed in 1.00s; `uv run --frozen pytest -q tests/units/core/test_unity_catalog.py tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/graphdb/delta/test_delta_package.py tests/units/settings/test_delta_health_permissions.py` (GREEN) → 89 passed, 0 failed in 1.38s; `uv run --frozen pytest -q -m "not scenario"` → 5831 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.93s.
+
+## Align Settings Runs and Health tab rails
+
+Context: Task 5 requires applying the canonical card-integrated `ob-tabs`
+layout to Settings Automation Runs and system Health while preserving all
+existing IDs, panes, filters, lazy-loading, handlers, diagnostics, and ARIA
+behavior. The tab-rail keyboard auto-scroll behavior also had to include these
+two additional rails.
+
+Changes:
+
+1. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Added RED-first assertions for Health canonical card hierarchy, `tab-content p-3`,
+   removal of `ob-tab-content`, and inclusion of `settingsRunsTabs` and `healthTabs`
+   in the Settings tab-rail auto-scroll list.
+2. tests/units/front/test_settings_runs_page.py
+   Added RED-first assertions that Runs keeps existing tab/pane IDs while using
+   canonical card-integrated markup, removes `ob-tab-content`, and removes
+   `text-primary`/`text-success` icon forcing from the Runs tab rail.
+3. src/front/templates/partials/settings/_settings_runs.html
+   Kept the Domain filter above the tab card, wrapped Runs tabs/content in
+   `card h-100` + `card-body p-0 ob-tabs-wrap`, added `nav-fill`, switched to
+   `tab-content p-3`, and removed per-icon primary/success color classes.
+4. src/front/templates/partials/settings/_settings_health.html
+   Wrapped Health tabs/content in the same canonical hierarchy, added `nav-fill`,
+   and switched to `tab-content p-3` while preserving all existing IDs, tab targets,
+   lazy-loaded panes, refresh actions, and ARIA attributes.
+5. src/front/static/config/js/settings.js
+   Extended the existing Settings-only nearest-scroll rail list to include
+   `settingsRunsTabs` and `healthTabs` in the `shown.bs.tab` and `focusin`
+   auto-scroll wiring.
+6. docs/superpowers/plans/2026-09-02-settings-lakehouse-health-permissions.md
+   Updated Task 5 execution checkboxes to record completed RED/GREEN/full-suite
+   steps and delivery state.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/settings/_settings_health.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- tests/units/front/test_settings_runs_page.py
+- docs/superpowers/plans/2026-09-02-settings-lakehouse-health-permissions.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` (RED) → 6 failed, 98 passed in 1.99s; `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` (GREEN) → 104 passed, 0 failed in 2.15s; `uv run --frozen pytest -q -m "not scenario"` → 5836 passed, 304 skipped, 6 deselected, 1 xfailed, 0 failed in 44.68s.
+
+## Address Task 5 review findings
+
+Context: Before browser validation, Task 5 review requested a formatting-only
+cleanup of wrapped Runs/Health tab markup indentation and stronger structural
+tests that assert full ordered nesting in the correct scope instead of
+independent contains checks.
+
+Changes:
+
+1. src/front/templates/partials/settings/_settings_runs.html
+   Re-indented wrapped tab-pane content and closing tags so visual hierarchy
+   clearly follows `card` → `card-body` → `tab-content`, with no content,
+   behavior, IDs, handlers, filters, tables, diagnostics, lazy-load, or ARIA
+   changes.
+2. src/front/templates/partials/settings/_settings_health.html
+   Re-indented wrapped tab-pane content and closing tags to mirror the same
+   visual hierarchy and preserve all existing behavior and identifiers.
+3. tests/units/front/test_settings_runs_page.py
+   Strengthened the Runs structural assertion to validate the complete ordered
+   four-level nesting inside the rendered `/settings` Runs section boundary in
+   one scoped regex check.
+4. tests/units/front/test_settings_lakehouse_health_permissions.py
+   Strengthened the Health structural assertion to validate the complete
+   ordered four-level nesting inside the `_settings_health.html` partial with
+   explicit close-order enforcement.
+5. .superpowers/sdd/task-5-report.md
+   Appended review follow-up evidence and focused test results before browser
+   validation.
+
+Modified files:
+- src/front/templates/partials/settings/_settings_runs.html
+- src/front/templates/partials/settings/_settings_health.html
+- tests/units/front/test_settings_runs_page.py
+- tests/units/front/test_settings_lakehouse_health_permissions.py
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_settings_lakehouse_health_permissions.py tests/units/front/test_settings_runs_page.py` → 104 passed, 0 failed in 1.89s.
+
+## Append Task 5 browser validation evidence
+
+Context: Completed Task 5 browser validation evidence capture after review
+findings closure, replacing the pending-browser note in the delivery report
+and recording final UI and interaction checks.
+
+Changes:
+
+1. .superpowers/sdd/task-5-report.md
+   Replaced the pending browser-validation concern with a completed status and
+   appended detailed desktop/mobile browser evidence for Runs and Health rails.
+2. changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+   Appended this evidence section (append-only) without rewriting prior entries.
+
+Browser evidence:
+- Desktop and 390px: identical style across the five Settings rails
+  (Lakehouse, Lakebase, Neo4j, Runs, Health).
+- Runs: 25 build rows and 21 analytics rows rendered; Domain filter remained
+  outside the tab card.
+- Health: 15 readiness checks; Diagnostics 4 groups / 20 checks; Refresh
+  performed successful `GET` updates.
+- Navigation and accessibility: click, `ArrowRight`, `ArrowLeft`, wrap, and
+  focus visibility all passed.
+- Rail metrics: desktop `scrollWidth/clientWidth/scrollLeft = 1335/1335/0`;
+  mobile `341/341/0`.
+- No page overflow; no console, page, network, or HTTP errors.
+- Only expected capability warnings observed; zero failed checks.
+
+Modified files:
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+## Skip current Lakebase registry migrations
+
+Context: A deployment replayed owner-only PostgreSQL DDL even though the
+registry schema was already at the current version. App-initialized tables are
+owned by the application service principal while the schema is human-owned, so
+`ALTER TABLE ... IF NOT EXISTS` failed with `must be owner of table
+domain_versions` before determining that no change was needed.
+
+Changes:
+
+1. scripts/bootstrap/lakebase-perms.sh
+   Reused the canonical read-only migration inspection before Step 2b and skip
+   all DDL when no expected or stale registry changes remain. Inspection
+   failures preserve the previous idempotent-DDL fallback.
+2. tests/units/scripts/test_lakebase_preflight.py
+   Added a regression contract proving that migration inspection precedes DDL
+   and that current registries use the explicit skip path.
+
+Modified files:
+- scripts/bootstrap/lakebase-perms.sh
+- tests/units/scripts/test_lakebase_preflight.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-02.log
+
+Tests: `uv run --frozen pytest -q tests/units/scripts/test_lakebase_preflight.py`
+(RED) → 1 failed, 3 passed; `uv run --frozen pytest -q
+tests/units/scripts/test_lakebase_preflight.py tests/units/scripts/test_lakebase_perms.py`
+(GREEN) → 7 passed; `unset APP_NAME MCP_APP_NAME DATABRICKS_CONFIG_PROFILE; uv
+run --frozen pytest -q -m "not scenario"` → 5837 passed, 304 skipped, 6
+deselected, 1 xfailed, 0 failed in 42.77s.
+
+Live verification: `make bootstrap-lakebase` → exit 0 and
+`Registry schema migrations already current; skipping DDL.`; the
+`must be owner of table domain_versions` error was not emitted.

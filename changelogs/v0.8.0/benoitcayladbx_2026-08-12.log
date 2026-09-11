@@ -1,0 +1,42 @@
+## Stop binding Neo4j secret in DAB deploy (GH #136)
+
+Context: `./scripts/deploy.sh` failed on first deploy with
+`Invalid secret resource neo4j-password: Secret with scope ontobricks-secrets
+and key neo4j-password does not exist.` Neo4j is optional and the product path
+is Settings → Neo4j (Secrets API); the DAB overlay forced a workspace secret
+that most installs do not have. Also, instance targets (`dev-lakebase-<id>`)
+skipped the secret preflight because it only grepped `databricks.yml`.
+
+Changes:
+
+1. `databricks.yml`
+   Removed `neo4j_secret_scope` variable and the `neo4j-password` secret overlay
+   from the `dev-lakebase` app resources.
+2. `scripts/_internal/_ensure-instance-target.sh`
+   Stopped emitting the `neo4j-password` secret binding for generated instance
+   targets.
+3. `scripts/deploy.config.sh` / `scripts/deploy.sh`
+   Dropped `NEO4J_SECRET_SCOPE` / `--var=neo4j_secret_scope` and the secret-scope
+   preflight block.
+4. `app.yaml.template`
+   Clarified that the unbound `neo4j-password` resource is legacy-only and not
+   bound by DAB.
+5. `tests/units/settings/test_deploy_app_rename_guard.py`
+   Replaced “secret scope is configurable” assertions with “DAB must not bind
+   Neo4j secrets”.
+6. `documentation/pr47-neo4j-demo/secret-configuration.md` /
+   `documentation/deployment.md`
+   Documented that deploy does not bind Neo4j secrets.
+
+Modified files:
+- databricks.yml
+- scripts/_internal/_ensure-instance-target.sh
+- scripts/deploy.config.sh
+- scripts/deploy.sh
+- app.yaml.template
+- tests/units/settings/test_deploy_app_rename_guard.py
+- documentation/pr47-neo4j-demo/secret-configuration.md
+- documentation/deployment.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-12.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 4796 passed, 276 skipped, 5 deselected, 1 xfailed in 45.53s

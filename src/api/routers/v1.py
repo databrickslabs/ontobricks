@@ -7,7 +7,7 @@ All endpoints accept authentication via headers or request body.
 
 from fastapi import APIRouter, Header
 from pydantic import AliasChoices, BaseModel, Field
-from typing import Optional, Any
+from typing import Any, Literal, Optional
 
 from back.core.errors import ValidationError, NotFoundError
 from shared.config.constants import APP_VERSION
@@ -119,6 +119,40 @@ class SuccessResponse(BaseModel):
     message: Optional[str] = Field(None, description="Optional message")
 
 
+class DomainStatisticsResponse(BaseModel):
+    """Counts and generated-artifact availability for a domain document."""
+
+    classes: int = 0
+    properties: int = 0
+    entities: int = 0
+    relationships: int = 0
+    has_r2rml: bool = False
+
+
+class DomainFileInfoResponse(BaseModel):
+    """Normalized metadata returned for one domain JSON document."""
+
+    name: str
+    description: str = ""
+    uri: str = ""
+    version: str
+    status: str = "DRAFT"
+    author: str = ""
+    graph_backend: Literal["none", "lakebase", "databricks", "neo4j"] = Field(
+        default="lakebase",
+        description="Normalized backend; 'none' denotes an ontology-only domain.",
+    )
+    statistics: DomainStatisticsResponse
+
+
+class DomainInfoSuccessResponse(BaseModel):
+    """Typed success envelope for stateless domain metadata."""
+
+    success: bool = True
+    data: DomainFileInfoResponse
+    message: Optional[str] = None
+
+
 # ===========================================
 # Helper Functions
 # ===========================================
@@ -209,7 +243,7 @@ async def list_domains(
     )
 
 
-@router.post("/domain/info", response_model=SuccessResponse)
+@router.post("/domain/info", response_model=DomainInfoSuccessResponse)
 async def get_domain_info(
     data: DomainPathModel,
     x_databricks_host: Optional[str] = Header(None, alias="X-Databricks-Host"),

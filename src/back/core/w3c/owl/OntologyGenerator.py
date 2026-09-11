@@ -570,6 +570,19 @@ class OntologyGenerator:
                 (class_uri, ONTOBRICKS_NS.actions, Literal(json.dumps(actions)))
             )
 
+        # Add virtual attribute declarations as JSON string. These are computed
+        # on demand by a UC function, never materialized, so they are kept out
+        # of the owl:DatatypeProperty block below on purpose.
+        virtual_attributes = cls.get("virtualAttributes", [])
+        if virtual_attributes:
+            self.graph.add(
+                (
+                    class_uri,
+                    ONTOBRICKS_NS.virtualAttributes,
+                    Literal(json.dumps(virtual_attributes)),
+                )
+            )
+
         # Add parent class (subClassOf)
         parent = cls.get("parent", "").strip() if cls.get("parent") else ""
         if parent:

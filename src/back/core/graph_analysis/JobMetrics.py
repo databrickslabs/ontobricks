@@ -26,9 +26,10 @@ per metric is returned, never a row per node.
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
-from back.core.errors import InfrastructureError
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graph_analysis.models import (
     DEFAULT_DISTRIBUTION_BINS,
     MODE_JOB,
@@ -53,6 +54,12 @@ APPROXIMATE_METRICS = ("betweenness", "closeness")
 #: What is missing when the job ran with no pivots, or when its BFS was
 #: truncated and the estimates would be biased.
 UNAVAILABLE_METRICS = ("betweenness", "closeness")
+
+METRIC_SERIES_COLUMNS = frozenset(
+    {"pagerank", "betweenness", "degree", "closeness", "clustering"}
+)
+METRIC_SERIES_SAMPLE_THRESHOLD = 5_000
+METRIC_SERIES_SAMPLE_SIZE = 2_000
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +91,51 @@ def resolve_analytics_source(domain: Any, settings: Any) -> Tuple[str, str]:
             f"catalog.schema.table name the Databricks job can read."
         )
     return table, ""
+
+
+@contextmanager
+def analytics_snapshot(domain: Any, settings: Any, source_table: str) -> Iterator[str]:
+    """Yield a table the analytics job can scan repeatedly, cleaning up after.
+
+    In the default materialization ``source_table`` is already a Delta table
+    and this yields it unchanged. Under view-only materialization it is a
+    pass-through view over the R2RML gateway, and the job's iterative BFS would
+    re-run that whole query on every scan — so a disposable snapshot is
+    materialized for the run and dropped on the way out, including when the run
+    raises.
+
+    A failure to drop is logged rather than raised: the run's result matters
+    more than the leftover, which Settings → Lakehouse lists for purging.
+    """
+    from back.core.graphdb.GraphDBFactory import GraphDBFactory
+
+    if GraphDBFactory.resolve_lakehouse_materialization(domain, settings) != "view":
+        yield source_table
+        return
+
+    from back.core.graphdb.delta import _table_naming, materialize
+    from back.core.graphdb.delta.DeltaBase import create_databricks_client
+
+    snapshot = _table_naming.analytics_snapshot_fqn(domain, settings)
+    client = create_databricks_client(domain, settings)
+    if not snapshot or client is None:
+        raise InfrastructureError(
+            "Graph analytics needs a temporary Delta snapshot for a view-only "
+            "domain, and it could not be prepared",
+            detail=(
+                "No snapshot table name could be derived"
+                if not snapshot
+                else "No SQL warehouse is configured for this domain"
+            ),
+        )
+
+    logger.info("Materializing analytics snapshot %s from %s", snapshot, source_table)
+    materialize.materialize_from_view(client, source_table, snapshot)
+    try:
+        yield snapshot
+    finally:
+        logger.info("Dropping analytics snapshot %s", snapshot)
+        materialize.drop_relation(client, snapshot, kind="table")
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +178,92 @@ def top_nodes_query(output_table: str, top_n: int) -> str:
         f"   OR rn_bc <= {k} OR rn_cn <= {k}\n"
         "ORDER BY pagerank DESC, node_uri"
     )
+
+
+def validate_metric_series_column(metric: str) -> str:
+    """Return a validated metric column name for metric-series SQL."""
+    metric_name = str(metric or "").strip()
+    if metric_name not in METRIC_SERIES_COLUMNS:
+        raise ValidationError("Unsupported graph metric")
+    return metric_name
+
+
+def metric_series_query(output_table: str, metric: str) -> str:
+    """One exhaustive series query for a validated metric column."""
+    metric_name = validate_metric_series_column(metric)
+    return (
+        "SELECT node_uri, label, "
+        f"{metric_name} AS score\n"
+        f"FROM {output_table}\n"
+        f"ORDER BY {metric_name} DESC, node_uri ASC"
+    )
+
+
+def sample_metric_series(
+    rows: List[Dict[str, Any]],
+    *,
+    threshold: int = METRIC_SERIES_SAMPLE_THRESHOLD,
+    sample_size: int = METRIC_SERIES_SAMPLE_SIZE,
+) -> Tuple[List[Dict[str, Any]], List[int], bool]:
+    """Return sampled rows and their original one-based ranks.
+
+    Uses pure LTTB above *threshold*. For *threshold* or fewer rows, returns
+    the full input with identity ranks.
+    """
+    total = len(rows)
+    if total <= max(1, int(threshold)):
+        return list(rows), [i + 1 for i in range(total)], False
+
+    target = min(total, max(3, int(sample_size)))
+    if target >= total:
+        return list(rows), [i + 1 for i in range(total)], False
+
+    def _score(index: int) -> float:
+        try:
+            return float(rows[index].get("score", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    bucket_width = float(total - 2) / float(target - 2)
+    sampled_indexes: List[int] = [0]
+    a = 0
+
+    for bucket in range(target - 2):
+        avg_start = int((bucket + 1) * bucket_width) + 1
+        avg_end = int((bucket + 2) * bucket_width) + 1
+        avg_start = min(max(1, avg_start), total - 1)
+        avg_end = min(max(avg_start + 1, avg_end), total)
+
+        avg_count = max(1, avg_end - avg_start)
+        avg_x = 0.0
+        avg_y = 0.0
+        for idx in range(avg_start, avg_end):
+            avg_x += float(idx)
+            avg_y += _score(idx)
+        avg_x /= float(avg_count)
+        avg_y /= float(avg_count)
+
+        range_start = int(bucket * bucket_width) + 1
+        range_end = int((bucket + 1) * bucket_width) + 1
+        range_start = min(max(1, range_start), total - 1)
+        range_end = min(max(range_start + 1, range_end), total - 1)
+
+        ax = float(a)
+        ay = _score(a)
+        max_area = -1.0
+        best = range_start
+        for idx in range(range_start, range_end):
+            area = abs((ax - avg_x) * (_score(idx) - ay) - (ax - float(idx)) * (avg_y - ay))
+            if area > max_area:
+                max_area = area
+                best = idx
+        sampled_indexes.append(best)
+        a = best
+
+    sampled_indexes.append(total - 1)
+    sampled_rows = [rows[idx] for idx in sampled_indexes]
+    ranks = [idx + 1 for idx in sampled_indexes]
+    return sampled_rows, ranks, True
 
 
 def type_profiles_query(output_table: str) -> str:

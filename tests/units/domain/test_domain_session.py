@@ -411,6 +411,36 @@ class TestExportImport:
         domain_session.import_from_file(export)
         assert domain_session.info["neo4j_connection"] == "Aura Prod"
 
+    def test_lakehouse_materialization_round_trip(self, domain_session):
+        """A view-only Lakehouse domain must not silently start copying again."""
+        domain_session.info["name"] = "RoundTrip"
+        domain_session.info["graph_backend"] = "databricks"
+        domain_session.info["lakehouse_materialization"] = "view"
+        export = domain_session.export_for_save()
+        assert export["info"]["lakehouse_materialization"] == "view"
+        domain_session.reset()
+        domain_session.import_from_file(export)
+        assert domain_session.info["lakehouse_materialization"] == "view"
+
+    def test_lakehouse_materialization_defaults_to_table_on_import(self, domain_session):
+        """A domain exported before the option existed keeps materialising."""
+        domain_data = {
+            "info": {"name": "Legacy", "graph_backend": "databricks"},
+            "versions": {
+                "1": {
+                    "ontology": {
+                        "name": "O", "base_uri": "http://x#", "classes": [],
+                        "properties": [], "constraints": [], "swrl_rules": [],
+                        "axioms": [], "expressions": [],
+                    },
+                    "assignment": {"entities": [], "relationships": []},
+                    "design_layout": {"views": {}, "map": {}},
+                }
+            },
+        }
+        domain_session.import_from_file(domain_data)
+        assert domain_session.info["lakehouse_materialization"] == "table"
+
     def test_neo4j_connection_defaults_empty_on_import(self, domain_session):
         """A legacy export without neo4j_connection imports as empty (no crash)."""
         domain_data = {

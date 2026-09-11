@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     initBtn.className = 'btn btn-sm btn-outline-secondary';
                     initBtn.innerHTML = '<i class="bi bi-arrow-up-circle me-1"></i> Apply upgrades';
                 } else {
-                    initBtn.className = 'btn btn-sm btn-outline-success';
+                    initBtn.className = 'btn btn-sm btn-primary';
                     initBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Initialize';
                 }
             }
@@ -772,7 +772,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderImportObxPreview(data) {
         document.getElementById('importObxStep1').style.display = 'none';
         document.getElementById('importObxStep2').style.display = '';
-        document.getElementById('btnImportObxConfirm').style.display = '';
+        const obxConfirmBtn = document.getElementById('btnImportObxConfirm');
+        obxConfirmBtn.classList.remove('d-none');
+        obxConfirmBtn.style.display = '';
 
         const meta = document.getElementById('importObxMeta');
         meta.innerHTML =

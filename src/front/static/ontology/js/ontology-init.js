@@ -74,6 +74,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const currentSection = SidebarNav.getActiveSection();
             if (currentSection === 'design' && typeof flushDesignLayout === 'function') {
                 await flushDesignLayout();
+                if (typeof autoSaveToRegistry === 'function') {
+                    await autoSaveToRegistry();
+                }
             }
             return true;
         },

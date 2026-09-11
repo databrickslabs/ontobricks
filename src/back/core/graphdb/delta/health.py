@@ -2,12 +2,77 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from back.core.logging import get_logger
 from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
 
 logger = get_logger(__name__)
+
+REQUIRED_SCHEMA_PERMISSIONS = (
+    "USE CATALOG",
+    "USE SCHEMA",
+    "CREATE TABLE",
+    "CREATE VIEW",
+    "SELECT",
+    "MODIFY",
+)
+
+
+def _normalize_permission_name(value: Any) -> str:
+    """Normalize evaluator input from UC REST assignments.
+
+    Intentionally duplicated with ``UnityCatalog._normalize_privilege_name``:
+    this evaluator remains pure and boundary-agnostic, avoiding a dependency
+    cycle between Databricks client code and domain health logic.
+    """
+    return str(value or "").strip().replace("_", " ").upper()
+
+
+def schema_permission_summary(
+    catalog: str, schema: str, principal: str, assignments: Any
+) -> Dict[str, Any]:
+    """Evaluate required schema permissions from normalized assignments."""
+    registry_catalog = (catalog or "").strip()
+    registry_schema = (schema or "").strip()
+    storage_location = (
+        f"{registry_catalog}.{registry_schema}"
+        if registry_catalog and registry_schema
+        else ""
+    )
+    raw_assignments = assignments if isinstance(assignments, list) else []
+    grants: Dict[str, str] = {}
+
+    for item in raw_assignments:
+        if not isinstance(item, dict):
+            continue
+        privilege = _normalize_permission_name(item.get("privilege"))
+        inherited_from = str(item.get("inherited_from") or "").strip()
+        if not privilege:
+            continue
+        if privilege == "ALL PRIVILEGES":
+            for required in REQUIRED_SCHEMA_PERMISSIONS:
+                grants.setdefault(required, inherited_from)
+            continue
+        if privilege in REQUIRED_SCHEMA_PERMISSIONS:
+            grants.setdefault(privilege, inherited_from)
+
+    permissions = [
+        {
+            "name": required,
+            "granted": required in grants,
+            "inherited_from": grants.get(required, ""),
+        }
+        for required in REQUIRED_SCHEMA_PERMISSIONS
+    ]
+    return {
+        "registry_catalog": registry_catalog,
+        "registry_schema": registry_schema,
+        "storage_location": storage_location,
+        "principal": principal,
+        "permissions": permissions,
+        "operational": all(item["granted"] for item in permissions),
+    }
 
 
 def probe_table_status(store: DeltaFlatStore, table_fqn: str) -> Dict[str, Any]:
@@ -54,57 +119,3 @@ def probe_from_client(client: Any, table_fqn: str) -> Dict[str, Any]:
             "error": "Databricks client not configured",
         }
     return probe_table_status(DeltaFlatStore(client), table_fqn)
-
-
-def settings_health_summary(
-    domain: Any,
-    settings: Optional[Any] = None,
-    registry_cfg: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Payload for Settings → Lakehouse triple-store health card."""
-    from back.core.graphdb.delta import _table_naming
-    from back.core.graphdb.delta.DeltaBase import create_databricks_client
-
-    reg = registry_cfg if isinstance(registry_cfg, dict) else {}
-    registry_catalog = (reg.get("catalog") or "").strip()
-    registry_schema = (reg.get("schema") or "").strip()
-    storage_location = (
-        f"{registry_catalog}.{registry_schema}"
-        if registry_catalog and registry_schema
-        else ""
-    )
-
-    client = create_databricks_client(domain, settings)
-    view = ""
-    data = ""
-    inferred = ""
-    domain_name = ((getattr(domain, "info", None) or {}).get("name") or "").strip()
-    try:
-        view = _table_naming.view_fqn(domain, settings)
-        data = _table_naming.data_table_fqn(domain, settings)
-        inferred = _table_naming.inferred_table_fqn(domain, settings)
-    except Exception:  # noqa: BLE001
-        pass
-    view_status = (
-        probe_from_client(client, view) if view else {"error": "View FQN not resolved"}
-    )
-    data_status = (
-        probe_from_client(client, data)
-        if data
-        else {"error": "Data table FQN not resolved"}
-    )
-    return {
-        "success": client is not None,
-        "warehouse_configured": client is not None,
-        "warehouse_id": getattr(client, "warehouse_id", "") if client else "",
-        "registry_catalog": registry_catalog,
-        "registry_schema": registry_schema,
-        "storage_location": storage_location,
-        "registry_configured": bool(storage_location),
-        "active_domain": domain_name,
-        "view_fqn": view,
-        "data_table_fqn": data,
-        "inferred_table_fqn": inferred,
-        "view": view_status,
-        "data_table": data_status,
-    }

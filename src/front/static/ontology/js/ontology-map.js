@@ -10,6 +10,7 @@ let ontologyMapSvg = null;
 let ontologyMapSimulation = null;
 let ontologyMapZoom = null;
 let mapAutoSaveTimeout = null;
+const MAP_GRID_STORAGE_KEY = 'mapGridVisible';
 let mapConnectionMode = null; // { sourceEntity: {...}, lineElement: <line>, type: 'relationship'|'inheritance' }
 let _mapInitGeneration = 0;   // guards against concurrent initOntologyMap() calls
 let ontologyMapLinks  = [];   // live reference to link data (set by initOntologyMap)
@@ -25,6 +26,37 @@ let _mapClearHighlights       = null;  // set by initOntologyMap, used by focusM
  */
 function _resolveLinkEndpoint(endpoint) {
     return (endpoint && typeof endpoint === 'object') ? endpoint.name : endpoint;
+}
+
+function _classHasExternalConfig(cls) {
+    return !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length);
+}
+
+function _appendMapExternalBadge(nodeSelection) {
+    nodeSelection.append('circle')
+        .attr('class', 'map-node-external-badge-bg')
+        .attr('cx', 16)
+        .attr('cy', -16)
+        .attr('r', 9)
+        .attr('role', 'img')
+        .attr('aria-label', 'Has external configuration');
+
+    nodeSelection.append('text')
+        .attr('class', 'map-node-external-badge-icon')
+        .attr('x', 16)
+        .attr('y', -16)
+        .attr('aria-hidden', 'true')
+        .text('\uf46d');
+}
+
+/**
+ * Resolve the current brand primary from CSS custom properties.
+ */
+function _getBrandPrimaryColor() {
+    const value = getComputedStyle(document.documentElement)
+        .getPropertyValue('--db-primary')
+        .trim();
+    return value || '#4F46E5';
 }
 
 /**
@@ -93,12 +125,53 @@ function scheduleMapAutoSave(nodes) {
 }
 
 /**
+ * Whether the Designer canvas dotted grid is shown (default: on, like OntoViz).
+ * @returns {boolean}
+ */
+function isMapGridVisible() {
+    return sessionStorage.getItem(MAP_GRID_STORAGE_KEY) !== 'false';
+}
+
+/**
+ * Apply persisted grid visibility to the canvas and toggle button.
+ */
+function applyMapGridVisibility() {
+    const container = document.getElementById('ontology-map-container');
+    const btn = document.getElementById('mapToggleGrid');
+    const visible = isMapGridVisible();
+    if (container) {
+        container.classList.toggle('map-grid-visible', visible);
+    }
+    if (btn) {
+        btn.classList.toggle('active', visible);
+        btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        btn.title = visible ? 'Hide dot grid' : 'Show dot grid';
+    }
+}
+
+/**
+ * Bind the header grid toggle once. Safe to call from every map init
+ * (including the empty-ontology early return).
+ */
+function initMapGridToggle() {
+    const btn = document.getElementById('mapToggleGrid');
+    applyMapGridVisibility();
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.onclick = () => {
+        sessionStorage.setItem(MAP_GRID_STORAGE_KEY, String(!isMapGridVisible()));
+        applyMapGridVisibility();
+    };
+}
+
+/**
  * Initialize the Ontology Designer visualization
  */
 async function initOntologyMap() {
     // Increment generation counter to cancel any previous in-flight init
     const thisGeneration = ++_mapInitGeneration;
 
+    initMapGridToggle();
     showOntologyMapLoading(true);
     
     const container = document.getElementById('ontology-map-container');
@@ -175,7 +248,7 @@ async function initOntologyMap() {
             icon: cls.emoji || OntologyState.defaultClassEmoji || '📦',
             // True when the backing class has a Dashboard, Dataset, Actions, or
             // Bridges configured under the entity panel's References tab.
-            hasExternal: !!(cls.dashboard || cls.dataset || (cls.actions || []).length || (cls.bridges || []).length),
+            hasExternal: _classHasExternalConfig(cls),
             parent: cls.parent,
             // Use saved position if available, fix positions to prevent animation
             x: x,
@@ -340,6 +413,19 @@ async function initOntologyMap() {
         .attr('d', 'M0,-5L10,0L0,5')
         .attr('fill', '#495057');
     
+    // Arrow for reverse-direction relationships (placed at path start, points back toward source)
+    defs.append('marker')
+        .attr('id', 'map-arrow-start')
+        .attr('viewBox', '0 -5 10 10')
+        .attr('refX', 28)
+        .attr('refY', 0)
+        .attr('markerWidth', 6)
+        .attr('markerHeight', 6)
+        .attr('orient', 'auto-start-reverse')
+        .append('path')
+        .attr('d', 'M0,-5L10,0L0,5')
+        .attr('fill', '#6c757d');
+
     // Arrow for inheritance (hollow)
     defs.append('marker')
         .attr('id', 'map-arrow-inheritance')
@@ -418,7 +504,7 @@ async function initOntologyMap() {
         .data(regularLinks.filter(l => l.type === 'relationship'))
         .enter()
         .append('path')
-        .attr('class', 'map-link');
+        .attr('class', d => `map-link${d.direction === 'reverse' ? ' reverse' : ''}`);
 
     // Draw inheritance links
     const inheritanceLinkElements = g.append('g')
@@ -529,20 +615,7 @@ async function initOntologyMap() {
     // and marked pointer-events: none in CSS.
     const externalBadgeNodes = nodeElements.filter(d => d.hasExternal);
 
-    externalBadgeNodes.append('circle')
-        .attr('class', 'map-node-external-badge-bg')
-        .attr('cx', 16)
-        .attr('cy', -16)
-        .attr('r', 9)
-        .attr('role', 'img')
-        .attr('aria-label', 'Has external configuration');
-
-    externalBadgeNodes.append('text')
-        .attr('class', 'map-node-external-badge-icon')
-        .attr('x', 16)
-        .attr('y', -16)
-        .attr('aria-hidden', 'true')
-        .text('\uf46d'); // bi-lightning-charge codepoint (bootstrap-icons font) — same glyph/colour as the entity panel's References tab
+    _appendMapExternalBadge(externalBadgeNodes);
 
     // Tooltip on hover
     nodeElements.append('title')
@@ -687,7 +760,8 @@ async function initOntologyMap() {
         showMapContextMenu(event, d, container);
     });
     
-    // Hide context menu when clicking on SVG background
+    // Clicking the empty canvas drops the selection. Entity and relationship
+    // clicks stop propagation, so only background clicks reach this handler.
     svg.on('click', function() {
         hideMapContextMenu();
         hideMapRelationshipActions();
@@ -697,6 +771,12 @@ async function initOntologyMap() {
             .attr('stroke', '#999')
             .attr('stroke-width', 1.5);
         clearHighlights();
+
+        // Guarded: this is now the only way out of the panel, so a pending
+        // edit must be flushed rather than dropped.
+        if (typeof guardedCloseSharedPanel === 'function') {
+            guardedCloseSharedPanel();
+        }
     });
     
     svg.on('contextmenu', function(event) {
@@ -1739,7 +1819,7 @@ function startMapConnectionMode(sourceEntity, container, type = 'relationship') 
     // CSS class fails to apply for any reason.
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('class', type === 'inheritance' ? 'map-connection-line map-inheritance-line' : 'map-connection-line');
-    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : '#0d6efd');
+    line.setAttribute('stroke', type === 'inheritance' ? '#6f42c1' : _getBrandPrimaryColor());
     line.setAttribute('stroke-width', '3');
     line.setAttribute('stroke-dasharray', type === 'inheritance' ? '5,5' : '8,4');
     line.setAttribute('stroke-linecap', 'round');
@@ -2454,3 +2534,85 @@ function showMapRelationshipDialog(sourceEntity, targetEntity) {
         modal.show();
     });
 }
+
+/**
+ * Targeted in-place update of a single relationship link's direction in the D3 map.
+ * Updates the live `ontologyMapLinks` data and toggles the `reverse` CSS class on the
+ * corresponding SVG path element so the arrowhead flips immediately.
+ * Called by `saveSharedRelationship` via window.refreshMapLinkDirection.
+ * @param {string} name - Relationship name (matched by link.name)
+ * @param {string} direction - 'forward' | 'reverse'
+ */
+function refreshMapLinkDirection(name, direction) {
+    if (!ontologyMapSimulation) return;
+    const isReverse = direction === 'reverse';
+    // Update the live data so the next simulation tick renders the correct direction
+    ontologyMapLinks.forEach(link => {
+        if (link.name === name) link.direction = direction;
+    });
+    // Update the DOM element class immediately (CSS handles the marker swap)
+    if (typeof d3 !== 'undefined' && ontologyMapSvg) {
+        ontologyMapSvg.selectAll('.map-link').each(function(d) {
+            if (d && d.name === name) {
+                d3.select(this).classed('reverse', isReverse);
+            }
+        });
+    }
+}
+window.refreshMapLinkDirection = refreshMapLinkDirection;
+
+/**
+ * Refresh visible metadata for one existing entity without rebuilding the map.
+ * Structural changes (create, rename, delete, or inheritance) still require
+ * initOntologyMap().
+ * @param {string} name - Entity name
+ * @returns {boolean} true when an existing map node was updated
+ */
+function refreshMapNodeFromConfig(name) {
+    if (!ontologyMapSimulation || typeof d3 === 'undefined') return false;
+
+    const classData = (OntologyState?.config?.classes || []).find(cls => cls.name === name);
+    const node = ontologyMapNodes.find(candidate => candidate.name === name);
+    if (!classData || !node) return false;
+
+    node.label = classData.label || classData.name;
+    node.icon = classData.emoji || OntologyState.defaultClassEmoji || '📦';
+    node.hasExternal = _classHasExternalConfig(classData);
+
+    const nodeSelection = d3.selectAll('.map-node').filter(d => d && d.name === name);
+    if (nodeSelection.empty()) return false;
+
+    nodeSelection.select('.map-node-icon').text(node.icon);
+    nodeSelection.select('.map-node-label').text(node.label || node.name);
+    nodeSelection.select('title').text(node.label || node.name);
+    nodeSelection.selectAll('.map-node-external-badge-bg').remove();
+    nodeSelection.selectAll('.map-node-external-badge-icon').remove();
+    if (node.hasExternal) _appendMapExternalBadge(nodeSelection);
+
+    return true;
+}
+window.refreshMapNodeFromConfig = refreshMapNodeFromConfig;
+
+/**
+ * Refresh direction and label for one relationship whose endpoints and name
+ * did not change.
+ * @param {string} name - Relationship name
+ * @returns {boolean} true when an existing map link was updated
+ */
+function refreshMapRelationshipFromConfig(name) {
+    if (!ontologyMapSimulation || !ontologyMapSvg || typeof d3 === 'undefined') return false;
+
+    const property = (OntologyState?.config?.properties || []).find(prop => prop.name === name);
+    const link = ontologyMapLinks.find(candidate => candidate.name === name);
+    if (!property || !link) return false;
+
+    link.label = property.label || property.name;
+    refreshMapLinkDirection(name, property.direction);
+
+    const labelSelection = ontologyMapSvg.selectAll('.map-link-label').filter(d => d && d.name === name);
+    if (labelSelection.empty()) return false;
+    labelSelection.text(link.label);
+
+    return true;
+}
+window.refreshMapRelationshipFromConfig = refreshMapRelationshipFromConfig;

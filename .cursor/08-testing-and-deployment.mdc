@@ -16,7 +16,7 @@ scope:
 - Ensure proper input validation and error handling.
 - **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `app.yaml` (Databricks Asset Bundle format). The container runs `uv run --frozen`, so `uv.lock` must stay pinned to the public CDN and in sync with `pyproject.toml` — see the **"`uv.lock` is deployment-critical"** section in `.cursor/09-package-management.mdc` before deploying or re-locking.
 - **Development Server**: Run via `run.py` which imports `create_app` from `shared.fastapi.main`. Uvicorn with auto-reload for local development.
-- **Changelog**: After any code change, update `/changelogs/YYYY-MM-DD.log` with a section including title, context, numbered changes with file paths, modified files list, and test results.
+- **Changelog**: After any code change, update `/changelogs/` (version folder + `[user]_YYYY-MM-DD.log`) with a section including title, context, numbered changes with file paths, modified files list, and test results. **English only** — `.cursor/05 §English-only artifacts`.
 
 ### Documentation Rules
 
@@ -40,7 +40,7 @@ scope:
   2. Re-build by running `ci/build_docs.sh` from the project root.
   3. Verify no new Sphinx warnings about missing or renamed symbols.
 - When adding a **new subpackage** to `back/core`, `back/objects`, or `agents`, add a new `.rst` file and reference it from the parent `.rst` toctree.
-- All public classes and functions must have **docstrings** (Google or NumPy style) so `autodoc` renders them properly.
+- All public classes and functions must have **docstrings** (Google or NumPy style, **in English**) so `autodoc` renders them properly. See `.cursor/05 §English-only artifacts`.
 
 ### Working Style for Refactoring
 

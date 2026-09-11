@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/.."
-SPHINX_DIR="$PROJECT_ROOT/documentation/sphinx"
+SPHINX_DIR="$PROJECT_ROOT/docs/sphinx"
 BUILD_DIR="$SPHINX_DIR/_build"
 
 # Prefer the project venv if it exists
@@ -60,11 +60,11 @@ fi
 
 find_sphinx_build
 
-# Narrative docs use MyST to include ../../documentation/*.md — install if missing:
+# Narrative docs use MyST to include ../../docs/*.md — install if missing:
 if ! "$PYTHON" -c "import myst_parser" 2>/dev/null; then
     echo "Installing Sphinx dependencies (sphinx, myst-parser)..."
     "$PYTHON" -m pip install -q "sphinx>=7" "myst-parser>=3" || {
-        echo "ERROR: myst-parser is required for Topic guides. Run: uv sync   or   pip install myst-parser"
+        echo "ERROR: myst-parser is required for Topic guides. Run: uv sync --frozen   or   pip install myst-parser"
         exit 1
     }
 fi

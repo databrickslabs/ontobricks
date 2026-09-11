@@ -96,6 +96,58 @@ def test_dtwin_classes_normalizes_bridges_and_drops_malformed_actions(
     assert "target_project" not in cls["bridges"][0]
 
 
+def test_dtwin_classes_enriches_bridges_but_keeps_unavailable_targets(
+    client, monkeypatch
+):
+    """Internal /dtwin/classes surface enriches with descriptions but
+    never drops bridges — the ontology designer keeps seeing every authored bridge,
+    even ones whose target is not (yet) MCP-visible."""
+    from api.routers.internal import dtwin
+    from back.objects.digitaltwin.NodeContextService import NodeContextService
+
+    mock_domain = MagicMock()
+    mock_domain.info = {"name": "Customer 360"}
+    mock_domain.domain_folder = "customer-360"
+    mock_domain.get_classes.return_value = _CLASSES_WITH_ACTIONS
+    monkeypatch.setattr(dtwin, "get_domain", lambda _session_mgr: mock_domain)
+    monkeypatch.setattr(
+        NodeContextService,
+        "_load_mcp_target_descriptions",
+        staticmethod(lambda **_kw: {"NotFinance": "some other domain"}),
+    )
+
+    response = client.get("/dtwin/classes")
+
+    assert response.status_code == 200
+    bridges = response.json()["classes"][0]["bridges"]
+    # Bridge to Finance is kept (drop_unavailable=False on the UI path)
+    # even though Finance is not in the MCP-visible map.
+    assert len(bridges) == 1
+    assert bridges[0]["target_domain"] == "Finance"
+    assert bridges[0]["target_domain_description"] == ""
+
+
+def test_dtwin_classes_adds_target_description_when_visible(client, monkeypatch):
+    from api.routers.internal import dtwin
+    from back.objects.digitaltwin.NodeContextService import NodeContextService
+
+    mock_domain = MagicMock()
+    mock_domain.info = {"name": "Customer 360"}
+    mock_domain.domain_folder = "customer-360"
+    mock_domain.get_classes.return_value = _CLASSES_WITH_ACTIONS
+    monkeypatch.setattr(dtwin, "get_domain", lambda _session_mgr: mock_domain)
+    monkeypatch.setattr(
+        NodeContextService,
+        "_load_mcp_target_descriptions",
+        staticmethod(lambda **_kw: {"Finance": "Finance ontology"}),
+    )
+
+    response = client.get("/dtwin/classes")
+
+    bridges = response.json()["classes"][0]["bridges"]
+    assert bridges[0]["target_domain_description"] == "Finance ontology"
+
+
 def test_dtwin_nodes_context_returns_metadata_without_rows(client, domain, monkeypatch):
     from api.routers.internal import dtwin
 

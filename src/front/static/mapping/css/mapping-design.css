@@ -9,7 +9,17 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #ffffff;
+    background-color: var(--db-surface-warm);
+}
+
+/* Viewport-fixed dotted grid, matching Ontology Designer (24px / 1px dots). */
+#mapping-map-container.mapping-grid-visible {
+    background-image: radial-gradient(
+        circle at 1px 1px,
+        color-mix(in srgb, var(--db-text) 18%, transparent) 1px,
+        transparent 0
+    );
+    background-size: 24px 24px;
 }
 
 .mapping-design-map-card-body {
@@ -51,6 +61,16 @@
 .mapping-map-node-hitarea {
     stroke: none;
     cursor: inherit;
+}
+
+/* Advisory marker: a bound column vanished from the source table. The
+   mapping itself is still valid, so this sits alongside the status ring
+   rather than replacing it. */
+.mapping-map-node-drift {
+    font-size: 16px;
+    text-anchor: middle;
+    pointer-events: none;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
 /* Mapped entity node - green */
@@ -159,6 +179,22 @@
 .mapping-map-link:hover {
     stroke-opacity: 1;
     stroke-width: 3px;
+}
+
+/* Reverse-direction relationships - arrow at the source end, not the target end */
+.mapping-map-link.reverse.mapped {
+    marker-end: none;
+    marker-start: url(#mapping-arrow-start-mapped);
+}
+
+.mapping-map-link.reverse.unmapped {
+    marker-end: none;
+    marker-start: url(#mapping-arrow-start-unmapped);
+}
+
+.mapping-map-link.reverse.excluded {
+    marker-end: none !important;
+    marker-start: url(#mapping-arrow-start-excluded) !important;
 }
 
 /* Self-loop relationships - override marker-end with self-loop specific markers */

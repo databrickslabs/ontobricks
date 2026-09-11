@@ -3,10 +3,24 @@
 from back.core.helpers.DatabricksHelpers import (  # noqa: F401
     DatabricksHelpers,
     effective_uc_version_path,
+    get_blocking_pool_stats,
     make_volume_file_service,
 )
-from back.core.helpers.SQLHelpers import SQLHelpers  # noqa: F401
+from back.core.helpers.SQLHelpers import (  # noqa: F401
+    SAFE_COL_IDENT,
+    SAFE_SQL_IDENT,
+    SQLHelpers,
+)
 from back.core.helpers.URIHelpers import URIHelpers  # noqa: F401
+from back.core.helpers.UIBranding import (  # noqa: F401
+    BrandPalette,
+    UIBranding,
+    DEFAULT_APP_TITLE,
+    DEFAULT_PRIMARY_COLOR,
+    DEFAULT_LOGO_PATH,
+    derive_brand_palette,
+    normalize_ui_branding,
+)
 
 # SQL / URI helpers must be bound before importing databricks: transitive
 # imports can pull ``back.core.helpers`` again while this module is still
@@ -39,6 +53,7 @@ resolve_default_emoji = DatabricksHelpers.resolve_default_emoji
 resolve_use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch
 resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 resolve_analytics_job_name = DatabricksHelpers.resolve_analytics_job_name
+resolve_app_registry_context = DatabricksHelpers.resolve_app_registry_context
 get_databricks_client = DatabricksHelpers.get_databricks_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
 get_delta_databricks_credentials = DatabricksHelpers.get_delta_databricks_credentials
@@ -58,12 +73,14 @@ __all__ = [
     "resolve_use_cloud_fetch",
     "resolve_analytics_job_enabled",
     "resolve_analytics_job_name",
+    "resolve_app_registry_context",
     "get_databricks_client",
     "get_databricks_credentials",
     "get_delta_databricks_credentials",
     "get_triplestore_sql_credentials",
     "get_databricks_host_and_token",
     "make_volume_file_service",
+    "get_blocking_pool_stats",
     "require_serving_llm",
     "effective_uc_version_path",
     "sql_escape",
@@ -76,4 +93,13 @@ __all__ = [
     "is_uri",
     "extract_local_name",
     "safe_identifier",
+    "SAFE_SQL_IDENT",
+    "SAFE_COL_IDENT",
+    "BrandPalette",
+    "UIBranding",
+    "DEFAULT_APP_TITLE",
+    "DEFAULT_PRIMARY_COLOR",
+    "DEFAULT_LOGO_PATH",
+    "derive_brand_palette",
+    "normalize_ui_branding",
 ]

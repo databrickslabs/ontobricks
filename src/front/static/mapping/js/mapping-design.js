@@ -13,6 +13,86 @@ let mappingMapSvg = null;
 let mappingMapSimulation = null;
 let mappingMapZoom = null;
 let mappingMapNodes = [];
+let isMappingResizing = false;
+
+const MAPPING_PANEL_DEFAULT_HEIGHT = 320;
+const MAPPING_PANEL_MIN_HEIGHT = 200;
+const MAPPING_PANEL_HEIGHT_STORAGE_KEY = 'mappingDesignerPanelHeight';
+const MAPPING_MAP_GRID_STORAGE_KEY = 'mappingMapGridVisible';
+
+function isMappingMapGridVisible() {
+    return sessionStorage.getItem(MAPPING_MAP_GRID_STORAGE_KEY) !== 'false';
+}
+
+function applyMappingMapGridVisibility() {
+    const container = document.getElementById('mapping-map-container');
+    const btn = document.getElementById('mappingMapToggleGrid');
+    const visible = isMappingMapGridVisible();
+    if (container) {
+        container.classList.toggle('mapping-grid-visible', visible);
+    }
+    if (btn) {
+        btn.classList.toggle('active', visible);
+        btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+        btn.title = visible ? 'Hide dot grid' : 'Show dot grid';
+    }
+}
+
+function initMappingMapGridToggle() {
+    const btn = document.getElementById('mappingMapToggleGrid');
+    applyMappingMapGridVisibility();
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.onclick = () => {
+        sessionStorage.setItem(
+            MAPPING_MAP_GRID_STORAGE_KEY,
+            String(!isMappingMapGridVisible())
+        );
+        applyMappingMapGridVisibility();
+    };
+}
+
+/**
+ * Bound columns that no longer exist in their source table, keyed by entity
+ * class URI / relationship property URI. Populated from /mapping/schema-drift
+ * so the designer can flag upstream schema changes without the user having to
+ * run full diagnostics.
+ */
+const MappingDriftState = {
+    entities: {},
+    relationships: {}
+};
+
+// Drift is fetched once per designer render cycle. The fetch triggers a
+// re-render to paint the markers, and that re-render must not fetch again —
+// otherwise the designer loops, re-querying the warehouse forever.
+let mappingDriftLoaded = false;
+
+/**
+ * Refresh MappingDriftState. Advisory only — a failure (no warehouse, no
+ * permissions) leaves the designer working with no drift markers.
+ */
+async function loadSchemaDrift() {
+    try {
+        const response = await fetch('/mapping/schema-drift', { credentials: 'same-origin' });
+        const data = await response.json();
+        MappingDriftState.entities = (data.success && data.entities) || {};
+        MappingDriftState.relationships = (data.success && data.relationships) || {};
+    } catch (error) {
+        console.log('[MappingDrift] Schema drift check unavailable:', error);
+        MappingDriftState.entities = {};
+        MappingDriftState.relationships = {};
+    }
+    mappingDriftLoaded = true;
+}
+
+/**
+ * Columns of the currently open entity that have drifted, as a Set for
+ * cheap per-column lookup while rendering the results grid.
+ */
+function driftedColumnsForEntity(classUri) {
+    return new Set(MappingDriftState.entities[classUri]?.columns || []);
+}
 
 /**
  * Show/hide loading overlay for mapping designer
@@ -45,6 +125,10 @@ async function loadMapLayout() {
  */
 async function initMappingDesigner() {
     showMappingDesignerLoading(true);
+    initMappingMapGridToggle();
+    setupMappingDesignerResizeHandle();
+    restoreMappingDesignerPanelHeight();
+    ensureMappingDesignerPlaceholder();
     
     // Wait for MappingState initialization (ontology + mappings fetched)
     if (!MappingState.initialized) {
@@ -128,8 +212,16 @@ async function initMappingDesigner() {
             return;
         }
         
-        // Load saved layout from Ontology Designer
+        // Load saved layout from Ontology Designer synchronously (fast, session-local).
+        // Schema-drift is advisory (warehouse query, can take tens of seconds) — fire it
+        // in the background so it never blocks the spinner.  Once it resolves, re-render
+        // to pick up any drift indicators on nodes and panels.
         const savedLayout = await loadMapLayout();
+        if (!mappingDriftLoaded) {
+            loadSchemaDrift().then(() => {
+                if (mappingMapInitialized) initMappingDesigner();
+            }).catch(() => {});
+        }
         
         // Get mapping status (only count entries that have a SQL query as truly assigned)
         const mappedClassUris = new Set(
@@ -188,6 +280,7 @@ async function initMappingDesigner() {
                 mapped: isMapped,
                 excluded: isExcluded,
                 mappingStatus: mappingStatus,
+                driftedColumns: MappingDriftState.entities[cls.uri]?.columns || [],
                 x: x,
                 y: y,
                 // Fix positions - no animation
@@ -377,6 +470,26 @@ async function initMappingDesigner() {
             .attr('d', 'M0,-5L10,0L0,5')
             .attr('fill', '#ced4da');
 
+        // Arrows for reverse-direction relationships — drawn at the path start
+        // and rotated, so the head points back toward the source node.
+        [
+            ['mapping-arrow-start-mapped', '#198754'],
+            ['mapping-arrow-start-unmapped', '#dc3545'],
+            ['mapping-arrow-start-excluded', '#ced4da']
+        ].forEach(([id, fill]) => {
+            defs.append('marker')
+                .attr('id', id)
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 28)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto-start-reverse')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', fill);
+        });
+
         // Arrow for inheritance (hollow)
         defs.append('marker')
             .attr('id', 'mapping-arrow-inheritance')
@@ -450,7 +563,7 @@ async function initMappingDesigner() {
             .data(regularLinks.filter(l => l.type === 'relationship'))
             .enter()
             .append('path')
-            .attr('class', d => `mapping-map-link ${d.excluded ? 'excluded' : (d.mapped ? 'mapped' : 'unmapped')}`);
+            .attr('class', d => `mapping-map-link ${d.excluded ? 'excluded' : (d.mapped ? 'mapped' : 'unmapped')}${d.direction === 'reverse' ? ' reverse' : ''}`);
         
         // Draw inheritance links
         const inheritanceLinkElements = g.append('g')
@@ -560,10 +673,24 @@ async function initMappingDesigner() {
             .attr('dy', 35)
             .text(d => d.name);
         
+        // Passive schema-drift marker — the mapping is intact, the source
+        // table lost a column it is bound to.
+        nodeElements.filter(d => d.driftedColumns.length > 0)
+            .append('text')
+            .attr('class', 'mapping-map-node-drift')
+            .attr('dx', 16)
+            .attr('dy', -14)
+            .text('⚠');
+        
         // Tooltip
         const statusLabels = { mapped: 'Mapped', unmapped: 'Not Mapped', partial: 'Attributes Missing', excluded: 'Excluded' };
         nodeElements.append('title')
-            .text(d => `${d.name} (${statusLabels[d.mappingStatus] || 'Not Mapped'})`);
+            .text(d => {
+                const status = `${d.name} (${statusLabels[d.mappingStatus] || 'Not Mapped'})`;
+                return d.driftedColumns.length
+                    ? `${status}\nSchema drift — missing in source: ${d.driftedColumns.join(', ')}`
+                    : status;
+            });
         
         // Click to open mapping panel
         nodeElements.on('click', function(event, d) {
@@ -605,7 +732,7 @@ async function initMappingDesigner() {
             hideMappingMapContextMenu();
             d3.selectAll('.mapping-map-node').classed('selected', false);
             d3.selectAll('.mapping-map-link-hitarea').classed('selected', false);
-            closeMappingPanel();
+            guardedCloseMappingPanel();
         });
         
         svg.on('contextmenu', function(event) {
@@ -878,6 +1005,9 @@ async function initMappingDesigner() {
  * Refresh the mapping design view (update mapping status)
  */
 function refreshMappingDesign() {
+    // An explicit refresh follows a mapping change, so the drift picture may
+    // have changed too — allow exactly one new drift fetch.
+    mappingDriftLoaded = false;
     initMappingDesigner();
 }
 
@@ -892,6 +1022,12 @@ function loadOntologyIntoMappingDesigner() {
 
 let currentPanelType = null; // 'entity' or 'relationship'
 let currentPanelUri = null;
+let currentPanelDirty = false;
+// Body element id of the host holding the panel: 'panelBody' (Designer right panel)
+// or 'manualPanelBody' (Manual Mapping bottom panel). The panel markup uses
+// page-global ep*/rp* ids, so a leftover copy in the other host would shadow the
+// live one on every getElementById lookup.
+let currentPanelHostId = null;
 
 /**
  * Open the right panel for entity mapping
@@ -953,38 +1089,108 @@ function openRelationshipMappingFromDesign(rel) {
  * Open the mapping panel
  */
 function openMappingPanel() {
-    const container = document.getElementById('mappingDesignerContainer');
-    container.classList.add('panel-open');
+    setTimeout(resizeMapSvg, 0);
+}
+
+/**
+ * Register the host that now holds the entity/relationship panel markup.
+ * Any other host is closed first so only one copy of those ids exists.
+ * Callers that render panel content must call this before initialising it —
+ * runEntityPanelQuery() / runRelPanelQuery() drop their results when the
+ * panel type does not match the host they were started from.
+ *
+ * @param {HTMLElement} panelBody - The body element receiving the markup
+ * @param {string} type - 'entity' or 'relationship'
+ * @param {string} uri - URI of the ontology item being mapped
+ */
+function claimMappingPanel(panelBody, type, uri) {
+    const hostId = panelBody?.id || 'panelBody';
+    if (currentPanelHostId && currentPanelHostId !== hostId) {
+        closeActiveMappingPanel();
+    }
+    currentPanelHostId = hostId;
+    currentPanelType = type;
+    currentPanelUri = uri;
+    currentPanelDirty = false;
+}
+
+function markMappingPanelDirty() {
+    currentPanelDirty = true;
+    if (currentPanelHostId === 'manualPanelBody') {
+        const saveBtn = document.getElementById('manualSavePanelBtn');
+        if (saveBtn && window.isActiveVersion !== false) saveBtn.disabled = false;
+    }
+}
+
+/**
+ * Drop panel ownership and invalidate in-flight panel queries.
+ * Called by every host when it tears its panel down.
+ */
+function releaseMappingPanel() {
+    currentPanelHostId = null;
+    currentPanelType = null;
+    currentPanelUri = null;
+    currentPanelDirty = false;
     
-    // Resize SVG after transition completes
-    setTimeout(resizeMapSvg, 250);
+    if (EntityPanelState._autoLoadTimer) {
+        clearTimeout(EntityPanelState._autoLoadTimer);
+        EntityPanelState._autoLoadTimer = null;
+    }
+    EntityPanelState._generation++;
+}
+
+/**
+ * Close whichever host currently holds the panel.
+ */
+function closeActiveMappingPanel() {
+    if (currentPanelHostId === 'manualPanelBody' && window.ManualModule) {
+        ManualModule.closePanel();
+    } else {
+        closeMappingPanel();
+    }
 }
 
 /**
  * Close the mapping panel
  */
 function closeMappingPanel() {
-    const container = document.getElementById('mappingDesignerContainer');
-    if (container) container.classList.remove('panel-open');
-    currentPanelType = null;
-    currentPanelUri = null;
-    
-    // Invalidate any in-flight entity panel queries
-    if (EntityPanelState._autoLoadTimer) {
-        clearTimeout(EntityPanelState._autoLoadTimer);
-        EntityPanelState._autoLoadTimer = null;
-    }
-    EntityPanelState._generation++;
+    releaseMappingPanel();
     
     const panelBody = document.getElementById('panelBody');
-    if (panelBody) panelBody.innerHTML = '';
+    if (panelBody) {
+        panelBody.innerHTML = renderMappingPanelPlaceholder();
+    }
+    const panelTitle = document.getElementById('panelTitle');
+    if (panelTitle) {
+        panelTitle.innerHTML = '<span id="panelItemName">Select Item</span>';
+    }
     
     // Clear selections on map
     d3.selectAll('.mapping-map-node').classed('selected', false);
     d3.selectAll('.mapping-map-link-hitarea').classed('selected', false);
     
-    // Resize SVG after transition completes
-    setTimeout(resizeMapSvg, 250);
+    setTimeout(resizeMapSvg, 0);
+}
+
+/**
+ * Close the panel with auto-save (used for explicit user dismissal via X or background click).
+ * Skips save when viewing a non-active (read-only) version.
+ * savePanelMapping() calls closeMappingPanel() internally, so no double-close.
+ */
+function guardedCloseMappingPanel() {
+    if (!currentPanelType) {
+        closeMappingPanel();
+        return;
+    }
+    if (window.isActiveVersion === false) {
+        closeMappingPanel();
+        return;
+    }
+    if (!currentPanelDirty) {
+        closeMappingPanel();
+        return;
+    }
+    savePanelMapping();
 }
 
 /**
@@ -1010,6 +1216,91 @@ function resizeMapSvg() {
     }
 }
 
+function renderMappingPanelPlaceholder() {
+    return `
+        <div class="panel-placeholder">
+            <i class="bi bi-cursor"></i>
+            <p class="mb-0">Click on an entity or relationship to configure its mapping.</p>
+        </div>
+    `;
+}
+
+function ensureMappingDesignerPlaceholder() {
+    const panelBody = document.getElementById('panelBody');
+    if (!panelBody) return;
+    if (panelBody.children.length > 0) return;
+    panelBody.innerHTML = renderMappingPanelPlaceholder();
+}
+
+function restoreMappingDesignerPanelHeight() {
+    const panel = document.getElementById('mappingRightPanel');
+    const container = document.getElementById('mappingDesignerContainer');
+    if (!panel || !container) return;
+
+    const maxHeight = Math.max(MAPPING_PANEL_MIN_HEIGHT, Math.floor(container.clientHeight * 0.5));
+    const persistedHeight = Number.parseInt(
+        window.sessionStorage.getItem(MAPPING_PANEL_HEIGHT_STORAGE_KEY) || '',
+        10
+    );
+    const safeHeight = Number.isFinite(persistedHeight)
+        ? Math.max(MAPPING_PANEL_MIN_HEIGHT, Math.min(maxHeight, persistedHeight))
+        : Math.max(MAPPING_PANEL_MIN_HEIGHT, Math.min(maxHeight, MAPPING_PANEL_DEFAULT_HEIGHT));
+    panel.style.height = `${safeHeight}px`;
+}
+
+function setupMappingDesignerResizeHandle() {
+    const container = document.getElementById('mappingDesignerContainer');
+    const panel = document.getElementById('mappingRightPanel');
+    const handle = container?.querySelector('.detail-panel-resize-handle');
+    if (!container || !panel || !handle) return;
+    if (handle.dataset.mappingResizeBound === 'true') return;
+
+    handle.style.cursor = 'row-resize';
+
+    const onMouseMove = (event) => {
+        if (!isMappingResizing) return;
+        if ((event.buttons & 1) !== 1) {
+            onMouseUp();
+            return;
+        }
+        const containerRect = container.getBoundingClientRect();
+        const maxHeight = Math.max(
+            MAPPING_PANEL_MIN_HEIGHT,
+            Math.floor(containerRect.height * 0.5)
+        );
+        const nextHeight = Math.round(containerRect.bottom - event.clientY);
+        const clampedHeight = Math.max(
+            MAPPING_PANEL_MIN_HEIGHT,
+            Math.min(maxHeight, nextHeight)
+        );
+        panel.style.height = `${clampedHeight}px`;
+        window.sessionStorage.setItem(MAPPING_PANEL_HEIGHT_STORAGE_KEY, String(clampedHeight));
+    };
+
+    const onMouseUp = () => {
+        if (!isMappingResizing) return;
+        isMappingResizing = false;
+        handle.classList.remove('active');
+        document.body.classList.remove('resizing-panel');
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        resizeMapSvg();
+    };
+
+    handle.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        isMappingResizing = true;
+        handle.classList.add('active');
+        document.body.classList.add('resizing-panel');
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+
+    handle.dataset.mappingResizeBound = 'true';
+}
+
 /**
  * Load entity panel content
  * @param {string} classUri - The class URI
@@ -1018,6 +1309,7 @@ function resizeMapSvg() {
  */
 function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
     const panelBody = targetPanelBody || document.getElementById('panelBody');
+    claimMappingPanel(panelBody, 'entity', classUri);
     const existingMapping = MappingState.config.entities.find(m => m.ontology_class === classUri);
     const classInfo = MappingState.loadedOntology?.classes?.find(c => c.uri === classUri);
     
@@ -1056,10 +1348,22 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
         </tr>`;
     }).join('');
 
+    const epDrift = MappingDriftState.entities[classUri]?.columns || [];
+
     panelBody.innerHTML = `
         <input type="hidden" id="panelEntityClass" value="${classUri}" />
         
-        <ul class="nav nav-tabs ob-tabs" id="entityPanelTabs" role="tablist">
+        ${epDrift.length ? `
+            <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.78rem;">
+                <i class="bi bi-database-exclamation me-1"></i>
+                <strong>Source schema changed.</strong>
+                ${epDrift.length} mapped column(s) no longer exist upstream:
+                ${epDrift.map(c => `<code>${c}</code>`).join(', ')}.
+                Remap them or restore the column in the source table.
+            </div>
+        ` : ''}
+        
+        <ul class="nav nav-tabs ob-tabs ob-tabs--compact" id="entityPanelTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="ep-status-tab" data-bs-toggle="tab" data-bs-target="#ep-status-pane" type="button">
                     <i class="bi bi-clipboard-check"></i> Status
@@ -1095,8 +1399,8 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
                             <table class="table table-sm mb-0" style="font-size:0.8rem;">
                                 <tbody>
                                     <tr><td>${epStatusIcon(epHasSql)}</td><td>SQL Query</td><td class="text-muted small">${epHasSql ? 'Defined' : 'Not defined'}</td></tr>
-                                    <tr><td>${epStatusIcon(epHasId)}</td><td>ID column</td><td class="text-muted small">${epHasId ? existingMapping.id_column : 'Not assigned'}</td></tr>
-                                    <tr><td>${epStatusIcon(epHasLabel)}</td><td>Label column</td><td class="text-muted small">${epHasLabel ? existingMapping.label_column : 'Not assigned'}</td></tr>
+                                    <tr><td id="epStatusIdIcon">${epStatusIcon(epHasId)}</td><td>ID column</td><td id="epStatusIdDetail" class="text-muted small">${epHasId ? existingMapping.id_column : 'Not assigned'}</td></tr>
+                                    <tr><td id="epStatusLabelIcon">${epStatusIcon(epHasLabel)}</td><td>Label column</td><td id="epStatusLabelDetail" class="text-muted small">${epHasLabel ? existingMapping.label_column : 'Not assigned'}</td></tr>
                                     ${attributes.length > 0 ? '<tr><td>' + epStatusIcon(epMappedAttrCount === attributes.length) + '</td><td>Attributes</td><td class="text-muted small">' + epMappedAttrCount + ' / ' + attributes.length + ' assigned</td></tr>' : ''}
                                 </tbody>
                             </table>
@@ -1208,6 +1512,7 @@ function loadEntityPanelContent(classUri, className, targetPanelBody = null) {
  */
 function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) {
     const panelBody = targetPanelBody || document.getElementById('panelBody');
+    claimMappingPanel(panelBody, 'relationship', ontologyProperty.uri);
     const existingMapping = MappingState.config.relationships.find(m => m.property === ontologyProperty.uri);
     
     const domainUri = ontologyProperty.domain;
@@ -1252,8 +1557,8 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
 
     const rpStatusRows = `
         <tr><td>${statusIcon(hasSql)}</td><td>SQL Query</td><td class="text-muted small">${hasSql ? 'Defined' : 'Not defined'}</td></tr>
-        <tr><td>${statusIcon(hasSrcId)}</td><td>Source ID column</td><td class="text-muted small">${hasSrcId ? existingMapping.source_id_column : 'Not assigned'}</td></tr>
-        <tr><td>${statusIcon(hasTgtId)}</td><td>Target ID column</td><td class="text-muted small">${hasTgtId ? existingMapping.target_id_column : 'Not assigned'}</td></tr>
+        <tr><td id="rpStatusSourceIcon">${statusIcon(hasSrcId)}</td><td>Source ID column</td><td id="rpStatusSourceDetail" class="text-muted small">${hasSrcId ? existingMapping.source_id_column : 'Not assigned'}</td></tr>
+        <tr><td id="rpStatusTargetIcon">${statusIcon(hasTgtId)}</td><td>Target ID column</td><td id="rpStatusTargetDetail" class="text-muted small">${hasTgtId ? existingMapping.target_id_column : 'Not assigned'}</td></tr>
         ${relAttributes.length > 0 ? `<tr><td>${statusIcon(mappedAttrCount === relAttributes.length)}</td><td>Attributes</td><td class="text-muted small">${mappedAttrCount} / ${relAttributes.length} assigned</td></tr>` : ''}
     `;
 
@@ -1273,8 +1578,19 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
         </tr>`;
     }).join('');
 
+    const rpDrift = MappingDriftState.relationships[ontologyProperty.uri]?.columns || [];
+
     panelBody.innerHTML = `
         <input type="hidden" id="panelPropertyUri" value="${ontologyProperty.uri}" />
+        
+        ${rpDrift.length ? `
+            <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.78rem;">
+                <i class="bi bi-database-exclamation me-1"></i>
+                <strong>Source schema changed.</strong>
+                ${rpDrift.length} mapped column(s) no longer exist upstream:
+                ${rpDrift.map(c => `<code>${c}</code>`).join(', ')}.
+            </div>
+        ` : ''}
         
         <div class="d-flex align-items-center justify-content-center gap-2 py-2 mb-2 bg-light rounded">
             <span class="badge bg-primary small">${sourceName}</span>
@@ -1282,7 +1598,7 @@ function loadRelationshipPanelContent(ontologyProperty, targetPanelBody = null) 
             <span class="badge bg-success small">${targetName}</span>
         </div>
         
-        <ul class="nav nav-tabs ob-tabs" id="relPanelTabs" role="tablist">
+        <ul class="nav nav-tabs ob-tabs ob-tabs--compact" id="relPanelTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="rp-status-tab" data-bs-toggle="tab" data-bs-target="#rp-status-pane" type="button">
                     <i class="bi bi-clipboard-check"></i> Status
@@ -1431,9 +1747,69 @@ const EntityPanelState = {
     attributeMappings: {},
     attributes: [],
     excludedAttributes: [],
+    driftedColumns: new Set(),
     _generation: 0,
     _autoLoadTimer: null
 };
+
+const EntityPreviewCache = new Map();
+
+function entityPreviewCacheKey(classUri, sql, previewLimit) {
+    return JSON.stringify([classUri, sql, previewLimit]);
+}
+
+function applyEntityPanelPreview(result, options = {}) {
+    EntityPanelState.columns = result.columns;
+    EntityPanelState.rows = result.rows || [];
+
+    if (!EntityPanelState.idColumn || !result.columns.includes(EntityPanelState.idColumn)) {
+        EntityPanelState.idColumn = null;
+    }
+    if (EntityPanelState.labelColumn && !result.columns.includes(EntityPanelState.labelColumn)) {
+        EntityPanelState.labelColumn = null;
+    }
+
+    autoMapEntityColumns(result.columns);
+    renderEntityPanelGrid();
+    const epSummary = document.getElementById('epMappingSummary');
+    if (epSummary) epSummary.style.display = 'none';
+    const epLoading = document.getElementById('epMappingLoading');
+    if (epLoading) epLoading.style.display = 'none';
+    const epGrid = document.getElementById('epMappingGrid');
+    if (epGrid) epGrid.style.display = 'flex';
+
+    const epTab = document.getElementById('ep-mapping-tab');
+    if (epTab) {
+        epTab.disabled = false;
+        if (!options.autoLoad) bootstrap.Tab.getOrCreateInstance(epTab).show();
+    }
+
+    const statusEl = document.getElementById('epQueryStatus');
+    if (statusEl) {
+        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> ' + result.row_count + ' rows</span>';
+    }
+}
+
+function cacheEntityPreview(classUri, sql, previewLimit, result) {
+    EntityPreviewCache.set(
+        entityPreviewCacheKey(classUri, sql, previewLimit),
+        {
+            ...result,
+            columns: [...result.columns],
+            rows: (result.rows || []).map(row => Array.isArray(row) ? [...row] : {...row})
+        }
+    );
+}
+
+function restoreCachedEntityPreview(classUri, sql, previewLimit) {
+    const cached = EntityPreviewCache.get(
+        entityPreviewCacheKey(classUri, sql, previewLimit)
+    );
+    if (!cached) return false;
+
+    applyEntityPanelPreview(cached, { autoLoad: true });
+    return true;
+}
 
 function initEntityPanel(classUri, className, existingMapping, classInfo) {
     // Cancel any pending autoLoad from a previous entity to prevent race conditions
@@ -1455,15 +1831,18 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
         .map(k => ({ name: k }));
     EntityPanelState.attributes = [..._epOntAttrs, ..._epMappedOnly];
     EntityPanelState.excludedAttributes = existingMapping?.excluded_attributes ? [...existingMapping.excluded_attributes] : [];
+    EntityPanelState.driftedColumns = driftedColumnsForEntity(classUri);
     
     updateEntityPanelSaveBtn();
     
     document.getElementById('epRunQueryBtn')?.addEventListener('click', runEntityPanelQuery);
+    document.getElementById('epSqlQuery')?.addEventListener('input', markMappingPanelDirty);
     
     // Exclude checkbox
     const epExcludeCb = document.getElementById('epExcludeCheck');
     if (epExcludeCb) {
         epExcludeCb.addEventListener('change', function() {
+            markMappingPanelDirty();
             toggleEntityExclusion(classUri, !this.checked, 'entity');
         });
     }
@@ -1471,6 +1850,7 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
     // Per-attribute include/exclude checkboxes
     document.querySelectorAll('.ep-attr-include-cb').forEach(cb => {
         cb.addEventListener('change', function() {
+            markMappingPanelDirty();
             const attrName = this.dataset.attr;
             const row = this.closest('tr');
             const nameCell = row.querySelector('td:nth-child(2)');
@@ -1496,10 +1876,13 @@ function initEntityPanel(classUri, className, existingMapping, classInfo) {
 
     // Auto-load query data in background when there is an existing mapping with SQL
     if (existingMapping?.sql_query) {
-        EntityPanelState._autoLoadTimer = setTimeout(() => {
-            EntityPanelState._autoLoadTimer = null;
-            runEntityPanelQuery({ autoLoad: true });
-        }, 100);
+        const previewLimit = parseInt(document.getElementById('epPreviewLimit')?.value) || 10;
+        if (!restoreCachedEntityPreview(classUri, existingMapping.sql_query, previewLimit)) {
+            EntityPanelState._autoLoadTimer = setTimeout(() => {
+                EntityPanelState._autoLoadTimer = null;
+                runEntityPanelQuery({ autoLoad: true });
+            }, 100);
+        }
     }
 }
 
@@ -1514,6 +1897,7 @@ async function runEntityPanelQuery(options = {}) {
     
     // Capture the generation at call time so we can detect stale responses
     const capturedGeneration = EntityPanelState._generation;
+    const capturedPanelUri = currentPanelUri;
     
     const previewLimit = parseInt(document.getElementById('epPreviewLimit')?.value) || 10;
     const btn = document.getElementById('epRunQueryBtn');
@@ -1534,32 +1918,8 @@ async function runEntityPanelQuery(options = {}) {
         if (currentPanelType !== 'entity' || capturedGeneration !== EntityPanelState._generation) return;
         
         if (result.success) {
-            EntityPanelState.columns = result.columns;
-            EntityPanelState.rows = result.rows || [];
-            
-            if (!EntityPanelState.idColumn || !result.columns.includes(EntityPanelState.idColumn)) {
-                EntityPanelState.idColumn = null;
-            }
-            if (EntityPanelState.labelColumn && !result.columns.includes(EntityPanelState.labelColumn)) {
-                EntityPanelState.labelColumn = null;
-            }
-            
-            autoMapEntityColumns(result.columns);
-            renderEntityPanelGrid();
-            const epSummary = document.getElementById('epMappingSummary');
-            if (epSummary) epSummary.style.display = 'none';
-            const epLoading = document.getElementById('epMappingLoading');
-            if (epLoading) epLoading.style.display = 'none';
-            const epGrid = document.getElementById('epMappingGrid');
-            if (epGrid) epGrid.style.display = 'flex';
-            
-            const epTab = document.getElementById('ep-mapping-tab');
-            if (epTab) {
-                epTab.disabled = false;
-                if (!options.autoLoad) bootstrap.Tab.getOrCreateInstance(epTab).show();
-            }
-            
-            if (statusEl) statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> ' + result.row_count + ' rows</span>';
+            cacheEntityPreview(capturedPanelUri, sql, previewLimit, result);
+            applyEntityPanelPreview(result, options);
         } else {
             const epLoading = document.getElementById('epMappingLoading');
             if (epLoading) epLoading.style.display = 'none';
@@ -1597,6 +1957,11 @@ function renderEntityPanelGrid() {
             if (attr) badge = `<span class="badge bg-secondary">${attr[0]}</span>`;
             else badge = '<span class="badge bg-light text-muted border">Map</span>';
         }
+        if (EntityPanelState.driftedColumns.has(col)) {
+            badge += ' <span class="badge bg-warning text-dark" ' +
+                'title="This column no longer exists in the source table">' +
+                '<i class="bi bi-database-exclamation"></i></span>';
+        }
         return `<th data-col="${col}" style="cursor:pointer;">${col}<br>${badge}</th>`;
     }).join('');
     
@@ -1608,7 +1973,25 @@ function renderEntityPanelGrid() {
         th.addEventListener('click', () => showEntityColumnMenu(th, th.dataset.col));
     });
     
+    refreshEntityPanelStatus();
     updateEntityPanelSaveBtn();
+}
+
+function refreshEntityPanelStatus() {
+    const assignments = [
+        ['epStatusIdIcon', 'epStatusIdDetail', EntityPanelState.idColumn],
+        ['epStatusLabelIcon', 'epStatusLabelDetail', EntityPanelState.labelColumn]
+    ];
+    assignments.forEach(([iconId, detailId, column]) => {
+        const icon = document.getElementById(iconId);
+        const detail = document.getElementById(detailId);
+        if (icon) {
+            icon.innerHTML = column
+                ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                : '<i class="bi bi-x-circle-fill text-danger"></i>';
+        }
+        if (detail) detail.textContent = column || 'Not assigned';
+    });
 }
 
 function showEntityColumnMenu(th, column) {
@@ -1640,6 +2023,7 @@ function showEntityColumnMenu(th, column) {
     
     menu.querySelectorAll('.dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
+            markMappingPanelDirty();
             const action = item.dataset.action;
             if (EntityPanelState.idColumn === column) EntityPanelState.idColumn = null;
             if (EntityPanelState.labelColumn === column) EntityPanelState.labelColumn = null;
@@ -1773,11 +2157,13 @@ function initRelationshipPanel(ontologyProperty, existingMapping) {
     updateRelPanelSaveBtn();
     
     document.getElementById('rpRunQueryBtn')?.addEventListener('click', runRelPanelQuery);
+    document.getElementById('rpSqlQuery')?.addEventListener('input', markMappingPanelDirty);
     
     // Exclude checkbox
     const rpExcludeCb = document.getElementById('rpExcludeCheck');
     if (rpExcludeCb) {
         rpExcludeCb.addEventListener('change', function() {
+            markMappingPanelDirty();
             toggleEntityExclusion(ontologyProperty.uri, !this.checked, 'relationship');
         });
     }
@@ -1785,6 +2171,7 @@ function initRelationshipPanel(ontologyProperty, existingMapping) {
     // Per-attribute include/exclude checkboxes
     document.querySelectorAll('.rp-attr-include-cb').forEach(cb => {
         cb.addEventListener('change', function() {
+            markMappingPanelDirty();
             const attrName = this.dataset.attr;
             const row = this.closest('tr');
             const nameCell = row.querySelector('td:nth-child(2)');
@@ -1906,7 +2293,25 @@ function renderRelPanelGrid() {
         th.addEventListener('click', () => showRelColumnMenu(th, th.dataset.col));
     });
     
+    refreshRelationshipPanelStatus();
     updateRelPanelSaveBtn();
+}
+
+function refreshRelationshipPanelStatus() {
+    const assignments = [
+        ['rpStatusSourceIcon', 'rpStatusSourceDetail', RelPanelState.sourceIdColumn],
+        ['rpStatusTargetIcon', 'rpStatusTargetDetail', RelPanelState.targetIdColumn]
+    ];
+    assignments.forEach(([iconId, detailId, column]) => {
+        const icon = document.getElementById(iconId);
+        const detail = document.getElementById(detailId);
+        if (icon) {
+            icon.innerHTML = column
+                ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                : '<i class="bi bi-x-circle-fill text-danger"></i>';
+        }
+        if (detail) detail.textContent = column || 'Not assigned';
+    });
 }
 
 function showRelColumnMenu(th, column) {
@@ -1938,6 +2343,7 @@ function showRelColumnMenu(th, column) {
     
     menu.querySelectorAll('.dropdown-item').forEach(item => {
         item.addEventListener('click', () => {
+            markMappingPanelDirty();
             const action = item.dataset.action;
             if (RelPanelState.sourceIdColumn === column) RelPanelState.sourceIdColumn = null;
             if (RelPanelState.targetIdColumn === column) RelPanelState.targetIdColumn = null;
@@ -2310,6 +2716,7 @@ function _updateEntityAttrToggleBtn() {
 function toggleAllEntityAttrs() {
     const cbs = document.querySelectorAll('.ep-attr-include-cb');
     if (!cbs.length) return;
+    markMappingPanelDirty();
     const includeAll = EntityPanelState.excludedAttributes.length > 0;
     cbs.forEach(cb => {
         const attrName = cb.dataset.attr;
@@ -2336,7 +2743,7 @@ function toggleAllEntityAttrs() {
     _updateEntityAttrToggleBtn();
     const classUri = document.getElementById('panelEntityClass')?.value;
     _syncEntityAttrExclusions(classUri);
-    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Apply to persist`;
+    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded`;
     showNotification(msg, 'info', 2000);
 }
 
@@ -2362,6 +2769,7 @@ function _updateRelAttrToggleBtn() {
 function toggleAllRelAttrs() {
     const cbs = document.querySelectorAll('.rp-attr-include-cb');
     if (!cbs.length) return;
+    markMappingPanelDirty();
     const includeAll = RelPanelState.excludedAttributes.length > 0;
     cbs.forEach(cb => {
         const attrName = cb.dataset.attr;
@@ -2388,7 +2796,7 @@ function toggleAllRelAttrs() {
     _updateRelAttrToggleBtn();
     const propertyUri = RelPanelState.propertyUri;
     _syncRelAttrExclusions(propertyUri);
-    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded — click Apply to persist`;
+    const msg = includeAll ? 'All attributes included' : `${cbs.length} attribute(s) excluded`;
     showNotification(msg, 'info', 2000);
 }
 
@@ -2424,7 +2832,8 @@ function autoExcludeUnmappedEntityAttrs() {
     });
     _updateEntityAttrToggleBtn();
     if (changed > 0) {
-        showNotification(`${changed} unmapped attribute(s) excluded — click Apply to persist`, 'info', 2500);
+        markMappingPanelDirty();
+        showNotification(`${changed} unmapped attribute(s) excluded`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);
     }
@@ -2457,7 +2866,8 @@ function autoExcludeUnmappedRelAttrs() {
     });
     _updateRelAttrToggleBtn();
     if (changed > 0) {
-        showNotification(`${changed} unmapped attribute(s) excluded — click Apply to persist`, 'info', 2500);
+        markMappingPanelDirty();
+        showNotification(`${changed} unmapped attribute(s) excluded`, 'info', 2500);
     } else {
         showNotification('No unmapped attributes to exclude', 'info', 2000);
     }
@@ -2785,7 +3195,7 @@ async function _pollAndSaveResult(taskId, itemType, targetUri, itemName) {
         );
 
         if (currentPanelUri === targetUri) {
-            closeMappingPanel();
+            closeActiveMappingPanel();
         }
     } catch (error) {
         console.error('[Auto-Map] Poll/save error for ' + itemName + ':', error);
@@ -3394,9 +3804,7 @@ window.includeAllExcluded = includeAllExcluded;
 
 // Initialize panel close/save buttons
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('closePanelBtn')?.addEventListener('click', closeMappingPanel);
-    document.getElementById('cancelPanelBtn')?.addEventListener('click', closeMappingPanel);
-    document.getElementById('savePanelBtn')?.addEventListener('click', savePanelMapping);
+    document.getElementById('closePanelBtn')?.addEventListener('click', guardedCloseMappingPanel);
     document.getElementById('autoMapPanelBtn')?.addEventListener('click', autoMapPanel);
     document.getElementById('resetPanelBtn')?.addEventListener('click', resetPanel);
     

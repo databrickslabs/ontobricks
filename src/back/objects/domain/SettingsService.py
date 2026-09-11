@@ -17,11 +17,16 @@ from back.core.errors import (
 from shared.config.constants import HTTP_USER_AGENT
 from shared.config.settings import Settings
 from back.core.databricks import is_databricks_app
+from back.core.databricks import DatabricksClient
+from back.core.databricks.constants import PERMISSIONS_APPS_PATH
 from back.core.databricks.lakebase.grants import resolve_mcp_app_name
 from back.core.graphdb.neo4j.Neo4jStore import is_neo4j_password_from_secret
 from back.core.helpers import (
+    DEFAULT_LOGO_PATH,
     get_databricks_client,
     get_databricks_host_and_token,
+    normalize_ui_branding,
+    resolve_app_registry_context,
     resolve_delta_warehouse_id,
     resolve_warehouse_id,
     run_blocking,
@@ -481,9 +486,11 @@ class SettingsService:
     ) -> Dict[str, Any]:
         """List user-defined functions in *catalog*.*schema*.
 
-        Used by the ontology *Actions* picker. Callers only bind functions
-        taking exactly one parameter (the entity ID), so ``param_count`` is
-        surfaced for client-side filtering.
+        Used by the ontology *Actions* and *Virtual Attributes* pickers. Both
+        only bind functions taking exactly one parameter (the entity ID), so
+        ``param_count`` is surfaced for client-side filtering; the virtual
+        attribute picker additionally reads ``return_columns`` to derive one
+        attribute per result column.
         """
         try:
             client = get_databricks_client(get_domain(session_mgr), settings)
@@ -1161,6 +1168,9 @@ class SettingsService:
             info = data.get("info", {})
             current_status = (info.get("status") or "DRAFT").upper()
             last_build = info.get("last_build", "") or ""
+            has_ontology = RegistryService.version_document_has_ontology(
+                data, version
+            )
 
             check_status_transition(
                 current_status,
@@ -1168,6 +1178,7 @@ class SettingsService:
                 user_role=user_role,
                 user_domain_role=user_domain_role,
                 last_build=last_build,
+                has_ontology=has_ontology,
             )
 
             ok, set_msg = svc.set_version_status(domain_name, version, new_status)
@@ -1271,7 +1282,6 @@ class SettingsService:
     # at 64×64 (≈2.7×) gives crisp rendering on retina displays without
     # bloating the global config blob.
     NAVBAR_LOGO_RECOMMENDED_SIZE = "64×64 px"
-    NAVBAR_LOGO_DEFAULT_PATH = "/static/global/img/favicon.svg"
     _NAVBAR_LOGO_ALLOWED_MIME = {
         "image/svg+xml",
         "image/png",
@@ -1282,37 +1292,8 @@ class SettingsService:
     _NAVBAR_LOGO_MAX_BYTES = 1024 * 1024  # 1 MB — way more than a 64×64 icon needs
 
     @staticmethod
-    def get_navbar_logo_result(
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        """Return the configured navbar logo (data URL) or the bundled default."""
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
-        custom = global_config_service.get_navbar_logo(host, token, registry_cfg)
-        return {
-            "success": True,
-            "logo_url": custom or SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
-            "is_custom": bool(custom),
-            "default_url": SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
-            "recommended_size": SettingsService.NAVBAR_LOGO_RECOMMENDED_SIZE,
-            "max_bytes": SettingsService._NAVBAR_LOGO_MAX_BYTES,
-            "allowed_mime": sorted(SettingsService._NAVBAR_LOGO_ALLOWED_MIME),
-        }
-
-    @staticmethod
-    def upload_navbar_logo_result(
-        content: bytes,
-        content_type: str,
-        email: str,
-        user_token: str,
-        session_mgr: SessionManager,
-        settings: Settings,
-    ) -> Dict[str, Any]:
-        """Validate and persist an uploaded navbar logo (admin only, stored globally)."""
-        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
-
+    def _validate_and_encode_logo(content: bytes, content_type: str) -> tuple[str, str]:
+        """Validate logo payload and return ``(mime, data_url)``."""
         if not content:
             raise ValidationError("Empty file — pick an image to upload")
         if len(content) > SettingsService._NAVBAR_LOGO_MAX_BYTES:
@@ -1331,11 +1312,113 @@ class SettingsService:
         import base64
 
         b64 = base64.b64encode(content).decode("ascii")
-        data_url = f"data:{mime};base64,{b64}"
+        return mime, f"data:{mime};base64,{b64}"
 
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
+    @staticmethod
+    def get_ui_branding_result(
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return normalized UI branding payload for Settings."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        return {
+            "success": True,
+            "branding": global_config_service.get_ui_branding(host, token, registry_cfg),
+        }
+
+    @staticmethod
+    def save_ui_branding_result(
+        app_title: str,
+        primary_color: str,
+        logo_content: Optional[bytes],
+        logo_mime: Optional[str],
+        reset_logo: bool,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Validate and persist title/color/logo atomically (admin only)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        if logo_content is not None and reset_logo:
+            raise ValidationError("reset_logo cannot be true when logo_file is provided")
+
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        current = global_config_service.get_ui_branding(host, token, registry_cfg)
+
+        logo_data_url = str(current.get("logo_data_url", "") or "")
+        if reset_logo:
+            logo_data_url = ""
+        elif logo_content is not None:
+            _, logo_data_url = SettingsService._validate_and_encode_logo(
+                logo_content, logo_mime or ""
+            )
+
+        try:
+            normalized = normalize_ui_branding(
+                {
+                    "version": current.get("version", 1),
+                    "app_title": app_title,
+                    "primary_color": primary_color,
+                    "logo_data_url": logo_data_url,
+                }
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
+        ok, msg = global_config_service.set_ui_branding(
+            host,
+            token,
+            registry_cfg,
+            {
+                "version": normalized.version,
+                "app_title": normalized.app_title,
+                "primary_color": normalized.primary_color,
+                "logo_data_url": normalized.logo_data_url,
+            },
         )
+        if not ok:
+            raise InfrastructureError("Failed to save UI branding", detail=msg)
+
+        return {"success": True, "branding": normalized.to_dict()}
+
+    @staticmethod
+    def get_navbar_logo_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the configured navbar logo (data URL) or the bundled default."""
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        branding = global_config_service.get_ui_branding(host, token, registry_cfg)
+        custom = str(branding.get("logo_data_url", "") or "")
+        return {
+            "success": True,
+            "logo_url": custom or DEFAULT_LOGO_PATH,
+            "is_custom": bool(custom),
+            "default_url": DEFAULT_LOGO_PATH,
+            "recommended_size": SettingsService.NAVBAR_LOGO_RECOMMENDED_SIZE,
+            "max_bytes": SettingsService._NAVBAR_LOGO_MAX_BYTES,
+            "allowed_mime": sorted(SettingsService._NAVBAR_LOGO_ALLOWED_MIME),
+        }
+
+    @staticmethod
+    def upload_navbar_logo_result(
+        content: bytes,
+        content_type: str,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Validate and persist an uploaded navbar logo (admin only, stored globally)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+        mime, data_url = SettingsService._validate_and_encode_logo(content, content_type)
+
+        host, token, registry_cfg = resolve_app_registry_context(settings)
         ok, msg = global_config_service.set_navbar_logo(
             host, token, registry_cfg, data_url
         )
@@ -1359,9 +1442,7 @@ class SettingsService:
         """Clear the custom navbar logo so the bundled default is used again."""
         SettingsService.require_admin_error(email, user_token, session_mgr, settings)
 
-        _, host, token, registry_cfg = SettingsService._resolve_context(
-            session_mgr, settings
-        )
+        host, token, registry_cfg = resolve_app_registry_context(settings)
         ok, msg = global_config_service.set_navbar_logo(
             host, token, registry_cfg, ""
         )
@@ -1369,7 +1450,7 @@ class SettingsService:
             raise InfrastructureError("Failed to reset navbar logo", detail=msg)
         return {
             "success": True,
-            "logo_url": SettingsService.NAVBAR_LOGO_DEFAULT_PATH,
+            "logo_url": DEFAULT_LOGO_PATH,
             "is_custom": False,
         }
 
@@ -1403,6 +1484,64 @@ class SettingsService:
         if not ok:
             raise InfrastructureError("Failed to save registry cache TTL", detail=msg)
         return {"success": True, "registry_cache_ttl": max(10, int(ttl))}
+
+    @staticmethod
+    def get_graph_limits_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the effective graph-read bounds for the Settings UI.
+
+        ``graph_query_timeout_s`` bounds a single graph read (Lakebase /
+        warehouse ``statement_timeout``); ``graph_chat_result_cap`` bounds the
+        triples returned to the Graph Chat agent. Both resolve admin override →
+        env var → built-in default.
+        """
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        return {
+            "success": True,
+            "graph_query_timeout_s": global_config_service.get_graph_query_timeout_s(
+                host, token, registry_cfg
+            ),
+            "graph_chat_result_cap": global_config_service.get_graph_chat_result_cap(
+                host, token, registry_cfg
+            ),
+        }
+
+    @staticmethod
+    def save_graph_limits_result(
+        graph_query_timeout_s: Optional[int],
+        graph_chat_result_cap: Optional[int],
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist admin-set graph-read bounds (``0``/``None`` = unset)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        if graph_query_timeout_s is not None:
+            ok, msg = global_config_service.set_graph_query_timeout_s(
+                host, token, registry_cfg, int(graph_query_timeout_s)
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to save graph query timeout", detail=msg
+                )
+        if graph_chat_result_cap is not None:
+            ok, msg = global_config_service.set_graph_chat_result_cap(
+                host, token, registry_cfg, int(graph_chat_result_cap)
+            )
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to save graph chat result cap", detail=msg
+                )
+        return SettingsService.get_graph_limits_result(session_mgr, settings)
 
     @staticmethod
     def get_edit_lock_ttl_result(
@@ -1558,10 +1697,76 @@ class SettingsService:
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
-        from back.core.graphdb.delta.health import settings_health_summary
+        from back.core.graphdb.delta.health import schema_permission_summary
 
-        domain, _, _, registry_cfg = SettingsService._resolve_context(session_mgr, settings)
-        return settings_health_summary(domain, settings, registry_cfg=registry_cfg)
+        host, token, registry_cfg = resolve_app_registry_context(settings)
+        reg = registry_cfg if isinstance(registry_cfg, dict) else {}
+        catalog = (reg.get("catalog") or "").strip()
+        schema = (reg.get("schema") or "").strip()
+        storage_location = f"{catalog}.{schema}" if catalog and schema else ""
+
+        if not storage_location:
+            return {
+                "success": True,
+                "registry_configured": False,
+                "registry_catalog": catalog,
+                "registry_schema": schema,
+                "storage_location": "",
+                "principal": "",
+                "accessible": False,
+                "operational": False,
+                "permissions": [],
+                "error": "Registry catalog/schema is not configured (Settings -> Registry)",
+            }
+
+        try:
+            client = DatabricksClient(host=host, token=token)
+            principal = (
+                client.auth.client_id or client.workspace.get_current_user_email() or ""
+            ).strip()
+            if not principal:
+                return {
+                    "success": True,
+                    "registry_configured": True,
+                    "registry_catalog": catalog,
+                    "registry_schema": schema,
+                    "storage_location": storage_location,
+                    "principal": "",
+                    "accessible": False,
+                    "operational": False,
+                    "permissions": [],
+                    "error": (
+                        "Principal could not be resolved; effective-permissions "
+                        "check was skipped."
+                    ),
+                }
+
+            effective = client.catalog.get_effective_schema_permissions(
+                catalog, schema, principal
+            )
+            accessible = bool(effective.get("accessible", False))
+            assignments = effective.get("assignments", [])
+            raw_error = effective.get("error")
+            normalized_error = None if raw_error is None else str(raw_error)
+            summary = schema_permission_summary(catalog, schema, principal, assignments)
+            return {
+                "success": True,
+                "registry_configured": True,
+                "registry_catalog": catalog,
+                "registry_schema": schema,
+                "storage_location": storage_location,
+                "principal": principal,
+                "accessible": accessible,
+                "operational": bool(summary.get("operational", False)) and accessible,
+                "permissions": summary.get("permissions", []),
+                "error": normalized_error,
+            }
+        except Exception as exc:
+            logger.warning("triple_store_databricks_health failed: %s", exc)
+            raise InfrastructureError(
+                "inspect effective schema permissions failed",
+                detail=str(exc),
+            ) from exc
 
     @staticmethod
     def triple_store_databricks_objects_result(
@@ -2508,11 +2713,15 @@ class SettingsService:
         try:
             from databricks.sdk import WorkspaceClient
 
+            from back.core.databricks.lakebase.LakebaseProjectService import (
+                LakebaseProjectService,
+            )
+
             w = WorkspaceClient()
             api = getattr(w, "api_client", None)
             if api is None or not hasattr(api, "do"):
                 raise InfrastructureError("Databricks SDK api_client unavailable")
-            raw = (api.do("GET", "/api/2.0/postgres/projects") or {}).get("projects") or []
+            raw = LakebaseProjectService.list_projects(api)
             projects = []
             for p in raw:
                 name = p.get("name") or ""
@@ -3639,60 +3848,46 @@ class SettingsService:
             w = WorkspaceClient()
             diag["sdk_host"] = str(getattr(w.config, "host", ""))
             diag["sdk_auth_type"] = str(getattr(w.config, "auth_type", ""))
-            raw = w.api_client.do("GET", f"/api/2.0/permissions/apps/{app_name}")
-            acl_list = raw.get("access_control_list", [])
-            managers = []
-            for acl in acl_list:
-                principal = (
-                    acl.get("user_name")
-                    or acl.get("group_name")
-                    or acl.get("service_principal_name")
-                    or ""
-                )
-                for p in acl.get("all_permissions", []):
-                    if p.get("permission_level") == "CAN_MANAGE":
-                        managers.append(principal)
-            diag["sdk_can_manage"] = managers
+            raw = w.api_client.do("GET", f"{PERMISSIONS_APPS_PATH}/{app_name}")
+            diag["sdk_can_manage"] = permission_service._extract_can_manage(raw)
             diag["sdk_error"] = None
         except Exception as e:
             diag["sdk_error"] = f"{type(e).__name__}: {e}"
             diag["sdk_can_manage"] = []
 
         # ── User-token path (preferred at runtime) ──
+        managers = diag["sdk_can_manage"]
         if user_token:
             try:
                 host = diag.get("sdk_host", "").rstrip("/")
                 resp = _req.get(
-                    f"{host}/api/2.0/permissions/apps/{app_name}",
+                    f"{host}{PERMISSIONS_APPS_PATH}/{app_name}",
                     headers={"Authorization": f"Bearer {user_token}", "User-Agent": HTTP_USER_AGENT},
                     timeout=5,
                 )
                 resp.raise_for_status()
-                acl_list = resp.json().get("access_control_list", [])
-                managers = []
-                for acl in acl_list:
-                    principal = (
-                        acl.get("user_name")
-                        or acl.get("group_name")
-                        or acl.get("service_principal_name")
-                        or ""
-                    )
-                    for p in acl.get("all_permissions", []):
-                        if p.get("permission_level") == "CAN_MANAGE":
-                            managers.append(principal)
+                managers = permission_service._extract_can_manage(resp.json())
                 diag["user_token_can_manage"] = managers
-                diag["email_is_manager"] = email.lower() in [
-                    m.lower() for m in managers
-                ]
                 diag["user_token_error"] = None
             except Exception as e:
                 diag["user_token_error"] = f"{type(e).__name__}: {e}"
                 diag["user_token_can_manage"] = []
-                diag["email_is_manager"] = False
-        else:
-            diag["email_is_manager"] = email.lower() in [
-                m.lower() for m in diag.get("sdk_can_manage", [])
-            ]
+                managers = diag["sdk_can_manage"]
+
+        # Admin can be granted to the e-mail directly or to any group the
+        # caller belongs to, so report both and why.
+        wanted = {m.lower() for m in managers if m}
+        user_groups = permission_service._get_user_groups(
+            email,
+            diag.get("sdk_host", ""),
+            "",
+            user_token=user_token,
+        )
+        diag["user_groups"] = user_groups
+        diag["email_is_manager"] = email.lower() in wanted
+        diag["group_is_manager"] = sorted(
+            g for g in user_groups if g.lower() in wanted
+        )
 
         diag["admin_cache"] = {
             k: {"result": v[0], "age_s": round(time.time() - v[1], 1)}

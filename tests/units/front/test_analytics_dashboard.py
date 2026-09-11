@@ -293,8 +293,9 @@ class TestRankingCard:
         fn = _fn(js, "_renderRankingChart")
         assert "_navigateToGraph" in fn
 
-    def test_the_top_n_input_still_drives_the_chart(self, js):
-        assert "analyticsTopN" in js
+    def test_top_n_is_not_read_by_the_ranking_chart(self, js):
+        ranking = _fn(js, "_renderRankingChart")
+        assert "analyticsTopN" not in ranking
 
     def test_the_estimate_notice_survives(self, js):
         assert "Estimate." in js
@@ -309,10 +310,74 @@ class TestRankingCard:
         assert "_renderPagerankTable" in js
 
 
+class TestAllNodeSeriesChartContracts:
+    def test_the_selected_metric_chart_is_a_line_with_points(self, js):
+        ranking = _fn(js, "_renderRankingChart")
+        assert "type: 'line'" in js
+        assert "showLine: true" in js
+        assert ".slice(0, _topN())" not in ranking
+
+    def test_browser_decimation_state_is_removed(self, js):
+        assert "_DECIMATION_THRESHOLD" not in js
+        assert "_DECIMATION_SAMPLES" not in js
+        assert "algorithm: 'lttb'" not in js
+        assert "samples:" not in _fn(js, "_renderMetricSeriesChart")
+
+    def test_metric_series_is_loaded_from_one_response_api(self, js):
+        assert "/dtwin/metrics/series" in js
+        assert "AbortController" in js
+        loader = _fn(js, "_loadMetricSeries")
+        assert "offset=" not in loader
+        assert "limit=" not in loader
+        assert "next_offset" not in loader
+        assert "_SERIES_PAGE_SIZE" not in js
+
+    def test_points_use_server_returned_ranks(self, js):
+        loader = _fn(js, "_loadMetricSeries")
+        assert "var ranks = payload.ranks || [];" in loader
+        assert "x: Number(ranks[i] || (i + 1))" in loader
+
+    def test_chart_title_switches_to_nodes_by_metric(self, js):
+        assert "Nodes by " in js
+
+    def test_cache_hit_only_returns_after_request_invalidation(self, js):
+        fn = _fn(js, "_loadMetricSeries")
+        assert "_invalidateMetricSeriesRequest()" in fn
+        assert fn.index("_invalidateMetricSeriesRequest()") < fn.index("if (_metricSeriesCache[cacheKey])")
+
+    def test_stale_closures_are_gated_in_then_and_catch(self, js):
+        fn = _fn(js, "_renderRankingChart")
+        assert "if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;" in fn
+
+    def test_series_loader_checks_http_status_before_success(self, js):
+        fn = _fn(js, "_loadMetricSeries")
+        assert "if (!resp.ok)" in fn
+
+    def test_touch_click_reads_dataset_point_deterministically(self, js):
+        fn = _fn(js, "_renderMetricSeriesChart")
+        assert "event.chart.data.datasets[hit.datasetIndex].data[hit.index]" in fn
+        assert "$context" not in fn
+        on_click = fn[fn.index("onClick"):fn.index("onHover")]
+        assert "points[elements[0].index]" not in on_click
+
+
+class TestTopNIsTableOnly:
+    def test_top_n_triggers_only_detail_table_render(self, panel):
+        top_n = panel[panel.index('id="analyticsTopN"') - 180:]
+        top_n = top_n[: top_n.index("nodes</span>")]
+        assert 'onchange="analyticsRenderDetailTable()"' in top_n
+        assert 'onchange="analyticsRenderCharts()"' not in top_n
+
+    def test_table_only_handler_is_exposed(self, js):
+        assert "window.analyticsRenderDetailTable" in js
+
+
 class TestLogScaleToggle:
     def test_the_toggle_exists_in_the_section_header(self, panel):
         header = panel[: panel.index('id="analyticsSpinner"')]
         assert 'id="analyticsLogScale"' in header
+        switch = header[header.index('id="analyticsLogScale"') - 120 :]
+        assert "checked" in switch[:220]
 
     def test_the_toggle_is_labelled(self, panel):
         assert "Log scale" in panel
@@ -321,8 +386,8 @@ class TestLogScaleToggle:
         fn = _fn(js, "analyticsToggleLogScale")
         assert "_renderDistributionStrip" in fn
 
-    def test_it_defaults_to_linear(self, js):
-        assert "_logScale = false" in js
+    def test_it_defaults_to_logarithmic(self, js):
+        assert "_logScale = true" in js
 
     def test_the_axis_type_follows_the_flag(self, js):
         assert "'logarithmic'" in js

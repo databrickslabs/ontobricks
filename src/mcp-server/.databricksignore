@@ -1,5 +1,7 @@
-# mcp-ontobricks — files excluded from bundle sync
-# Only runtime files should be deployed: server/, app.yaml, pyproject.toml, requirements.txt
+# Legacy standalone-sync ignore list for mcp-ontobricks.
+# DAB does NOT read this file: the repository-root databricks.yml sync section
+# controls the shared Apps files tree. Keep the MCP source and both app.yaml
+# files/templates available to that bundle.
 
 .databricks/
 deploy-mcp-server.sh

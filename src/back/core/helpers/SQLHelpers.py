@@ -10,6 +10,12 @@ from back.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Allow-lists for identifiers interpolated into SQL text rather than bound as
+# parameters — Databricks cannot bind an object name. Anything outside these
+# character sets is rejected by the caller instead of being escaped.
+SAFE_SQL_IDENT = re.compile(r"^[A-Za-z0-9_.]+$")  # qualified: catalog.schema.name
+SAFE_COL_IDENT = re.compile(r"^[A-Za-z0-9_]+$")  # single column / attribute name
+
 
 class SQLHelpers:
     @staticmethod

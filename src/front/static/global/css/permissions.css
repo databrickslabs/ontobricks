@@ -171,12 +171,6 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #mappingIncludeExcl
        is unavailable rather than wondering where it went. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) #resetMappingsDesignBtn,
-/* --- Knowledge Graph > Build: start of a triple-store rebuild. JS
-       re-enables ``#syncStartBtn`` when readiness flips true; pointer-events
-       keeps the click dead on a non-DRAFT / viewer / locked domain. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #syncStartBtn,
-/* --- Knowledge Graph > Reasoning: materialise inferred triples. */
-body:is(.read-only-version, .role-viewer, .read-only-locked) #runMaterializeBtn,
 /* --- Ontology > Business Views: CRUD buttons (top toolbar) + the
        empty-state "Create View" CTA shown when no view exists. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #createViewBtn,
@@ -191,6 +185,16 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) #newGroupBtn,
 body:is(.read-only-version, .role-viewer, .read-only-locked) .dq-shape-card .btn-group button,
 /* --- Save Domain navbar item: still rendered, but neutralised. */
 body:is(.read-only-version, .role-viewer, .read-only-locked) #menuSaveDomain {
+    pointer-events: none !important;
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* --- Knowledge Graph data refresh: Build and reasoning materialisation
+       remain available to builders on IN-REVIEW / PUBLISHED versions. Only
+       role-viewer and active edit-lock view mode block these operations. */
+body:is(.role-viewer, .read-only-locked) #syncStartBtn,
+body:is(.role-viewer, .read-only-locked) #runMaterializeBtn {
     pointer-events: none !important;
     opacity: 0.5 !important;
     cursor: not-allowed !important;
@@ -258,6 +262,9 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
        admin "Back to Draft" / Publish on an IN-REVIEW or PUBLISHED
        version — opens this modal to capture an audit note, so the box
        must stay editable precisely when the domain is read-only.
+     - ``.new-domain-field`` fields in the New Domain modal. Creating a
+       separate domain is independent of the currently loaded domain's
+       lifecycle status or edit lock.
      - ``[data-collab]`` the discussion offcanvas fields (comment /
        reply boxes, task title / assignee / due-date — see
        ``comments-panel.js``). Comments and tasks are collaboration, not
@@ -288,9 +295,28 @@ body:is(.read-only-version, .role-viewer, .read-only-locked) .view-mode-hidden {
    ``/ontology/pitfalls/analyze`` endpoint is status-open), so a reader on
    a PUBLISHED/IN-REVIEW version must still be able to pick which patterns
    to check and run the analysis. */
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not([data-collab]),
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not([data-collab]),
-body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not([data-collab]) {
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) input:not([type="search"]):not([id*="search"]):not([id*="filter"]):not([id*="query"]):not(#domainVersionSelect):not(.pitfall-chk):not(.new-domain-field):not([data-collab]),
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) textarea:not([data-rm-comment]):not(.new-domain-field):not([data-collab]),
+body:is(.read-only-version, .role-viewer, .read-only-locked):not([data-page="digitaltwin"]):not([data-page="settings"]) select:not(#domainVersionSelect):not(#switchVersionSelect):not(#loadDomainSelect):not(#loadVersionSelect):not(#auditVersionFilter):not(.new-domain-field):not([data-collab]) {
+    pointer-events: none !important;
+    background-color: #e9ecef !important;
+    opacity: 0.7 !important;
+    cursor: not-allowed !important;
+}
+
+/* --- MCP policy controls (Domain → Information → MCP).
+   Their ids are derived from the tool / context-feature name
+   (``#mcpTool_<tool>`` / ``#mcpContext_<feature>``), so the tool named
+   ``query_graphql`` yields ``#mcpTool_query_graphql`` and slips through the
+   ``[id*="query"]`` exemption above — an exemption meant for query editors,
+   not for a checkbox that rewrites the domain's published tool set. The same
+   trap waits for any future tool whose name contains "search" or "filter".
+   Gate them by class so the lockdown never depends on what a tool is called.
+   The policy is a property of the domain, so editing it is a domain write:
+   readers, viewers and editors locked out of a DRAFT must all see it frozen. */
+body:is(.read-only-version, .role-viewer, .read-only-locked) .js-mcp-tool,
+body:is(.read-only-version, .role-viewer, .read-only-locked) .js-mcp-context,
+body:is(.read-only-version, .role-viewer, .read-only-locked) #mcpToolsSelectAll {
     pointer-events: none !important;
     background-color: #e9ecef !important;
     opacity: 0.7 !important;

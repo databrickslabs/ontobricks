@@ -11,6 +11,14 @@ New permission model:
   in ``.domain_permissions.json`` files inside each domain folder.  Non-admin
   users with no entry on a given domain have **no access** to it.
 
+Group principals are first-class everywhere: a grant made to a Databricks
+group applies to each of its members exactly as an individual grant would.
+CAN_MANAGE on a group makes every member an admin, and a group's per-domain
+role is inherited by every member.  When several entries match a caller, the
+most privileged role wins.  Membership comes from SCIM ``/Me`` using the
+caller's own forwarded token — the app service principal normally cannot
+search SCIM — and nested (group-in-group) membership is not expanded.
+
 Active only in Databricks App mode (DATABRICKS_APP_PORT is set).  In local
 mode every user has unrestricted access.
 """
@@ -20,6 +28,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
 from back.core.databricks.DatabricksClient import DatabricksClient
+from back.core.databricks.constants import PERMISSIONS_APPS_PATH, SCIM_USERS_PATH
 from shared.config.constants import HTTP_USER_AGENT
 
 logger = get_logger(__name__)
@@ -137,7 +146,9 @@ class PermissionService:
 
         groups = principals.get("groups", [])
         if groups:
-            user_groups = self._get_user_groups(email, host, token)
+            user_groups = self._get_user_groups(
+                email, host, token, user_token=user_token
+            )
             user_group_names_l = {g.lower() for g in user_groups}
             for g in groups:
                 name = (g.get("display_name") or g.get("id") or "").lower()
@@ -146,17 +157,64 @@ class PermissionService:
 
         return ROLE_NONE
 
-    def _get_user_groups(self, email: str, host: str, token: str) -> List[str]:
-        """Return group display-names that *email* belongs to (via SCIM)."""
-        import requests as req
+    def _get_user_groups(
+        self,
+        email: str,
+        host: str,
+        token: str,
+        *,
+        user_token: str = "",
+    ) -> List[str]:
+        """Return group display-names that *email* belongs to (via SCIM).
 
-        if not host or not token:
+        The caller's own forwarded token is tried first against SCIM ``/Me``:
+        any user may read their own resource, whereas the ``/Users`` search
+        below needs workspace-admin rights the app service principal usually
+        does not have.  The SP path is kept as a fallback for contexts with no
+        forwarded token (background jobs, local dev).
+
+        A failed lookup is never cached, so a transient 403 does not lock the
+        user out of their groups for the whole cache window.
+        """
+        if not host:
             return []
 
         now = time.time()
         cached = self._user_groups_cache.get(email.lower())
         if cached and (now - cached[1]) < _CACHE_TTL_USER_GROUPS:
             return cached[0]
+
+        names = self._groups_via_scim_me(host, user_token)
+        if names is None:
+            names = self._groups_via_scim_users(email, host, token)
+        if names is None:
+            return []
+
+        self._user_groups_cache[email.lower()] = (names, now)
+        return names
+
+    @staticmethod
+    def _groups_via_scim_me(host: str, user_token: str) -> Optional[List[str]]:
+        """Read the caller's groups from SCIM ``/Me``. ``None`` on failure."""
+        if not host or not user_token:
+            return None
+
+        try:
+            client = DatabricksClient(host=host, token=user_token)
+            return client.get_current_user_groups()
+        except Exception as e:
+            logger.debug("SCIM /Me group lookup failed: %s", e)
+            return None
+
+    @staticmethod
+    def _groups_via_scim_users(
+        email: str, host: str, token: str
+    ) -> Optional[List[str]]:
+        """Read *email*'s groups from SCIM ``/Users``. ``None`` on failure."""
+        import requests as req
+
+        if not email or not host or not token:
+            return None
 
         try:
             h = host.rstrip("/")
@@ -166,22 +224,19 @@ class PermissionService:
                 "User-Agent": HTTP_USER_AGENT,
             }
             resp = req.get(
-                f"{h}/api/2.0/preview/scim/v2/Users",
+                f"{h}{SCIM_USERS_PATH}",
                 headers=headers,
                 params={"filter": f'userName eq "{email}"', "count": 1},
             )
             resp.raise_for_status()
             resources = resp.json().get("Resources", [])
             if not resources:
-                self._user_groups_cache[email.lower()] = ([], now)
                 return []
             groups = resources[0].get("groups", [])
-            names = [g.get("display", "") for g in groups if g.get("display")]
-            self._user_groups_cache[email.lower()] = (names, now)
-            return names
+            return [g.get("display", "") for g in groups if g.get("display")]
         except Exception as e:
             logger.debug("Could not resolve groups for %s: %s", email, e)
-            return []
+            return None
 
     # ------------------------------------------------------------------
     # Admin detection via Databricks App Permissions API
@@ -198,10 +253,12 @@ class PermissionService:
     ) -> bool:
         """Check if *email* has CAN_MANAGE on the Databricks App.
 
-        Tries every available auth path until one gives a definitive
-        answer (``True`` or ``False``).  A ``None`` return from a check
-        means "could not determine" (timeout, 403, network error) and
-        the next path is attempted.
+        CAN_MANAGE granted to a **group** makes every member of that group an
+        admin, exactly as if it had been granted to them individually.
+
+        Tries every available auth path until one gives a definitive answer.
+        A ``None`` return from a check means "could not determine" (timeout,
+        403, network error) and the next path is attempted.
 
         Order: user token REST → SDK (SP) → SP token REST.
         """
@@ -214,30 +271,76 @@ class PermissionService:
         if cached and (now - cached[1]) < _CACHE_TTL_ADMIN:
             return cached[0]
 
-        result: bool | None = None
+        managers: Optional[List[str]] = None
 
-        if user_token and result is None:
-            check = self._check_admin_rest(email, host, user_token, app_name)
-            if check is not None:
-                result = check
+        if user_token:
+            managers = self._can_manage_principals_rest(host, user_token, app_name)
 
-        if result is None:
-            sdk_result = self._check_admin_sdk(email, app_name)
-            if sdk_result is not None:
-                result = sdk_result
+        if managers is None:
+            managers = self._can_manage_principals_sdk(app_name)
 
-        if result is None and token:
-            check = self._check_admin_rest(email, host, token, app_name)
-            if check is not None:
-                result = check
+        if managers is None and token:
+            managers = self._can_manage_principals_rest(host, token, app_name)
 
-        final = bool(result)
+        final = self._matches_principal(
+            email, managers or [], host, token, user_token=user_token
+        )
         self._admin_cache[email] = (final, now)
-        logger.info("Admin check for %s: %s", email, final)
+        logger.info(
+            "Admin check for %s: %s (CAN_MANAGE principals=%s)",
+            email,
+            final,
+            managers,
+        )
         return final
 
-    def _check_admin_sdk(self, email: str, app_name: str) -> Optional[bool]:
-        """Try the Databricks SDK to read app permissions."""
+    def _matches_principal(
+        self,
+        email: str,
+        principals: List[str],
+        host: str,
+        token: str,
+        *,
+        user_token: str = "",
+    ) -> bool:
+        """True when *email*, or one of their groups, is in *principals*."""
+        if not principals:
+            return False
+
+        wanted = {p.lower() for p in principals if p}
+        if email.lower() in wanted:
+            return True
+
+        user_groups = self._get_user_groups(
+            email, host, token, user_token=user_token
+        )
+        return any(g.lower() in wanted for g in user_groups)
+
+    @staticmethod
+    def _extract_can_manage(payload: Dict[str, Any]) -> List[str]:
+        """Return every principal holding CAN_MANAGE in an app ACL payload.
+
+        Users, groups and service principals are all returned; the caller
+        decides how to match them.
+        """
+        principals: List[str] = []
+        for acl in payload.get("access_control_list", []):
+            principal = (
+                acl.get("user_name")
+                or acl.get("group_name")
+                or acl.get("service_principal_name")
+                or ""
+            )
+            if not principal:
+                continue
+            for p in acl.get("all_permissions", []):
+                if p.get("permission_level") == "CAN_MANAGE":
+                    principals.append(principal)
+                    break
+        return principals
+
+    def _can_manage_principals_sdk(self, app_name: str) -> Optional[List[str]]:
+        """Read the CAN_MANAGE principals via the SDK. ``None`` on error."""
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
 
         def _do():
@@ -245,53 +348,29 @@ class PermissionService:
 
             w = WorkspaceClient()
             logger.info(
-                "SDK admin check: calling GET /api/2.0/permissions/apps/%s",
-                app_name,
+                "SDK admin check: calling GET %s/%s", PERMISSIONS_APPS_PATH, app_name
             )
-            raw = w.api_client.do("GET", f"/api/2.0/permissions/apps/{app_name}")
-            acl_list = raw.get("access_control_list", [])
-            managers = []
-            for acl in acl_list:
-                principal = acl.get("user_name") or acl.get("group_name") or ""
-                for p in acl.get("all_permissions", []):
-                    if p.get("permission_level") == "CAN_MANAGE":
-                        managers.append(principal)
-                        if principal.lower() == email.lower():
-                            logger.info(
-                                "SDK admin check: MATCH %s == %s",
-                                principal,
-                                email,
-                            )
-                            return True
-            logger.info(
-                "SDK admin check: CAN_MANAGE principals=%s, "
-                "looking for=%s → not found",
-                managers,
-                email,
-            )
-            return False
+            raw = w.api_client.do("GET", f"{PERMISSIONS_APPS_PATH}/{app_name}")
+            return self._extract_can_manage(raw)
 
         try:
             with ThreadPoolExecutor(max_workers=1) as pool:
-                result = pool.submit(_do).result(timeout=5)
-            logger.info("SDK admin check for %s: %s", email, result)
-            return result
+                return pool.submit(_do).result(timeout=5)
         except FutTimeout:
-            logger.warning("SDK admin check timed out for %s", email)
+            logger.warning("SDK admin check timed out")
             return None
         except Exception as e:
             logger.warning(
-                "SDK admin check failed for %s: %s (%s)",
-                email,
+                "SDK admin check failed: %s (%s)",
                 e,
                 type(e).__name__,
             )
             return None
 
-    def _check_admin_rest(
-        self, email: str, host: str, token: str, app_name: str
-    ) -> Optional[bool]:
-        """Call the Permissions REST API. Returns True/False or None on error."""
+    def _can_manage_principals_rest(
+        self, host: str, token: str, app_name: str
+    ) -> Optional[List[str]]:
+        """Read the CAN_MANAGE principals via REST. ``None`` on error."""
         import requests as req
 
         if not host or not token or not app_name:
@@ -300,25 +379,14 @@ class PermissionService:
             h = host.rstrip("/")
             headers = {"Authorization": f"Bearer {token}", "User-Agent": HTTP_USER_AGENT}
             resp = req.get(
-                f"{h}/api/2.0/permissions/apps/{app_name}",
+                f"{h}{PERMISSIONS_APPS_PATH}/{app_name}",
                 headers=headers,
                 timeout=5,
             )
             resp.raise_for_status()
-            data = resp.json()
-            for acl_entry in data.get("access_control_list", []):
-                principal = (
-                    acl_entry.get("user_name") or acl_entry.get("group_name") or ""
-                )
-                for p in acl_entry.get("all_permissions", []):
-                    if (
-                        p.get("permission_level") == "CAN_MANAGE"
-                        and principal.lower() == email.lower()
-                    ):
-                        return True
-            return False
+            return self._extract_can_manage(resp.json())
         except Exception as e:
-            logger.warning("REST admin check failed for %s: %s", email, e)
+            logger.warning("REST admin check failed: %s", e)
             return None
 
     # ------------------------------------------------------------------
@@ -420,8 +488,15 @@ class PermissionService:
         token: str,
         registry_cfg: Dict[str, str],
         domain_folder: str,
+        *,
+        user_token: str = "",
     ) -> Optional[str]:
-        """Resolve the domain-level entry for *email* (None = no entry)."""
+        """Resolve the domain-level entry for *email* (None = no entry).
+
+        A role granted to a group applies to every member.  When several
+        entries match — a direct entry plus one or more groups, or membership
+        in two groups with different roles — the most privileged one wins.
+        """
         if not domain_folder:
             return None
 
@@ -430,21 +505,30 @@ class PermissionService:
         if not entries:
             return None
 
-        for entry in entries:
-            if (
-                entry.get("principal_type") == "user"
-                and entry.get("principal", "").lower() == email.lower()
-            ):
-                return entry.get("role", ROLE_VIEWER)
+        matched: List[str] = [
+            entry.get("role", ROLE_VIEWER)
+            for entry in entries
+            if entry.get("principal_type") == "user"
+            and entry.get("principal", "").lower() == email.lower()
+        ]
 
-        user_groups = self._get_user_groups(email, host, token)
-        for entry in entries:
-            if entry.get("principal_type") == "group" and entry.get(
-                "principal", ""
-            ).lower() in (g.lower() for g in user_groups):
-                return entry.get("role", ROLE_VIEWER)
+        if any(e.get("principal_type") == "group" for e in entries):
+            user_groups = {
+                g.lower()
+                for g in self._get_user_groups(
+                    email, host, token, user_token=user_token
+                )
+            }
+            matched.extend(
+                entry.get("role", ROLE_VIEWER)
+                for entry in entries
+                if entry.get("principal_type") == "group"
+                and entry.get("principal", "").lower() in user_groups
+            )
 
-        return None
+        if not matched:
+            return None
+        return max(matched, key=role_level)
 
     def get_domain_role(
         self,
@@ -493,6 +577,7 @@ class PermissionService:
             token,
             registry_cfg,
             domain_folder,
+            user_token=user_token,
         )
         if domain_entry is None:
             return ROLE_NONE

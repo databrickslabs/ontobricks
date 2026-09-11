@@ -148,6 +148,7 @@ async function loadOntologyClasses() {
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
                     actions: cls.actions || [],
+                    virtualAttributes: cls.virtualAttributes || [],
                     description: cls.description || cls.comment || '',
                     dataProperties: cls.dataProperties || []
                 };

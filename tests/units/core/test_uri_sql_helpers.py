@@ -87,6 +87,13 @@ class TestSQLHelpers:
     def test_validate_uc_identifier_accepts_hyphen(self):
         assert SQLHelpers.validate_uc_identifier("my-catalog", role="catalog") == "my-catalog"
 
+    def test_validate_uc_identifier_accepts_leading_digit(self):
+        """UC quoted identifiers may start with a digit (e.g. 5_g_subscribers)."""
+        assert (
+            SQLHelpers.validate_uc_identifier("5_g_subscribers", role="table")
+            == "5_g_subscribers"
+        )
+
     def test_validate_uc_identifier_rejects_injection(self):
         from back.core.errors import ValidationError
         with pytest.raises(ValidationError, match="Invalid UC catalog"):
@@ -94,6 +101,12 @@ class TestSQLHelpers:
 
     def test_quote_uc_fqn(self):
         assert SQLHelpers.quote_uc_fqn("main", "default", "tbl") == "`main`.`default`.`tbl`"
+
+    def test_quote_uc_fqn_leading_digit_table(self):
+        assert (
+            SQLHelpers.quote_uc_fqn("main", "default", "5_g_subscribers")
+            == "`main`.`default`.`5_g_subscribers`"
+        )
 
     def test_effective_view_table_from_domain(self):
         class FakeDomain:

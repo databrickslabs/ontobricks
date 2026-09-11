@@ -2,6 +2,7 @@
 
 import importlib
 import pytest
+import requests
 from unittest.mock import MagicMock, Mock, patch
 
 _unity_catalog_mod = importlib.import_module("back.core.databricks.uc.UnityCatalog")
@@ -117,23 +118,31 @@ class TestGetTables:
 
 
 class TestListFunctions:
+    # Input parameters and RETURNS TABLE result columns live in two different
+    # information_schema views, so they are read by two separate statements.
+    _ROUTINES = [
+        ["recompute_risk", "STRING", "Recompute the risk score", "entity_id"],
+        ["risk_history", "TABLE_TYPE", None, "days,entity_id"],
+        ["no_args", "STRING", "", ""],
+    ]
+    _RETURN_COLUMNS = [
+        ["risk_history", "as_of", "DATE"],
+        ["risk_history", "score", "DOUBLE"],
+    ]
+
+    def _cursor(self, mock_connect, *, routines=None, return_columns=None):
+        cursor = _make_sql_mocks(mock_connect)
+        cursor.fetchall.side_effect = [
+            self._ROUTINES if routines is None else routines,
+            self._RETURN_COLUMNS if return_columns is None else return_columns,
+        ]
+        return cursor
+
     @patch("databricks.sql.connect")
     def test_returns_functions_with_param_metadata(
         self, mock_connect, auth_with_warehouse
     ):
-        mock_cursor = _make_sql_mocks(
-            mock_connect,
-            fetchall=[
-                [
-                    "recompute_risk",
-                    "STRING",
-                    "Recompute the risk score",
-                    "entity_id",
-                ],
-                ["risk_history", "TABLE_TYPE", None, "days,entity_id"],
-                ["no_args", "STRING", "", ""],
-            ],
-        )
+        cursor = self._cursor(mock_connect)
         uc = UnityCatalog(auth_with_warehouse)
         out = uc.list_functions("main", "ops")
 
@@ -145,6 +154,8 @@ class TestListFunctions:
                 "input_params": ["entity_id"],
                 "param_count": 1,
                 "returns_table": False,
+                "return_type": "STRING",
+                "return_columns": [],
             },
             {
                 "name": "risk_history",
@@ -153,6 +164,11 @@ class TestListFunctions:
                 "input_params": ["days", "entity_id"],
                 "param_count": 2,
                 "returns_table": True,
+                "return_type": "TABLE",
+                "return_columns": [
+                    {"name": "as_of", "data_type": "DATE"},
+                    {"name": "score", "data_type": "DOUBLE"},
+                ],
             },
             {
                 "name": "no_args",
@@ -161,15 +177,51 @@ class TestListFunctions:
                 "input_params": [],
                 "param_count": 0,
                 "returns_table": False,
+                "return_type": "STRING",
+                "return_columns": [],
             },
         ]
-        call_sql, call_params = mock_cursor.execute.call_args[0]
+        call_sql, call_params = cursor.execute.call_args_list[0][0]
         # Parameter listing must come from information_schema: the REST
         # /functions collection endpoint does not populate input_params.
         assert "`main`.information_schema.routines" in call_sql
         assert "`main`.information_schema.parameters" in call_sql
         assert "p.parameter_mode   = 'IN'" in call_sql
         assert call_params == ("ops",)
+
+    @patch("databricks.sql.connect")
+    def test_return_columns_come_from_routine_columns_not_parameters(
+        self, mock_connect, auth_with_warehouse
+    ):
+        """Databricks lists only the declared arguments in ``parameters``, so a
+        table function contributes no row there for what it returns."""
+        cursor = self._cursor(mock_connect)
+        UnityCatalog(auth_with_warehouse).list_functions("main", "ops")
+
+        call_sql, call_params = cursor.execute.call_args_list[1][0]
+        assert "`main`.information_schema.routine_columns" in call_sql
+        assert "information_schema.parameters" not in call_sql
+        assert "ORDER BY r.routine_name, c.ordinal_position" in call_sql
+        assert call_params == ("ops",)
+
+    @patch("databricks.sql.connect")
+    def test_unreadable_return_columns_do_not_cost_the_function_list(
+        self, mock_connect, auth_with_warehouse
+    ):
+        """The action picker only needs the parameter count, so a metastore
+        that cannot answer the second query must still yield the functions."""
+        cursor = _make_sql_mocks(mock_connect)
+        cursor.fetchall.side_effect = [self._ROUTINES]
+        cursor.execute.side_effect = [None, RuntimeError("no such column")]
+
+        out = UnityCatalog(auth_with_warehouse).list_functions("main", "ops")
+
+        assert [f["name"] for f in out] == [
+            "recompute_risk",
+            "risk_history",
+            "no_args",
+        ]
+        assert out[1]["return_columns"] == []
 
     @patch("databricks.sql.connect", side_effect=RuntimeError("boom"))
     def test_returns_empty_list_on_error(self, _mock_connect, auth_with_warehouse):
@@ -224,6 +276,9 @@ class TestGetTableComment:
         call_sql = call_args[0][0]
         assert "information_schema.tables" in call_sql
         assert "`cat`.information_schema.tables" in call_sql
+        # Databricks SQL Connector requires qmark placeholders, not pyformat %s.
+        assert "%s" not in call_sql
+        assert call_sql.count("?") == 3
         assert call_args[0][1] == ("cat", "sch", "tbl")
 
     @patch("databricks.sql.connect")
@@ -341,6 +396,193 @@ class TestCreateVolumeRest:
         assert uc.create_volume("main", "default", "v") is False
 
 
+class TestGetEffectiveSchemaPermissions:
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_calls_endpoint_with_exact_principal_param(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {"privilege_assignments": []}
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        assert out == {"accessible": True, "assignments": [], "error": None}
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        assert args[0].endswith(
+            "/api/2.1/unity-catalog/effective-permissions/SCHEMA/main.graph"
+        )
+        assert kwargs["params"] == {"principal": "app-client-id"}
+        assert kwargs["timeout"] == 10
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    @patch.object(_unity_catalog_mod, "validate_uc_identifier")
+    def test_effective_schema_validates_and_url_encodes_path_segments(
+        self, mock_validate_identifier, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b'{"privilege_assignments":[]}'
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {"privilege_assignments": []}
+        mock_get.return_value = mock_resp
+        mock_validate_identifier.side_effect = ["main", "graph/ops?takeover=1"]
+
+        UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        args, kwargs = mock_get.call_args
+        assert args[0].endswith(
+            "/api/2.1/unity-catalog/effective-permissions/SCHEMA/main.graph%2Fops%3Ftakeover%3D1"
+        )
+        assert kwargs["params"] == {"principal": "app-client-id"}
+        assert mock_validate_identifier.call_args_list[0].kwargs == {"role": "catalog"}
+        assert mock_validate_identifier.call_args_list[1].kwargs == {"role": "schema"}
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_normalizes_privileges_and_filters_by_principal(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {
+            "privilege_assignments": [
+                {
+                    "principal": "some-group",
+                    "privileges": [
+                        {
+                            "privilege": "USE_SCHEMA",
+                            "inherited_from_name": "main.graph",
+                        }
+                    ],
+                },
+                {
+                    "principal": "app-client-id",
+                    "privileges": [
+                        {"privilege": "USE_CATALOG", "inherited_from_name": "main"},
+                        {"privilege": "SELECT"},
+                        "ALL_PRIVILEGES",
+                    ],
+                },
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        assert out == {
+            "accessible": True,
+            "assignments": [
+                {"privilege": "USE CATALOG", "inherited_from": "main"},
+                {"privilege": "SELECT", "inherited_from": ""},
+                {"privilege": "ALL PRIVILEGES", "inherited_from": ""},
+            ],
+            "error": None,
+        }
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_discards_missing_or_mismatched_principals(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b'{"privilege_assignments":[]}'
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {
+            "privilege_assignments": [
+                {"privileges": [{"privilege": "USE_SCHEMA"}]},
+                {"principal": "", "privileges": [{"privilege": "CREATE_VIEW"}]},
+                {"principal": "other-principal", "privileges": [{"privilege": "SELECT"}]},
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+        assert out == {
+            "accessible": True,
+            "assignments": [],
+            "error": None,
+        }
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_does_not_require_warehouse(
+        self, mock_get, auth_no_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b'{"privilege_assignments":[]}'
+        mock_resp.raise_for_status = Mock()
+        mock_resp.json.return_value = {"privilege_assignments": []}
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_no_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+        assert out == {"accessible": True, "assignments": [], "error": None}
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_handles_empty_200_content(self, mock_get, auth_with_warehouse):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.content = b""
+        mock_resp.raise_for_status = Mock()
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+        assert out == {"accessible": True, "assignments": [], "error": None}
+        mock_resp.json.assert_not_called()
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    @pytest.mark.parametrize(
+        "status_code,expected_error",
+        [
+            (404, "Schema not found in Unity Catalog"),
+            (
+                403,
+                "Insufficient privileges to inspect effective schema permissions",
+            ),
+        ],
+    )
+    def test_effective_schema_returns_diagnostic_on_404_or_403(
+        self, mock_get, auth_with_warehouse, status_code, expected_error
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = status_code
+        mock_get.return_value = mock_resp
+
+        out = UnityCatalog(auth_with_warehouse).get_effective_schema_permissions(
+            "main", "graph", "app-client-id"
+        )
+
+        assert out == {"accessible": False, "assignments": [], "error": expected_error}
+
+    @patch.object(_unity_catalog_mod.requests, "get")
+    def test_effective_schema_raises_on_non_diagnostic_request_error(
+        self, mock_get, auth_with_warehouse
+    ):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.raise_for_status.side_effect = requests.HTTPError("boom")
+        mock_get.return_value = mock_resp
+
+        uc = UnityCatalog(auth_with_warehouse)
+        with pytest.raises(requests.HTTPError, match="boom"):
+            uc.get_effective_schema_permissions("main", "graph", "app-client-id")
+
+
 class TestUnityCatalogSqlInjectionGuards:
     @pytest.mark.parametrize(
         "method,args",
@@ -352,6 +594,7 @@ class TestUnityCatalogSqlInjectionGuards:
             ("get_volumes", ("main", "default;")),
             ("probe_schema_has_tables", ("cat", "sch;")),
             ("check_table_select_permission", ("cat", "sch", "tbl;")),
+            ("get_effective_schema_permissions", ("cat", "sch;", "spn")),
         ],
     )
     def test_rejects_invalid_identifiers(self, auth_with_warehouse, method, args):
@@ -369,7 +612,8 @@ class TestProbeSchemaHasTables:
         mock_cursor.execute.assert_called_once()
         call_sql, params = mock_cursor.execute.call_args[0]
         assert "`my_cat`.information_schema.tables" in call_sql
-        assert "table_schema = %s" in call_sql
+        assert "table_schema = ?" in call_sql
+        assert "%s" not in call_sql
         assert params == ("my_sch",)
 
     @patch("databricks.sql.connect", side_effect=RuntimeError("denied"))

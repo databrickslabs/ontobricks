@@ -59,7 +59,8 @@ class _FakeApi:
     """Stateful fake of ``WorkspaceClient.api_client``."""
 
     def __init__(self, *, apps_resolve=None, existing_instance=False,
-                 project_short="ontobricks-graph", roles=None):
+                 project_short="ontobricks-graph", roles=None,
+                 project_on_second_page=False):
         self.instance_created = existing_instance
         self.databases = []
         self.calls = []
@@ -69,6 +70,7 @@ class _FakeApi:
         self.apps_resolve = apps_resolve or {}
         # canonical project short-name surfaced by /postgres/projects
         self.project_short = project_short
+        self.project_on_second_page = project_on_second_page
         # Branch roles surfaced by /roles (default: an SP role for "app-sp").
         self.roles = roles if roles is not None else [
             {
@@ -81,7 +83,7 @@ class _FakeApi:
             }
         ]
 
-    def do(self, method, path, body=None):
+    def do(self, method, path, body=None, query=None):
         self.calls.append((method, path, body))
 
         if path.startswith("/api/2.0/database/instances/"):
@@ -94,6 +96,15 @@ class _FakeApi:
             return {}
 
         if method == "GET" and path == "/api/2.0/postgres/projects":
+            if self.project_on_second_page:
+                if (query or {}).get("page_token") == "page-2":
+                    return {
+                        "projects": [{"name": "projects/" + self.project_short}]
+                    }
+                return {
+                    "projects": [{"name": "projects/unrelated"}],
+                    "next_page_token": "page-2",
+                }
             return {"projects": [{"name": "projects/" + self.project_short}]}
 
         if path.endswith("/branches"):
@@ -287,6 +298,18 @@ class TestProvisioner:
         assert any("normalised to lowercase" in w for w in task.result["warnings"])
         # CAN_USE grant targeted the canonical lowercase project name.
         assert any("database-projects/test-db" in c[0] for c in api.permission_calls)
+
+    def test_project_resolution_follows_next_page_token(self):
+        api = _FakeApi(project_on_second_page=True)
+        prov, _, _ = _make_provisioner(api, [])
+
+        with patch(
+            "back.core.graphdb.lakebase.provisioner.time.sleep",
+            return_value=None,
+        ):
+            prov._resolve_project_path(api)
+
+        assert prov._project_path == "projects/ontobricks-graph"
 
     def test_names_are_normalised_to_safe_charset(self):
         # Names are lowercased and restricted to [a-z0-9_-]; other characters

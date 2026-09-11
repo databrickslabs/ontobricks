@@ -7,7 +7,17 @@ let autoSaveTimeout = null;
 let isLoadingData = false;  // Flag to prevent auto-save during data loading
 let isViewOnlyMode = true;  // Default to view-only mode
 let layoutDirty = false;    // Track unsaved layout changes
+let ontologyDirty = false;  // Track ontology edits (attributes, relationships…) not yet in the session
+let registryDirty = false;  // Track changes not yet persisted to the registry
+let unloadOntologyFlushed = false;  // The ontology beacon owns the session write on this unload
 let ontologyVersionAtLoad = null;  // Track ontology version when design was last loaded
+// True only when the canvas was built with the ontology as the authoritative
+// content source (merge / from-OntologyState branches). False when it was built
+// from a saved design-layout view alone (ontology not yet loaded): in that case
+// the canvas is a stale visual and MUST NOT be serialised back to the session,
+// or it resurrects removed attributes/relationships/parents. See
+// loadOntologyIntoDesigner and syncDesignToOntology.
+let designerContentAuthoritative = false;
 
 /**
  * Resolve an entity name (from a property's domain/range) to an ID in the entity map.
@@ -181,7 +191,7 @@ function _getOntologyVersion() {
         classes.length,
         classes.map(c => c.name + ':' + (c.dataProperties || []).length + ':' + (c.parent || '')).join(','),
         props.length,
-        props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '')).join(',')
+        props.map(p => p.name + ':' + p.type + ':' + (p.domain || '') + ':' + (p.range || '') + ':' + (p.direction || 'forward')).join(',')
     ];
     return parts.join('|');
 }
@@ -306,11 +316,18 @@ function scheduleAutoSave() {
     }
     
     layoutDirty = true;
-    
+    ontologyDirty = true;
+    registryDirty = true;
+    // A user edit on the canvas makes it the current source of truth (this only
+    // runs for user-driven changes; loads are guarded by isLoadingData). Promote
+    // it so the pending sync is allowed to persist, including on a fresh canvas.
+    designerContentAuthoritative = true;
+
     if (autoSaveTimeout) {
         clearTimeout(autoSaveTimeout);
     }
     autoSaveTimeout = setTimeout(async () => {
+        autoSaveTimeout = null;
         // Double-check flag in case loading started during the timeout
         if (isLoadingData) {
             console.log('[AUTO-SAVE] Skipped - data loading in progress');
@@ -318,6 +335,7 @@ function scheduleAutoSave() {
         }
         await syncDesignToOntology(false);
         layoutDirty = false;
+        ontologyDirty = false;
     }, 500); // Save 500ms after last change
 }
 
@@ -333,7 +351,16 @@ async function flushDesignLayout() {
     
     if (!ontologyDesigner || isLoadingData) return;
     
-    if (layoutDirty) {
+    if (ontologyDirty) {
+        // A debounced ontology sync (attribute add/remove, rename, relationship
+        // edit …) was pending. Persist it fully now — syncDesignToOntology also
+        // saves the layout — otherwise the edit is lost when leaving the section
+        // and reappears on return because the session was never updated.
+        console.log('[FLUSH] Persisting pending ontology changes');
+        await syncDesignToOntology(false);
+        ontologyDirty = false;
+        layoutDirty = false;
+    } else if (layoutDirty) {
         console.log('[FLUSH] Saving pending layout changes');
         await saveDesignLayoutOnly();
         layoutDirty = false;
@@ -357,6 +384,11 @@ async function saveDesignLayoutOnly() {
  */
 function saveDesignLayoutBeacon() {
     if (!ontologyDesigner || !layoutDirty || isLoadingData) return;
+    // The ontology beacon already wrote the whole session (classes, properties
+    // AND positions) this unload. /design-views/save-current does its own
+    // read-modify-write of the session, so letting it run concurrently would
+    // clobber the ontology beacon's edit with a stale snapshot.
+    if (unloadOntologyFlushed) return;
     
     try {
         const design = ontologyDesigner.toJSON();
@@ -380,21 +412,191 @@ function saveDesignLayoutBeacon() {
         );
         navigator.sendBeacon('/domain/design-views/save-current', blob);
         layoutDirty = false;
-        console.log('[BEACON] Layout saved via sendBeacon');
     } catch (error) {
         console.warn('[BEACON] Failed to save layout:', error);
     }
 }
 
+/**
+ * Persist pending ontology edits (attribute add/remove, rename, relationship
+ * changes …) on page teardown. The 500 ms debounced syncDesignToOntology is
+ * dropped when the page unloads, so a full navigation (e.g. Designer → KG
+ * Explorer) would otherwise leave the session with the pre-edit ontology and
+ * the change would reappear on return. We rebuild the state from the canvas and
+ * fire a keepalive /ontology/save so the browser completes it during teardown.
+ * Registered before the layout beacon so the session is refreshed first.
+ */
+function saveOntologyBeacon() {
+    if (!ontologyDesigner || isLoadingData || !ontologyDirty) return;
+    // Never serialise a stale-fallback canvas back over the session ontology.
+    if (!designerContentAuthoritative) {
+        return;
+    }
+    try {
+        commitDesignToOntologyState();
+        if (typeof window.saveConfigToSession === 'function') {
+            window.saveConfigToSession({ keepalive: true });
+        }
+        ontologyDirty = false;
+        // Claim the session write for this unload: the layout and registry
+        // beacons each read-modify-write the whole session, so they must NOT
+        // race this keepalive /ontology/save or they overwrite the edit with a
+        // pre-edit snapshot (the bug where a removed attribute reappears).
+        unloadOntologyFlushed = true;
+    } catch (error) {
+        console.warn('[BEACON] Failed to save ontology:', error);
+    }
+}
+
+window.addEventListener('beforeunload', saveOntologyBeacon);
+window.addEventListener('pagehide', saveOntologyBeacon);
+
 window.addEventListener('beforeunload', saveDesignLayoutBeacon);
 window.addEventListener('pagehide', saveDesignLayoutBeacon);
+
+/**
+ * Auto-save design changes to the registry (silent, no confirmation).
+ * Called when the user leaves the design section or navigates away.
+ */
+async function autoSaveToRegistry() {
+    if (!registryDirty) return;
+    try {
+        console.log('[AUTO-SAVE] Saving design changes to registry...');
+        if (typeof showNotification === 'function') {
+            showNotification('Auto-saving to registry…', 'info', 3000);
+        }
+        const response = await fetch('/domain/save-to-uc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            registryDirty = false;
+            console.log('[AUTO-SAVE] Registry save successful');
+            if (typeof showNotification === 'function') {
+                showNotification('Design auto-saved to registry', 'success', 2500);
+            }
+        } else {
+            console.warn('[AUTO-SAVE] Registry save failed:', data.message);
+        }
+    } catch (e) {
+        console.warn('[AUTO-SAVE] Registry save error:', e);
+    }
+}
+
+/**
+ * Reset the registry-dirty flag (called after an explicit manual save).
+ */
+function clearRegistryDirty() {
+    registryDirty = false;
+}
+
+/**
+ * Fire-and-forget registry save on page unload using fetch keepalive.
+ * Runs after saveDesignLayoutBeacon so the layout is already committed to the
+ * session before the server processes the save-to-uc request.
+ */
+function saveRegistryOnUnload() {
+    // Same ordering requirement as the layout beacon, and the reason it is
+    // called from here rather than left to its own listener: the detail panel
+    // module is loaded after this one, so its unload handler would run second
+    // and the registry would be written from a session that never saw the
+    // pending edit. The flush is a no-op once the panel is clean.
+    if (typeof flushSharedPanelOnUnload === 'function') flushSharedPanelOnUnload();
+    if (!registryDirty) return;
+    // save-to-uc also read-modify-writes the whole session (Domain.save_domain_to_uc
+    // ends with session.save()). If the ontology beacon just fired a keepalive
+    // /ontology/save, running this concurrently would persist a pre-edit
+    // snapshot back into the session and revert the edit. Skip it: the session
+    // now holds the change and the registry is re-synced on the next section
+    // switch / explicit save (both of which run sequentially, not racing).
+    if (unloadOntologyFlushed) return;
+    try {
+        fetch('/domain/save-to-uc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+            credentials: 'same-origin',
+            keepalive: true
+        });
+        console.log('[UNLOAD] Registry save request sent (keepalive)');
+    } catch (e) {
+        console.warn('[UNLOAD] Registry save on unload failed:', e);
+    }
+}
+
+window.addEventListener('beforeunload', saveRegistryOnUnload);
+window.addEventListener('pagehide', saveRegistryOnUnload);
+window.autoSaveToRegistry = autoSaveToRegistry;
+window.clearRegistryDirty = clearRegistryDirty;
+
+/**
+ * Targeted in-place update of a single relationship's direction in the canvas.
+ * Avoids a full loadOntologyIntoDesigner reload — updates only the relevant SVG
+ * element, then persists the new layout to the session.
+ * @param {string} name - Relationship name
+ * @param {string} direction - 'forward' | 'reverse'
+ */
+function refreshRelationshipInDesigner(name, direction) {
+    if (!ontologyDesigner) return;
+    ontologyDesigner.relationships.forEach(rel => {
+        if (rel.name === name) {
+            rel.direction = direction;
+            ontologyDesigner._renderRelationship(rel);
+        }
+    });
+    // Persist the updated layout (direction is stored in the design views snapshot)
+    saveDesignLayoutOnly();
+}
+window.refreshRelationshipInDesigner = refreshRelationshipInDesigner;
 
 /**
  * Sync design to OntologyState and optionally save to session
  */
 async function syncDesignToOntology(showFeedback = false) {
-    if (!ontologyDesigner) return;
-    
+    // Guard against clobber: if the canvas was built from a stale saved-layout
+    // view (ontology not authoritative) and the user has not edited it, do NOT
+    // rebuild the ontology from it — that resurrects removed attributes/
+    // relationships/parents. Persist only the visual layout instead.
+    if (!designerContentAuthoritative) {
+        await saveDesignLayoutOnly();
+        return;
+    }
+
+    const design = commitDesignToOntologyState();
+    if (!design) return;
+
+    if (typeof OntologyState !== 'undefined' && OntologyState.config) {
+        // Save to session (await to ensure it completes)
+        await saveOntologyToSession(showFeedback);
+
+        // Also save the design layout for domain persistence
+        await saveDesignLayout(design);
+
+        // Regenerate OWL content to reflect changes
+        if (typeof autoGenerateOwl === 'function') {
+            autoGenerateOwl();
+        }
+
+        const inheritanceCount = design.inheritances ? design.inheritances.length : 0;
+        console.log('Design synced:', (OntologyState.config.classes || []).length + ' classes, ' + inheritanceCount + ' inheritances');
+    }
+}
+
+/**
+ * Rebuild OntologyState.config.classes/properties from the current canvas.
+ *
+ * Pure and synchronous (no network): the derivation used to live inside
+ * syncDesignToOntology, but it is split out so an unload handler can refresh
+ * the in-memory state and immediately fire a keepalive /ontology/save. Returns
+ * the raw design JSON (for layout persistence) or null when the designer is
+ * not ready.
+ */
+function commitDesignToOntologyState() {
+    if (!ontologyDesigner) return null;
+
     const design = ontologyDesigner.toJSON();
     
     // Build a map of entity ID to entity name for inheritance lookup
@@ -467,6 +669,7 @@ async function syncDesignToOntology(showFeedback = false) {
             bridges: existing.bridges || [],
             dataset: existing.dataset || null,
             actions: existing.actions || [],
+            virtualAttributes: existing.virtualAttributes || [],
             dataProperties: [...ownProperties, ...inheritedProperties]
         };
         
@@ -504,21 +707,9 @@ async function syncDesignToOntology(showFeedback = false) {
         
         OntologyState.config.classes = classes;
         OntologyState.config.properties = [...existingDataProperties, ...objectProperties];
-        
-        // Save to session (await to ensure it completes)
-        await saveOntologyToSession(showFeedback);
-        
-        // Also save the design layout for domain persistence
-        await saveDesignLayout(design);
-        
-        // Regenerate OWL content to reflect changes
-        if (typeof autoGenerateOwl === 'function') {
-            autoGenerateOwl();
-        }
-        
-        const inheritanceCount = design.inheritances ? design.inheritances.length : 0;
-        console.log('Design synced:', classes.length + ' classes, ' + objectProperties.length + ' relationships, ' + inheritanceCount + ' inheritances');
     }
+
+    return design;
 }
 
 /**
@@ -890,6 +1081,7 @@ async function loadFromOntologyFresh() {
     setTimeout(() => {
         isLoadingData = false;
         layoutDirty = false;
+        ontologyDirty = false;
         ontologyVersionAtLoad = _getOntologyVersion();
         console.log('[LOAD FRESH] Data load complete - auto-save re-enabled');
     }, 600);
@@ -1516,8 +1708,21 @@ async function loadOntologyIntoDesigner(showAlert = true) {
     
     // Set flag to prevent auto-save during loading
     isLoadingData = true;
-    console.log('[LOAD] Starting data load - auto-save disabled');
-    
+
+    // Close the load-order race: on a full page load the Designer can run before
+    // GET /ontology/load has populated OntologyState.config.classes. Without this
+    // await we fall into the "saved-layout-only" branch below, load a stale view
+    // and then serialise it back — resurrecting removed attributes/relationships/
+    // parents. Waiting guarantees the ontology is the authoritative content source
+    // whenever it actually has classes.
+    if (typeof window.waitForOntologyLoaded === 'function') {
+        try {
+            await window.waitForOntologyLoaded();
+        } catch (e) {
+            console.warn('[LOAD] waitForOntologyLoaded rejected — proceeding:', e);
+        }
+    }
+
     // First, try to load from saved design layout (domain persistence)
     const savedLayout = await loadDesignLayoutFromProject();
 
@@ -1718,14 +1923,16 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         
         const inhCount = mergedLayout.inheritances ? mergedLayout.inheritances.length : 0;
         console.log('Loading merged layout:', mergedLayout.entities.length + ' entities, ' + mergedLayout.relationships.length + ' relationships, ' + inhCount + ' inheritances');
+        // Content came from the ontology (authoritative) with saved positions.
+        designerContentAuthoritative = true;
         ontologyDesigner.fromJSON(mergedLayout, { autoLayout: false, center: _layoutHasHidden, animate: false });
         
         // Re-enable auto-save after loading completes
         setTimeout(() => {
             isLoadingData = false;
             layoutDirty = false;
+            ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
-            console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);  // Wait longer than auto-save debounce (500ms)
         return true;
     }
@@ -1751,14 +1958,18 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         
         const inhCount = savedLayout.inheritances ? savedLayout.inheritances.length : 0;
         console.log('Loading from saved design layout:', savedLayout.entities.length + ' entities, ' + inhCount + ' inheritances');
+        // Stale-fallback: the ontology was not available, so this canvas reflects
+        // a design-view snapshot only. Mark it non-authoritative so autosave never
+        // serialises it back over the session ontology.
+        designerContentAuthoritative = false;
         ontologyDesigner.fromJSON(savedLayout, { autoLayout: false, center: _layoutHasHidden, animate: false });
         
         // Re-enable auto-save after loading completes
         setTimeout(() => {
             isLoadingData = false;
             layoutDirty = false;
+            ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
-            console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);
         return true;
     }
@@ -1780,7 +1991,9 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         }
         
         ontologyDesigner.clear();
-        
+        // Built directly from OntologyState.config (authoritative content).
+        designerContentAuthoritative = true;
+
         // Create entity map for relationship linking
         const entityMap = new Map();
         
@@ -1893,8 +2106,8 @@ async function loadOntologyIntoDesigner(showAlert = true) {
         setTimeout(() => {
             isLoadingData = false;
             layoutDirty = false;
+            ontologyDirty = false;
             ontologyVersionAtLoad = _getOntologyVersion();
-            console.log('[LOAD] Data load complete - auto-save re-enabled');
         }, 600);
         return true;
     } else {

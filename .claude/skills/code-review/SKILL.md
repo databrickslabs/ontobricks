@@ -53,6 +53,8 @@ the canonical files, not here.
 - Inline CSS/JS in templates → `.cursor/05 §Frontend`
 - Secrets or query results on a domain object → `.cursor/02`, `.cursor/07 §Domain Security`
 - Multiple public classes per file, or filename not PascalCase → `.cursor/01`, `.cursor/07 §Class-First Policy`
+- Non-English comments, `/changelogs/` prose, `logger.*` templates, audit-trail
+  strings, or traces → `.cursor/05 §English-only artifacts`, `src/.coding_rules.md §3`
 
 ## Don't
 

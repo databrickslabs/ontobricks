@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_id %}settings{% endblock %}
-{% block title %}Settings - OntoBricks{% endblock %}
+{% block title %}{{ brand_page_title('Settings') }}{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='global/css/config.css') }}?v={{ asset_version }}">
@@ -29,7 +29,7 @@
                             <h4 class="mb-1"><i class="ob-brand-icon ob-icon-databricks me-2"></i>Databricks</h4>
                             <p class="text-muted mb-0 small">Configure Databricks connection and SQL Warehouse</p>
                         </div>
-                        <button type="button" class="btn btn-primary btn-save-settings">
+                        <button type="button" class="btn btn-sm btn-primary btn-save-settings">
                             <i class="bi bi-check-circle me-1"></i> Save
                         </button>
                     </div>
@@ -102,8 +102,9 @@
                     </div>
 
                     <div id="deltaGraphPanel" style="display:none;">
-
-                        <ul class="nav nav-tabs ob-tabs" id="deltaTabs" role="tablist">
+                        <div class="card h-100">
+                            <div class="card-body p-0 ob-tabs-wrap">
+                        <ul class="nav nav-tabs ob-tabs nav-fill" id="deltaTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="dttab-overview" data-bs-toggle="tab"
                                         data-bs-target="#dtpane-overview" type="button" role="tab"
@@ -134,7 +135,7 @@
                             </li>
                         </ul>
 
-                        <div class="tab-content ob-tab-content" id="deltaTabContent">
+                        <div class="tab-content p-3" id="deltaTabContent">
 
                             <!-- ── TAB 1 · Overview ── -->
                             <div class="tab-pane fade show active" id="dtpane-overview" role="tabpanel" aria-labelledby="dttab-overview">
@@ -213,16 +214,18 @@
                             <!-- ── TAB 4 · Health ── -->
                             <div class="tab-pane fade" id="dtpane-health" role="tabpanel" aria-labelledby="dttab-health">
                                 <p class="small text-muted mb-3">
-                                    Probes the SQL Warehouse and, when a domain is open in the session, the active
-                                    domain&rsquo;s VIEW and <code>_data</code> table.
+                                    Checks effective Unity Catalog permissions for the saved Registry
+                                    <code>catalog.schema</code> and the checked principal.
                                 </p>
                                 <button type="button" class="btn btn-sm btn-outline-primary" id="btnDeltaTripleStoreHealth">
                                     <i class="bi bi-arrow-clockwise me-1"></i> Refresh status
                                 </button>
-                                <div id="deltaHealthResult" class="mt-3"></div>
+                                <div id="deltaHealthResult" class="mt-3" role="status" aria-live="polite"></div>
                             </div>
 
                         </div><!-- /#deltaTabContent -->
+                            </div>
+                        </div>
                     </div><!-- /#deltaGraphPanel -->
                 </div>
             </div>
@@ -236,11 +239,11 @@
                             <p class="text-muted mb-0 small">Configure the Lakebase (Postgres) connection and bulk-loading mode</p>
                         </div>
                         <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-outline-primary" id="btnOpenProvisionModal"
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnOpenProvisionModal"
                                     data-bs-toggle="modal" data-bs-target="#lakebaseProvisionModal">
                                 <i class="bi bi-magic me-1"></i> Create graph DB
                             </button>
-                            <button type="button" class="btn btn-primary btn-save-settings">
+                            <button type="button" class="btn btn-sm btn-primary btn-save-settings">
                                 <i class="bi bi-check-circle me-1"></i> Save
                             </button>
                         </div>
@@ -253,9 +256,11 @@
                     </div>
 
                     <div id="lakebaseGraphPanel" style="display:none;">
+                        <div class="card h-100">
+                            <div class="card-body p-0 ob-tabs-wrap">
 
                         <!-- Tab strip -->
-                        <ul class="nav nav-tabs ob-tabs" id="lakebaseTabs" role="tablist">
+                        <ul class="nav nav-tabs ob-tabs nav-fill" id="lakebaseTabs" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="lktab-connection" data-bs-toggle="tab"
                                         data-bs-target="#lkpane-connection" type="button" role="tab"
@@ -300,7 +305,7 @@
                             </li>
                         </ul>
 
-                        <div class="tab-content ob-tab-content" id="lakebaseTabContent">
+                        <div class="tab-content p-3" id="lakebaseTabContent">
 
                             <!-- ── TAB 1 · Connection ── -->
                             <div class="tab-pane fade show active" id="lkpane-connection" role="tabpanel" aria-labelledby="lktab-connection">
@@ -529,6 +534,8 @@
                             </div>
 
                         </div><!-- /#lakebaseTabContent -->
+                            </div>
+                        </div>
                     </div><!-- /#lakebaseGraphPanel -->
 
                     <!-- ── Provision new graph DB modal ── -->
@@ -630,7 +637,7 @@
                             <p class="text-muted mb-0 small">Manage named Neo4j (Bolt) connections — Aura or self-hosted</p>
                         </div>
                         <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-primary btn-save-settings">
+                            <button type="button" class="btn btn-sm btn-primary btn-save-settings">
                                 <i class="bi bi-check-circle me-1"></i> Save
                             </button>
                         </div>
@@ -642,8 +649,10 @@
                         <span class="text-muted small">Loading Neo4j settings…</span>
                     </div>
 
+                    <div class="card h-100">
+                        <div class="card-body p-0 ob-tabs-wrap">
                     <!-- Tab strip (parity with the Lakebase panel) -->
-                    <ul class="nav nav-tabs ob-tabs" id="neo4jTabs" role="tablist">
+                    <ul class="nav nav-tabs ob-tabs nav-fill" id="neo4jTabs" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" id="n4tab-connection" data-bs-toggle="tab"
                                     data-bs-target="#n4pane-connection" type="button" role="tab"
@@ -660,7 +669,7 @@
                         </li>
                     </ul>
 
-                    <div class="tab-content ob-tab-content" id="neo4jTabContent">
+                    <div class="tab-content p-3" id="neo4jTabContent">
 
                     <!-- ── TAB 1 · Connections (master–detail) ── -->
                     <div class="tab-pane fade show active" id="n4pane-connection" role="tabpanel" aria-labelledby="n4tab-connection">
@@ -674,7 +683,7 @@
                     <div class="alert alert-warning border-0 mb-3 small">
                         <strong>Requirements:</strong> Neo4j <strong>server 5.x</strong> (Aura, Enterprise,
                         or Community). OntoBricks assumes it <em>owns</em> the connected database. APOC is not required.
-                        See the <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/neo4j-requirements.md" target="_blank" rel="noopener">Neo4j requirements guide</a>.
+                        See the <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/neo4j-requirements.md" target="_blank" rel="noopener">Neo4j requirements guide</a>.
                     </div>
 
                     <div class="row g-3">
@@ -763,7 +772,7 @@
                                         </div>
                                         <div class="form-text small text-muted">
                                             The password is fetched live at connect time — nothing is persisted in clear. See
-                                            <a href="https://github.com/databrickslabs/ontobricks/blob/develop/documentation/pr47-neo4j-demo/secret-configuration.md" target="_blank" rel="noopener">setup guide</a>.
+                                            <a href="https://github.com/databrickslabs/ontobricks/blob/develop/docs/neo4j-requirements.md" target="_blank" rel="noopener">setup guide</a>.
                                         </div>
                                     </div>
 
@@ -810,6 +819,8 @@
                     </div><!-- /#n4pane-objects -->
 
                     </div><!-- /#neo4jTabContent -->
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -821,7 +832,7 @@
                             <h4 class="mb-1"><i class="bi bi-sliders me-2"></i>Global</h4>
                             <p class="text-muted mb-0 small">Global preferences and application settings</p>
                         </div>
-                        <button type="button" class="btn btn-primary btn-save-settings">
+                        <button type="button" class="btn btn-sm btn-primary btn-save-settings">
                             <i class="bi bi-check-circle me-1"></i> Save
                         </button>
                     </div>
@@ -838,57 +849,6 @@
                         <small class="text-muted">
                             <i class="bi bi-info-circle"></i> This domain is used as the default Base URI when creating new domains. Stored globally for all users.
                         </small>
-                    </div>
-
-                    <div class="mb-4">
-                        <label class="form-label fw-semibold">
-                            Default Entity Icon
-                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
-                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
-                            </span>
-                        </label>
-                        <div class="d-flex align-items-center gap-2 mb-1">
-                            <span id="currentDefaultEmoji" class="fs-3">📦</span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="changeDefaultEmoji">
-                                <i class="bi bi-pencil me-1"></i> Change
-                            </button>
-                        </div>
-                        <small class="text-muted">Default icon used for new entities in the ontology. Stored globally for all users.</small>
-
-                        <div id="defaultEmojiPickerMount"></div>
-                    </div>
-
-                    <div class="mb-4">
-                        <label class="form-label fw-semibold">
-                            Application Logo
-                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
-                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
-                            </span>
-                        </label>
-                        <div class="d-flex align-items-center gap-3 mb-2">
-                            <div class="d-flex align-items-center justify-content-center border rounded bg-dark settings-logo-preview-box">
-                                <img id="navbarLogoPreview"
-                                     src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2"
-                                     alt="Current logo" width="32" height="32">
-                            </div>
-                            <div class="flex-grow-1">
-                                <input type="file" class="form-control form-control-sm" id="navbarLogoFile"
-                                       accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
-                                <div class="form-text">
-                                    Recommended: <strong>64&times;64&nbsp;px</strong> square
-                                    (rendered at 24&times;24 in the navbar). SVG, PNG, JPEG, WEBP or GIF, max&nbsp;1&nbsp;MB.
-                                </div>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnUploadNavbarLogo" disabled>
-                                <i class="bi bi-upload me-1"></i> Upload logo
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnResetNavbarLogo">
-                                <i class="bi bi-arrow-counterclockwise me-1"></i> Reset to default
-                            </button>
-                            <span id="navbarLogoStatus" class="text-muted small ms-2 align-self-center"></span>
-                        </div>
                     </div>
 
                     <div class="mb-4">
@@ -917,6 +877,36 @@
                         <small class="text-muted">
                             <i class="bi bi-info-circle"></i> How long a DRAFT single-editor lock survives with no keep-alive (a crashed / closed tab) before another user can reclaim it. The editor's browser auto-renews while open. Set to <strong>0</strong> to disable the lease (a lock is then held until the editor closes the domain or an admin force-unlocks it).
                         </small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">
+                            Graph read limits
+                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                            </span>
+                        </label>
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-6">
+                                <label for="graphQueryTimeoutS" class="form-label small fw-semibold mb-1">Statement timeout (seconds)</label>
+                                <input type="number" min="0" step="5" class="form-control form-control-sm"
+                                       id="graphQueryTimeoutS" placeholder="60">
+                                <div class="form-text small mt-1 mb-0 text-muted">
+                                    Max time a single graph read (e.g. a Graph Chat traversal) may run before the
+                                    database cancels it &mdash; applies to both Lakebase and the SQL warehouse. <code>0</code>
+                                    uses the built-in default. Prevents a broad query from freezing the app.
+                                </div>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label for="graphChatResultCap" class="form-label small fw-semibold mb-1">Graph Chat result cap (triples)</label>
+                                <input type="number" min="0" step="100" class="form-control form-control-sm"
+                                       id="graphChatResultCap" placeholder="10000">
+                                <div class="form-text small mt-1 mb-0 text-muted">
+                                    Hard ceiling on triples returned to the Graph Chat agent per query.
+                                    <code>0</code> uses the built-in default.
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <hr>
@@ -955,6 +945,169 @@
                             <a href="/api/redoc" target="_blank" class="btn btn-sm btn-outline-secondary">
                                 <i class="bi bi-journal-text me-1"></i> ReDoc
                             </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== UI SECTION ==================== -->
+            <div id="ui-section" class="sidebar-section">
+                <div class="content-section">
+                    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h4 class="mb-1"><i class="bi bi-palette me-2"></i>UI</h4>
+                            <p class="text-muted mb-0 small">Branding and theme settings for the application interface</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBrandingDiscardBtn" disabled>
+                                <i class="bi bi-arrow-counterclockwise me-1"></i> Discard changes
+                            </button>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-warning"
+                                    id="uiBrandingResetDefaultsBtn"
+                                    title="Restore factory UI defaults"
+                                    aria-label="Restore factory UI defaults">
+                                <i class="bi bi-arrow-repeat me-1"></i> Default
+                            </button>
+                            <button type="button" class="btn btn-sm btn-primary" id="uiBrandingSaveBtn" disabled>
+                                <i class="bi bi-check-circle me-1"></i> Save
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="uiBrandingStatus" class="alert d-none py-2 px-3 mb-3 small" role="status" aria-live="polite"></div>
+
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Branding</h5>
+
+                            <div class="mb-3">
+                                <label for="uiBrandingTitle" class="form-label fw-semibold">
+                                    Application title
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                        <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                                    </span>
+                                </label>
+                                <input type="text"
+                                       class="form-control form-control-sm"
+                                       id="uiBrandingTitle"
+                                       maxlength="60"
+                                       aria-describedby="uiBrandingTitleHelp uiBrandingTitleError"
+                                       autocomplete="off"
+                                       placeholder="OntoBricks">
+                                <div id="uiBrandingTitleHelp" class="form-text">Displayed in the navbar and browser page titles. 1&ndash;60 characters.</div>
+                                <div id="uiBrandingTitleError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">
+                                    Application Logo
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                        <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                                    </span>
+                                </label>
+                                <div class="d-flex align-items-center gap-3 mb-2">
+                                    <div class="d-flex align-items-center justify-content-center border rounded bg-dark settings-logo-preview-box">
+                                        <img id="navbarLogoPreview"
+                                             data-brand-icon
+                                             src="{{ ui_branding_for().logo_url }}"
+                                             alt="{{ ui_branding_for().app_title }}"
+                                             width="32"
+                                             height="32">
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <label for="uiBrandingLogoFile" class="form-label small fw-semibold">Logo file</label>
+                                        <input type="file"
+                                               class="form-control form-control-sm"
+                                               id="uiBrandingLogoFile"
+                                               aria-describedby="uiBrandingLogoHelp"
+                                               accept="image/svg+xml,image/png,image/jpeg,image/webp,image/gif">
+                                        <div id="uiBrandingLogoHelp" class="form-text">
+                                            Recommended: <strong>64&times;64&nbsp;px</strong> square.
+                                            SVG, PNG, JPEG, WEBP or GIF, max&nbsp;1&nbsp;MB.
+                                        </div>
+                                        <div class="d-flex gap-2 mt-2">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBrandingResetIconBtn">
+                                                <i class="bi bi-image me-1"></i> Reset icon
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-0">
+                                <label class="form-label fw-semibold">
+                                    Default Entity Icon
+                                    <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                        <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                                    </span>
+                                </label>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span id="currentDefaultEmoji" class="fs-3">📦</span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="changeDefaultEmoji">
+                                        <i class="bi bi-pencil me-1"></i> Change
+                                    </button>
+                                </div>
+                                <small class="text-muted d-block">Default icon used for new entities in the ontology. Stored globally for all users.</small>
+                                <div id="defaultEmojiPickerMount"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Theme</h5>
+
+                            <div class="row g-3 align-items-end mb-3">
+                                <div class="col-12 col-lg-4">
+                                    <label for="uiBrandingPrimaryColor" class="form-label fw-semibold">Primary color</label>
+                                    <input type="color"
+                                           class="form-control form-control-color"
+                                           id="uiBrandingPrimaryColor"
+                                           aria-describedby="uiBrandingColorHelp uiBrandingColorError"
+                                           value="#4F46E5">
+                                </div>
+                                <div class="col-12 col-lg-8">
+                                    <label for="uiBrandingPrimaryHex" class="form-label fw-semibold">Hex value</label>
+                                    <input type="text"
+                                           class="form-control form-control-sm font-monospace text-uppercase"
+                                           id="uiBrandingPrimaryHex"
+                                           aria-describedby="uiBrandingColorHelp uiBrandingColorError"
+                                           maxlength="7"
+                                           autocomplete="off"
+                                           value="#4F46E5"
+                                           placeholder="#4F46E5">
+                                </div>
+                                <div class="col-12">
+                                    <div id="uiBrandingColorHelp" class="form-text">Use a valid uppercase hex color in the format #RRGGBB.</div>
+                                    <div id="uiBrandingColorError" class="text-danger small mt-1 d-none" aria-live="polite"></div>
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mb-3 ui-branding-swatches">
+                                <div class="col-6 col-lg-4">
+                                    <div class="ui-branding-swatch ui-branding-swatch-primary" id="uiSwatchPrimary" role="img" aria-label="Primary color #4F46E5" title="Primary color #4F46E5">Primary</div>
+                                </div>
+                                <div class="col-6 col-lg-4">
+                                    <div class="ui-branding-swatch ui-branding-swatch-hover" id="uiSwatchHover" role="img" aria-label="Hover color rgba(79, 70, 229, 0.06)" title="Hover color rgba(79, 70, 229, 0.06)">Hover</div>
+                                </div>
+                                <div class="col-6 col-lg-4">
+                                    <div class="ui-branding-swatch ui-branding-swatch-light" id="uiSwatchLight" role="img" aria-label="Selected color rgba(79, 70, 229, 0.10)" title="Selected color rgba(79, 70, 229, 0.10)">Selected</div>
+                                </div>
+                                <div class="col-6 col-lg-4">
+                                    <div class="ui-branding-swatch ui-branding-swatch-focus" id="uiSwatchFocus" role="img" aria-label="Focus Ring color rgba(79, 70, 229, 0.18)" title="Focus Ring color rgba(79, 70, 229, 0.18)">Focus Ring</div>
+                                </div>
+                                <div class="col-6 col-lg-4">
+                                    <div class="ui-branding-swatch ui-branding-swatch-on-primary" id="uiSwatchOnPrimary" role="img" aria-label="On Primary color #FFFFFF" title="On Primary color #FFFFFF">On Primary</div>
+                                </div>
+                            </div>
+
+                            <div class="ui-branding-preview" id="uiBrandingPreview" aria-hidden="true">
+                                <button type="button" class="btn btn-sm btn-primary ui-branding-preview-btn">Primary button</button>
+                                <div class="ui-branding-preview-active">Active navigation item</div>
+                                <div class="ui-branding-preview-hover">Hover well</div>
+                                <input type="text" class="form-control form-control-sm ui-branding-preview-focus" value="Focused control" readonly>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -189,6 +189,7 @@ class NodeContextDataset(BaseModel):
 
 class NodeContextBridge(BaseModel):
     target_domain: str
+    target_domain_description: str = ""
     target_class_name: str
     target_class_uri: str = ""
     label: str = ""
@@ -207,6 +208,30 @@ class NodeContextAction(BaseModel):
     returns_table: bool = False
 
 
+class NodeContextVirtualAttribute(BaseModel):
+    name: str
+    column: str = ""
+    label: str = ""
+    dataType: Optional[str] = None
+
+
+class NodeContextVirtualAttributeGroup(BaseModel):
+    """The virtual attributes produced by one Unity Catalog function.
+
+    ``values`` is absent until the caller asks for the computation; the
+    declaration is always available.
+    """
+
+    fullName: str
+    function: str = ""
+    description: Optional[str] = None
+    returns_table: bool = False
+    attributes: List[NodeContextVirtualAttribute] = []
+    values: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+
+
 class NodeContextResponse(BaseModel):
     success: bool
     entity_uri: str = ""
@@ -215,6 +240,7 @@ class NodeContextResponse(BaseModel):
     dataset: Optional[NodeContextDataset] = None
     bridges: Optional[List[NodeContextBridge]] = None
     actions: Optional[List[NodeContextAction]] = None
+    virtual_attributes: Optional[List[NodeContextVirtualAttributeGroup]] = None
     message: Optional[str] = None
 
 
@@ -832,7 +858,7 @@ async def dt_triples(
 
     table = (
         effective_view_table(domain, settings).strip()
-        if be == "view"
+        if backend == "view"
         else effective_graph_query_table(domain, settings, store=store)
     )
     if not table:
@@ -1620,10 +1646,11 @@ async def dt_cohort_materialize(
     "/nodes/context",
     response_model=NodeContextResponse,
     response_model_exclude_none=True,
-    summary="Complete node context (dataset + bridges)",
+    summary="Complete node context (dataset + bridges + virtual attributes)",
     description="Resolve the ontology class for an entity URI and return linked "
-    "dataset metadata (with optional row retrieval) and bridge definitions "
-    "(with optional cross-domain entity traversal).",
+    "dataset metadata (with optional row retrieval), bridge definitions "
+    "(with optional cross-domain entity traversal) and the virtual attributes "
+    "declared on the class (with optional on-demand computation).",
 )
 async def dt_nodes_context(
     entity_uri: str = Query(..., description="Full URI of the entity node"),
@@ -1641,6 +1668,11 @@ async def dt_nodes_context(
         ge=1,
         le=5,
         description="Bridge traversal depth (BFS hops in the target domain graph)",
+    ),
+    compute_virtual_attributes: bool = Query(
+        False,
+        description="Run the class's virtual attribute functions and return "
+        "their values. Declarations are returned either way.",
     ),
     registry_catalog: Optional[str] = Query(None),
     registry_schema: Optional[str] = Query(None),
@@ -1662,9 +1694,11 @@ async def dt_nodes_context(
         dataset_row_limit=dataset_row_limit,
         follow_bridges=follow_bridges,
         bridge_depth=bridge_depth,
+        compute_virtual_attributes=compute_virtual_attributes,
         registry_catalog=registry_catalog,
         registry_schema=registry_schema,
         registry_volume=registry_volume,
+        context_policy=NodeContextService.resolve_context_policy(domain),
     )
     return NodeContextResponse(**payload)
 
@@ -1699,5 +1733,64 @@ async def dt_nodes_action(
         settings,
         entity_uri=payload.entity_uri,
         action_full_name=payload.action_full_name,
+        context_policy=NodeContextService.resolve_context_policy(domain),
     )
     return NodeActionResponse(**result)
+
+
+# ---------------------------------------------------------------------------
+# GET /nodes/virtual-attributes
+# ---------------------------------------------------------------------------
+
+
+class ComputeVirtualAttributesResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    virtual_attributes: Optional[List[NodeContextVirtualAttributeGroup]] = None
+    message: Optional[str] = None
+
+
+@router.get(
+    "/nodes/virtual-attributes",
+    response_model=ComputeVirtualAttributesResponse,
+    response_model_exclude_none=True,
+    summary="Compute virtual attributes for a node",
+    description="Run the Unity Catalog functions declared as virtual attributes "
+    "on the entity's ontology class. Omit *function* to compute every group; "
+    "pass a fully qualified name to compute one group only. Each function "
+    "receives exactly one argument: the entity's local ID.",
+)
+async def dt_nodes_virtual_attributes(
+    entity_uri: str = Query(..., description="Full URI of the entity node"),
+    function: Optional[str] = Query(
+        None,
+        description="Fully qualified UC function name (catalog.schema.function). "
+        "When omitted, every virtual attribute group on the class is computed.",
+    ),
+    domain_name: Optional[str] = Query(
+        None,
+        validation_alias=AliasChoices("domain_name", "project_name"),
+        description="Domain name in the registry",
+    ),
+    domain_version: Optional[str] = Query(None),
+    registry_catalog: Optional[str] = Query(None),
+    registry_schema: Optional[str] = Query(None),
+    registry_volume: Optional[str] = Query(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        domain_name, session_mgr, settings,
+        registry_catalog, registry_schema, registry_volume,
+        domain_version, read_only=True,
+    )
+    payload = await NodeContextService.compute_virtual_attributes(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        function_full_name=function,
+        context_policy=NodeContextService.resolve_context_policy(domain),
+    )
+    return ComputeVirtualAttributesResponse(**payload)

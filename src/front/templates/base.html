@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en" data-max-notifications="{{ max_notifications }}">
 <head>
+    {% set _branding = ui_branding_for() %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}OntoBricks{% endblock %}</title>
+    <title>{% block title %}{{ brand_page_title() }}{% endblock %}</title>
     
     <!-- OntoBricks Favicon -->
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2">
+    <link rel="icon" type="image/svg+xml" href="{{ _branding.logo_url }}">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -28,6 +29,7 @@
          any per-component rule that might set display/pointer-events on
          the same selectors. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/permissions.css') }}?v={{ asset_version }}">
+    <style id="uiBrandingTokens">{{ ui_branding_css_vars() }}</style>
     
     <!-- OntoBricks JS Utilities (defer: non-blocking, executed after HTML parse) -->
     <!-- permissions.js MUST stay first so window.OB.permissions exists before
@@ -63,8 +65,8 @@
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="{{ menu_config.brand.route }}">
-                <img id="brandLogoImg" src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="{{ menu_config.brand.label }}" width="24" height="24" class="me-2">
-                {{ menu_config.brand.label }}
+                <img id="brandLogoImg" data-brand-icon src="{{ _branding.logo_url }}" alt="{{ _branding.app_title }}" width="24" height="24" class="me-2">
+                <span id="brandTitleText" data-brand-title>{{ _branding.app_title }}</span>
                 {% if app_version %}<span class="ob-navbar-brand-version">v{{ app_version }}</span>{% endif %}
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -215,6 +217,32 @@
                     </li>
                     {% endif %}
                     {% endfor %}
+                    <!-- Current user — last item, so it anchors the right edge -->
+                    {% set _email = get_user_email() %}
+                    {% set _app_role = get_user_role() or 'user' %}
+                    {% set _domain_role = get_user_domain_role() %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link" href="#" id="userMenuDropdown" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false"
+                           title="{{ _email }}" aria-label="Current user">
+                            <i class="bi bi-person-circle"></i>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end ob-user-menu" aria-labelledby="userMenuDropdown">
+                            <li class="ob-user-menu-identity">
+                                <div class="ob-user-menu-email">{{ _email }}</div>
+                                <div class="ob-user-menu-badges">
+                                    {% if _app_role == 'admin' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Admin</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary border">{{ _app_role|title }}</span>
+                                    {% endif %}
+                                    {% if _domain_role and _domain_role != 'none' and _domain_role != _app_role %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ _domain_role|title }}</span>
+                                    {% endif %}
+                                </div>
+                            </li>
+                        </ul>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -234,11 +262,16 @@
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
         <div class="container-fluid">
             <ul class="ob-subnav-nav">
+                <li class="ob-subnav-workspaces">
+                    <ul class="ob-subnav-workspace-list">
                 {% if domain_m.v %}
                 <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle" href="#" id="subnavDomainDropdown" role="button"
-                       data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi {{ domain_m.v.icon }}"></i> Domain
+                    <a class="ob-subnav-link dropdown-toggle" href="{{ domain_m.v.route }}" id="subnavDomainDropdown" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false"
+                       data-subnav-route="{{ domain_m.v.route }}"
+                       title="Domain">
+                        <i class="bi {{ domain_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">Domain</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavDomainDropdown" id="subnavDomainDropdownMenu">
                         {% set ns = namespace(first_group=true) %}
@@ -262,8 +295,10 @@
                        href="{{ ontology_m.v.route }}"
                        id="subnavOntologyDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ ontology_m.v.route }}">
-                        <i class="bi {{ ontology_m.v.icon }}"></i> {{ ontology_m.v.label }}
+                       data-subnav-route="{{ ontology_m.v.route }}"
+                       title="{{ ontology_m.v.label }}">
+                        <i class="bi {{ ontology_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ ontology_m.v.label }}</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavOntologyDropdown">
                         {% set vis = namespace(any=false) %}
@@ -282,12 +317,14 @@
                 {% endif %}
                 {% if mapping_m.v %}
                 <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle"
+                    <a class="ob-subnav-link dropdown-toggle nav-requires-graph"
                        href="{{ mapping_m.v.route }}"
                        id="subnavMappingDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ mapping_m.v.route }}">
-                        <i class="bi {{ mapping_m.v.icon }}"></i> {{ mapping_m.v.label }}
+                       data-subnav-route="{{ mapping_m.v.route }}"
+                       title="{{ mapping_m.v.label }}">
+                        <i class="bi {{ mapping_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ mapping_m.v.label }}</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavMappingDropdown">
                         {% set vis = namespace(any=false) %}
@@ -306,12 +343,14 @@
                 {% endif %}
                 {% if kg_m.v %}
                 <li class="ob-subnav-item dropdown">
-                    <a class="ob-subnav-link dropdown-toggle"
+                    <a class="ob-subnav-link dropdown-toggle nav-requires-graph"
                        href="{{ kg_m.v.route }}"
                        id="subnavKgDropdown" role="button"
                        data-bs-toggle="dropdown" aria-expanded="false"
-                       data-subnav-route="{{ kg_m.v.route }}">
-                        <i class="bi {{ kg_m.v.icon }}"></i> {{ kg_m.v.label }}
+                       data-subnav-route="{{ kg_m.v.route }}"
+                       title="{{ kg_m.v.label }}">
+                        <i class="bi {{ kg_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ kg_m.v.label }}</span>
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="subnavKgDropdown">
                         {% set vis = namespace(any=false) %}
@@ -328,6 +367,8 @@
                     </ul>
                 </li>
                 {% endif %}
+                    </ul>
+                </li>
                 <!-- Flex spacer — always pushes breadcrumb + Save button to the right -->
                 <li class="ob-subnav-flex-spacer" aria-hidden="true"></li>
 
@@ -348,7 +389,8 @@
                        data-navbar-action="{{ save_action.v.action }}"
                        {% if save_action.v.element_id %}id="{{ save_action.v.element_id }}"{% endif %}
                        title="Save domain to Unity Catalog">
-                        <i class="bi {{ save_action.v.icon }}"></i> {{ save_action.v.label }}
+                        <i class="bi {{ save_action.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ save_action.v.label }}</span>
                     </a>
                     {% endif %}
                     {% if switch_action.v %}
@@ -356,7 +398,8 @@
                        data-navbar-action="{{ switch_action.v.action }}"
                        {% if switch_action.v.element_id %}id="{{ switch_action.v.element_id }}"{% endif %}
                        title="Reload the current domain or switch to another version">
-                        <i class="bi {{ switch_action.v.icon }}"></i> {{ switch_action.v.label }}
+                        <i class="bi {{ switch_action.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ switch_action.v.label }}</span>
                     </a>
                     {% endif %}
                     {% if close_action.v %}
@@ -364,7 +407,8 @@
                        data-navbar-action="{{ close_action.v.action }}"
                        {% if close_action.v.element_id %}id="{{ close_action.v.element_id }}"{% endif %}
                        title="Close the domain and release the edit lock">
-                        <i class="bi {{ close_action.v.icon }}"></i> {{ close_action.v.label }}
+                        <i class="bi {{ close_action.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ close_action.v.label }}</span>
                     </a>
                     {% endif %}
                 </li>

@@ -10,6 +10,7 @@ from back.core.helpers.SQLHelpers import SQLHelpers
 _SUFFIX_DATA = "_data"
 _SUFFIX_INFERRED = "_inferred"
 _SUFFIX_GRAPH = "_graph"
+_SUFFIX_ANALYTICS = "_analytics"
 
 
 def view_fqn(domain: Any, settings: Any = None) -> str:
@@ -44,6 +45,20 @@ def graph_view_fqn(domain: Any, settings: Any = None) -> str:
     return f"{cat}.{sch}.{base}{_SUFFIX_GRAPH}"
 
 
+def analytics_snapshot_fqn(domain: Any, settings: Any = None) -> str:
+    """Disposable Delta TABLE the analytics job reads in view-only mode.
+
+    Only ever exists for the duration of one run: the graph analytics job
+    scans its source repeatedly (iterative BFS), which a pass-through view
+    would answer by re-running the whole R2RML query every time.
+    """
+    view = view_fqn(domain, settings)
+    if not view or view.count(".") != 2:
+        return ""
+    cat, sch, base = view.split(".", 2)
+    return f"{cat}.{sch}.{base}{_SUFFIX_ANALYTICS}"
+
+
 def graph_suffix() -> str:
     return _SUFFIX_GRAPH
 
@@ -54,3 +69,7 @@ def data_suffix() -> str:
 
 def inferred_suffix() -> str:
     return _SUFFIX_INFERRED
+
+
+def analytics_suffix() -> str:
+    return _SUFFIX_ANALYTICS

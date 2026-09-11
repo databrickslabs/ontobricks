@@ -196,16 +196,38 @@ echo "Acting as: ${PGUSER}"
 echo "Apps     : ${APPS[*]}"
 echo
 
-# Mint a Lakebase JWT via the Autoscaling Postgres API. The legacy
-# ``/api/2.0/database/credentials`` mint cannot scope tokens to
-# Autoscaling-only project endpoints.
-PGPASSWORD="$(databricks api post /api/2.0/postgres/credentials \
-    --json "{\"endpoint\":\"${ENDPOINT_PATH}\"}" \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')"
-if [[ -z "$PGPASSWORD" ]]; then
-    echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}'." >&2
+# Mint a Lakebase JWT via `databricks postgres generate-database-credential`
+# (verified on Databricks CLI 1.14.1+). --output json is required: the CLI's
+# default output format is text/table unless the user's config or
+# DATABRICKS_OUTPUT_FORMAT already forces JSON, and without it the parser
+# below dies silently under `set -euo pipefail`.
+CRED_ERR_FILE="$(mktemp)"
+if ! CRED_JSON="$(databricks postgres generate-database-credential "${ENDPOINT_PATH}" --output json 2>"$CRED_ERR_FILE")"; then
+    CRED_ERROR="$(cat "$CRED_ERR_FILE")"
+    rm -f "$CRED_ERR_FILE"
+    echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}' (CLI exited non-zero)." >&2
+    [[ -n "$CRED_ERROR" ]] && printf '%s\n' "$CRED_ERROR" >&2
     _lakebase_print_diag_hints \
-        "postgres credentials API failed (endpoint: ${ENDPOINT_PATH})" \
+        "postgres generate-database-credential failed (endpoint: ${ENDPOINT_PATH})" \
+        "${INSTANCE}" "${BRANCH}" "${DATABASE}"
+    exit 1
+fi
+CRED_WARNING="$(cat "$CRED_ERR_FILE")"
+rm -f "$CRED_ERR_FILE"
+PGPASSWORD="$(printf '%s' "$CRED_JSON" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    data = {}
+token = data.get("token") if isinstance(data, dict) else ""
+print(token or "", end="")
+')"
+if [[ -z "$PGPASSWORD" ]]; then
+    echo "ERROR: Failed to mint a Lakebase JWT for project '${INSTANCE}' on branch '${BRANCH}' — CLI succeeded but response was not valid JSON or had no token field." >&2
+    [[ -n "$CRED_WARNING" ]] && printf '%s\n' "$CRED_WARNING" >&2
+    _lakebase_print_diag_hints \
+        "postgres generate-database-credential returned unparseable/empty credential (endpoint: ${ENDPOINT_PATH})" \
         "${INSTANCE}" "${BRANCH}" "${DATABASE}"
     exit 1
 fi
@@ -272,22 +294,71 @@ print(d.get("service_principal_client_id") or "")' 2>/dev/null || true)"
     fi
 done
 
+# ── Step 1b: pgcrypto (DB-level; required for companion object_hash) ──────────
+# Graph companion / sync tables use a generated ``object_hash`` column via
+# ``digest(..., 'sha256')``.
+#
+# The extension MUST live in ``public``: app connections run
+# ``SET search_path TO "<graph_schema>", public``, and a bare
+# ``CREATE EXTENSION`` installs into the *first* search_path entry — i.e. a
+# graph schema. ``IF NOT EXISTS`` then becomes a permanent no-op, so renaming
+# the graph schema strands digest() out of reach. Pin it to public and
+# relocate a stranded install.
+if ! psql "$PGCONN" -tAc "SELECT 1" >/dev/null 2>&1; then
+    echo "ERROR: Cannot connect to Lakebase Postgres (host=${PGHOST}, dbname=${DATABASE})." >&2
+    _lakebase_print_diag_hints \
+        "psql connection failed — wrong datname or endpoint" \
+        "${INSTANCE}" "${BRANCH}" "${DATABASE}"
+    exit 1
+fi
+echo "  Ensuring pgcrypto extension in public (digest for companion object_hash)..."
+# Relocation of an app-owned extension fails for a non-owner admin; the app
+# self-heals in that case (it owns the extension), so warn rather than abort.
+psql "$PGCONN" -q <<'SQL' 2>&1 | grep -vE '^(NOTICE|CREATE EXTENSION|DO)' || true
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+DO $$
+DECLARE ext_schema text;
+BEGIN
+    SELECT n.nspname INTO ext_schema
+    FROM pg_extension e
+    JOIN pg_namespace n ON n.oid = e.extnamespace
+    WHERE e.extname = 'pgcrypto';
+    IF ext_schema IS NOT NULL AND ext_schema <> 'public' THEN
+        RAISE NOTICE 'Relocating pgcrypto from % to public', ext_schema;
+        BEGIN
+            EXECUTE 'ALTER EXTENSION pgcrypto SET SCHEMA public';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE WARNING 'Could not relocate pgcrypto to public: %', SQLERRM;
+        END;
+    END IF;
+END $$;
+SQL
+
+_PGCRYPTO_SCHEMA="$(psql "$PGCONN" -tAc \
+    "SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname='pgcrypto'" \
+    2>/dev/null | tr -d '[:space:]')"
+if [[ "$_PGCRYPTO_SCHEMA" == "public" ]]; then
+    echo "  ✓ pgcrypto ready in public (digest available)"
+elif [[ -n "$_PGCRYPTO_SCHEMA" ]]; then
+    echo "  ⚠ pgcrypto lives in schema '${_PGCRYPTO_SCHEMA}', not public." >&2
+    echo "    It is only visible to connections whose search_path includes that" >&2
+    echo "    schema. The app relocates it automatically on the next Build (it owns" >&2
+    echo "    the extension). To fix manually, run as its owner:" >&2
+    echo "      ALTER EXTENSION pgcrypto SET SCHEMA public;" >&2
+else
+    echo "  ⚠ pgcrypto is not installed on '${DATABASE}' — the app installs it on" >&2
+    echo "    first Build; re-run this script as an admin if that fails." >&2
+fi
+
 # ── Step 2: Postgres schema grants (requires the schema to exist) ────────────
 # Ensure the target schema actually exists. If not, the operator
 # probably ran the script before initialising the registry.
 if ! psql "$PGCONN" -tAc "SELECT 1 FROM information_schema.schemata WHERE schema_name='${SCHEMA}'" \
         2>/dev/null | grep -q 1; then
-    if ! psql "$PGCONN" -tAc "SELECT 1" >/dev/null 2>&1; then
-        echo "ERROR: Cannot connect to Lakebase Postgres (host=${PGHOST}, dbname=${DATABASE})." >&2
-        _lakebase_print_diag_hints \
-            "psql connection failed — wrong datname or endpoint" \
-            "${INSTANCE}" "${BRANCH}" "${DATABASE}"
-        exit 1
-    fi
     echo "ERROR: Schema '${SCHEMA}' does not exist in database '${DATABASE}'." >&2
     echo "       Initialise the registry from the OntoBricks Settings UI first." >&2
-    echo "       CAN_USE / UC catalog grants above were applied — re-run after" >&2
-    echo "       initialisation to apply the Postgres schema grants." >&2
+    echo "       CAN_USE / UC catalog / pgcrypto above were applied — re-run" >&2
+    echo "       after initialisation to apply the Postgres schema grants." >&2
     exit 1
 fi
 
@@ -299,8 +370,39 @@ _HAS_DOMAIN_VERSIONS="$(psql "$PGCONN" -tAc \
     "SELECT 1 FROM information_schema.tables WHERE table_schema='${SCHEMA}' AND table_name='domain_versions'" \
     | tr -d '[:space:]')"
 if [[ "$_HAS_DOMAIN_VERSIONS" == "1" ]]; then
-    echo "  Applying registry schema migrations..."
-    if psql "$PGCONN" -v ON_ERROR_STOP=1 -q <<SQL
+    # PostgreSQL checks table ownership before evaluating IF NOT EXISTS.
+    # Registries initialized by the app have app-owned tables even when the
+    # schema itself is human-owned, so replaying already-current no-op DDL
+    # fails with "must be owner of table". Reuse the read-only preflight's
+    # canonical migration expectations and only invoke DDL when work remains.
+    _MIGRATIONS_CURRENT="0"
+    if _MIGRATIONS_CURRENT="$(PGCONN="$PGCONN" python3 - "$SCHEMA" <<'PY'
+import os
+import sys
+
+from scripts._internal._lakebase_preflight import inspect_migrations
+
+pending, stale, errors = inspect_migrations(os.environ.copy(), sys.argv[1])
+if errors:
+    print(
+        "Could not inspect registry migration state: " + "; ".join(errors),
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+print("1" if not pending and not stale else "0")
+PY
+)"; then
+        :
+    else
+        echo "  ⚠ migration state inspection failed; falling back to idempotent DDL" >&2
+        _MIGRATIONS_CURRENT="0"
+    fi
+
+    if [[ "$_MIGRATIONS_CURRENT" == "1" ]]; then
+        echo "  ✓ Registry schema migrations already current; skipping DDL."
+    else
+        echo "  Applying registry schema migrations..."
+        if psql "$PGCONN" -v ON_ERROR_STOP=1 -q <<SQL
 -- domain_versions.status (lifecycle column added after initial release)
 ALTER TABLE "${SCHEMA}".domain_versions
     ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'DRAFT';
@@ -310,6 +412,10 @@ CREATE INDEX IF NOT EXISTS idx_domain_versions_status
 -- domains.review_quorum (per-domain sign-off quorum added after initial release)
 ALTER TABLE "${SCHEMA}".domains
     ADD COLUMN IF NOT EXISTS review_quorum integer NOT NULL DEFAULT 1;
+
+-- domains.mcp_policy (per-domain MCP tool + context policy added in v0.8)
+ALTER TABLE "${SCHEMA}".domains
+    ADD COLUMN IF NOT EXISTS mcp_policy jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 -- build_runs (build history table added after initial release)
 CREATE TABLE IF NOT EXISTS "${SCHEMA}".build_runs (
@@ -545,10 +651,11 @@ CREATE INDEX IF NOT EXISTS idx_schedule_runs_domain
         registry_id, task_type, domain_name, target_key, run_ts DESC
     );
 SQL
-    then
-        echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
-    else
-        echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
+        then
+            echo "  ✓ schema migrations applied (domain_versions.status, domains.review_quorum, domains.mcp_policy, build_runs, graph_analytics, graph_analytics_runs, domain_review_events, domain_comments, domain_tasks, domain_edit_locks, domain_change_events, schedules/schedule_runs generic tasks)"
+        else
+            echo "  ⚠ schema migration failed — continuing (SP grants below may partially succeed)"
+        fi
     fi
 fi
 

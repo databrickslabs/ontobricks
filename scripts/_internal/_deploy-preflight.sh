@@ -103,6 +103,7 @@ _preflight_check_deploy_files() {
         _preflight_require_file "scripts/migrations/upgrade_0.4_to_0.5.sql"
         _preflight_require_file "scripts/migrations/upgrade_0.5_to_0.6.sql"
         _preflight_require_file "scripts/migrations/upgrade_0.6_to_0.7.sql"
+        _preflight_require_file "scripts/migrations/upgrade_0.7_to_0.8.sql"
     fi
     _preflight_ok "required project files present"
 }
@@ -294,7 +295,7 @@ _preflight_summary() {
     echo ""
     if [[ $_PREFLIGHT_FAILED -gt 0 ]]; then
         echo "${_PF_C_RED}Preflight FAILED${_PF_C_RST}: ${_PREFLIGHT_FAILED} blocking issue(s), ${_PREFLIGHT_WARNINGS} warning(s)"
-        echo "See documentation/DEPLOY_CHECKLIST.md for the full deployment requirements."
+        echo "See docs/DEPLOY_CHECKLIST.md for the full deployment requirements."
         return 1
     fi
     if [[ $_PREFLIGHT_WARNINGS -gt 0 ]]; then

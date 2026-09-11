@@ -21,25 +21,27 @@
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
+            {% include "partials/dtwin/_purge_inferences_button.html" %}
             <button class="btn btn-sm btn-outline-secondary"
                     id="cohortOutputsBtn"
                     onclick="CohortModule.openOutputsModal()"
                     title="Configure outputs (graph triples, UC table)">
                 <i class="bi bi-sliders me-1"></i>Outputs
             </button>
-            <button class="btn btn-sm btn-primary"
+            <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                    title="Open the Knowledge Graph discussion" aria-label="Open the Knowledge Graph discussion"
+                    onclick="openTwinDiscussion()">
+                <i class="bi bi-chat-dots"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary"
                     id="cohortPreviewBtn"
                     onclick="CohortModule.preview()" disabled>
                 <i class="bi bi-eye me-1"></i>Preview cohorts
             </button>
-            <button class="btn btn-sm btn-success"
+            <button class="btn btn-sm btn-primary"
                     id="cohortMaterializeBtn"
                     onclick="CohortModule.openMaterializeModal()" disabled>
                 <i class="bi bi-cloud-upload me-1"></i>Materialise
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-                    title="Open the Knowledge Graph discussion" onclick="openTwinDiscussion()">
-                <i class="bi bi-chat-dots"></i>
             </button>
         </div>
     </div>
@@ -67,7 +69,7 @@
         </aside>
 
         <!-- Main column: selected rule summary + Preview pane -->
-        <section class="cohort-tabs-wrap card">
+        <section class="cohort-content-card card">
             <div class="card-body p-3">
 
                 <!-- Selected rule summary (auto-populated when a rule is picked) -->

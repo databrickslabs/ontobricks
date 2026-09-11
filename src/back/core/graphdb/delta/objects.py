@@ -19,14 +19,18 @@ _WORK_RE = re.compile(r"_work(?:_.*)?$")
 _VIEW_NAME_RE = re.compile(r"^triplestore_(?P<safe>.+)_V(?P<version>[^_]+)$", re.I)
 
 
+#: Suffixes of the per-domain companions, stripped to recover the group key.
+#: ``_analytics`` is the disposable snapshot of a view-only build: it only
+#: outlives its run when that run died, and grouping it here is what lets an
+#: admin see and purge the leftover.
+_COMPANION_SUFFIXES = ("_graph", "_inferred", "_analytics", "_data")
+
+
 def object_base(name: str) -> str:
-    """Strip ``_data`` / ``_inferred`` / ``_graph`` suffix to get the domain group key."""
-    if name.endswith("_graph"):
-        return name[: -len("_graph")]
-    if name.endswith("_inferred"):
-        return name[: -len("_inferred")]
-    if name.endswith("_data"):
-        return name[: -len("_data")]
+    """Strip a companion suffix to get the domain group key."""
+    for suffix in _COMPANION_SUFFIXES:
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
     return name
 
 
@@ -36,9 +40,20 @@ def uc_object_kind(table_type: str) -> str:
 
 
 def _drop_sort_key(name: str, kind: str) -> tuple:
-    """Views before tables; within views: ``_graph`` then R2RML; tables: ``_data`` then ``_inferred``."""
+    """Order a domain's UC objects so a dependent always drops before its source.
+
+    Views before tables, and within views ``_graph`` then ``_data`` then the
+    R2RML gateway. ``_data`` only appears among the views for a domain built in
+    view-only materialization, where it *is* a view over the gateway — hence it
+    has to drop between the two.
+    """
     if kind == "view":
-        order = 0 if name.endswith("_graph") else 1
+        if name.endswith("_graph"):
+            order = 0
+        elif name.endswith("_data"):
+            order = 1
+        else:
+            order = 2
         return (0, order, name)
     order = 0 if name.endswith("_data") else 1
     return (1, order, name)

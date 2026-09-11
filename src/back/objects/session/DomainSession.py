@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.mcp_tools import coerce_mcp_policy
 from shared.config.constants import (
     DEFAULT_BASE_URI,
     DEFAULT_GRAPH_NAME,
@@ -79,11 +80,19 @@ def get_empty_domain() -> Dict[str, Any]:
                 "mcp_enabled": False,
                 "status": "DRAFT",
                 "review_quorum": 1,
-                # Mandatory per-domain graph backend: lakebase | databricks | neo4j.
+                # Per-domain MCP surface policy (tools + dataset/bridges/
+                # actions handling). Empty means "everything exposed".
+                "mcp_policy": {},
+                # Mandatory per-domain graph backend:
+                # lakebase | databricks | neo4j | none.
+                # ``none`` is an ontology-only domain: no graph is ever built.
                 "graph_backend": "lakebase",
                 # Named Neo4j connection from Settings → Neo4j (required when
                 # graph_backend == "neo4j"). Value is the connection ``name``.
                 "neo4j_connection": "",
+                # How the Lakehouse backend builds ``…_data``: table | view.
+                # Only honoured when graph_backend == "databricks".
+                "lakehouse_materialization": "table",
             },
             "triplestore": {
                 "stats": {},
@@ -1330,7 +1339,10 @@ class DomainSession:
         version = self._data["domain"].get("current_version", "1")
 
         # Export info from project.info (without version - version is at versions level)
-        from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+        from back.core.graphdb.GraphDBFactory import (
+            normalize_graph_backend,
+            normalize_lakehouse_materialization,
+        )
 
         info_export = {
             "name": self._data["domain"]["info"].get("name", "NewDomain"),
@@ -1342,12 +1354,18 @@ class DomainSession:
             "review_quorum": max(
                 1, int(self._data["domain"]["info"].get("review_quorum") or 1)
             ),
+            "mcp_policy": coerce_mcp_policy(
+                self._data["domain"]["info"].get("mcp_policy")
+            ),
             "graph_backend": normalize_graph_backend(
                 self._data["domain"]["info"].get("graph_backend")
             ),
             "neo4j_connection": str(
                 self._data["domain"]["info"].get("neo4j_connection", "") or ""
             ).strip(),
+            "lakehouse_materialization": normalize_lakehouse_materialization(
+                self._data["domain"]["info"].get("lakehouse_materialization")
+            ),
             "last_update": self._data["domain"].get("last_update", ""),
             "last_build": self._data["domain"].get("last_build", ""),
         }
@@ -1438,7 +1456,10 @@ class DomainSession:
 
         # Import info into domain.info
         if "info" in data:
-            from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+            from back.core.graphdb.GraphDBFactory import (
+                normalize_graph_backend,
+                normalize_lakehouse_materialization,
+            )
 
             info = data["info"]
             self._data["domain"]["info"]["name"] = info.get("name", "NewDomain")
@@ -1450,12 +1471,20 @@ class DomainSession:
             self._data["domain"]["info"]["review_quorum"] = max(
                 1, int(info.get("review_quorum") or 1)
             )
+            self._data["domain"]["info"]["mcp_policy"] = coerce_mcp_policy(
+                info.get("mcp_policy")
+            )
             self._data["domain"]["info"]["graph_backend"] = normalize_graph_backend(
                 info.get("graph_backend")
             )
             self._data["domain"]["info"]["neo4j_connection"] = str(
                 info.get("neo4j_connection", "") or ""
             ).strip()
+            self._data["domain"]["info"]["lakehouse_materialization"] = (
+                normalize_lakehouse_materialization(
+                    info.get("lakehouse_materialization")
+                )
+            )
             # Drop legacy domain DB override if present on import.
             self._data["domain"]["info"].pop("neo4j_database", None)
             self._data["domain"]["last_update"] = info.get("last_update", "")

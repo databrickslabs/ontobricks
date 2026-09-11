@@ -6,8 +6,9 @@ import re
 
 from back.core.errors import ValidationError
 
-# Unity Catalog segment names: letters, digits, underscore, hyphen; leading letter/underscore.
-UC_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]*$")
+# Unity Catalog segment names: letters, digits, underscore, hyphen.
+# Leading digits are allowed because identifiers are always backtick-quoted in SQL.
+UC_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_-]*$")
 
 
 def validate_uc_identifier(name: str, *, role: str = "identifier") -> str:

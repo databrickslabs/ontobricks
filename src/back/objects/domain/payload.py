@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from back.core.graphdb.GraphDBFactory import normalize_graph_backend
 from back.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -73,6 +74,7 @@ def get_domain_info(domain_data: Dict[str, Any]) -> Dict[str, Any]:
         "version": version,
         "status": (info.get("status") or "DRAFT"),
         "author": info.get("author", ""),
+        "graph_backend": normalize_graph_backend(info.get("graph_backend")),
         "statistics": {
             "classes": len(ontology.get("classes", [])),
             "properties": len(ontology.get("properties", [])),

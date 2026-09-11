@@ -9,7 +9,7 @@ import json
 
 from typing import Optional
 
-from fastapi import APIRouter, Request, Depends, Query, Response
+from fastapi import APIRouter, Request, Depends, Query, Response, Form, File, UploadFile
 from fastapi.responses import PlainTextResponse
 
 from shared.config.settings import get_settings, Settings
@@ -565,6 +565,58 @@ async def save_base_uri(
 # ===========================================
 
 
+@router.get("/ui-branding")
+async def get_ui_branding(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+    _role: str = Depends(require(ROLE_ADMIN)),
+):
+    """Return normalized UI branding settings (admin only)."""
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.get_ui_branding_result(
+        email, user_token, session_mgr, settings
+    )
+
+
+@router.post("/ui-branding")
+async def save_ui_branding(
+    request: Request,
+    app_title: str = Form(""),
+    primary_color: str = Form(""),
+    reset_logo: bool = Form(False),
+    logo_file: UploadFile | None = File(None),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save title/color/logo atomically from multipart form data (admin only)."""
+    logo_content = None
+    logo_mime = None
+    if logo_file is not None:
+        filename = (getattr(logo_file, "filename", "") or "").strip()
+        content = await logo_file.read()
+        # Match legacy upload behavior: ignore placeholder/empty file parts.
+        if filename and content:
+            logo_content = content
+            logo_mime = (getattr(logo_file, "content_type", "") or "")
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_ui_branding_result(
+        app_title=app_title,
+        primary_color=primary_color,
+        logo_content=logo_content,
+        logo_mime=logo_mime,
+        reset_logo=reset_logo,
+        email=email,
+        user_token=user_token,
+        session_mgr=session_mgr,
+        settings=settings,
+    )
+
+
 @router.get("/navbar-logo")
 async def get_navbar_logo(
     session_mgr: SessionManager = Depends(get_session_manager),
@@ -640,6 +692,45 @@ async def save_registry_cache_ttl(
     )
     return config_service.save_registry_cache_ttl_result(
         ttl, email, user_token, session_mgr, settings
+    )
+
+
+@router.get("/graph-limits")
+async def get_graph_limits(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get effective graph-read bounds (statement timeout + chat result cap)."""
+    return config_service.get_graph_limits_result(session_mgr, settings)
+
+
+@router.post("/save-graph-limits")
+async def save_graph_limits(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save graph-read bounds (admin only, stored globally). ``0`` = unset."""
+    data = await request.json()
+
+    def _opt_int(key: str):
+        if key not in data or data[key] is None or data[key] == "":
+            return None
+        try:
+            return int(data[key])
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"{key} must be an integer") from exc
+
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_graph_limits_result(
+        _opt_int("graph_query_timeout_s"),
+        _opt_int("graph_chat_result_cap"),
+        email,
+        user_token,
+        session_mgr,
+        settings,
     )
 
 
@@ -904,7 +995,7 @@ async def get_triple_store_databricks_health(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Probe SQL Warehouse + UC Delta triple-store artefacts."""
+    """Report effective permissions on the Registry UC schema for the app principal."""
     with map_route_errors("Databricks triple store health", logger):
         return config_service.triple_store_databricks_health_result(
             session_mgr, settings

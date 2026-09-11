@@ -1,0 +1,406 @@
+## Freeze backend cards in view mode
+
+Context: Domain → Information backend cards used hidden radio inputs. The
+generic read-only CSS blocked pointer events on those inputs, but their labels
+could still activate them and keyboard navigation could still change the
+selected backend. Viewers and edit-locked users must not be able to alter this
+domain setting.
+
+Changes:
+
+1. src/front/static/domain/js/domain-information.js
+   Natively disables backend card radios for read-only versions, viewer roles,
+   and edit locks; resynchronizes after lifecycle evaluation and whenever body
+   permission classes change.
+2. tests/units/front/test_no_backend_ui.py
+   Added regression contracts covering all three view-only states and
+   mid-session permission changes.
+
+Modified files:
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_no_backend_ui.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5739 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 51.73s.
+
+Browser verification: `.role-viewer`, `.read-only-version`, and
+`.read-only-locked` all natively disabled the four backend radios; pointer and
+keyboard selection remained frozen, while removing the view-only state restored
+interaction.
+
+## Match Domain Information tab surface
+
+Context: Domain → Information used a standalone bordered tab-content surface,
+while the requested Ontology → Data Quality reference places its tab rail and
+content inside one card. The separate surfaces produced different visible
+borders, radii, spacing, and rail edges despite sharing the same tab component.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_information.html
+   Rebuilt the tab container with the Data Quality `card h-100` /
+   `card-body p-0` structure, `nav-fill` rail, and `tab-content p-3` body.
+2. tests/units/front/test_no_backend_ui.py
+   Added regression contracts for the Data Quality tab-header classes and
+   single-card surface structure.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- tests/units/front/test_no_backend_ui.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5740 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 52.04s.
+
+Browser verification: Domain Information matched the Data Quality card border,
+radius, background, content padding, and flush rail geometry; tab switching,
+responsive overflow, backend cards, and read-only locking remained functional.
+
+## Standardize card-integrated page tabs
+
+Context: Ontology → Generate still used a standalone `ob-tab-content` surface
+under the tab rail, while Domain → Information and Ontology → Data Quality
+share one outer card. The Cursor rule treated all tab bodies as independent
+surfaces, so new pages kept drifting away from the Data Quality reference.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_wizard.html
+   Wrapped the Generate tabs in the Data Quality `card h-100` /
+   `card-body p-0 ob-tabs-wrap` structure with a `nav-fill` rail and
+   `tab-content p-3` body.
+2. .cursor/11-frontend-design.mdc
+   Documented card-integrated page tabs as the default page-level pattern
+   and kept `ob-tab-content` for genuinely independent surfaces.
+3. .claude/skills/frontend-design/SKILL.md
+   Added a thin Claude skill that points to `.cursor/11` and sequences
+   contract tests plus browser verification.
+4. CLAUDE.md
+   Registered the `frontend-design` skill in the Claude-only skill table.
+5. tests/units/front/test_clarity_design_contract.py
+   Added contracts for Generate markup, the Cursor rule skeleton, and the
+   Claude skill pointer.
+6. docs/superpowers/specs/2026-08-31-card-integrated-tabs-design.md
+   Recorded the approved design for the card-integrated tab pattern.
+7. docs/superpowers/plans/2026-08-31-card-integrated-tabs.md
+   Recorded the test-first implementation plan.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- .cursor/11-frontend-design.mdc
+- .claude/skills/frontend-design/SKILL.md
+- CLAUDE.md
+- tests/units/front/test_clarity_design_contract.py
+- docs/superpowers/specs/2026-08-31-card-integrated-tabs-design.md
+- docs/superpowers/plans/2026-08-31-card-integrated-tabs.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5743 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 50.82s.
+
+## Complete graphless external API contracts
+
+Context: The external domain listing exposed graph availability but omitted
+the configured backend, so clients could not distinguish an ontology-only
+domain from a graph-backed domain awaiting its first build. The GraphQL domain
+listing also advertised ontology-only domains that cannot provide a graph
+execution context, while the stateless domain-info endpoint omitted the same
+backend field.
+
+Changes:
+
+1. src/back/objects/registry/RegistryService.py
+   Added the numeric-latest PUBLISHED version's normalized graph backend to
+   each API/MCP domain summary.
+2. src/api/routers/domains.py
+   Exposed `graph_backend` as a documented and described OpenAPI enum on
+   `GET /api/v1/domains`.
+3. src/back/fastapi/graphql_routes.py
+   Filtered domains without a materialized graph from the GraphQL listing.
+4. src/back/objects/registry/store/base.py
+   Updated the registry summary contract to include the `none` backend.
+5. tests/units/api/test_external_api.py
+   Added REST serialization and GraphQL graphless-filtering regressions.
+6. tests/units/registry/test_registry_published.py
+   Added coverage for selecting the latest PUBLISHED version's backend.
+7. tests/contract/test_openapi_contract.py
+   Added the public `graph_backend` enum and default contract.
+8. documentation/api.md
+   Documented `graph_backend` for both domain endpoints, clarified `has_graph`,
+   and corrected stale request, parameter, and response names.
+9. documentation/architecture.md
+   Updated external REST and GraphQL architecture descriptions.
+10. documentation/code_organization.md
+    Updated the external domains endpoint contract.
+11. documentation/user-guide.md
+    Clarified that the GraphQL listing contains materialized domains only.
+12. src/back/objects/domain/payload.py
+    Added the normalized backend to stateless `POST /api/v1/domain/info`
+    responses, including the legacy `lakebase` default.
+13. tests/units/api/test_api_service.py
+    Added graphless and legacy normalization coverage for domain-info payloads.
+14. documentation/deployment.md
+    Added the ontology-only backend to deployment guidance.
+
+Modified files:
+- src/back/objects/registry/RegistryService.py
+- src/api/routers/domains.py
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/domain/payload.py
+- src/back/objects/registry/store/base.py
+- tests/units/api/test_external_api.py
+- tests/units/api/test_api_service.py
+- tests/units/registry/test_registry_published.py
+- tests/contract/test_openapi_contract.py
+- documentation/api.md
+- documentation/architecture.md
+- documentation/code_organization.md
+- documentation/deployment.md
+- documentation/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5748 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 43.12s.
+
+## Synchronize Settings API and Swagger
+
+Context: Settings → Developer → API used the internal registry listing and
+could offer domains or versions that the external API cannot serve. Its
+curated samples omitted graph backend availability, GraphQL copy referenced
+the removed Active toggle, and the custom OpenAPI builder dropped descriptive
+tag, contact, and license metadata.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_api.html
+   Updated domain and GraphQL reference copy, added backend availability
+   status, and marked graph-dependent Try-it controls.
+2. src/front/static/query/js/query-api.js
+   Loads API-exposed domains, limits versions to PUBLISHED entries, displays
+   backend readiness, and freezes graph controls until graph data exists.
+3. src/api/routers/v1.py
+   Added typed stateless domain-info and statistics response models for
+   accurate Swagger payload documentation.
+4. src/api/constants.py
+   Documented graph backend semantics in the external API overview and tags.
+5. src/api/external_app.py
+   Preserved tag, contact, and license metadata in the rewritten OpenAPI
+   schema.
+6. tests/units/front/test_settings_api_contract.py
+   Added curated content, selector-source, version-filter, and graph-control
+   contracts.
+7. tests/contract/test_openapi_contract.py
+   Added typed domain-info and descriptive OpenAPI metadata contracts.
+8. documentation/api.md
+   Documented the curated Settings API selector and graph capability states.
+9. documentation/user-guide.md
+   Updated the Settings navigation and graph Try-it availability guidance.
+10. docs/superpowers/specs/2026-08-31-settings-api-graph-backend-design.md
+    Recorded the approved Settings API and Swagger behavior.
+11. docs/superpowers/plans/2026-08-31-settings-api-graph-backend.md
+    Recorded the test-first implementation plan.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_api.html
+- src/front/static/query/js/query-api.js
+- src/api/routers/v1.py
+- src/api/constants.py
+- src/api/external_app.py
+- tests/units/front/test_settings_api_contract.py
+- tests/contract/test_openapi_contract.py
+- documentation/api.md
+- documentation/user-guide.md
+- docs/superpowers/specs/2026-08-31-settings-api-graph-backend-design.md
+- docs/superpowers/plans/2026-08-31-settings-api-graph-backend.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5756 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 48.33s.
+
+## Remove stale Neo4j deployment references
+
+Context: The optional Neo4j Apps secret was removed from the DAB binding, but
+the main app manifest still referenced the unbound resource and Makefile
+inspection targets still passed the deleted bundle variable. This produced a
+build-time resource-resolution error and broke bundle validation helpers.
+
+Changes:
+
+1. app.yaml.template
+   Removed the legacy unbound `neo4j-password` resource and `NEO4J_PASSWORD`
+   environment reference; Neo4j credentials remain managed through Settings.
+2. Makefile
+   Removed the deleted `neo4j_secret_scope` override from bundle validation and
+   summary targets.
+3. tests/units/settings/test_deploy_app_rename_guard.py
+   Added regression contracts covering both the rendered app manifest source
+   and Makefile deployment helpers.
+4. changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+   Recorded the clean-deployment correction and verification result.
+
+Modified files:
+- app.yaml.template
+- Makefile
+- tests/units/settings/test_deploy_app_rename_guard.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5758 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 53.38s.
+
+
+## Rename documentation/ → docs/ (single canonical docs root)
+
+Context: the repository had two parallel documentation trees — the historical
+`documentation/` (Help Center markdown, Sphinx sources, INFO/README) and a
+newer `docs/superpowers/` created by the writing-plans skill default. After
+first consolidating everything under `documentation/`, the decision was
+reversed to standardize on `docs/`, aligning with the `.cursorrules` "in /docs"
+wording and the superpowers skill default. The whole tree was renamed and every
+functional reference updated; historical audit files (changelogs, releases,
+superpowers plan/spec bodies) were intentionally left untouched.
+
+Changes:
+
+1. documentation/ → docs/
+   `git mv` of the entire tree (192 tracked files) so history is preserved.
+2. src/api/routers/internal/help.py
+   Help Center now resolves `<repo>/docs` (was `<repo>/documentation`); docstrings
+   and the missing-dir audit warning updated.
+3. databricks.yml, .databricksignore
+   Bundle sync now ships `docs/**`; excludes point at `docs/sphinx/_build/` and
+   `.doctrees/`. Removed the stale wholesale `docs/` exclusion (former GitHub
+   Pages marketing site) that would otherwise strip the Help Center from the
+   deployed bundle.
+4. ci/build_docs.sh, pyproject.toml, Makefile, scripts/deploy.sh,
+   scripts/_internal/_deploy-preflight.sh
+   Sphinx source dir, mypy/coverage excludes, and deploy-checklist pointers
+   repointed to `docs/`.
+5. src/front/static/global/js/help-docs.js, src/front/templates/settings.html
+   GitHub blob links and the Help Center path label repointed to `docs/`; the
+   JS asset normaliser keeps a legacy `documentation/` strip for old links.
+6. tests/units/api/test_help_api.py
+   Fixed the deploy-bundle guard tests for the inverted semantics — `docs/` must
+   NOT be excluded — and the asset-ref normaliser's legacy fallback.
+7. .cursor/07-project-conventions.mdc
+   Documented `docs/` as the single canonical docs root and that superpowers
+   plans/specs live under `docs/superpowers/`.
+
+Modified files:
+- src/api/routers/internal/help.py
+- databricks.yml
+- .databricksignore
+- ci/build_docs.sh
+- pyproject.toml
+- Makefile
+- scripts/deploy.sh
+- scripts/_internal/_deploy-preflight.sh
+- src/front/static/global/js/help-docs.js
+- src/front/templates/settings.html
+- tests/units/api/test_help_api.py
+- tests/e2e/help/test_help_modal_flows.py
+- tests/units/core/test_try_cast_policy.py
+- README.md, CONTRIBUTING.md
+- .cursor/07-project-conventions.mdc, .cursor/11-frontend-design.mdc
+- documentation/** → docs/** (192-file git rename; docs/*.md, docs/sphinx/**, docs/superpowers/**)
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5758 passed, 305 skipped, 6 deselected, 1 xfailed, 23 warnings in 49.61s. Sphinx build (ci/build_docs.sh) → "Documentation built successfully" from docs/sphinx.
+
+
+## Deploy hygiene: ship only the Help Center runtime set from docs/
+
+Context: after the documentation/ → docs/ rename, the bundle synced all of
+`docs/**` (only the Sphinx build output was excluded). That shipped internal-only
+content — planning artifacts, Sphinx sources, diagrams, demo assets and
+non-catalogued guides — to the Databricks App. The Help Center only serves a
+fixed catalogue of `docs/*.md` plus `docs/images/` and `docs/screenshots/`, so
+everything else under docs/ is dead weight in the deployed bundle.
+
+Changes:
+
+1. databricks.yml
+   Replaced the two Sphinx-build excludes with a tighter set: exclude
+   `docs/sphinx/`, `docs/superpowers/`, `docs/diagrams/`, `docs/pr47-neo4j-demo/`
+   and the five non-catalogued markdown files (DEPLOY_CHECKLIST, PR_REVIEW_CHECKLIST,
+   dab-reference, sizing, uc-mcp-connection-genie-one). Only the catalogued
+   Help Center docs + images/ + screenshots/ now ship.
+2. .databricksignore
+   Mirrored the same exclusions so both bundle-sync mechanisms agree.
+3. tests/units/api/test_help_api.py
+   Added `test_bundle_excludes_non_runtime_docs` — asserts the internal docs/
+   content is excluded in both databricks.yml and .databricksignore, and that no
+   catalogued Help Center doc is excluded by its docs/<file> path.
+
+Modified files:
+- databricks.yml
+- .databricksignore
+- tests/units/api/test_help_api.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_help_api.py → 41 passed.
+Bundle: make bundle-validate → valid (exclude patterns match real files; only
+pre-existing mlruns/htmlcov/mlartifacts "no match" warnings remain).
+
+--------------------------------------------------------------------------------
+
+## Ontology → Import adopts the card-integrated tab pattern
+
+Context:
+Ontology → Import still used the legacy standalone tab layout (a bare
+`nav-tabs ob-tabs` rail plus an independent `ob-tab-content` surface), which
+renders with a different border/radius/spacing than the canonical
+card-integrated page tabs already used by Ontology → Generate, Ontology → Data
+Quality and Domain → Information. Migrated Import onto the same pattern so all
+Ontology page tabs share one visual surface.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_import.html
+   Wrapped the tab rail and content in the canonical
+   `<div class="card h-100"><div class="card-body p-0 ob-tabs-wrap">…</div></div>`
+   surface. Added `nav-fill` to the `#importTabs` rail and replaced the
+   standalone `tab-content ob-tab-content` with the card-integrated
+   `tab-content p-3`. The hidden file inputs and the Import Status panel stay
+   as siblings below the card (unchanged behaviour, IDs and handlers).
+2. tests/units/front/test_clarity_design_contract.py
+   Added `ONTOLOGY_IMPORT_TEMPLATE` and
+   `test_ontology_import_uses_the_card_integrated_tab_pattern`, mirroring the
+   Generate contract: asserts the card/card-body/ob-tabs-wrap wrapper, the
+   `nav-fill` rail, `tab-content p-3`, and the absence of `ob-tab-content`.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_import.html
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5760 passed, 305 skipped,
+1 xfailed. (test_clarity_design_contract.py → 39 passed.)
+
+--------------------------------------------------------------------------------
+
+## KG → Runs adopts the card-integrated tab pattern
+
+Context:
+Same visual inconsistency as Ontology → Import: the Knowledge Graph → Runs
+section (Build runs / Analytics runs) still used the legacy standalone
+`nav-tabs ob-tabs` rail plus an independent `ob-tab-content` surface. Migrated
+it onto the canonical card-integrated page-tab pattern so it matches the rest of
+the workspace tabs.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_runs.html
+   Wrapped the `#runsTabs` rail and `#runsTabContent` in the canonical
+   `<div class="card h-100"><div class="card-body p-0 ob-tabs-wrap">…</div></div>`
+   surface, added `nav-fill` to the rail, and replaced
+   `tab-content ob-tab-content` with `tab-content p-3`. Tab IDs, targets,
+   tables, loading/empty/error elements and JS handlers are unchanged. (This
+   partial is shared by the KG page via dtwin.html, so Domain → Runs picks up
+   the same surface.)
+2. tests/units/front/test_clarity_design_contract.py
+   Added `DOMAIN_RUNS_TEMPLATE` and
+   `test_domain_runs_uses_the_card_integrated_tab_pattern`, mirroring the
+   Import/Generate contracts.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_runs.html
+- tests/units/front/test_clarity_design_contract.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-31.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5761 passed, 305 skipped,
+1 xfailed. (test_clarity_design_contract.py → 40 passed.)

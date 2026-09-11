@@ -80,6 +80,12 @@ let sharedPanelDataset = null;  // Linked Unity Catalog dataset { catalog, schem
 // The bound function must take exactly one parameter: the ID of the entity
 // being acted on — it is passed automatically at invocation time.
 let sharedPanelActions = [];
+// Virtual attribute declarations. One entry per bound Unity Catalog function:
+// { catalog, schema, function, fullName, description, returns_table,
+//   attributes: [{ name, column, label, dataType }] }.
+// Values are never stored here — they are computed on demand by the consumers
+// (Graph Explorer, MCP), never at design time.
+let sharedPanelVirtualAttributes = [];
 let sharedPanelDirty = false;
 
 // Remembered active tab per panel type — persists across entity/relationship selections
@@ -88,7 +94,7 @@ let _relPanelActiveTab = 'details';
 
 // Panel resize state
 let isResizing = false;
-let panelStartWidth = 380;
+let panelStartWidth = 420;
 
 /**
  * Get or create the detail panel in the current active section
@@ -122,8 +128,10 @@ function getOrCreateDetailPanel() {
     
     // Use the specific container for each section
     let panelContainer = activeSection;
+    // The panel is a sibling of the content pane, not a child of it, so the
+    // Designer hosts it on the wrapper rather than on the canvas itself.
     const containerMap = {
-        'map-section': 'ontology-map-container',
+        'map-section': 'ontology-map-wrapper',
         'entities-section': 'ontology-entities-container',
         'relationships-section': 'ontology-relationships-container'
     };
@@ -144,54 +152,95 @@ function getOrCreateDetailPanel() {
         return panel;
     }
     
+    return createDetailPanel(panelContainer);
+}
+
+/**
+ * Build the handle + panel pair inside a container and wire it up.
+ * Returns the existing panel if the container already has one.
+ */
+function createDetailPanel(panelContainer) {
+    const existing = panelContainer.querySelector('.shared-detail-panel');
+    if (existing) return existing;
+
     console.log('[SharedPanel] Creating new panel');
-    
+
     // Create resize handle
     const resizeHandle = document.createElement('div');
     resizeHandle.className = 'detail-panel-resize-handle';
-    resizeHandle.innerHTML = '<div class="resize-bar"></div>';
-    
+    resizeHandle.title = 'Drag to resize panels';
+    resizeHandle.innerHTML = '<div class="resize-handle-bar"></div>';
+
     // Create panel
     const panelDiv = document.createElement('div');
     panelDiv.className = 'shared-detail-panel';
-    
+
     panelDiv.innerHTML = `
         <div class="panel-header">
-            <h6 id="sharedPanelTitle"><i class="bi bi-box"></i> <span id="sharedPanelItemName">Edit</span></h6>
-            <button type="button" class="btn btn-outline-secondary btn-sm panel-close-btn" id="sharedClosePanelBtn" title="Close">
-                <i class="bi bi-x-lg"></i>
-            </button>
+            <h6 id="sharedPanelTitle"><span id="sharedPanelItemName">Select Item</span></h6>
         </div>
         <div class="panel-body" id="sharedPanelBody"></div>
-        <div class="panel-footer" id="sharedPanelFooter">
-            <button type="button" class="btn btn-secondary btn-sm" id="sharedCancelPanelBtn">Cancel</button>
-            <button type="button" class="btn btn-dark btn-sm" id="sharedSavePanelBtn">
-                <i class="bi bi-check-circle"></i> Apply
-            </button>
-        </div>
     `;
-    
-    // Append to container (either section or ontology-map-container for Map)
+
+    // Append to container (either section or ontology-map-wrapper for Map)
     panelContainer.appendChild(resizeHandle);
     panelContainer.appendChild(panelDiv);
-    
+
     // Add the class to enable split layout
     panelContainer.classList.add('has-detail-panel');
-    
-    // Setup event listeners for this panel instance
-    setupPanelListeners(panelContainer);
+
     setupResizeHandle(panelContainer);
-    
+
+    renderPanelPlaceholder(panelDiv);
+
     return panelDiv;
 }
 
 /**
- * Setup panel event listeners
+ * Create the panel in every section that hosts one, before the views render.
+ * D3 sizes the Designer canvas from `container.clientWidth` exactly once, so a
+ * panel appearing later would leave the graph centred on the wrong axis.
  */
-function setupPanelListeners(section) {
-    section.querySelector('#sharedClosePanelBtn')?.addEventListener('click', guardedCloseSharedPanel);
-    section.querySelector('#sharedCancelPanelBtn')?.addEventListener('click', guardedCloseSharedPanel);
-    section.querySelector('#sharedSavePanelBtn')?.addEventListener('click', saveSharedPanelItem);
+function ensureDetailPanels() {
+    ['ontology-map-wrapper',
+     'ontology-entities-container',
+     'ontology-relationships-container'].forEach(id => {
+        const container = document.getElementById(id);
+        if (container) createDetailPanel(container);
+    });
+}
+
+/**
+ * Reset a panel to its "nothing selected" state.
+ */
+function renderPanelPlaceholder(panel) {
+    const target = panel || sharedPanelElement;
+    if (!target) return;
+
+    target.classList.add('is-empty');
+
+    const heading = target.querySelector('#sharedPanelTitle');
+    if (heading) {
+        heading.innerHTML = '<span id="sharedPanelItemName">Select Item</span>';
+    }
+
+    const body = target.querySelector('#sharedPanelBody');
+    if (body) {
+        body.innerHTML = `
+            <div class="panel-placeholder">
+                <i class="bi bi-cursor"></i>
+                <p class="small mb-0">Click on an entity or<br>relationship to view details</p>
+            </div>
+        `;
+    }
+}
+
+function renderFormTabsNav(tabs, activeTab) {
+    const items = tabs.map(({ id, icon, label }) => {
+        const selected = activeTab === id;
+        return `<li class="nav-item" role="presentation"><a class="nav-link form-tab-link${selected ? ' active' : ''}" data-form-tab="${id}" href="#" role="tab" aria-selected="${selected}" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi ${icon} me-1"></i>${label}</a></li>`;
+    }).join('');
+    return `<ul class="nav nav-tabs ob-tabs ob-tabs--compact form-tabs-nav" role="tablist">${items}</ul>`;
 }
 
 /**
@@ -205,7 +254,9 @@ function switchFormTab(tabLink) {
     const tabName = tabLink.dataset.formTab;
 
     form.querySelectorAll('.form-tabs-nav .form-tab-link').forEach(link => {
-        link.classList.toggle('active', link.dataset.formTab === tabName);
+        const selected = link.dataset.formTab === tabName;
+        link.classList.toggle('active', selected);
+        link.setAttribute('aria-selected', selected ? 'true' : 'false');
     });
     form.querySelectorAll('.form-tab-pane').forEach(pane => {
         pane.classList.toggle('active', pane.dataset.formTabContent === tabName);
@@ -246,18 +297,7 @@ function attachDirtyTracking() {
  */
 async function guardedCloseSharedPanel() {
     if (sharedPanelDirty) {
-        const save = await showConfirmDialog({
-            title: 'Unapplied Changes',
-            message: 'You have unapplied changes. Do you want to apply them before closing?',
-            confirmText: 'Apply',
-            cancelText: 'Discard',
-            confirmClass: 'btn-primary',
-            icon: 'exclamation-triangle'
-        });
-        if (save) {
-            await saveSharedPanelItem();
-            return;
-        }
+        await saveSharedPanelItem();
     }
     closeSharedPanel();
 }
@@ -284,9 +324,8 @@ function setupResizeHandle(section) {
         
         const sectionRect = section.getBoundingClientRect();
         const newWidth = sectionRect.right - e.clientX;
-        
-        // Clamp width between min and max
-        const clampedWidth = Math.max(280, Math.min(500, newWidth));
+
+        const clampedWidth = Math.max(200, Math.min(900, newWidth));
         panel.style.width = clampedWidth + 'px';
     });
     
@@ -319,19 +358,7 @@ function panelGetById(id) {
  */
 async function checkDirtyBeforeSwitch() {
     if (!sharedPanelDirty) return true;
-    const save = await showConfirmDialog({
-        title: 'Unapplied Changes',
-        message: 'You have unapplied changes. Do you want to apply them before continuing?',
-        confirmText: 'Apply',
-        cancelText: 'Discard',
-        confirmClass: 'btn-primary',
-        icon: 'exclamation-triangle'
-    });
-    if (save) {
-        await saveSharedPanelItem();
-    } else {
-        sharedPanelDirty = false;
-    }
+    await saveSharedPanelItem();
     return true;
 }
 
@@ -348,32 +375,24 @@ function openSharedPanel() {
     
     // Store reference to the current panel element for scoped queries
     sharedPanelElement = panel;
-    
-    // Get the container (either section or map-container for Map section)
-    const container = panel.parentElement;
-    const effectiveContainer = panel.closest('.has-detail-panel') || container;
-    console.log('[SharedPanel] Adding panel-open class to container:', effectiveContainer?.id || effectiveContainer?.className);
-    effectiveContainer?.classList.add('panel-open');
+
+    panel.classList.remove('is-empty');
+
+    // Callers set the header synchronously but render the body in an async
+    // step. Drop the placeholder now so it can't sit under a populated header.
+    panel.querySelector('.panel-placeholder')?.remove();
 }
 
 /**
  * Close the shared panel
  */
 function closeSharedPanel() {
-    // Find all containers that might have the panel-open class
-    const containers = [
-        sharedPanelCurrentSection,
-        document.getElementById('ontology-map-container'),
-        document.getElementById('ontology-entities-container'),
-        document.getElementById('ontology-relationships-container')
-    ];
-    
-    containers.forEach(container => {
-        if (container) {
-            container.classList.remove('panel-open');
-        }
+    // The panel stays in the layout, so "close" means drop the selection and
+    // fall back to the placeholder.
+    document.querySelectorAll('.shared-detail-panel').forEach(panel => {
+        renderPanelPlaceholder(panel);
     });
-    
+
     // Reset state
     sharedPanelEditType = null;
     sharedPanelEditIndex = -1;
@@ -445,6 +464,7 @@ async function openEntityPanel(options = {}) {
     sharedPanelBridges = [];  // Reset bridges for new entity
     sharedPanelDataset = null;  // Reset dataset for new entity
     sharedPanelActions = [];  // Reset UC function actions for new entity
+    sharedPanelVirtualAttributes = [];  // Reset virtual attributes for new entity
     
     openSharedPanel();
     
@@ -455,8 +475,6 @@ async function openEntityPanel(options = {}) {
     }
     
     panel.querySelector('#sharedPanelTitle').innerHTML = '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Entity</span>';
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderEntityForm(panel, null);
     attachDirtyTracking();
 }
@@ -489,6 +507,7 @@ async function openEntityPanelForEdit(idx, options = {}) {
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
     sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
     sharedPanelActions = cls.actions ? JSON.parse(JSON.stringify(cls.actions)) : [];
+    sharedPanelVirtualAttributes = cls.virtualAttributes ? JSON.parse(JSON.stringify(cls.virtualAttributes)) : [];
 
     console.log('[SharedPanel] Edit - Loaded class:', cls.name, 'dataProperties:', (cls.dataProperties || []).length);
     
@@ -511,8 +530,6 @@ async function openEntityPanelForEdit(idx, options = {}) {
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> ${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderEntityForm(panel, cls);
     attachDirtyTracking();
 }
@@ -531,6 +548,7 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
     sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
     sharedPanelActions = cls.actions ? JSON.parse(JSON.stringify(cls.actions)) : [];
+    sharedPanelVirtualAttributes = cls.virtualAttributes ? JSON.parse(JSON.stringify(cls.virtualAttributes)) : [];
 
     sharedPanelInheritedAttributes = getSharedInheritedProperties(cls.parent);
     const inheritedNames = new Set(sharedPanelInheritedAttributes.map(a => a.name));
@@ -548,8 +566,6 @@ async function openEntityPanelForView(idx, options = {}) {
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> ${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = 'none';
-    
     await renderEntityForm(panel, cls, true);
 }
 
@@ -612,12 +628,12 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     body.innerHTML = `
         <div id="sharedEntityAssignmentLink"></div>
         <form id="sharedEntityForm">
-            <ul class="form-tabs-nav">
-                <li><a class="form-tab-link ${_eTab === 'details' ? 'active' : ''}" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
-                <li><a class="form-tab-link ${_eTab === 'attributes' ? 'active' : ''}" data-form-tab="attributes" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-tags me-1"></i>Attributes</a></li>
-                <li><a class="form-tab-link ${_eTab === 'actions' ? 'active' : ''}" data-form-tab="actions" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-lightning me-1"></i>References</a></li>
-                <li><a class="form-tab-link ${_eTab === 'constraints' ? 'active' : ''}" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
-            </ul>
+            ${renderFormTabsNav([
+                { id: 'details', icon: 'bi-info-circle', label: 'Details' },
+                { id: 'attributes', icon: 'bi-tags', label: 'Attributes' },
+                { id: 'actions', icon: 'bi-lightning', label: 'References' },
+                { id: 'constraints', icon: 'bi-sliders', label: 'Constraints' },
+            ], _eTab)}
 
             <div class="form-tab-pane ${_eTab === 'details' ? 'active' : ''}" data-form-tab-content="details">
                 <div class="mb-3 p-2 bg-light rounded border">
@@ -666,7 +682,19 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                         <button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="addSharedEntityAttribute()" title="Add manually"><i class="bi bi-plus"></i></button>
                     ` : ''}
                 </div>
-                <div id="sharedEntityAttributes" class="border rounded p-2" style="background: #ffffff; overflow-y: auto;"></div>
+                <div id="sharedEntityAttributes" class="border rounded p-2 panel-box"></div>
+                <div class="mt-3">
+                    <label class="form-label d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-magic me-1"></i>Virtual Attributes</span>
+                        ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openVirtualAttributeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
+                    </label>
+                    <div id="sharedEntityVirtualAttributes" class="border rounded p-2 panel-box">
+                        <div id="sharedEntityVirtualAttributesContent">
+                            <small class="text-muted">No virtual attributes</small>
+                        </div>
+                    </div>
+                    <div class="form-text small">Computed on demand by a Unity Catalog function taking exactly one parameter: the ID of the entity. Not mapped, not stored in the graph, and not queryable in SPARQL or GraphQL.</div>
+                </div>
             </div>
 
             <div class="form-tab-pane ${_eTab === 'actions' ? 'active' : ''}" data-form-tab-content="actions">
@@ -761,6 +789,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     }
     
     renderSharedEntityAttributes(viewOnly);
+    renderSharedEntityVirtualAttributes(viewOnly);
     renderSharedEntityDashboard(viewOnly);
     renderSharedEntityDataset(viewOnly);
     renderSharedEntityActions(viewOnly);
@@ -818,9 +847,39 @@ function renderSharedEntityAttributes(viewOnly = false) {
     container.innerHTML = html;
 }
 
+/**
+ * Mirror the open entity's attribute buffer into OntologyState.config now.
+ *
+ * The panel is an edit buffer, but attribute add/remove/rename must not wait
+ * for an explicit Save: a background autosave (autoGenerateOwl → saveConfig, a
+ * section init, the registry unload beacon …) can persist OntologyState.config
+ * at any moment, and if the buffer edit has not been mirrored yet that autosave
+ * re-persists the pre-edit attribute list — the bug where a removed attribute
+ * reappears after leaving and returning. We only touch the open class's
+ * dataProperties (own attributes); name/parent/dataset etc. stay in the form
+ * until Save, and the class index is stable, so this is safe. Matches the
+ * shape saveSharedEntity writes (own attributes only; inherited are derived).
+ *
+ * @param {boolean} persist When true, also push the config to the session so
+ *     the edit survives an immediate navigation without relying on the unload
+ *     flush.
+ */
+function commitOpenEntityAttributesToConfig(persist) {
+    if (sharedPanelEditType !== 'entity' || sharedPanelEditIndex < 0) return;
+    const cls = OntologyState.config?.classes?.[sharedPanelEditIndex];
+    if (!cls) return;
+    cls.dataProperties = sharedPanelOwnAttributes
+        .filter(a => a.name && a.name.trim())
+        .map(a => ({ name: a.name.trim(), localName: a.name.trim() }));
+    if (persist && typeof window.saveConfigToSession === 'function') {
+        window.saveConfigToSession();
+    }
+}
+
 function addSharedEntityAttribute() {
     sharedPanelOwnAttributes.push({ name: '' });
     markPanelDirty();
+    commitOpenEntityAttributesToConfig(false);
     renderSharedEntityAttributes(false);
     setTimeout(() => {
         const inputs = document.querySelectorAll('#sharedEntityAttributes input:not([disabled])');
@@ -831,11 +890,17 @@ function addSharedEntityAttribute() {
 function updateSharedEntityAttribute(idx, value) {
     if (sharedPanelOwnAttributes[idx]) sharedPanelOwnAttributes[idx].name = value.trim();
     markPanelDirty();
+    // Rename typed by the user: mirror into config immediately, and persist so
+    // the session reflects it even if the user navigates right after.
+    commitOpenEntityAttributesToConfig(true);
 }
 
 function removeSharedEntityAttribute(idx) {
     sharedPanelOwnAttributes.splice(idx, 1);
     markPanelDirty();
+    // Persist the removal now: a background autosave must not re-add the
+    // attribute from a stale OntologyState.config after we leave the page.
+    commitOpenEntityAttributesToConfig(true);
     renderSharedEntityAttributes(false);
 }
 
@@ -1431,6 +1496,107 @@ function closeDatasetSelectorModal() {
 }
 
 // =====================================================
+// UNITY CATALOG FUNCTION PICKERS — shared cascade
+// =====================================================
+// Both the Actions picker and the Virtual Attributes picker walk the same
+// catalog -> schema -> function cascade. Only the eligibility rules and what
+// they do with the chosen function differ, so the three fetches live here.
+
+/**
+ * Fill a catalog <select> with the accessible Unity Catalog catalogs.
+ */
+async function _ucFillCatalogSelect(selectId) {
+    try {
+        const resp = await fetch('/settings/catalogs', { credentials: 'same-origin' });
+        const data = await resp.json();
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        const catalogs = data.catalogs || [];
+        sel.innerHTML = '<option value="">Select a catalog...</option>' +
+            catalogs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    } catch (err) {
+        console.error('[UCPicker] Error loading catalogs:', err);
+        const sel = document.getElementById(selectId);
+        if (sel) sel.innerHTML = '<option value="">Failed to load catalogs</option>';
+    }
+}
+
+/**
+ * Fill a schema <select> with the schemas of *catalog*.
+ */
+async function _ucFillSchemaSelect(catalog, selectId) {
+    const schemaSel = document.getElementById(selectId);
+    if (!schemaSel) return;
+    schemaSel.disabled = true;
+    schemaSel.innerHTML = '<option value="">Loading...</option>';
+    try {
+        const resp = await fetch(`/settings/schemas/${encodeURIComponent(catalog)}`, { credentials: 'same-origin' });
+        const data = await resp.json();
+        const schemas = data.schemas || [];
+        schemaSel.innerHTML = '<option value="">Select a schema...</option>' +
+            schemas.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+        schemaSel.disabled = false;
+    } catch (err) {
+        console.error('[UCPicker] Error loading schemas:', err);
+        schemaSel.innerHTML = '<option value="">Failed to load schemas</option>';
+    }
+}
+
+/**
+ * Return the user-defined functions of catalog.schema, or [] on failure.
+ * Each entry carries param_count, returns_table, return_type and
+ * return_columns.
+ */
+async function _ucFetchFunctions(catalog, schema) {
+    const resp = await fetch(
+        `/settings/uc-functions?catalog=${encodeURIComponent(catalog)}&schema=${encodeURIComponent(schema)}`,
+        { credentials: 'same-origin' }
+    );
+    const data = await resp.json();
+    return (data.success && data.functions) ? data.functions : [];
+}
+
+/**
+ * Number of values a function returns: one RETURNS TABLE column each, or 1 for
+ * a scalar. Null when the metastore did not report the columns of a table
+ * function, which is not the same as returning nothing.
+ *
+ * @param {Object} fn Entry from /settings/uc-functions.
+ * @returns {?number} Output count, or null when unknown.
+ */
+function _ucOutputCount(fn) {
+    if (!fn.returns_table) return 1;
+    const columns = fn.return_columns || [];
+    return columns.length > 0 ? columns.length : null;
+}
+
+/**
+ * Badge stating how many values a function returns, for the picker list.
+ * Empty when the count is unknown rather than guessing at it.
+ */
+function _ucOutputBadge(fn) {
+    const count = _ucOutputCount(fn);
+    if (count === null) {
+        return '<span class="badge bg-light text-muted border" ' +
+            'title="Unity Catalog did not report this function\'s result columns">' +
+            'outputs unknown</span>';
+    }
+    return `<span class="badge bg-light text-dark border" title="Returns ${count} value${count === 1 ? '' : 's'}">` +
+        `${count} output${count === 1 ? '' : 's'}</span>`;
+}
+
+/**
+ * Discard a dynamically inserted picker modal once Bootstrap has hidden it.
+ */
+function _ucClosePickerModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    const bsModal = bootstrap.Modal.getInstance(modal);
+    if (bsModal) bsModal.hide();
+    modal.addEventListener('hidden.bs.modal', () => modal.remove(), { once: true });
+}
+
+// =====================================================
 // UNITY CATALOG FUNCTION ACTIONS
 // =====================================================
 
@@ -1551,19 +1717,7 @@ async function openActionSelectorModal() {
     const modal = new bootstrap.Modal(document.getElementById(modalId));
     modal.show();
 
-    try {
-        const resp = await fetch('/settings/catalogs', { credentials: 'same-origin' });
-        const data = await resp.json();
-        const sel = document.getElementById('actionCatalogSelect');
-        if (!sel) return;
-        const catalogs = data.catalogs || [];
-        sel.innerHTML = '<option value="">Select a catalog...</option>' +
-            catalogs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-    } catch (err) {
-        console.error('[Action] Error loading catalogs:', err);
-        const sel = document.getElementById('actionCatalogSelect');
-        if (sel) sel.innerHTML = '<option value="">Failed to load catalogs</option>';
-    }
+    await _ucFillCatalogSelect('actionCatalogSelect');
 }
 
 async function _actionOnCatalogChange() {
@@ -1576,31 +1730,13 @@ async function _actionOnCatalogChange() {
     const list = document.getElementById('actionFunctionList');
     if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list functions</div>';
     if (catalog) {
-        await _actionLoadSchemas(catalog);
+        await _ucFillSchemaSelect(catalog, 'actionSchemaSelect');
     } else {
         const schemaSel = document.getElementById('actionSchemaSelect');
         if (schemaSel) {
             schemaSel.disabled = true;
             schemaSel.innerHTML = '<option value="">Select a catalog first</option>';
         }
-    }
-}
-
-async function _actionLoadSchemas(catalog) {
-    const schemaSel = document.getElementById('actionSchemaSelect');
-    if (!schemaSel) return;
-    schemaSel.disabled = true;
-    schemaSel.innerHTML = '<option value="">Loading...</option>';
-    try {
-        const resp = await fetch(`/settings/schemas/${encodeURIComponent(catalog)}`, { credentials: 'same-origin' });
-        const data = await resp.json();
-        const schemas = data.schemas || [];
-        schemaSel.innerHTML = '<option value="">Select a schema...</option>' +
-            schemas.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
-        schemaSel.disabled = false;
-    } catch (err) {
-        console.error('[Action] Error loading schemas:', err);
-        schemaSel.innerHTML = '<option value="">Failed to load schemas</option>';
     }
 }
 
@@ -1619,9 +1755,7 @@ async function _actionLoadFunctions(catalog, schema) {
     const list = document.getElementById('actionFunctionList');
     if (list) list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading functions...</div>';
     try {
-        const resp = await fetch(`/settings/uc-functions?catalog=${encodeURIComponent(catalog)}&schema=${encodeURIComponent(schema)}`, { credentials: 'same-origin' });
-        const data = await resp.json();
-        _actionAllFunctions = (data.success && data.functions) ? data.functions : [];
+        _actionAllFunctions = await _ucFetchFunctions(catalog, schema);
         const searchInput = document.getElementById('actionFunctionSearch');
         if (searchInput) searchInput.disabled = _actionAllFunctions.length === 0;
         if (!_actionAllFunctions.length) {
@@ -1653,7 +1787,7 @@ function _renderActionFunctionList(functions) {
                     ${eligible ? `onclick='_actionSelectFunction(${JSON.stringify(fn).replace(/'/g, "&#39;")})'` : 'disabled'}>
                 <i class="bi bi-lightning-charge text-warning"></i>
                 <div class="flex-grow-1">
-                    <div class="fw-semibold">${escapeHtml(fn.name)} ${badge}</div>
+                    <div class="fw-semibold">${escapeHtml(fn.name)} ${badge} ${_ucOutputBadge(fn)}</div>
                     ${hint}
                 </div>
                 ${eligible ? '<i class="bi bi-chevron-right text-muted"></i>' : ''}
@@ -1692,12 +1826,373 @@ function _actionSelectFunction(fn) {
 }
 
 function closeActionSelectorModal() {
-    const modal = document.getElementById('actionSelectorModal');
-    if (modal) {
-        const bsModal = bootstrap.Modal.getInstance(modal);
-        if (bsModal) bsModal.hide();
-        modal.addEventListener('hidden.bs.modal', () => modal.remove(), { once: true });
+    _ucClosePickerModal('actionSelectorModal');
+}
+
+// =====================================================
+// VIRTUAL ATTRIBUTES
+// =====================================================
+// A virtual attribute is not mapped and not stored in the graph: a Unity
+// Catalog function computes it on demand. One function yields one attribute
+// per RETURNS TABLE column, or a single one when it is scalar. Nothing is
+// computed here — at design time there is no entity instance to bind the ID to.
+
+/**
+ * Alias used for the single value of a scalar function, which has no result
+ * column name of its own. Must match SCALAR_RESULT_COLUMN server-side.
+ */
+const VA_SCALAR_COLUMN = 'result';
+
+/**
+ * Render the declared virtual attribute groups in the entity form.
+ */
+function renderSharedEntityVirtualAttributes(viewOnly = false) {
+    const container = panelGetById('sharedEntityVirtualAttributesContent');
+    if (!container) return;
+
+    if (!sharedPanelVirtualAttributes.length) {
+        container.innerHTML = '<small class="text-muted">No virtual attributes</small>';
+        return;
     }
+
+    container.innerHTML = sharedPanelVirtualAttributes.map((group, idx) => {
+        const fullName = group.fullName
+            || `${group.catalog || ''}.${group.schema || ''}.${group.function || ''}`;
+        const badge = group.returns_table
+            ? '<span class="badge bg-info text-dark">Table</span>'
+            : '<span class="badge bg-secondary">Scalar</span>';
+        const descHtml = !viewOnly
+            ? `<textarea class="form-control form-control-sm mt-1" rows="2"
+                         id="vaDescriptionInput-${idx}"
+                         placeholder="What does this function compute?"
+                         oninput="onVirtualAttributeDescriptionChange(${idx}, this.value)">${escapeHtml(group.description || '')}</textarea>`
+            : (group.description
+                ? `<small class="text-muted d-block ms-3">${escapeHtml(group.description)}</small>`
+                : '');
+        const attrsHtml = (group.attributes || []).map((attr, aIdx) => {
+            const type = attr.dataType
+                ? `<span class="badge bg-light text-muted border ms-1">${escapeHtml(attr.dataType)}</span>`
+                : '';
+            const labelHtml = !viewOnly
+                ? `<input type="text" class="form-control form-control-sm mt-1"
+                          value="${escapeHtml(attr.label || attr.name || '')}"
+                          placeholder="Display label"
+                          oninput="onVirtualAttributeLabelChange(${idx}, ${aIdx}, this.value)">`
+                : '';
+            return `
+                <div class="${aIdx > 0 ? 'mt-2' : ''}">
+                    <div class="small"><code>${escapeHtml(attr.name || '')}</code>${type}</div>
+                    ${labelHtml}
+                </div>
+            `;
+        }).join('');
+        return `
+            <div class="va-group">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-magic text-primary"></i>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">${escapeHtml(group.function || '')} ${badge}</div>
+                        <small class="text-muted">${escapeHtml(fullName)}</small>
+                    </div>
+                    ${!viewOnly ? `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSharedEntityVirtualAttribute(${idx})" title="Remove this function and its attributes"><i class="bi bi-x"></i></button>` : ''}
+                </div>
+                ${descHtml}
+                <div class="va-group-attrs">${attrsHtml}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function onVirtualAttributeDescriptionChange(index, value) {
+    const group = sharedPanelVirtualAttributes[index];
+    if (!group) return;
+    group.description = value.trim() || null;
+    markPanelDirty();
+}
+
+function onVirtualAttributeLabelChange(index, attrIndex, value) {
+    const attr = sharedPanelVirtualAttributes[index]?.attributes?.[attrIndex];
+    if (!attr) return;
+    attr.label = value.trim() || attr.name;
+    markPanelDirty();
+}
+
+/**
+ * Remove a whole group. A single attribute cannot be removed on its own: it is
+ * part of the function's signature, so dropping one would make the mapping
+ * from result column to attribute ambiguous.
+ */
+async function removeSharedEntityVirtualAttribute(index) {
+    const group = sharedPanelVirtualAttributes[index];
+    if (!group) return;
+    const count = (group.attributes || []).length;
+    const confirmed = await showConfirmDialog({
+        title: 'Remove virtual attributes',
+        message: `Remove <strong>${escapeHtml(group.function || group.fullName)}</strong> and its ${count} virtual attribute${count === 1 ? '' : 's'}?`,
+        confirmText: 'Remove',
+        confirmClass: 'btn-danger',
+        icon: 'trash'
+    });
+    if (!confirmed) return;
+    sharedPanelVirtualAttributes.splice(index, 1);
+    markPanelDirty();
+    renderSharedEntityVirtualAttributes(false);
+}
+
+/**
+ * Names already taken on this class: mapped attributes (own + inherited) and
+ * the other virtual attributes. The Graph Explorer and the MCP render both
+ * families in one namespace, so a collision has to be resolved at declaration
+ * time rather than surfacing as two rows with the same name.
+ */
+function _vaTakenNames(exceptGroupIndex = -1) {
+    const taken = new Set();
+    sharedPanelOwnAttributes.forEach(a => a.name && taken.add(a.name));
+    sharedPanelInheritedAttributes.forEach(a => a.name && taken.add(a.name));
+    sharedPanelVirtualAttributes.forEach((group, idx) => {
+        if (idx === exceptGroupIndex) return;
+        (group.attributes || []).forEach(a => a.name && taken.add(a.name));
+    });
+    return taken;
+}
+
+/**
+ * Derive the virtual attributes of *fn*, suffixing any colliding name.
+ * Returns { attributes, renamed } where renamed lists "old -> new" pairs.
+ */
+function _vaDeriveAttributes(fn) {
+    const taken = _vaTakenNames();
+    const columns = fn.returns_table
+        ? (fn.return_columns || [])
+        : [{ name: fn.name, data_type: fn.return_type || '' }];
+    const attributes = [];
+    const renamed = [];
+    columns.forEach(col => {
+        const rawName = String(col.name || '').trim();
+        if (!rawName) return;
+        let name = rawName;
+        let suffix = 2;
+        while (taken.has(name)) {
+            name = `${rawName}_${suffix}`;
+            suffix += 1;
+        }
+        if (name !== rawName) renamed.push(`${rawName} → ${name}`);
+        taken.add(name);
+        attributes.push({
+            name,
+            column: fn.returns_table ? rawName : VA_SCALAR_COLUMN,
+            label: name,
+            dataType: String(col.data_type || '').trim() || null,
+        });
+    });
+    return { attributes, renamed };
+}
+
+// Virtual attribute selector state
+let _vaSelCatalog = '';
+let _vaSelSchema = '';
+let _vaAllFunctions = [];
+
+/**
+ * Open the virtual attribute selector modal (catalog -> schema -> function).
+ */
+async function openVirtualAttributeSelectorModal() {
+    const modalId = 'virtualAttributeSelectorModal';
+    const existing = document.getElementById(modalId);
+    if (existing) existing.remove();
+
+    _vaSelCatalog = '';
+    _vaSelSchema = '';
+    _vaAllFunctions = [];
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-magic me-2"></i>Select a Unity Catalog Function</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2 px-3 small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            The function must accept <strong>exactly one parameter</strong>: the ID of the
+                            entity. One virtual attribute is created per returned column.
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Catalog</label>
+                                <select class="form-select form-select-sm" id="vaCatalogSelect" onchange="_vaOnCatalogChange()">
+                                    <option value="">Loading...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold">Schema</label>
+                                <select class="form-select form-select-sm" id="vaSchemaSelect" onchange="_vaOnSchemaChange()" disabled>
+                                    <option value="">Select a catalog first</option>
+                                </select>
+                            </div>
+                        </div>
+                        <input type="text" class="form-control form-control-sm mb-2" id="vaFunctionSearch" placeholder="Search functions..." oninput="_filterVaFunctions()" disabled>
+                        <div id="vaFunctionList" class="list-group va-function-list">
+                            <div class="text-muted p-3 text-center">Select a catalog and schema to list functions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById(modalId));
+    modal.show();
+
+    await _ucFillCatalogSelect('vaCatalogSelect');
+}
+
+async function _vaOnCatalogChange() {
+    const catalog = document.getElementById('vaCatalogSelect')?.value || '';
+    _vaSelCatalog = catalog;
+    _vaSelSchema = '';
+    _vaAllFunctions = [];
+    const searchInput = document.getElementById('vaFunctionSearch');
+    if (searchInput) searchInput.disabled = true;
+    const list = document.getElementById('vaFunctionList');
+    if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list functions</div>';
+    if (catalog) {
+        await _ucFillSchemaSelect(catalog, 'vaSchemaSelect');
+    } else {
+        const schemaSel = document.getElementById('vaSchemaSelect');
+        if (schemaSel) {
+            schemaSel.disabled = true;
+            schemaSel.innerHTML = '<option value="">Select a catalog first</option>';
+        }
+    }
+}
+
+async function _vaOnSchemaChange() {
+    const schema = document.getElementById('vaSchemaSelect')?.value || '';
+    _vaSelSchema = schema;
+    if (schema && _vaSelCatalog) {
+        await _vaLoadFunctions(_vaSelCatalog, schema);
+    } else {
+        const list = document.getElementById('vaFunctionList');
+        if (list) list.innerHTML = '<div class="text-muted p-3 text-center">Select a schema to list functions</div>';
+    }
+}
+
+async function _vaLoadFunctions(catalog, schema) {
+    const list = document.getElementById('vaFunctionList');
+    if (list) list.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading functions...</div>';
+    try {
+        _vaAllFunctions = await _ucFetchFunctions(catalog, schema);
+        const searchInput = document.getElementById('vaFunctionSearch');
+        if (searchInput) searchInput.disabled = _vaAllFunctions.length === 0;
+        if (!_vaAllFunctions.length) {
+            if (list) list.innerHTML = '<div class="text-muted p-3 text-center">No functions found in this schema</div>';
+            return;
+        }
+        _renderVaFunctionList(_vaAllFunctions);
+    } catch (err) {
+        console.error('[VirtualAttribute] Error loading functions:', err);
+        if (list) list.innerHTML = '<div class="text-danger p-2"><i class="bi bi-exclamation-triangle"></i> Failed to load functions</div>';
+    }
+}
+
+function _renderVaFunctionList(functions) {
+    const list = document.getElementById('vaFunctionList');
+    if (!list) return;
+    const assigned = new Set(sharedPanelVirtualAttributes.map(g => g.fullName));
+    list.innerHTML = functions.map(fn => {
+        const fullName = fn.full_name || `${_vaSelCatalog}.${_vaSelSchema}.${fn.name}`;
+        // Same single-parameter rule as actions: the one argument is the entity ID.
+        const singleParam = Number(fn.param_count) === 1;
+        const alreadyAssigned = assigned.has(fullName);
+        const eligible = singleParam && !alreadyAssigned;
+        const badge = fn.returns_table
+            ? '<span class="badge bg-info text-dark">Table</span>'
+            : '<span class="badge bg-secondary">Scalar</span>';
+        const returns = fn.returns_table
+            ? (fn.return_columns || []).map(c => `${c.name}${c.data_type ? ` ${c.data_type}` : ''}`).join(', ')
+            : (fn.return_type || '');
+        let hint;
+        if (!singleParam) {
+            hint = `<small class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Needs exactly 1 parameter (has ${Number(fn.param_count) || 0})</small>`;
+        } else if (alreadyAssigned) {
+            hint = '<small class="text-warning"><i class="bi bi-check2-circle me-1"></i>Already assigned to this entity</small>';
+        } else {
+            // The output count is what the user is really choosing here: it is
+            // the number of virtual attributes the function will create.
+            const count = _ucOutputCount(fn);
+            const creates = count === null
+                ? ''
+                : ` — creates ${count} attribute${count === 1 ? '' : 's'}`;
+            hint = `<small class="text-muted">returns: ${escapeHtml(returns || 'unknown')}${creates}</small>`;
+        }
+        return `
+            <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                    ${eligible ? `onclick='_vaSelectFunction(${JSON.stringify(fn).replace(/'/g, "&#39;")})'` : 'disabled'}>
+                <i class="bi bi-magic text-primary"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">${escapeHtml(fn.name)} ${badge} ${_ucOutputBadge(fn)}</div>
+                    ${hint}
+                </div>
+                ${eligible ? '<i class="bi bi-chevron-right text-muted"></i>' : ''}
+            </button>
+        `;
+    }).join('');
+}
+
+function _filterVaFunctions() {
+    const q = (document.getElementById('vaFunctionSearch')?.value || '').toLowerCase();
+    const filtered = _vaAllFunctions.filter(fn =>
+        (fn.name || '').toLowerCase().includes(q) ||
+        (fn.comment || '').toLowerCase().includes(q)
+    );
+    _renderVaFunctionList(filtered);
+}
+
+function _vaSelectFunction(fn) {
+    const fullName = fn.full_name || `${_vaSelCatalog}.${_vaSelSchema}.${fn.name}`;
+    if (sharedPanelVirtualAttributes.some(g => g.fullName === fullName)) {
+        showNotification(`Function already assigned: ${fullName}`, 'warning', 3000);
+        return;
+    }
+    const { attributes, renamed } = _vaDeriveAttributes(fn);
+    if (!attributes.length) {
+        showNotification(
+            `${fn.name} exposes no usable return column — cannot create virtual attributes`,
+            'warning', 4000
+        );
+        return;
+    }
+    sharedPanelVirtualAttributes.push({
+        catalog: _vaSelCatalog,
+        schema: _vaSelSchema,
+        function: fn.name,
+        fullName,
+        description: String(fn.comment || '').trim() || null,
+        returns_table: Boolean(fn.returns_table),
+        attributes,
+    });
+    markPanelDirty();
+    renderSharedEntityVirtualAttributes(false);
+    closeVirtualAttributeSelectorModal();
+    if (renamed.length) {
+        showNotification(
+            `Name already used on this entity, renamed: ${renamed.join(', ')}`,
+            'warning', 5000
+        );
+    } else {
+        showNotification(
+            `${attributes.length} virtual attribute${attributes.length === 1 ? '' : 's'} added from ${fn.name}`,
+            'success', 3000
+        );
+    }
+}
+
+function closeVirtualAttributeSelectorModal() {
+    _ucClosePickerModal('virtualAttributeSelectorModal');
 }
 
 // =====================================================
@@ -2355,7 +2850,7 @@ function applyManualDashboardUrl() {
     selectDashboard(url, 'Custom Dashboard');
 }
 
-async function saveSharedEntity() {
+async function saveSharedEntity(options = {}) {
     const name = panelGetById('sharedEntityName')?.value.trim();
     const labelRaw = panelGetById('sharedEntityLabel')?.value.trim();
     const label = labelRaw || name;
@@ -2371,7 +2866,9 @@ async function saveSharedEntity() {
     
     if (!name) { showNotification('Please enter an entity name', 'warning'); return; }
 
-    const duplicateEntity = (OntologyState.config.classes || []).some((c, i) => c.name === name && i !== sharedPanelEditIndex);
+    // Same stale-index guard as saveSharedRelationship: skip when only non-name fields changed.
+    const duplicateEntity = (name !== sharedPanelOriginalName || sharedPanelEditIndex < 0)
+        && (OntologyState.config.classes || []).some((c, i) => c.name === name && i !== sharedPanelEditIndex);
     if (duplicateEntity) { showNotification(`An entity named "${name}" already exists`, 'warning'); return; }
     
     const validAttributes = sharedPanelOwnAttributes.filter(a => a.name?.trim()).map(a => ({ name: a.name.trim(), localName: a.name.trim() }));
@@ -2391,16 +2888,21 @@ async function saveSharedEntity() {
         dashboardParams: Object.keys(sharedPanelDashboardParams).length > 0 ? sharedPanelDashboardParams : undefined,
         bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined,
         dataset: sharedPanelDataset || undefined,
-        actions: sharedPanelActions.length > 0 ? sharedPanelActions : undefined
+        actions: sharedPanelActions.length > 0 ? sharedPanelActions : undefined,
+        virtualAttributes: sharedPanelVirtualAttributes.length > 0 ? sharedPanelVirtualAttributes : undefined
     };
     
     console.log('[SharedPanel] Saving - classData.dashboardParams:', JSON.stringify(classData.dashboardParams));
+
+    const isNew = sharedPanelEditIndex < 0;
+    const existingEntity = isNew ? null : (OntologyState.config.classes[sharedPanelEditIndex] || {});
+    const oldName = existingEntity?.name || sharedPanelOriginalName;
+    const isRename = !isNew && oldName !== name;
+    const parentChanged = !isNew && (existingEntity?.parent || undefined) !== classData.parent;
     
     if (sharedPanelEditIndex >= 0) {
-        const existing = OntologyState.config.classes[sharedPanelEditIndex] || {};
-        const oldName = existing.name;
         // Preserve server-assigned URI so the backend prune doesn't orphan mappings.
-        if (existing.uri) classData.uri = existing.uri;
+        if (existingEntity.uri) classData.uri = existingEntity.uri;
         OntologyState.config.classes[sharedPanelEditIndex] = classData;
         if (oldName !== name) {
             OntologyState.config.classes.forEach(c => { if (c.parent === oldName) c.parent = name; });
@@ -2412,13 +2914,19 @@ async function saveSharedEntity() {
         showNotification('Entity added', 'success', 2000);
     }
     
-    await window.saveConfigToSession();
+    await window.saveConfigToSession({ keepalive: options.keepalive });
     
     // Save entity constraints to the ONLY storage location: session_data/ontology/constraints
     await saveEntityConstraintsToServer(name, disjointWith, equivalentTo);
     
     await autoGenerateOwl();
-    if (sharedPanelOnSaveCallback) sharedPanelOnSaveCallback();
+    if (sharedPanelOnSaveCallback) {
+        sharedPanelOnSaveCallback({
+            entityName: name,
+            previousName: oldName,
+            requiresMapRebuild: isNew || isRename || parentChanged
+        });
+    }
     if (typeof updateClassesList === 'function') updateClassesList();
     
     // Refresh ConstraintsModule if loaded
@@ -2528,8 +3036,6 @@ async function openRelationshipPanel(options = {}) {
     }
     
     panel.querySelector('#sharedPanelTitle').innerHTML = '<i class="bi bi-plus-circle"></i> <span id="sharedPanelItemName">Add Relationship</span>';
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderRelationshipForm(panel, null);
     attachDirtyTracking();
 }
@@ -2567,8 +3073,6 @@ async function openRelationshipPanelForEdit(idx, options = {}) {
     }
     
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> <span id="sharedPanelItemName">${prop.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = '';
-    
     await renderRelationshipForm(panel, prop);
     attachDirtyTracking();
 }
@@ -2592,9 +3096,65 @@ async function openRelationshipPanelForView(idx, options = {}) {
     if (!panel) return;
     
     panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> <span id="sharedPanelItemName">${prop.name}</span>`;
-    panel.querySelector('#sharedSavePanelBtn').style.display = 'none';
-    
     await renderRelationshipForm(panel, prop, true);
+}
+
+/**
+ * One clickable card of the graphical direction picker: the two endpoint chips
+ * with the arrow between them, drawn the way the canvas will draw the link.
+ * @param {string} value - 'forward' | 'reverse'
+ * @param {string} icon - Bootstrap Icons class for the arrow
+ * @param {boolean} viewOnly - render as a non-interactive preview
+ * @returns {string} HTML
+ */
+function _relDirectionOption(value, icon, viewOnly) {
+    return `
+        <button type="button" class="rel-direction-option" data-direction="${value}"
+                role="radio" aria-checked="false" ${viewOnly ? 'disabled' : ''}>
+            <span class="rel-direction-node" data-rel-node="domain">Source</span>
+            <span class="rel-direction-arrow">
+                <span class="rel-direction-name" data-rel-node="name"></span>
+                <i class="bi ${icon}"></i>
+            </span>
+            <span class="rel-direction-node" data-rel-node="range">Target</span>
+        </button>
+    `;
+}
+
+/**
+ * Select *direction* in the picker and mirror it into the hidden input that
+ * saveSharedRelationship() reads.
+ * @param {string} direction - 'forward' | 'reverse'
+ */
+function setSharedRelDirection(direction) {
+    const value = direction === 'reverse' ? 'reverse' : 'forward';
+    const input = panelGetById('sharedRelDirection');
+    if (input) input.value = value;
+    panelGetById('sharedRelDirectionPicker')?.querySelectorAll('.rel-direction-option')
+        .forEach(option => {
+            const selected = option.dataset.direction === value;
+            option.classList.toggle('selected', selected);
+            option.setAttribute('aria-checked', String(selected));
+        });
+}
+
+/**
+ * Keep the picker's endpoint chips in sync with the Source / Target / Name
+ * fields, so both cards always read as the relationship being edited.
+ */
+function refreshSharedRelDirectionLabels() {
+    const picker = panelGetById('sharedRelDirectionPicker');
+    if (!picker) return;
+    const text = {
+        domain: panelGetById('sharedRelDomain')?.value || 'Source',
+        range: panelGetById('sharedRelRange')?.value || 'Target',
+        name: panelGetById('sharedRelName')?.value.trim() || ''
+    };
+    Object.entries(text).forEach(([role, label]) => {
+        picker.querySelectorAll(`[data-rel-node="${role}"]`).forEach(el => {
+            el.textContent = label;
+        });
+    });
 }
 
 async function renderRelationshipForm(panel, prop, viewOnly = false) {
@@ -2635,10 +3195,10 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     body.innerHTML = `
         <div id="sharedRelAssignmentLink"></div>
         <form id="sharedRelationshipForm">
-            <ul class="form-tabs-nav">
-                <li><a class="form-tab-link ${_rTab === 'details' ? 'active' : ''}" data-form-tab="details" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-info-circle me-1"></i>Details</a></li>
-                <li><a class="form-tab-link ${_rTab === 'constraints' ? 'active' : ''}" data-form-tab="constraints" href="#" onclick="event.preventDefault(); switchFormTab(this)"><i class="bi bi-sliders me-1"></i>Constraints</a></li>
-            </ul>
+            ${renderFormTabsNav([
+                { id: 'details', icon: 'bi-info-circle', label: 'Details' },
+                { id: 'constraints', icon: 'bi-sliders', label: 'Constraints' },
+            ], _rTab)}
 
             <div class="form-tab-pane ${_rTab === 'details' ? 'active' : ''}" data-form-tab-content="details">
                 <div class="mb-3">
@@ -2662,11 +3222,13 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
                     </select>
                 </div>
                 <div class="mb-3">
-                    <label for="sharedRelDirection" class="form-label">Direction</label>
-                    <select class="form-select form-select-sm" id="sharedRelDirection" ${disabled}>
-                        <option value="forward">Forward →</option>
-                        <option value="reverse">Reverse ←</option>
-                    </select>
+                    <label class="form-label">Direction</label>
+                    <input type="hidden" id="sharedRelDirection" value="${prop?.direction || 'forward'}">
+                    <div class="rel-direction-picker" id="sharedRelDirectionPicker" role="radiogroup" aria-label="Relationship direction">
+                        ${_relDirectionOption('forward', 'bi-arrow-right', viewOnly)}
+                        ${_relDirectionOption('reverse', 'bi-arrow-left', viewOnly)}
+                    </div>
+                    <div class="form-text small mt-1">Which way the triple is written — the canvas draws the arrowhead on the side it points to</div>
                 </div>
                 <div class="mb-3">
                     <label for="sharedRelDescription" class="form-label">Description</label>
@@ -2730,7 +3292,18 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     if (prop) {
         panelGetById('sharedRelDomain').value = prop.domain || '';
         panelGetById('sharedRelRange').value = prop.range || '';
-        panelGetById('sharedRelDirection').value = prop.direction || 'forward';
+    }
+
+    setSharedRelDirection(prop?.direction || 'forward');
+    refreshSharedRelDirectionLabels();
+    if (!viewOnly) {
+        panelGetById('sharedRelDirectionPicker')?.addEventListener('click', (event) => {
+            const option = event.target.closest('.rel-direction-option');
+            if (option) setSharedRelDirection(option.dataset.direction);
+        });
+        ['sharedRelDomain', 'sharedRelRange', 'sharedRelName'].forEach(id => {
+            panelGetById(id)?.addEventListener('input', refreshSharedRelDirectionLabels);
+        });
     }
     
     // Add event listener to sync Functional checkbox with Max cardinality
@@ -2756,7 +3329,7 @@ async function renderRelationshipForm(panel, prop, viewOnly = false) {
     }
 }
 
-async function saveSharedRelationship() {
+async function saveSharedRelationship(options = {}) {
     const name = panelGetById('sharedRelName')?.value.trim();
     const labelRaw = panelGetById('sharedRelLabel')?.value.trim();
     const label = labelRaw || name;
@@ -2775,7 +3348,11 @@ async function saveSharedRelationship() {
     
     if (!name) { showNotification('Please enter a relationship name', 'warning'); return; }
 
-    const duplicateRel = (OntologyState.config.properties || []).some((p, i) => p.name === name && i !== sharedPanelEditIndex);
+    // When the name is unchanged (direction/domain/range edit) the entry cannot be a
+    // duplicate of itself — skip the index-based check, which can be stale when
+    // syncDesignToOntology has reordered the properties array since the panel opened.
+    const duplicateRel = (name !== sharedPanelOriginalName || sharedPanelEditIndex < 0)
+        && (OntologyState.config.properties || []).some((p, i) => p.name === name && i !== sharedPanelEditIndex);
     if (duplicateRel) { showNotification(`A relationship named "${name}" already exists`, 'warning'); return; }
 
     if (!domain) { showNotification('Please select a source entity', 'warning'); return; }
@@ -2806,12 +3383,15 @@ async function saveSharedRelationship() {
         direction
         // NOTE: constraints are stored ONLY in session_data/ontology/constraints, not here
     };
-    const isRename = sharedPanelEditIndex >= 0 && sharedPanelOriginalName && sharedPanelOriginalName !== name;
+    const isNew = sharedPanelEditIndex < 0;
+    const existingProperty = isNew ? null : (OntologyState.config.properties[sharedPanelEditIndex] || {});
+    const isRename = !isNew && sharedPanelOriginalName && sharedPanelOriginalName !== name;
+    const endpointsChanged = !isNew
+        && (existingProperty.domain !== domain || existingProperty.range !== range);
     
     if (sharedPanelEditIndex >= 0) {
-        const existingProp = OntologyState.config.properties[sharedPanelEditIndex] || {};
         // Preserve server-assigned URI so the backend prune doesn't orphan mappings.
-        if (existingProp.uri) propertyData.uri = existingProp.uri;
+        if (existingProperty.uri) propertyData.uri = existingProperty.uri;
         OntologyState.config.properties[sharedPanelEditIndex] = propertyData;
         showNotification('Relationship updated', 'success', 2000);
     } else {
@@ -2819,7 +3399,7 @@ async function saveSharedRelationship() {
         showNotification('Relationship added', 'success', 2000);
     }
     
-    await window.saveConfigToSession();
+    await window.saveConfigToSession({ keepalive: options.keepalive });
     if (isRename) {
         try { await fetch('/ontology/update-relationship-references', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ old_name: sharedPanelOriginalName, new_name: name }) }); } catch (e) {}
     }
@@ -2828,14 +3408,27 @@ async function saveSharedRelationship() {
     await saveRelationshipConstraintsToServer(name, domain, constraints);
     
     await autoGenerateOwl();
-    if (sharedPanelOnSaveCallback) sharedPanelOnSaveCallback();
+    if (sharedPanelOnSaveCallback) {
+        sharedPanelOnSaveCallback({
+            relationshipName: name,
+            previousName: sharedPanelOriginalName,
+            requiresMapRebuild: isNew || isRename || endpointsChanged
+        });
+    }
     if (typeof updatePropertiesList === 'function') updatePropertiesList();
     
     // Refresh ConstraintsModule if loaded
     if (typeof ConstraintsModule !== 'undefined' && ConstraintsModule.loadConstraints) {
         ConstraintsModule.loadConstraints();
     }
-    
+
+    // Targeted in-place canvas updates — immediately flip the arrow in whichever
+    // view is currently active. Both calls are no-ops when the view was never opened.
+    const lookupName = sharedPanelOriginalName || name;
+    if (typeof refreshRelationshipInDesigner === 'function') {
+        refreshRelationshipInDesigner(lookupName, direction);
+    }
+
     closeSharedPanel();
 }
 
@@ -2933,21 +3526,89 @@ async function saveRelationshipConstraintsToServer(propertyName, domainClass, co
 // SAVE HANDLER
 // =====================================================
 
-async function saveSharedPanelItem() {
+async function saveSharedPanelItem(options = {}) {
     if (sharedPanelViewOnly) return;
-    if (sharedPanelEditType === 'entity') await saveSharedEntity();
-    else if (sharedPanelEditType === 'relationship') await saveSharedRelationship();
+    if (sharedPanelEditType === 'entity') await saveSharedEntity(options);
+    else if (sharedPanelEditType === 'relationship') await saveSharedRelationship(options);
     sharedPanelDirty = false;
 }
+
+/**
+ * Commit the panel's pending edit while the page is being torn down.
+ *
+ * The panel is an edit buffer: closing it, switching section or opening
+ * another item all flush it first. Leaving the page did not, so a pending
+ * edit — a removed virtual attribute, a renamed entity — was dropped, and the
+ * registry auto-save on unload then persisted the state that never heard about
+ * it. This closes that gap.
+ *
+ * Deliberately not awaited: only the synchronous prefix of the save can run
+ * before teardown. That prefix commits the change to `OntologyState.config`
+ * and dispatches the session save with `keepalive`, which is the part that
+ * must not be lost. The tail (constraints, OWL regeneration, notifications)
+ * is skipped — the OWL is regenerated from the config on the next load.
+ */
+function flushSharedPanelOnUnload() {
+    if (!sharedPanelDirty || sharedPanelViewOnly) return;
+    try {
+        saveSharedPanelItem({ keepalive: true });
+        console.log('[UNLOAD] Pending panel edit flushed to session');
+    } catch (err) {
+        console.warn('[UNLOAD] Could not flush the pending panel edit:', err);
+    }
+    sharedPanelDirty = false;
+}
+
+window.addEventListener('beforeunload', flushSharedPanelOnUnload);
+window.addEventListener('pagehide', flushSharedPanelOnUnload);
+window.flushSharedPanelOnUnload = flushSharedPanelOnUnload;
+
+document.addEventListener('DOMContentLoaded', () => {
+    ensureDetailPanels();
+});
 
 // =====================================================
 // COMPATIBILITY FUNCTIONS
 // =====================================================
 
+function _isOntologyMapActive() {
+    return document.getElementById('map-section')?.classList.contains('active');
+}
+
+function refreshMapAfterEntitySave(changeInfo) {
+    if (!_isOntologyMapActive() || typeof initOntologyMap !== 'function') return;
+    if (!changeInfo) {
+        initOntologyMap();
+        return;
+    }
+    if (changeInfo.requiresMapRebuild) {
+        initOntologyMap();
+        return;
+    }
+    const refreshed = typeof refreshMapNodeFromConfig === 'function'
+        && refreshMapNodeFromConfig(changeInfo.entityName);
+    if (!refreshed) initOntologyMap();
+}
+
+function refreshMapAfterRelationshipSave(changeInfo) {
+    if (!_isOntologyMapActive() || typeof initOntologyMap !== 'function') return;
+    if (!changeInfo) {
+        initOntologyMap();
+        return;
+    }
+    if (changeInfo.requiresMapRebuild) {
+        initOntologyMap();
+        return;
+    }
+    const refreshed = typeof refreshMapRelationshipFromConfig === 'function'
+        && refreshMapRelationshipFromConfig(changeInfo.relationshipName);
+    if (!refreshed) initOntologyMap();
+}
+
 function editClassByName(className, activeTab) {
     const idx = OntologyState.config.classes.findIndex(cls => cls.name === className);
     if (idx >= 0) {
-        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        const opts = { onSave: refreshMapAfterEntitySave };
         if (activeTab) opts.activeTab = activeTab;
         if (_canEditOntologyPanel()) openEntityPanelForEdit(idx, opts);
         else openEntityPanelForView(idx, opts);
@@ -2955,7 +3616,7 @@ function editClassByName(className, activeTab) {
 }
 
 function editClass(idx, activeTab) {
-    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    const opts = { onSave: refreshMapAfterEntitySave };
     if (activeTab) opts.activeTab = activeTab;
     openEntityPanelForEdit(idx, opts);
 }
@@ -2964,7 +3625,7 @@ function viewClass(idx) { openEntityPanelForView(idx); }
 function editPropertyByName(propertyName, activeTab) {
     const idx = OntologyState.config.properties.findIndex(prop => prop.name === propertyName);
     if (idx >= 0) {
-        const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+        const opts = { onSave: refreshMapAfterRelationshipSave };
         if (activeTab) opts.activeTab = activeTab;
         if (_canEditOntologyPanel()) openRelationshipPanelForEdit(idx, opts);
         else openRelationshipPanelForView(idx, opts);
@@ -2972,7 +3633,7 @@ function editPropertyByName(propertyName, activeTab) {
 }
 
 function editProperty(idx, activeTab) {
-    const opts = { onSave: () => { if (typeof initOntologyMap === 'function' && document.getElementById('map-section')?.classList.contains('active')) initOntologyMap(); } };
+    const opts = { onSave: refreshMapAfterRelationshipSave };
     if (activeTab) opts.activeTab = activeTab;
     openRelationshipPanelForEdit(idx, opts);
 }

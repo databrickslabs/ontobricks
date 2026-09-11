@@ -3066,6 +3066,11 @@ class DigitalTwin:
         deliberate — the same domain must produce the same KPIs whatever engine
         holds its graph, and at any size.
 
+        A view-only Lakehouse domain has no such snapshot standing, so
+        :func:`analytics_snapshot` materialises a disposable one around the run
+        and drops it afterwards. The job therefore always scans a Delta table,
+        whatever the domain's materialization.
+
         Raises rather than degrading when the job cannot run: a run that
         silently returns fewer metrics is exactly what this path replaced.
 
@@ -3074,7 +3079,11 @@ class DigitalTwin:
 
         Returns a JSON-serializable dict matching the API contract.
         """
-        from back.core.graph_analysis import MetricsRequest, resolve_analytics_source
+        from back.core.graph_analysis import (
+            MetricsRequest,
+            analytics_snapshot,
+            resolve_analytics_source,
+        )
 
         source_table, reason = resolve_analytics_source(self._domain, settings)
         if not source_table:
@@ -3082,17 +3091,18 @@ class DigitalTwin:
                 "The graph analytics job cannot read this domain", detail=reason
             )
 
-        job_metrics = DigitalTwin.build_job_metrics(
-            self._domain,
-            settings,
-            source_table=source_table,
-            graph_name=graph_name,
-            top_n=top_n,
-        )
         request = MetricsRequest(
             predicate_filter=predicate_filter, class_filter=class_filter
         )
-        return job_metrics.compute(request, on_progress=on_progress).to_dict()
+        with analytics_snapshot(self._domain, settings, source_table) as scan_table:
+            job_metrics = DigitalTwin.build_job_metrics(
+                self._domain,
+                settings,
+                source_table=scan_table,
+                graph_name=graph_name,
+                top_n=top_n,
+            )
+            return job_metrics.compute(request, on_progress=on_progress).to_dict()
 
     @staticmethod
     def build_job_metrics(
@@ -3149,6 +3159,54 @@ class DigitalTwin:
             pivots=int(getattr(settings, "analytics_job_pivots", 64) or 0),
             max_depth=int(getattr(settings, "analytics_job_max_depth", 32) or 32),
         )
+
+    def load_graph_metric_series(
+        self,
+        graph_name: str,
+        metric: str,
+        settings: Any = None,
+    ) -> Dict[str, Any]:
+        """Return one exhaustive node-series, sampled server-side if needed."""
+        from back.core.databricks import DatabricksClient
+        from back.core.graph_analysis import (
+            metric_series_query,
+            sample_metric_series,
+            validate_metric_series_column,
+        )
+        from back.core.helpers import (
+            get_databricks_host_and_token,
+            resolve_delta_warehouse_id,
+        )
+        from back.objects.registry import RegistryCfg
+
+        metric_name = validate_metric_series_column(metric)
+
+        host, token = get_databricks_host_and_token(self._domain, settings)
+        warehouse_id = resolve_delta_warehouse_id(self._domain, settings)
+        client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
+
+        output_schema = (
+            getattr(settings, "analytics_job_output_schema", "") or ""
+        ).strip()
+        if not output_schema:
+            rcfg = RegistryCfg.from_domain(self._domain, settings)
+            output_schema = f"{rcfg.catalog}.{rcfg.schema}"
+
+        output_table = DigitalTwin.analytics_output_table(
+            output_schema, self._domain, graph_name
+        )
+        sql = metric_series_query(output_table, metric_name)
+        rows = client.execute_query(sql) or []
+        sampled_rows, ranks, sampled = sample_metric_series(rows)
+        total = len(rows)
+        return {
+            "total": total,
+            "sampled": sampled,
+            "ranks": ranks,
+            "uris": [str(row.get("node_uri") or "") for row in sampled_rows],
+            "labels": [str(row.get("label") or "") for row in sampled_rows],
+            "scores": [float(row.get("score", 0.0) or 0.0) for row in sampled_rows],
+        }
 
     @staticmethod
     def analytics_output_table(output_schema: str, domain: Any, graph_name: str) -> str:

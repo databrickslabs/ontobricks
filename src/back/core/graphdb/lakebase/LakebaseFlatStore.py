@@ -92,6 +92,8 @@ class LakebaseFlatStore(LakebaseBase):
     :class:`GraphDBBackend` helpers resolves correctly.
     """
 
+    supports_materialized_inference_purge = True
+
     def __init__(
         self,
         auth: Any,
@@ -401,6 +403,15 @@ class LakebaseFlatStore(LakebaseBase):
         with self._cursor() as cur:
             _companion_ddl.truncate_companion(cur, companion)
 
+    def purge_materialized_triples(self, table_name: str) -> int:
+        """Truncate the app companion while preserving mapped source triples."""
+        companion = self.companion_phy(table_name)
+        count = self.count_triples(companion)
+        with self._cursor() as cur:
+            _companion_ddl.truncate_companion(cur, companion)
+        logger.info("Purged %d materialized triples from %s", count, companion)
+        return count
+
     def _idx_name(self, phy: str, suffix: str) -> str:
         base = f"g_{phy}_{suffix}".lower()
         return base[:63]
@@ -472,15 +483,31 @@ class LakebaseFlatStore(LakebaseBase):
         return _require_psycopg()
 
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
+        from back.core.query_limits import get_graph_query_timeout_s
+
         _, dict_row = self._require_pg()
         pool = self._pool()
+        timeout_ms = get_graph_query_timeout_s() * 1000
         with pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(f'SET search_path TO "{self._schema}", public')
-                cur.execute(query)
-                if cur.description:
-                    return [dict(row) for row in cur.fetchall()]
-                return []
+                # Bound graph reads so a runaway traversal is cancelled
+                # server-side instead of pinning the pooled connection.
+                #
+                # The pool hands out ``autocommit=True`` connections, so this is
+                # a *session* GUC that would otherwise persist to the next
+                # borrower (e.g. a bulk COPY/INSERT or DDL path) and cancel it
+                # mid-write. Reset it in ``finally`` so the bound is scoped to
+                # this read only. In autocommit mode a statement_timeout cancel
+                # leaves no open transaction to abort, so the RESET runs cleanly.
+                cur.execute(f"SET statement_timeout = {int(timeout_ms)}")
+                try:
+                    cur.execute(query)
+                    if cur.description:
+                        return [dict(row) for row in cur.fetchall()]
+                    return []
+                finally:
+                    cur.execute("RESET statement_timeout")
 
     def find_subjects_by_patterns(
         self, table_name: str, like_patterns: List[str]

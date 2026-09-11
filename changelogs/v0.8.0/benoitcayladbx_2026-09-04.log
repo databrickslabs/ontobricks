@@ -1,0 +1,80 @@
+## Split the MCP server into topic modules
+
+Context: `src/mcp-server/server/app.py` had grown to 2131 lines and held every
+concern of the MCP server in a single module — URI/text helpers, the HTTP
+client layer, a 1170-line `create_mcp_server` factory closure carrying all
+session state plus every `@mcp.tool` / `@mcp.resource` handler, and the
+Databricks app builder. This refactor (Martin Fowler *Extract Module* /
+*Extract Class* / *Move Function*) breaks it up by topic into a `server/`
+package while keeping `server/app.py` as a thin re-export facade, so every
+existing import path (`from server.app import …`) and the uvicorn entry point
+(`server.app:combined_app`) are unchanged. Behaviour is identical.
+
+Changes:
+
+1. src/mcp-server/server/constants.py (new)
+   Extract Module — `REGISTRY_TOOLS`, `GRAPH_TOOLS`, the `API_V1_*` REST paths,
+   RDF/RDFS vocabulary URIs, `MAX_DEPTH`, `_USER_AGENT`. No dependencies.
+2. src/mcp-server/server/uri_helpers.py (new)
+   Extract Module — pure URI helpers `_local_name`, `_pretty_predicate`,
+   `_is_uri`, `_is_label_predicate`.
+3. src/mcp-server/server/formatting.py (new)
+   Extract Module — all JSON → LLM-text renderers (`_format_*`, `_preferred`,
+   `_hint`, `_merge_uri_aliases`).
+4. src/mcp-server/server/http_client.py (new)
+   Extract Module — the network boundary: `_base_url`, `_get_auth_headers`
+   (with the module-level M2M token cache), retry helpers, and the retrying
+   `_get` / `_post` wrappers.
+5. src/mcp-server/server/session.py (new)
+   Extract Class `MCPServerSession` — converts the factory closure's shared
+   mutable state (selected domain, per-domain policy, ontology labels, class
+   Actions, resolved registry, pooled HTTP client) plus the
+   registry-resolution and policy-gating helpers into a per-server class.
+6. src/mcp-server/server/tools.py (new)
+   Move Function — the 13 `@mcp.tool` handlers into `register_tools(mcp,
+   session)`; handlers now call `session.*` and late-bind `_http._get` /
+   `_http._post`.
+7. src/mcp-server/server/resources.py (new)
+   Move Function — the 4 `ontobricks://` resources into
+   `register_resources(mcp, session)`.
+8. src/mcp-server/server/factory.py (new)
+   Move Function — `create_mcp_server` (session wiring + FastMCP instructions +
+   registration) and `create_databricks_app`.
+9. src/mcp-server/server/app.py
+   Reduced from 2131 → 155 lines: now a re-export facade that preserves the
+   full public surface and builds `combined_app = create_databricks_app()` at
+   import time, as before.
+10. tests/units/mcp/test_domain_policy_gating.py
+    Monkeypatch `_get` / `_post` on `server.http_client` (their new home) — the
+    tool handlers late-bind there. Assertions unchanged.
+11. tests/mcp/integration/test_smoke_tools.py,
+    tests/mcp/integration/test_more_smoke_tools.py,
+    tests/mcp/integration/test_dataset_context_tools.py
+    Monkeypatch `_get_auth_headers` / `_base_url` on `server.http_client`.
+12. tests/units/mcp/test_node_context_formatting.py
+    Repoint the static source-guard from `app.py` to `formatting.py`.
+13. .planning/refactor-mcp-server/PLAN.md (new)
+    Fowler smell → refactoring → location plan for the split.
+
+Modified files:
+- src/mcp-server/server/app.py
+- src/mcp-server/server/constants.py (new)
+- src/mcp-server/server/uri_helpers.py (new)
+- src/mcp-server/server/formatting.py (new)
+- src/mcp-server/server/http_client.py (new)
+- src/mcp-server/server/session.py (new)
+- src/mcp-server/server/tools.py (new)
+- src/mcp-server/server/resources.py (new)
+- src/mcp-server/server/factory.py (new)
+- tests/units/mcp/test_domain_policy_gating.py
+- tests/units/mcp/test_node_context_formatting.py
+- tests/mcp/integration/test_smoke_tools.py
+- tests/mcp/integration/test_more_smoke_tools.py
+- tests/mcp/integration/test_dataset_context_tools.py
+- .planning/refactor-mcp-server/PLAN.md (new)
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` →
+5845 passed, 304 skipped, 6 deselected, 1 xfailed in ~48s. MCP-scoped subset
+(`tests/units/mcp tests/mcp`) → 104 passed. Entry points verified: `server.app`
+imports cleanly, `combined_app` is a FastAPI instance, `create_mcp_server`
+returns a FastMCP instance, and the standalone `mcp_server.py` script imports.

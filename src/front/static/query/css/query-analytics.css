@@ -184,6 +184,20 @@
     height: 420px;
 }
 
+.analytics-rank-status {
+    min-height: 1rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.72rem;
+    color: var(--db-text-muted);
+}
+
+.analytics-rank-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
 .analytics-logscale-switch .form-check-label {
     cursor: pointer;
 }

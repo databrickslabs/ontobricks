@@ -7,8 +7,8 @@ request — see ``.cursor/08-testing-and-deployment.mdc``.
 
 Run them with::
 
-    uv run pytest -m scenario              # all scenarios
-    uv run pytest tests/e2e/scenarios/ -m scenario
+    uv run --frozen pytest -m scenario              # all scenarios
+    uv run --frozen pytest tests/e2e/scenarios/ -m scenario
 
 The live scenario additionally needs ``ONTOBRICKS_SCENARIO_LIVE=1``.
 """

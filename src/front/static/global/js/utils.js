@@ -414,6 +414,10 @@ function showStackedModal(modalEl) {
  * @param {string} options.cancelText - Cancel button text (default: 'Cancel')
  * @param {string} options.confirmClass - Bootstrap button class for confirm (default: 'btn-primary')
  * @param {string} options.icon - Bootstrap icon name (default: 'question-circle')
+ * @param {string} options.detailHtml - Optional HTML rendered below the message in a
+ *   scrollable bordered panel (for listing affected items, diffs, etc.)
+ * @param {string} options.size - Optional Bootstrap modal size class, e.g. 'modal-lg'
+ * @param {string} options.headerClass - Optional Bootstrap class for the header, e.g. 'bg-danger text-white'
  * @returns {Promise<boolean>} Resolves to true if confirmed, false if cancelled
  */
 function showConfirmDialog(options = {}) {
@@ -424,23 +428,31 @@ function showConfirmDialog(options = {}) {
             confirmText = 'Yes',
             cancelText = 'Cancel',
             confirmClass = 'btn-primary',
-            icon = 'question-circle'
+            icon = 'question-circle',
+            detailHtml = '',
+            size = '',
+            headerClass = ''
         } = options;
 
         const modalId = 'confirmDialog_' + Date.now();
+        const closeClass = headerClass.includes('text-white') ? 'btn-close-white' : '';
+        const detailBlock = detailHtml
+            ? `<div class="border rounded p-3 bg-light mt-3" style="max-height: 320px; overflow-y: auto;">${detailHtml}</div>`
+            : '';
 
         const modalHtml = `
             <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
-                <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-dialog modal-dialog-centered ${size}">
                     <div class="modal-content">
-                        <div class="modal-header">
+                        <div class="modal-header ${headerClass}">
                             <h5 class="modal-title">
                                 <i class="bi bi-${icon} me-2"></i>${title}
                             </h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close ${closeClass}" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <p class="mb-0">${message}</p>
+                            ${detailBlock}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="${modalId}_cancel">
@@ -846,7 +858,7 @@ function showNewDomainDialog() {
                             <p class="text-muted small mb-3">Enter a name for your new domain. You can add more details later.</p>
                             <div class="mb-3">
                                 <label for="${modalId}_name" class="form-label fw-semibold">Domain name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="${modalId}_name"
+                                <input type="text" class="form-control new-domain-field" id="${modalId}_name"
                                        placeholder="e.g. PatientCare, SupplyChain…" autocomplete="off" maxlength="64"
                                        pattern="[A-Z][A-Za-z0-9]*" inputmode="text" spellcheck="false">
                                 <div class="form-text">CamelCase alphanumeric only — no spaces or special characters.</div>
@@ -854,15 +866,26 @@ function showNewDomainDialog() {
                             </div>
                             <div class="mb-3">
                                 <label for="${modalId}_desc" class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
-                                <textarea class="form-control" id="${modalId}_desc" rows="2"
+                                <textarea class="form-control new-domain-field" id="${modalId}_desc" rows="2"
                                           placeholder="Short description of this domain…" maxlength="256"></textarea>
+                            </div>
+                            <div class="alert alert-light border small py-2 mb-3">
+                                <i class="bi bi-hdd-network me-1"></i>
+                                This domain uses the <strong>Lakehouse</strong> graph backend by default. You can
+                                change it anytime in <strong>Domain → Information</strong>:
+                                <ul class="mb-0 mt-1 ps-3">
+                                    <li><strong>Lakehouse</strong> — graph stored as Delta tables in Unity Catalog (default).</li>
+                                    <li><strong>Lakebase</strong> — graph stored in a managed Postgres instance.</li>
+                                    <li><strong>Neo4j</strong> — external native graph database (requires a connection).</li>
+                                    <li><strong>No Backend</strong> — ontology only, no knowledge graph.</li>
+                                </ul>
                             </div>
                             <div class="mb-1">
                                 <label for="${modalId}_llm" class="form-label fw-semibold">
                                     <i class="bi bi-robot me-1"></i>LLM Endpoint <span class="text-muted fw-normal">(optional — for OntoBricks Agents)</span>
                                 </label>
                                 <div class="input-group">
-                                    <select class="form-select" id="${modalId}_llm">
+                                    <select class="form-select new-domain-field" id="${modalId}_llm">
                                         <option value="">Loading endpoints…</option>
                                     </select>
                                     <button type="button" class="btn btn-outline-secondary" id="${modalId}_llm_refresh" title="Refresh endpoints">
@@ -928,7 +951,7 @@ function showNewDomainDialog() {
             const llm  = llmSelect.value || '';
             resolved = true;
             modal.hide();
-            resolve({ name, description: desc, llm_endpoint: llm });
+            resolve({ name, description: desc, llm_endpoint: llm, graph_backend: 'databricks' });
         });
 
         nameInput.addEventListener('input', () => {

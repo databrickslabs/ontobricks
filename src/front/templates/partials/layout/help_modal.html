@@ -7,9 +7,9 @@
             <div class="modal-header help-modal-header">
                 <h5 class="modal-title d-flex align-items-center" id="helpModalLabel">
                     <span class="help-title-logo me-2">
-                        <img src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="" width="22" height="22">
+                        <img data-brand-icon src="{{ ui_branding_for().logo_url }}" alt="" width="22" height="22">
                     </span>
-                    OntoBricks Help Center
+                    <span data-brand-title>{{ ui_branding_for().app_title }}</span> Help Center
                 </h5>
                 <div class="help-modal-search ms-auto me-3 flex-grow-1">
                     <div class="input-group input-group-sm">
@@ -47,10 +47,10 @@
                         <section class="help-section active" id="help-welcome" data-help-section-panel="welcome">
                             <div class="help-hero">
                                 <div class="help-hero-icon">
-                                    <img src="{{ url_for('static', filename='global/img/favicon.svg') }}?v=2" alt="OntoBricks" width="48" height="48">
+                                    <img data-brand-icon src="{{ ui_branding_for().logo_url }}" alt="{{ ui_branding_for().app_title }}" width="48" height="48">
                                 </div>
                                 <div>
-                                    <h2>Welcome to OntoBricks</h2>
+                                    <h2>Welcome to <span data-brand-title>{{ ui_branding_for().app_title }}</span></h2>
                                     <p class="lead mb-0">The Knowledge Graph Builder for Databricks &mdash; design an ontology, map Databricks tables to it, materialize a knowledge graph, and explore it visually.</p>
                                 </div>
                             </div>

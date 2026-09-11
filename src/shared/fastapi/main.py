@@ -20,6 +20,7 @@ from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
 from back.objects.session import FileSessionMiddleware, reap_expired_sessions
 from back.core.logging import setup_logging, get_logger
+from shared.fastapi.ui_branding import UIBrandingMiddleware
 
 setup_logging()
 logger = get_logger(__name__)
@@ -155,13 +156,16 @@ _PERM_ADMIN_ONLY_PREFIXES = (
 # Endpoints under an admin-only prefix that non-admins must still be
 # able to reach (read-only status endpoints consumed by the regular
 # app flow, e.g. checking warehouse / registry configuration before
-# opening the Load Domain dialog, or listing domains for the
-# Registry Browse page). Map is exact-path → allowed HTTP methods,
+# opening the Load Domain dialog, listing domains for the Registry
+# Browse page, or browsing catalogs/schemas for Add Data Source).
+# Map is exact-path → allowed HTTP methods,
 # so write variants at the same path (e.g. ``POST /settings/registry``
 # to change the registry location) remain admin-only, and so do
 # deletes on sub-paths like ``/settings/registry/domains/<name>``.
 _PERM_ADMIN_ONLY_EXCEPTIONS = {
     "/settings/current": {"GET"},
+    "/settings/catalogs": {"GET"},
+    "/settings/schemas": {"GET"},
     "/settings/registry": {"GET"},
     "/settings/registry/domains": {"GET"},
     "/settings/registry/bridges": {"GET"},
@@ -172,6 +176,10 @@ _PERM_ADMIN_ONLY_EXCEPTIONS = {
     "/settings/graph-engine-config": {"GET"},
     "/settings/graph-engine/lakebase-health": {"GET"},
     "/settings/graph-engine/uc-catalogs": {"GET"},
+}
+
+_PERM_ADMIN_ONLY_PREFIX_EXCEPTIONS = {
+    "/settings/schemas/": {"GET"},
 }
 
 # Routes that operate on a specific domain (the session's current domain).
@@ -310,9 +318,11 @@ class PermissionMiddleware(BaseHTTPMiddleware):
       routes but not writes.
     - **Admin-only prefix** (`/settings`) is gated to admins even for
       app users. A small allow-list (see
-      :data:`_PERM_ADMIN_ONLY_EXCEPTIONS`) keeps the read-only status
-      endpoints that the regular app flow needs (warehouse/registry
-      config) open to non-admins.
+      :data:`_PERM_ADMIN_ONLY_EXCEPTIONS` and
+      :data:`_PERM_ADMIN_ONLY_PREFIX_EXCEPTIONS`) keeps the read-only
+      endpoints the regular app flow needs (warehouse/registry status
+      and Unity Catalog catalog/schema browse for **Add Data Source**)
+      open to non-admins. Settings writes stay admin-only.
 
     Only active when running as a Databricks App (``DATABRICKS_APP_PORT``
     is set).  In local-dev mode every request passes through as admin.
@@ -422,6 +432,15 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 )
 
             allowed_methods = _PERM_ADMIN_ONLY_EXCEPTIONS.get(path)
+            if allowed_methods is None:
+                allowed_methods = next(
+                    (
+                        methods
+                        for prefix, methods in _PERM_ADMIN_ONLY_PREFIX_EXCEPTIONS.items()
+                        if path.startswith(prefix)
+                    ),
+                    None,
+                )
             is_admin_only = any(
                 path.startswith(p) for p in _PERM_ADMIN_ONLY_PREFIXES
             ) and not (
@@ -607,6 +626,9 @@ def create_app() -> FastAPI:
 
     # Permission enforcement (runs after session is available)
     app.add_middleware(PermissionMiddleware)
+
+    # Resolve UI branding once per page request after session setup.
+    app.add_middleware(UIBrandingMiddleware, settings=settings)
 
     # Custom file-based session middleware
     is_app = bool(os.getenv("DATABRICKS_APP_PORT"))

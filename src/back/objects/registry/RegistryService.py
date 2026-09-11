@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from back.core.logging import get_logger
+from back.core.mcp_tools import coerce_mcp_policy
 from back.core.databricks import VolumeFileService
 from back.objects.registry.registry_cache import (
     registry_cache_key,
@@ -156,7 +157,12 @@ class RegistryCfg:
            registries row is found; used alone when step 2 does not
            return a row).
         4. ``settings.*`` env vars — last-resort fallback for catalog,
-           schema, volume, ``lakebase_schema`` and ``lakebase_database``.
+           schema, volume. When those are empty, the session
+           ``domain.settings["registry"]`` catalog/schema/volume is used.
+           A volume equal to the seeded default ``OntoBricksRegistry``
+           (DomainSession and ``Settings.registry_volume``) is treated
+           as unset so ``REGISTRY_VOLUME`` can override it; a custom
+           session volume still wins when env is that default.
 
         ``prefer_volume_binding`` (Initialize path only): when ``True``
         the Lakebase row read in step 2 is skipped. Lets the Initialize
@@ -230,12 +236,38 @@ class RegistryCfg:
             )
 
         return cls(
-            catalog=reg.get("catalog") or settings.registry_catalog,
-            schema=reg.get("schema") or settings.registry_schema,
-            volume=reg.get("volume") or settings.registry_volume or _DEFAULT_VOLUME,
+            catalog=cls._first_nonempty(
+                getattr(settings, "registry_catalog", ""),
+                reg.get("catalog"),
+            ),
+            schema=cls._first_nonempty(
+                getattr(settings, "registry_schema", ""),
+                reg.get("schema"),
+            ),
+            volume=cls._first_named_volume(
+                getattr(settings, "registry_volume", ""),
+                reg.get("volume"),
+            ),
             lakebase_schema=lb_schema,
             lakebase_database=lb_database,
         )
+
+    @staticmethod
+    def _first_nonempty(*values: object) -> str:
+        for raw in values:
+            text = str(raw or "").strip()
+            if text:
+                return text
+        return ""
+
+    @staticmethod
+    def _first_named_volume(*values: object) -> str:
+        """Last-resort volume: skip the seeded ``OntoBricksRegistry`` sentinel."""
+        for raw in values:
+            text = str(raw or "").strip()
+            if text and text != _DEFAULT_VOLUME:
+                return text
+        return _DEFAULT_VOLUME
 
     @classmethod
     def from_session(cls, session_mgr, settings) -> RegistryCfg:
@@ -627,13 +659,13 @@ class RegistryService:
 
     def list_mcp_domains(
         self, require_ontology: bool = False
-    ) -> Tuple[bool, List[Dict[str, str]], str]:
+    ) -> Tuple[bool, List[Dict[str, Any]], str]:
         """List domains that have an MCP-enabled version.
 
-        Returns ``(ok, domains, message)`` where each domain is
-        ``{"name": ..., "description": ...}``.  When *require_ontology* is
-        ``True`` only domains whose MCP version has a non-empty ``classes``
-        list are included.
+        Returns ``(ok, domains, message)`` where each domain includes its name,
+        description, MCP policy, configured graph backend, and graph
+        availability. When *require_ontology* is ``True`` only domains whose
+        MCP version has a non-empty ``classes`` list are included.
         """
         # Fast path: the cached two-query metadata listing already carries
         # per-version ``status`` + description, so a domain's PUBLISHED
@@ -643,15 +675,30 @@ class RegistryService:
         if not ok:
             return False, [], msg
 
-        result: List[Dict[str, str]] = []
+        result: List[Dict[str, Any]] = []
         for d in details:
             name = d.get("name", "")
-            has_published = any(
-                (v.get("status") or "").upper() == "PUBLISHED"
+            published = [
+                v
                 for v in d.get("versions", [])
-            )
-            if not has_published:
+                if (v.get("status") or "").upper() == "PUBLISHED"
+            ]
+            if not published:
                 continue
+            # ``has_graph`` reflects the numeric-latest PUBLISHED version (the
+            # one the external API/MCP serves): True once it has been built at
+            # least once. An ontology-only domain publishes with no build, so
+            # this stays False and the MCP surface falls back to the ontology
+            # tool alone.
+            latest_published = max(
+                published, key=RegistryService._version_sort_key
+            )
+            from back.core.graphdb.GraphDBFactory import normalize_graph_backend
+
+            graph_backend = normalize_graph_backend(
+                latest_published.get("graph_backend")
+            )
+            has_graph = bool(latest_published.get("last_build"))
             if require_ontology:
                 # Metadata only carries the latest version's ontology, so
                 # confirm the PUBLISHED version has classes with one targeted
@@ -667,7 +714,15 @@ class RegistryService:
                 except Exception:
                     logger.debug("Could not inspect ontology for domain %s", name)
                     continue
-            result.append({"name": name, "description": d.get("description", "")})
+            result.append(
+                {
+                    "name": name,
+                    "description": d.get("description", ""),
+                    "mcp_policy": coerce_mcp_policy(d.get("mcp_policy")),
+                    "graph_backend": graph_backend,
+                    "has_graph": has_graph,
+                }
+            )
         return True, result, ""
 
     def delete_domain(self, folder: str) -> List[str]:
@@ -730,6 +785,19 @@ class RegistryService:
         """Return version strings (e.g. ``['2', '1']``) for a domain folder."""
         return self._store.list_versions(folder)
 
+    @staticmethod
+    def _version_sort_key(v: Any) -> List[int]:
+        """Numeric sort key for a version string or a version dict.
+
+        Tolerates malformed versions (returns ``[0]``) so a hand-edited row
+        can never break the listing.
+        """
+        raw = v.get("version", "0") if isinstance(v, dict) else v
+        try:
+            return [int(x) for x in str(raw).split(".")]
+        except (ValueError, AttributeError):
+            return [0]
+
     def list_versions_sorted(self, folder: str, *, reverse: bool = True) -> List[str]:
         """Convenience: sorted version list (empty on failure)."""
         ok, versions, _ = self.list_versions(folder)
@@ -746,6 +814,32 @@ class RegistryService:
     def read_version(self, folder: str, version: str) -> Tuple[bool, dict, str]:
         """Read and parse a version document from Lakebase."""
         return self._store.read_version(folder, version)
+
+    @staticmethod
+    def version_document_has_ontology(
+        data: Dict[str, Any], version: str = ""
+    ) -> bool:
+        """True when a version document declares at least one ontology class.
+
+        Tolerates both document shapes seen across stores: a top-level
+        ``ontology`` block and the ``versions[<v>].ontology`` nesting used by
+        :meth:`find_published_version`. Any non-dict node (from a hand-edited
+        or corrupt row) reads as "no ontology" rather than raising.
+        """
+
+        def _classes(node: Any) -> list:
+            ont = node.get("ontology") if isinstance(node, dict) else None
+            cls = ont.get("classes") if isinstance(ont, dict) else None
+            return cls if isinstance(cls, list) else []
+
+        if not isinstance(data, dict):
+            return False
+        classes = _classes(data)
+        if not classes and version:
+            versions = data.get("versions")
+            vdata = versions.get(version) if isinstance(versions, dict) else None
+            classes = _classes(vdata)
+        return bool(classes)
 
     def write_version(self, folder: str, version: str, data: str) -> Tuple[bool, str]:
         """Persist a version document.

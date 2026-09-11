@@ -402,3 +402,81 @@ class TestNodeContextEndpoint:
 
         assert resp.status_code == 200
         assert mock_target_store.bfs_traversal.call_args.kwargs["depth"] == 2
+
+    def test_bridges_enriched_with_target_description(self, client):
+        """Bridges expose the target domain description from the registry."""
+        mock_domain = self._mock_domain()
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            return_value=mock_domain,
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "._load_mcp_target_descriptions",
+            return_value={"Finance": "Finance ontology"},
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                },
+            )
+
+        assert resp.status_code == 200
+        bridges = resp.json()["bridges"]
+        assert len(bridges) == 1
+        assert bridges[0]["target_domain"] == "Finance"
+        assert bridges[0]["target_domain_description"] == "Finance ontology"
+
+    def test_bridges_drop_non_mcp_visible_target(self, client):
+        """Bridges to non-MCP-visible targets are omitted from the payload."""
+        mock_domain = self._mock_domain()
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            return_value=mock_domain,
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "._load_mcp_target_descriptions",
+            return_value={"Other": "Some other domain"},
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                },
+            )
+
+        assert resp.status_code == 200
+        # Finance bridge dropped: not in the MCP-visible map.
+        assert resp.json().get("bridges") in (None, [])
+
+    def test_follow_bridges_skips_non_visible_target_without_sql(self, client):
+        """When target is filtered out, no BFS SQL scan runs for it."""
+        mock_domain = self._mock_domain()
+        mock_target_store = MagicMock()
+
+        with patch(
+            "api.routers.digitaltwin.DigitalTwin.resolve_domain",
+            return_value=mock_domain,
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.get_graphdb",
+            return_value=mock_target_store,
+        ), patch(
+            "back.objects.digitaltwin.NodeContextService.NodeContextService"
+            "._load_mcp_target_descriptions",
+            return_value={"OtherDomain": "not our target"},
+        ):
+            resp = client.get(
+                "/api/v1/digitaltwin/nodes/context",
+                params={
+                    "entity_uri": "https://example.com/Customer/CUST001",
+                    "domain_name": "test",
+                    "follow_bridges": "true",
+                },
+            )
+
+        assert resp.status_code == 200
+        mock_target_store.bfs_traversal.assert_not_called()

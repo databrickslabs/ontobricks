@@ -23,10 +23,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const select = document.getElementById('apiDomainName');
     if (select) {
-        select.addEventListener('change', () => loadApiVersions(select.value));
+        select.addEventListener('change', async () => {
+            clearApiResponses();
+            syncApiDomainCapabilities();
+            await loadApiVersions(select.value);
+        });
+    }
+
+    const versionSelect = document.getElementById('apiDomainVersion');
+    if (versionSelect) {
+        versionSelect.addEventListener('change', clearApiResponses);
     }
 
     bindQueryApiInteractions();
+    syncApiDomainCapabilities();
 });
 
 /**
@@ -76,20 +86,25 @@ async function loadApiDomains() {
     } catch (_) { /* ignore */ }
 
     try {
-        const resp = await fetch('/settings/registry/domains', { credentials: 'same-origin' });
+        const resp = await fetch('/api/v1/domains', {
+            credentials: 'same-origin'
+        });
         const data = await resp.json();
 
         select.innerHTML = '<option value="">Select a domain...</option>';
-        const domainRows = data.domains || data.projects || [];
+        const domainRows = data.domains || [];
         if (data.success && domainRows.length) {
             for (const p of domainRows) {
                 const opt = document.createElement('option');
                 opt.value = p.name;
-                opt.textContent = p.name;
+                opt.textContent = `${p.name} · ${formatGraphBackend(p.graph_backend)}`;
+                opt.dataset.graphBackend = p.graph_backend || 'lakebase';
+                opt.dataset.hasGraph = String(Boolean(p.has_graph));
                 if (p.name === currentDomainSlug) opt.selected = true;
                 select.appendChild(opt);
             }
         }
+        syncApiDomainCapabilities();
 
         const chosen = select.value;
         if (chosen) {
@@ -115,11 +130,18 @@ async function loadApiVersions(domainSlug) {
         const data = await resp.json();
         if (!data.success || !data.versions?.length) return;
 
-        select.innerHTML = '<option value="">latest (v' + escHtml(data.latest_version) + ')</option>';
-        for (const v of data.versions) {
+        const publishedVersions = data.versions.filter(v => v.is_published);
+        if (!publishedVersions.length) return;
+
+        const latestPublished = publishedVersions[0].version;
+        select.innerHTML =
+            '<option value="">latest PUBLISHED (v' +
+            escHtml(latestPublished) +
+            ')</option>';
+        for (const v of publishedVersions) {
             const opt = document.createElement('option');
             opt.value = v.version;
-            opt.textContent = 'v' + v.version + (v.is_latest ? ' (latest)' : '');
+            opt.textContent = 'v' + v.version + ' · PUBLISHED';
             select.appendChild(opt);
         }
     } catch (_) {
@@ -142,6 +164,55 @@ function appendDomainParam(path) {
     if (!parts.length) return path;
     const sep = path.includes('?') ? '&' : '?';
     return path + sep + parts.join('&');
+}
+
+function formatGraphBackend(backend) {
+    return {
+        none: 'No Backend',
+        lakebase: 'Lakebase',
+        databricks: 'Lakehouse',
+        neo4j: 'Neo4j'
+    }[backend] || 'Lakebase';
+}
+
+function syncApiDomainCapabilities() {
+    const select = document.getElementById('apiDomainName');
+    const option = select?.selectedOptions?.[0];
+    const status = document.getElementById('apiDomainStatus');
+    const hasSelection = Boolean(select?.value && option);
+    const graphless = hasSelection && option.dataset.graphBackend === 'none';
+    const hasGraph = hasSelection && option.dataset.hasGraph === 'true';
+
+    if (status) {
+        if (!hasSelection) {
+            status.textContent =
+                'Select an API-exposed domain to inspect its backend availability.';
+        } else if (graphless) {
+            status.textContent = 'No Backend · Ontology only';
+        } else if (hasGraph) {
+            status.textContent =
+                `${formatGraphBackend(option.dataset.graphBackend)} · Graph ready`;
+        } else {
+            status.textContent =
+                `${formatGraphBackend(option.dataset.graphBackend)} · Awaiting first build`;
+        }
+    }
+
+    document.querySelectorAll('[data-requires-graph]').forEach(control => {
+        control.disabled = hasSelection && !hasGraph;
+        control.title = control.disabled
+            ? (graphless
+                ? 'Unavailable for an ontology-only domain'
+                : 'Build this domain before using graph operations')
+            : '';
+    });
+}
+
+function clearApiResponses() {
+    document.querySelectorAll('.ob-api-response').forEach(response => {
+        response.classList.add('d-none');
+        response.innerHTML = '';
+    });
 }
 
 /* ------------------------------------------------------------------ */

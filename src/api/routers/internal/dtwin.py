@@ -42,6 +42,7 @@ from back.objects.digitaltwin import (
     DigitalTwin,
     DomainSnapshot,
     NodeContextService,
+    VirtualAttributeService,
 )
 from back.objects.domain import HomeService, Domain
 from api.routers.digitaltwin import NodeContextResponse
@@ -640,6 +641,44 @@ async def get_latest_graph_metrics(
     except Exception as e:
         logger.exception("Loading latest graph metrics failed: %s", e)
         raise InfrastructureError("Loading latest graph metrics failed", detail=str(e))
+
+
+@router.get("/metrics/series")
+async def get_graph_metric_series(
+    metric: str = Query(...),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return one exhaustive score series from the latest analytics run."""
+    try:
+        domain = get_domain(session_mgr)
+        stored = _load_stored_metrics(domain, settings)
+        if not stored:
+            return {"success": True, "has_result": False}
+
+        graph_name = stored.get("graph_name", "") or ""
+        if not graph_name:
+            return {"success": True, "has_result": False}
+
+        page = await run_blocking(
+            DigitalTwin(domain).load_graph_metric_series,
+            graph_name,
+            metric,
+            settings,
+        )
+        return {
+            "success": True,
+            "has_result": True,
+            "metric": metric,
+            "computed_at": stored.get("computed_at", ""),
+            **page,
+        }
+
+    except (ValidationError, InfrastructureError, NotFoundError):
+        raise
+    except Exception as e:
+        logger.exception("Loading graph metric series failed: %s", e)
+        raise InfrastructureError("Loading graph metric series failed", detail=str(e))
 
 
 @router.get("/metrics/history")
@@ -1281,7 +1320,11 @@ async def databricks_build_info(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Readiness + Delta table status for the Databricks triple-store build page."""
+    """Readiness + ``…_data`` status for the Databricks triple-store build page.
+
+    ``materialization`` tells the page whether that relation is a Delta table
+    or a pass-through view, so it can label it and explain the triple count.
+    """
     from back.core.graphdb.delta import _table_naming
     from back.core.graphdb.delta.health import probe_from_client
     from back.core.graphdb.delta.DeltaBase import create_databricks_client
@@ -1297,6 +1340,9 @@ async def databricks_build_info(
     return {
         "success": True,
         "triple_store_backend": backend,
+        "materialization": GraphDBFactory.resolve_lakehouse_materialization(
+            domain, settings
+        ),
         "readiness": readiness,
         "view_table": view_table,
         "data_table": data_table,
@@ -1808,21 +1854,58 @@ async def materialize_inferred(
     return result
 
 
-@router.get("/reasoning/inferred")
-async def get_inferred_triples(
-    request: Request,
+@router.delete(
+    "/reasoning/inferred",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def purge_materialized_inferences(
     session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
-    """Backward-compatible stub: reasoning results are not persisted in the session.
-
-    Clients should use the completed task payload from ``/tasks/{task_id}``.
-    """
-    _ = get_domain(session_mgr)
+    """Purge generated graph triples without modifying mapped source data."""
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = effective_graph_name(domain)
+    try:
+        purged_count = await run_blocking(
+            store.purge_materialized_triples,
+            graph_name,
+        )
+    except NotImplementedError as exc:
+        raise InfrastructureError(
+            "The active graph backend cannot safely purge materialized inferences",
+            detail=str(exc),
+        ) from exc
     return {
         "success": True,
+        "graph_name": graph_name,
+        "purged_count": purged_count,
+    }
+
+
+@router.get("/reasoning/inferred")
+async def get_inferred_triples(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Return live materialized-inference status without listing triples."""
+    domain = get_domain(session_mgr)
+    store = _require_graph_store(domain, settings)
+    graph_name = effective_graph_name(domain)
+    supported = bool(store.supports_materialized_inference_purge)
+    inferred_count = (
+        await run_blocking(store.get_inferred_triple_count, graph_name)
+        if supported
+        else None
+    )
+    return {
+        "success": True,
+        "graph_name": graph_name,
+        "materialized_inference_count": inferred_count,
+        "purge_supported": supported,
         "reasoning": {
             "last_run": None,
-            "inferred_count": 0,
+            "inferred_count": inferred_count,
             "inferred_triples": [],
         },
     }
@@ -1836,6 +1919,7 @@ async def get_inferred_triples(
 @router.get("/classes")
 async def dtwin_classes(
     session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
     """Return session-domain classes and Graph Chat action metadata."""
     domain = get_domain(session_mgr)
@@ -1847,8 +1931,14 @@ async def dtwin_classes(
                 "name": cls.get("name", ""),
                 "uri": cls.get("uri", ""),
                 "dataset": cls.get("dataset") or None,
-                "bridges": NodeContextService.class_bridge_entries(cls),
+                "bridges": NodeContextService.enrich_bridge_targets(
+                    NodeContextService.class_bridge_entries(cls),
+                    session_mgr=session_mgr,
+                    settings=settings,
+                    drop_unavailable=False,
+                ),
                 "actions": NodeContextService.class_action_entries(cls),
+                "virtualAttributes": VirtualAttributeService.class_entries(cls),
             }
             for cls in (domain.get_classes() or [])
         ],
@@ -2002,6 +2092,7 @@ async def dtwin_nodes_context(
     dataset_row_limit: int = 5,
     follow_bridges: bool = False,
     bridge_depth: int = 1,
+    compute_virtual_attributes: bool = False,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -2016,11 +2107,34 @@ async def dtwin_nodes_context(
         dataset_row_limit=max(1, min(dataset_row_limit or 5, 20)),
         follow_bridges=follow_bridges,
         bridge_depth=max(1, min(bridge_depth or 1, 1)),
+        compute_virtual_attributes=compute_virtual_attributes,
         registry_catalog=None,
         registry_schema=None,
         registry_volume=None,
     )
     return NodeContextResponse(**payload)
+
+
+@router.get("/nodes/virtual-attributes")
+async def dtwin_nodes_virtual_attributes(
+    entity_uri: str,
+    function: Optional[str] = None,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Compute a node's virtual attributes against the active session domain.
+
+    Dedicated to the Graph Explorer's Compute button: going through
+    ``/nodes/context`` would re-resolve the dataset and the bridges for
+    nothing. Omit *function* to compute every group declared on the class.
+    """
+    domain = get_domain(session_mgr)
+    return await NodeContextService.compute_virtual_attributes(
+        domain,
+        settings,
+        entity_uri=entity_uri,
+        function_full_name=function,
+    )
 
 
 # Session key for the Graph Chat cache (history + limit + pending actions).
@@ -2035,6 +2149,38 @@ _CHAT_SESSION_KEY = "graph_chat"
 _CHAT_DEFAULT_LIMIT = 20         # number of user+assistant turns kept per domain
 _CHAT_MIN_LIMIT = 5
 _CHAT_MAX_LIMIT = 100
+
+# Surfaced to the Graph Chat UI (inline + global toast) when the blocking
+# thread pool is saturated, so users understand why responses are slow and
+# admins know the actionable remedy.
+_UPGRADE_INSTANCE_ADVICE = (
+    "OntoBricks is under heavy load - the request worker pool is saturated, so "
+    "responses may be slow. If this happens often, upgrade the Databricks App "
+    "instance size (Apps UI -> Compute) for more concurrency."
+)
+
+
+def _resource_pressure_payload() -> dict:
+    """Return a resource-pressure advisory when the blocking pool is saturated.
+
+    Sampled around a Graph Chat turn so the UI can nudge the user toward a
+    larger Databricks App instance instead of silently appearing to hang.
+    Never raises - pressure detection must not break the chat response.
+    """
+    try:
+        from back.core.helpers import get_blocking_pool_stats
+
+        stats = get_blocking_pool_stats()
+    except Exception:  # noqa: BLE001
+        return {"resource_pressure": False}
+    if stats.get("saturated"):
+        return {
+            "resource_pressure": True,
+            "resource_advice": _UPGRADE_INSTANCE_ADVICE,
+            "pool_stats": stats,
+        }
+    return {"resource_pressure": False}
+
 
 # How long a minted Action confirmation token stays valid. Short enough that
 # a stale browser tab can't replay a UC function call long after the user
@@ -2143,6 +2289,7 @@ def _chat_response_payload(agent_result, event_type: str | None = None) -> dict:
         payload["type"] = event_type
     if agent_result.pending_action:
         payload["pending_action"] = agent_result.pending_action
+    payload.update(_resource_pressure_payload())
     return payload
 
 
@@ -2714,11 +2861,13 @@ async def dtwin_triples_find(
     Graph Chat agent can introspect domains that have never been
     published as a version.
     """
+    from back.core.query_limits import get_graph_chat_result_cap
+
     if not entity_type and not search:
         raise ValidationError("Provide at least entity_type or search")
 
     depth = max(1, min(int(depth or 1), 10))
-    limit = max(1, min(int(limit or 1000), 10000))
+    limit = max(1, min(int(limit or 1000), get_graph_chat_result_cap()))
     offset = max(0, int(offset or 0))
 
     domain = get_domain(session_mgr)

@@ -8,18 +8,22 @@ the store.
 """
 
 import sqlite3
+from types import SimpleNamespace
 from typing import Any, Dict, List
 
 import pytest
 
-from back.core.errors import InfrastructureError
+from back.core.errors import InfrastructureError, ValidationError
 from back.core.graph_analysis.JobMetrics import (
     APPROXIMATE_METRICS,
     UNAVAILABLE_METRICS,
     JobMetrics,
+    analytics_snapshot,
     distribution_bounds_query,
     distributions_query,
     interpolate_quantile,
+    metric_series_query,
+    sample_metric_series,
     resolve_analytics_source,
     summary_query,
     top_nodes_query,
@@ -93,6 +97,79 @@ def test_quoted_identifiers_are_accepted(monkeypatch):
     table, reason = resolve_analytics_source(object(), object())
     assert table == "cat.sch.tbl_data"
     assert reason == ""
+
+
+# ---------------------------------------------------------------------------
+# analytics_snapshot
+# ---------------------------------------------------------------------------
+
+
+def _view_only_domain():
+    """A Lakehouse domain whose ``…_data`` is a pass-through view."""
+    return SimpleNamespace(
+        info={
+            "name": "Dom",
+            "graph_backend": "databricks",
+            "lakehouse_materialization": "view",
+        },
+        current_version=3,
+        delta={"catalog": "cat", "schema": "sch"},
+    )
+
+
+def test_a_materialized_domain_is_scanned_in_place():
+    """Nothing to prepare, and nothing to clean up, when ..._data is a table."""
+    domain = SimpleNamespace(info={"graph_backend": "databricks"})
+    with analytics_snapshot(domain, None, "cat.sch.t_data") as table:
+        assert table == "cat.sch.t_data"
+
+
+def test_a_view_only_domain_gets_a_disposable_snapshot(monkeypatch):
+    """The job scans its source repeatedly, which a view would re-derive each time."""
+    statements: List[str] = []
+    client = SimpleNamespace(execute_statement=statements.append)
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings=None: client,
+    )
+
+    with analytics_snapshot(_view_only_domain(), None, "cat.sch.t_data") as table:
+        assert table == "cat.sch.triplestore_dom_V3_analytics"
+        assert "CREATE OR REPLACE TABLE" in statements[0]
+        assert "FROM cat.sch.t_data" in statements[0]
+        assert len(statements) == 1
+
+    assert statements[1] == (
+        "DROP TABLE IF EXISTS cat.sch.triplestore_dom_V3_analytics"
+    )
+
+
+def test_the_snapshot_is_dropped_even_when_the_run_fails(monkeypatch):
+    """A failed run must not leave storage behind for the next one to pay for."""
+    statements: List[str] = []
+    client = SimpleNamespace(execute_statement=statements.append)
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings=None: client,
+    )
+
+    with pytest.raises(RuntimeError, match="job died"):
+        with analytics_snapshot(_view_only_domain(), None, "cat.sch.t_data"):
+            raise RuntimeError("job died")
+
+    assert any(s.startswith("DROP TABLE IF EXISTS") for s in statements)
+
+
+def test_a_view_only_domain_without_a_warehouse_says_so(monkeypatch):
+    """Silently scanning the view instead would make the run cost unbounded."""
+    monkeypatch.setattr(
+        "back.core.graphdb.delta.DeltaBase.create_databricks_client",
+        lambda domain, settings=None: None,
+    )
+
+    with pytest.raises(InfrastructureError, match="temporary Delta snapshot"):
+        with analytics_snapshot(_view_only_domain(), None, "cat.sch.t_data"):
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +272,74 @@ class TestReadBackSql:
         rows = self._db().query(top_nodes_query("metrics", 5))
         ranks = [r["pagerank"] for r in rows]
         assert ranks == sorted(ranks, reverse=True)
+
+    def test_metric_series_query_has_the_validated_sql_contract(self):
+        sql = metric_series_query("cat.sch.metrics", "pagerank")
+        assert "pagerank AS score" in sql
+        assert "ORDER BY pagerank DESC, node_uri ASC" in sql
+        assert "COUNT(*) OVER() AS total_count" not in sql
+        assert "LIMIT " not in sql
+        assert "OFFSET " not in sql
+
+    @pytest.mark.parametrize(
+        "metric", ["pagerank", "betweenness", "degree", "closeness", "clustering"]
+    )
+    def test_metric_series_query_accepts_all_allowed_metrics(self, metric):
+        sql = metric_series_query("cat.sch.metrics", metric)
+        assert f"{metric} AS score" in sql
+
+    def test_metric_series_query_rejects_unknown_metric(self):
+        with pytest.raises(ValidationError, match="Unsupported graph metric"):
+            metric_series_query("cat.sch.metrics", "drop table metrics")
+
+    def test_metric_series_returns_all_rows_through_threshold(self):
+        rows = [
+            {"node_uri": f"urn:{i}", "label": f"N{i}", "score": float(10 - i)}
+            for i in range(8)
+        ]
+        sampled_rows, ranks, sampled = sample_metric_series(
+            rows, threshold=10, sample_size=4
+        )
+        assert sampled is False
+        assert sampled_rows == rows
+        assert ranks == [1, 2, 3, 4, 5, 6, 7, 8]
+
+    def test_metric_series_lttb_samples_exact_size_and_preserves_edges(self):
+        rows = [
+            {
+                "node_uri": f"urn:{i}",
+                "label": f"N{i}",
+                "score": float(((i * 17) % 97) / 97.0),
+            }
+            for i in range(6001)
+        ]
+        sampled_rows, ranks, sampled = sample_metric_series(rows)
+        assert sampled is True
+        assert len(sampled_rows) == 2000
+        assert len(ranks) == 2000
+        assert ranks[0] == 1
+        assert ranks[-1] == 6001
+        assert sampled_rows[0]["node_uri"] == "urn:0"
+        assert sampled_rows[-1]["node_uri"] == "urn:6000"
+        assert ranks == sorted(ranks)
+
+    def test_metric_series_lttb_is_deterministic_for_same_input(self):
+        rows = [
+            {
+                "node_uri": f"urn:{i}",
+                "label": f"N{i}",
+                "score": float((i % 37) / 37.0),
+            }
+            for i in range(7000)
+        ]
+        first_rows, first_ranks, first_sampled = sample_metric_series(rows)
+        second_rows, second_ranks, second_sampled = sample_metric_series(rows)
+        assert first_sampled is True
+        assert second_sampled is True
+        assert first_ranks == second_ranks
+        assert [r["node_uri"] for r in first_rows] == [
+            r["node_uri"] for r in second_rows
+        ]
 
     def test_type_profiles_query_reads_the_rollup_table(self):
         db = _OutputDB(_sample_rows())

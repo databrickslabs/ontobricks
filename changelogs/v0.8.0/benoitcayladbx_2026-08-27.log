@@ -1,0 +1,402 @@
+================================================================================
+Ontology-only publish + describe_ontology: unit tests and robustness fix
+================================================================================
+
+Context
+-------
+The ontology-only MCP publish feature (publish a domain with only an ontology,
+new `describe_ontology` tool, `has_graph`-driven tool hiding) shipped with
+integration-level coverage. This adds focused unit tests for the new helpers
+and the MCP no-graph restriction, and hardens the ontology-detection helper
+against a malformed registry row that a new test surfaced.
+
+Changes
+-------
+1. src/back/objects/registry/RegistryService.py
+   `version_document_has_ontology` now coerces any non-dict `ontology` /
+   `versions[<v>]` node to "no ontology" instead of raising `AttributeError`.
+   A hand-edited row like `{"ontology": "oops"}` previously crashed
+   submit-for-review and the `has_graph` computation.
+2. tests/units/registry/test_registry_ontology_detection.py (new)
+   Unit tests for `version_document_has_ontology` (top-level + nested shapes,
+   empty/malformed) and `_version_sort_key` (numeric ordering, dict rows,
+   junk tolerance).
+3. tests/units/registry/test_review_service.py
+   `_make_svc(has_ontology=...)`; renamed `test_submit_requires_build` to
+   `test_submit_requires_build_or_ontology` and added
+   `test_submit_allowed_with_ontology_and_no_build` (ontology-only submit
+   succeeds with no KG build).
+4. tests/units/mcp/test_domain_policy_gating.py
+   Extended the stub (`classes`, `ontology`, `API_V1_DOMAIN_ONTOLOGY`) and
+   added the ontology-only section: every graph tool hidden on select,
+   selection message flags the domain, call-time refusal for a hidden graph
+   tool, `describe_ontology` allowed (structured classes + OWL), targeting a
+   domain via `domain_name` without select, policy can still hide the tool,
+   and a built-domain control that keeps its graph tools.
+
+Modified files
+--------------
+- src/back/objects/registry/RegistryService.py
+- tests/units/registry/test_registry_ontology_detection.py
+- tests/units/registry/test_review_service.py
+- tests/units/mcp/test_domain_policy_gating.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5639 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings.
+
+
+================================================================================
+Ontology Designer: persist attribute removal on section switch and navigation
+================================================================================
+
+Context
+-------
+In Ontology -> Designer, removing an attribute from a class (e.g. `customerid`
+on `Customer`), then leaving the page (another Ontology section or a full
+navigation to KG -> Explorer) and coming back, the attribute reappeared. Root
+cause: an attribute edit reaches the session only through the 500 ms debounced
+`syncDesignToOntology` -> `POST /ontology/save`. That pending save was cancelled
+on section switch (`flushDesignLayout` cleared the timer and saved layout only)
+and dropped on full page unload (only a layout beacon + a stale `save-to-uc`
+fired). On return, the Designer rebuilt attributes from the never-updated
+session, so the removed attribute came back.
+
+Changes
+-------
+1. src/front/static/global/js/ontology-design.js
+   - Added an `ontologyDirty` flag set by `scheduleAutoSave` and cleared once the
+     ontology is persisted, so exit paths know a real ontology edit is pending.
+   - `flushDesignLayout` (section switch) now runs the full `syncDesignToOntology`
+     when `ontologyDirty`, instead of saving only the layout — the removed
+     attribute is committed to the session before leaving.
+   - Extracted the pure, synchronous canvas->OntologyState derivation into
+     `commitDesignToOntologyState()` (reused by `syncDesignToOntology`).
+   - Added `saveOntologyBeacon` on `beforeunload`/`pagehide` (registered before
+     the layout beacon): rebuilds state from the canvas and fires a keepalive
+     `POST /ontology/save` so a full navigation persists the edit.
+   - Reset `ontologyDirty` on load completion to avoid a stale flag.
+
+Modified files
+--------------
+- src/front/static/global/js/ontology-design.js
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+Frontend-only change (vanilla JS). `node --check` on the edited file passes.
+GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5639 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings.
+
+
+================================================================================
+Ontology Designer: stop concurrent unload writers from reverting an edit
+================================================================================
+
+Context
+-------
+Follow-up to the previous entry. The first fix persisted a pending Designer
+edit on unload via a keepalive /ontology/save beacon, but the removed attribute
+still reappeared when the user navigated within the 500 ms autosave debounce.
+Root cause is a lost-update race on the file-based session: on page unload the
+Designer fires THREE keepalive writes that each do a full read-modify-write of
+the session — /ontology/save (the ontology beacon), /domain/design-views/
+save-current (Domain.save_current_design_view → session.save()) and
+/domain/save-to-uc (Domain.save_domain_to_uc → session.save()). The two layout/
+registry writers load the session snapshot from BEFORE the ontology beacon's
+edit and their trailing session.save() overwrites it, so the removed attribute
+is written back. (Waiting >500 ms avoided the bug because the debounced save had
+already committed and no concurrent /ontology/save was in flight.)
+
+Changes
+-------
+1. src/front/static/global/js/ontology-design.js
+   - Added `unloadOntologyFlushed`: the ontology beacon sets it when it fires
+     the keepalive /ontology/save, claiming the sole session write for this
+     unload.
+   - `saveDesignLayoutBeacon` and `saveRegistryOnUnload` now early-return when
+     `unloadOntologyFlushed` is set, so neither races the ontology beacon with a
+     stale full-session snapshot. When the ontology is already clean (debounce
+     had fired), both run as before. The registry re-syncs on the next section
+     switch / explicit save, which run sequentially rather than racing.
+
+Modified files
+--------------
+- src/front/static/global/js/ontology-design.js
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+Frontend-only change (vanilla JS). `node --check` on the edited file passes.
+GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5639 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings.
+
+
+================================================================================
+Allow Editors and Builders to manage data sources
+================================================================================
+
+Context
+-------
+Users with Databricks App `CAN_USE` and an OntoBricks Editor or Builder role
+could mutate domain metadata, but the Add Data Source picker could not load
+Unity Catalog catalogs or schemas because those read-only endpoints inherited
+the admin-only Settings gate. This made `CAN_MANAGE` necessary for a normal
+domain-authoring workflow.
+
+Changes
+-------
+1. src/shared/fastapi/main.py
+   Added method-aware non-admin exceptions for catalog and schema discovery,
+   including the path-parameter schema route. Settings writes and SQL Warehouse
+   selection remain admin-only. Documented the allow-list in the middleware
+   docstring.
+2. tests/units/auth/test_permission_middleware.py
+   Added regression coverage for Editor and Builder access to all data-source
+   location endpoints and for continued denial of write methods.
+3. documentation/deployment.md
+   Documented Builder permissions, Layer 4 role table, non-admin data-source
+   management, and the retained administrator boundary for shared configuration.
+4. documentation/user-guide.md
+   Added role guidance to the data-source mapping workflow.
+5. documentation/development.md
+   Updated role capabilities and `/settings` enforcement so catalog/schema
+   GET allow-list is explicit.
+6. documentation/api.md
+   Documented which `/settings` discovery routes Editors/Builders may call.
+7. documentation/get-started.md, documentation/INFO.md, README.md
+   User-facing note: Add Data Source no longer requires `CAN_MANAGE`.
+8. docs/superpowers/specs/2026-08-27-editor-builder-data-sources-design.md
+   Recorded the approved permission-boundary design.
+9. docs/superpowers/plans/2026-08-27-editor-builder-data-sources.md
+   Recorded the test-first implementation and verification plan.
+
+Modified files
+--------------
+- src/shared/fastapi/main.py
+- tests/units/auth/test_permission_middleware.py
+- documentation/deployment.md
+- documentation/user-guide.md
+- documentation/development.md
+- documentation/api.md
+- documentation/get-started.md
+- documentation/INFO.md
+- README.md
+- docs/superpowers/specs/2026-08-27-editor-builder-data-sources-design.md
+- docs/superpowers/plans/2026-08-27-editor-builder-data-sources.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+GREEN `uv run --frozen pytest -q tests/units/auth/test_permission_middleware.py`
+(`-k "data_source"` -> 27 passed) and GREEN
+`uv run --frozen pytest -q -m "not scenario"` -> 5666 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings in 53.15s.
+
+
+================================================================================
+Ontology Designer: removed attribute reappears — real root cause (stale copies
+in design-layout views)
+================================================================================
+
+Context
+-------
+Definitive fix for the recurring "I remove customerid on Customer, navigate away
+and back, and it is there again" bug. The two earlier attempts (unload beacon +
+concurrent-writer suppression) did not fully solve it because they targeted the
+wrong layer. Inspecting the live session file showed the domain stores each
+entity's attribute list in TWO independent places:
+  - `domain_data/ontology/classes[].dataProperties` (the authoritative ontology)
+  - `domain_data/design_layout/views/<view>/entities[].properties` (a full copy
+    per design view, carrying canvas metadata: id/type/isRequired/isPrimaryKey)
+Removing an attribute in the shared entity panel (Model/Map) updated only the
+ontology copy. On the next visit to the Designer, the canvas is rebuilt from a
+design view (still 14 attrs), `commitDesignToOntologyState` re-derives config
+from that canvas, and `autoGenerateOwl` persists it — overwriting the ontology
+back to 14 and resurrecting the removed attribute. Confirmed via TEMP-DEBUG
+logging: /ontology/save went 14 → 13 (removal) → 13 → 14 (Designer reload).
+
+Secondary finding: `_asset_version` is computed once at server start and only
+changes on a `.py` reload (uvicorn/watchfiles ignores `.js`). Editing a `.js`
+file therefore leaves the cache-busting `?v=` unchanged, so the browser served
+the OLD bundle and none of the earlier front-end fixes were actually loaded —
+which is why "toujours le même problème" persisted across attempts.
+
+Changes
+-------
+1. src/back/objects/ontology/Ontology.py
+   - Added `Ontology._sync_design_layout_attributes()`: after `/ontology/save`
+     persists the ontology, reconcile every design-view entity's `properties`
+     with the matching class's `dataProperties` (by entity/attribute name).
+     Survivors keep their canvas metadata, removed attributes are dropped, new
+     ones are appended with defaults. This makes `/ontology/save` authoritative
+     for the attribute *set* regardless of which UI path made the edit, killing
+     the whole "stale view copy flows back into the ontology" class of bugs.
+   - `save_ontology_config_from_editor` now calls the sync before `s.save()`.
+2. src/api/routers/internal/ontology.py, src/api/routers/internal/domain.py
+   - Removed the temporary TEMP-DEBUG diagnostic logging added while tracing the
+     bug (/ontology/save, /design-views/save-current, /domain/save-to-uc).
+3. tests/units/ontology/test_ontology_service.py
+   - Added two regression tests: a removed attribute is dropped from design-view
+     copies (survivor metadata preserved) and a newly added attribute is
+     appended to them.
+
+Modified files
+--------------
+- src/back/objects/ontology/Ontology.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/internal/domain.py
+- tests/units/ontology/test_ontology_service.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+GREEN `uv run --frozen pytest -q -m "not scenario"` -> 5668 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings in 51.48s. New regression tests in
+`TestSaveOntologyConfigFromEditor` pass.
+
+Note (existing corrupted sessions self-heal): a session whose design views were
+already polluted with the stale attribute recovers on the next `/ontology/save`
+after removing the attribute once more — that save now also prunes the view
+copies.
+
+
+================================================================================
+Ontology Designer: uniform, clobber-proof session persistence (complete fix)
+================================================================================
+
+Context
+-------
+Final, complete fix for the recurring "a removed attribute/relationship/parent
+reappears after leaving and returning to the Designer" bug, generalised to ALL
+ontology characteristics per the requirement that every change persist to the
+session uniformly on page change. The earlier attempts (unload beacon,
+concurrent-writer suppression, attribute-only view sync) were partial because
+the true root cause is a FRONTEND load-order race, not a save race.
+
+Root cause. ``loadOntologyIntoDesigner`` has two branches: a "merge" branch that
+rebuilds the canvas from the ontology (authoritative — attributes, relationships
+AND inheritances) using the saved view only for positions, and a "saved-layout-
+only" fallback that loads the stale view wholesale. On a full page load the
+Designer could run before ``GET /ontology/load`` populated
+``OntologyState.config.classes``, so it fell into the fallback, loaded a stale
+view, and ``commitDesignToOntologyState`` + ``autoGenerateOwl`` serialised it
+back — overwriting the just-saved ontology. Because the design view embeds
+copies of attributes, relationships and inheritances, every structural edit was
+at risk, not just attributes. (Secondary: ``_asset_version`` only changes on a
+``.py`` reload, so pure ``.js`` edits were served stale from browser cache,
+masking earlier front-end fixes.)
+
+Changes
+-------
+1. src/front/static/global/js/ontology-design.js
+   - Close the load-order race: ``loadOntologyIntoDesigner`` now awaits
+     ``window.waitForOntologyLoaded()`` before choosing a branch, so the
+     authoritative merge branch runs whenever the ontology has classes.
+   - Anti-clobber guard: new ``designerContentAuthoritative`` flag (true in the
+     merge / from-OntologyState branches and on any user canvas edit via
+     ``scheduleAutoSave``; false in the stale-fallback branch).
+     ``syncDesignToOntology`` saves layout-only and ``saveOntologyBeacon``
+     no-ops when the canvas is not authoritative, so a stale visual can never be
+     serialised back over the session ontology.
+2. src/back/objects/ontology/Ontology.py
+   - Generalised ``_sync_design_layout_attributes`` ->
+     ``_sync_design_layout_with_ontology``: on every ``/ontology/save`` reconcile
+     each view against the ontology — drop entities of deleted classes, reconcile
+     surviving entities' attributes (survivors keep canvas metadata), drop
+     relationships / inheritances that no longer match the ontology, and prune
+     dangling visibility references. Defence-in-depth that also self-heals views
+     already polluted by the bug.
+3. tests/units/ontology/test_ontology_service.py
+   - Added reconciliation regression tests for relationships, inheritances and
+     entity deletion (plus the existing attribute add/remove tests).
+
+Uniform flush (verified, no change needed). On section change the sidebar's
+``onBeforeSectionChange`` already flushes the shared entity panel for all
+sections (``checkDirtyBeforeSwitch`` -> ``saveSharedEntity`` ->
+``saveConfigToSession``) and the Designer (``flushDesignLayout``); on unload
+``saveOntologyBeacon`` / ``flushSharedPanelOnUnload`` persist via keepalive.
+Constraints / SWRL / axioms / expressions have their own endpoints and are
+preserved by ``save_ontology_config_from_editor`` — never lost on navigation.
+
+Modified files
+--------------
+- src/front/static/global/js/ontology-design.js
+- src/back/objects/ontology/Ontology.py
+- tests/units/ontology/test_ontology_service.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+`node --check` on ontology-design.js passes. GREEN
+`uv run --frozen pytest -q -m "not scenario"` -> 5672 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings in 50.78s.
+
+Hotfix (same day). First runtime pass of ``_sync_design_layout_with_ontology``
+raised ``TypeError: unhashable type: 'dict'`` on real sessions — the
+``visibility.hiddenRelationships`` list holds ``{source, target}`` dicts, not
+name strings — which turned every ``POST /ontology/save`` into a 500 and made
+edits look lost. Fixed: visibility pruning now only touches the string lists
+(``hiddenEntities`` / ``collapsedEntities``) and is type-guarded, and the whole
+reconciliation is wrapped in a try/except so this defence-in-depth step can
+never break the actual ontology save. Regression test seeds dict-shaped
+visibility. Re-verified GREEN: 5672 passed.
+
+================================================================================
+Root-cause fix: deleted datatype attribute resurrected from properties mirror
+================================================================================
+
+Context
+-------
+Despite the design-view reconciliation above, removing an attribute (e.g.
+`customerid` on `Customer`) in the Designer / entity panel still saw it reappear
+after leaving and returning to the Ontology page. Log tracing was decisive: the
+removal reached the backend (`POST /ontology/save` with 13 attributes, session
+file verified at 13), yet the very next page load's `/ontology/load` returned 14
+again — with no client re-save in between. The session had silently reverted.
+
+Root cause. A class's `dataProperties` is a *derived* view. On every session
+load, `DomainSession._ensure_structure` -> `Ontology.finalize_class_attributes`
+-> `sync_class_data_properties` re-derives `classes[].dataProperties` from the
+datatype properties declared in `config['properties']` (matched by `domain`).
+That merge is additive-only. The editor removes the attribute from the class but
+NOT its `DatatypeProperty` mirror in `properties`, so the mirror survives and the
+next load resurrects the attribute — mutating the cached session dict back to 14.
+
+Fix
+---
+1. src/back/objects/ontology/Ontology.py
+   - New `prune_orphaned_datatype_properties(config)` — the missing inverse of
+     `sync_class_data_properties`. Drops any `DatatypeProperty` / `Property`
+     whose `domain` names an existing class in which the attribute is no longer
+     present. Object properties, empty domains, and domains pointing to unknown
+     classes are left untouched.
+   - `save_ontology_config_from_editor` now calls it right after domain/range
+     normalization (so the pruned list also feeds URI-based mapping cleanup and
+     the persisted `properties`). This makes `/ontology/save` authoritative:
+     deleting an attribute deletes its mirror, so nothing resurrects it on load.
+     Self-heals sessions already polluted on the next save of that class.
+2. tests/units/ontology/test_ontology_service.py
+   - `test_save_drops_orphaned_datatype_property`: end-to-end — remove
+     `customerid` from the class, assert its `DatatypeProperty` leaves
+     `properties`, and that a subsequent `finalize_class_attributes` (the
+     next-load path) does NOT resurrect it. `hasOrder` object property untouched.
+   - `test_prune_orphaned_datatype_properties_keeps_valid_and_unknown`: unit
+     coverage for kept-vs-pruned (valid attr, object prop, unknown/empty domain).
+3. src/api/routers/internal/ontology.py
+   - Removed the temporary `TEMP-DEBUG` logging added during diagnosis on
+     `/ontology/load` and `/ontology/save`.
+
+Modified files
+--------------
+- src/back/objects/ontology/Ontology.py
+- tests/units/ontology/test_ontology_service.py
+- src/api/routers/internal/ontology.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-27.log
+
+Tests
+-----
+`uv run --frozen pytest -q -m "not scenario"` -> 5674 passed, 305 skipped,
+6 deselected, 1 xfailed, 23 warnings in 48.16s. GREEN

@@ -34,12 +34,36 @@
             '<i class="bi bi-table"></i> ' + _escapeHtml(label) + '</span>';
     }
 
+    function _isDrift(check) {
+        return (check.check || '').indexOf('schema_drift:') === 0;
+    }
+
+    /**
+     * Header badge counting bound columns that vanished from the source table.
+     * Distinct from a plain warning: the mapping is fine, the upstream moved.
+     */
+    function _driftBadge(checks) {
+        var n = (checks || []).filter(_isDrift).length;
+        if (!n) return '';
+        return '<span class="badge bg-warning text-dark ms-2" ' +
+            'title="Bound column(s) no longer exist in the source table">' +
+            '<i class="bi bi-database-exclamation"></i> ' + n + ' drifted</span>';
+    }
+
     function _renderChecks(checks) {
         if (!checks || !checks.length) return '';
         var rows = checks.map(function (c) {
-            return '<tr class="diag-check-row diag-check-' + c.status + '">' +
-                '<td class="diag-check-icon">' + _icon(c.status) + '</td>' +
-                '<td class="diag-check-name">' + _escapeHtml(c.check) + '</td>' +
+            var drift = _isDrift(c);
+            var icon = drift
+                ? '<i class="bi bi-database-exclamation text-warning"></i>'
+                : _icon(c.status);
+            var name = drift
+                ? c.check.replace('schema_drift:', '') + ' (schema drift)'
+                : c.check;
+            return '<tr class="diag-check-row diag-check-' + c.status +
+                    (drift ? ' diag-check-drift' : '') + '">' +
+                '<td class="diag-check-icon">' + icon + '</td>' +
+                '<td class="diag-check-name">' + _escapeHtml(name) + '</td>' +
                 '<td class="diag-check-detail">' + _escapeHtml(c.detail) + '</td>' +
                 '</tr>';
         });
@@ -57,6 +81,7 @@
                 '<span class="diag-item-status">' + _icon(ent.status) + '</span>' +
                 '<span class="diag-item-label">' + _escapeHtml(ent.label) + '</span>' +
                 '<span class="diag-item-meta text-muted small ms-3">' + _escapeHtml(sourceDisplay) + '</span>' +
+                _driftBadge(ent.checks) +
                 _countBadge(ent.row_count) +
                 '<i class="bi bi-chevron-down diag-chevron ms-auto"></i>' +
             '</div>' +
@@ -115,6 +140,7 @@
                 '<span class="diag-item-meta text-muted small ms-3">' +
                     _escapeHtml(rel.source_class || '') + ' → ' + _escapeHtml(rel.target_class || '') +
                 '</span>' +
+                _driftBadge(rel.checks) +
                 _countBadge(rel.row_count) +
                 '<i class="bi bi-chevron-down diag-chevron ms-auto"></i>' +
             '</div>' +

@@ -1381,6 +1381,17 @@ var SigmaGraph = (function () {
         }
         html += _sec('bi bi-tags', 'Attributes', attrBody, true);
 
+        // Virtual attributes — declarations only. Values cost a warehouse
+        // round-trip, so they are computed when the user clicks, never here.
+        var virtualGroups = (entityMapping && entityMapping.virtualAttributes) || (classInfo && classInfo.virtualAttributes) || [];
+        if (virtualGroups.length > 0 && typeof renderVirtualAttributeSection === 'function') {
+            var vaCount = virtualGroups.reduce(function (n, g) {
+                return n + ((g.attributes || []).length);
+            }, 0);
+            html += _sec('bi bi-magic', 'Virtual Attributes (' + vaCount + ')',
+                renderVirtualAttributeSection(entity.id, virtualGroups), true);
+        }
+
         if (dashboardUrl && typeof buildDashboardUrl === 'function') {
             var paramValues = {};
             Object.entries(dashboardParams).forEach(function (kv) {
@@ -2168,8 +2179,9 @@ var SigmaGraph = (function () {
         var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
         var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
         var actions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
+        var virtualAttributes = (entityMapping && entityMapping.virtualAttributes) || (classInfo && classInfo.virtualAttributes) || [];
 
-        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, virtualAttributes: virtualAttributes, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
     }
 
     function _showNodeContextMenu(nodeId, mouseEvent) {
@@ -2239,6 +2251,17 @@ var SigmaGraph = (function () {
                 if (items) items += '<div class="ctx-divider"></div>';
                 items += '<div class="ctx-header">Actions</div>' + actionItems;
             }
+        }
+
+        // Shortcut to the detail panel's "Compute all": right-click does not
+        // open the panel, so the handler selects the node first.
+        var ctxVirtual = meta.virtualAttributes || [];
+        if (ctxVirtual.length > 0 && meta.entity && meta.entity.id) {
+            var vaCount = ctxVirtual.reduce(function (n, g) { return n + ((g.attributes || []).length); }, 0);
+            if (items) items += '<div class="ctx-divider"></div>';
+            items += '<div class="ctx-header">Virtual attributes</div>';
+            items += '<div class="ctx-item" data-sg-node-action="virtual-attributes" data-uri="' + esc(meta.entity.id) + '">' +
+                '<i class="bi bi-magic"></i> Compute virtual attributes (' + vaCount + ')</div>';
         }
 
         if (meta.bridges.length > 0) {
@@ -3467,6 +3490,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     openEntityActionModal(actUri, actName, actLbl, actDesc);
                 } else if (typeof showNotification === 'function') {
                     showNotification('Action execution is unavailable.', 'warning');
+                }
+            } else if (action === 'virtual-attributes') {
+                var vaUri = nodeItem.getAttribute('data-uri');
+                if (vaUri && typeof computeVirtualAttributesForNode === 'function') {
+                    computeVirtualAttributesForNode(vaUri);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('Virtual attribute computation is unavailable.', 'warning');
                 }
             } else if (action === 'bridge') {
                 var url = nodeItem.getAttribute('data-url');

@@ -84,6 +84,13 @@ class TestGetDomainInfo:
         assert info["name"] == "Untitled"
         assert info["statistics"]["classes"] == 0
 
+    def test_graph_backend_is_normalized_for_external_clients(self):
+        graphless = get_domain_info({"info": {"graph_backend": " NONE "}})
+        legacy = get_domain_info({"info": {}})
+
+        assert graphless["graph_backend"] == "none"
+        assert legacy["graph_backend"] == "lakebase"
+
 
 class TestGetOntologyInfo:
     def test_versioned_format(self):

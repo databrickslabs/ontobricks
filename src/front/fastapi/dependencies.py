@@ -13,6 +13,11 @@ import time as _time
 
 from back.core.logging import get_logger
 from shared.config.constants import APP_VERSION
+from shared.fastapi.ui_branding import (
+    brand_page_title as _brand_page_title,
+    get_request_ui_branding,
+    render_ui_branding_css_vars,
+)
 
 logger = get_logger(__name__)
 
@@ -122,6 +127,27 @@ def is_app_mode() -> bool:
     return _is_app()
 
 
+@pass_context
+def ui_branding_for(context: dict) -> dict:
+    """Return request-scoped UI branding with defaults as fallback."""
+    request: Request = context.get("request")
+    return get_request_ui_branding(request)
+
+
+@pass_context
+def brand_page_title(context: dict, page_label: str = "") -> str:
+    """Compose browser title using configured app title."""
+    request: Request = context.get("request")
+    return _brand_page_title(get_request_ui_branding(request), page_label)
+
+
+@pass_context
+def ui_branding_css_vars(context: dict) -> str:
+    """Render runtime brand CSS custom properties for first paint."""
+    request: Request = context.get("request")
+    return render_ui_branding_css_vars(get_request_ui_branding(request))
+
+
 # Add custom globals to Jinja2 environment
 templates.env.globals["url_for"] = url_for
 templates.env.globals["range"] = range_filter
@@ -129,6 +155,9 @@ templates.env.globals["get_user_email"] = get_user_email
 templates.env.globals["get_user_role"] = get_user_role
 templates.env.globals["get_user_domain_role"] = get_user_domain_role
 templates.env.globals["is_app_mode"] = is_app_mode
+templates.env.globals["ui_branding_for"] = ui_branding_for
+templates.env.globals["brand_page_title"] = brand_page_title
+templates.env.globals["ui_branding_css_vars"] = ui_branding_css_vars
 
 # Menu configuration available in all templates as {{ menu_config }}
 from front.config import get_menu_config, get_menu_by_id

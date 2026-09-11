@@ -478,29 +478,31 @@ class HomeService:
         (``/dtwin/sync/info``).
         """
         from back.objects.domain.Domain import Domain
-        from back.core.helpers import get_databricks_host_and_token
-        from back.objects.registry import RegistryCfg
+        from back.core.helpers import resolve_app_registry_context
         from back.objects.session import global_config_service
 
         logger.debug("Building navbar state")
         domain_data = Domain(domain, settings).get_domain_info()
 
-        custom_logo = ""
+        branding_payload = {}
         try:
-            host, token = get_databricks_host_and_token(domain, settings)
-            registry_cfg = RegistryCfg.from_domain(domain, settings).as_dict()
-            custom_logo = global_config_service.get_navbar_logo(
+            host, token, registry_cfg = resolve_app_registry_context(settings)
+            branding_payload = global_config_service.get_ui_branding(
                 host, token, registry_cfg
             )
         except Exception as e:
             # Branding is non-critical — never fail navbar rendering for it.
-            logger.debug("Could not resolve custom navbar logo: %s", e)
+            logger.debug("Could not resolve navbar branding: %s", e)
+
+        logo_url = str(branding_payload.get("logo_url", "") or "")
+        app_title = str(branding_payload.get("app_title", "") or "")
 
         return {
             "domain": domain_data,
             "warehouse": {"warehouse_id": warehouse_id},
             "branding": {
-                "logo_url": custom_logo or "",
-                "is_custom": bool(custom_logo),
+                "logo_url": logo_url,
+                "is_custom": bool(branding_payload.get("is_custom_logo")),
+                "app_title": app_title,
             },
         }

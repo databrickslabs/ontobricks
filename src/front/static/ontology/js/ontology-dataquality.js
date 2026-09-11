@@ -1206,7 +1206,7 @@ window.DataQualityModule = {
         if (loadingEl) loadingEl.style.display = '';
         if (emptyEl) emptyEl.style.display = 'none';
         if (listEl) listEl.style.display = 'none';
-        if (acceptBtn) acceptBtn.style.display = 'none';
+        if (acceptBtn) acceptBtn.classList.add('d-none');
 
         this._suggestions = [];
         new bootstrap.Modal(document.getElementById('dqSuggestModal')).show();
@@ -1229,7 +1229,7 @@ window.DataQualityModule = {
             }
 
             if (listEl) listEl.style.display = '';
-            if (acceptBtn) acceptBtn.style.display = '';
+            if (acceptBtn) acceptBtn.classList.remove('d-none');
 
             const countEl = document.getElementById('dqSuggestCount');
             if (countEl) countEl.textContent = `${this._suggestions.length} rule(s) suggested`;

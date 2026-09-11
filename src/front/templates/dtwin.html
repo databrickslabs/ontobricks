@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Knowledge Graph - OntoBricks{% endblock %}
+{% block title %}{{ brand_page_title('Knowledge Graph') }}{% endblock %}
 
 {# The Knowledge Graph is a read / analysis surface (query, explore, run
    reasoning, discover cohorts). Lifecycle / viewer read-only gating must NOT
@@ -155,11 +155,13 @@
 <script defer src="{{ url_for('static', filename='query/js/query-d3graph.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-entity-details.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dashboard.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-virtual-attributes.js') }}?v={{ asset_version }}"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-analytics.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-dataquality.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-reasoning.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-cohorts.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='query/js/query-purge-inferences.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-sigmagraph.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-graphql.js') }}?v={{ asset_version }}"></script>
 <script defer src="{{ url_for('static', filename='query/js/query-chat.js') }}?v={{ asset_version }}"></script>

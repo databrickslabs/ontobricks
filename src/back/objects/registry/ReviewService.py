@@ -128,11 +128,22 @@ class ReviewService:
                     version = v.get("version", "")
                     status = (v.get("status") or STATUS_DRAFT).upper()
                     last_build = v.get("last_build", "") or ""
+                    graphless = (
+                        v.get("graph_backend") or ""
+                    ).strip().lower() == "none"
+                    has_ontology = bool(v.get("has_ontology"))
                     summary = ReviewService._summarize(
                         events_by_key.get((folder, version), [])
                     )
                     actions = ReviewService._pending_actions(
-                        status, role, email, summary, quorum, last_build
+                        status,
+                        role,
+                        email,
+                        summary,
+                        quorum,
+                        last_build,
+                        can_submit_content=bool(last_build)
+                        or (graphless and has_ontology),
                     )
                     if not actions:
                         continue
@@ -181,6 +192,14 @@ class ReviewService:
             svc, info = ReviewService._load(session_mgr, settings, folder, version)
             status = (info.get("status") or STATUS_DRAFT).upper()
             last_build = info.get("last_build", "") or ""
+            # A "No Backend" (ontology-only) domain never builds a graph, so it
+            # may be submitted / published on the strength of its ontology
+            # alone. Graph-backed domains still require a build in the UI.
+            from back.core.graphdb.GraphDBFactory import is_graphless_backend
+
+            graphless = is_graphless_backend(info.get("graph_backend"))
+            has_ontology = ReviewService._has_ontology(svc, folder, version)
+            can_submit_content = bool(last_build) or (graphless and has_ontology)
             quorum = ReviewService._quorum(svc, folder)
             events = svc.list_review_events(folder, version)
             summary = ReviewService._summarize(events)
@@ -211,13 +230,19 @@ class ReviewService:
                 "events": events,
                 "actions": {
                     "can_submit": (
-                        status == STATUS_DRAFT and is_builder and bool(last_build)
+                        status == STATUS_DRAFT
+                        and is_builder
+                        and can_submit_content
                     ),
                     "submit_blocked_reason": (
                         ""
-                        if last_build
-                        else "This version has never been built. "
-                        "Run a Knowledge Graph build first."
+                        if can_submit_content
+                        else (
+                            "Define an ontology first."
+                            if graphless
+                            else "This version has never been built. "
+                            "Run a Knowledge Graph build first."
+                        )
                     ),
                     "can_approve": (
                         status == STATUS_IN_REVIEW and is_member and not already
@@ -351,10 +376,13 @@ class ReviewService:
             )
         if status != STATUS_DRAFT:
             raise ConflictError(f"Version is {status}, expected DRAFT")
-        if not last_build:
+        if not last_build and not ReviewService._has_ontology(
+            svc, folder, version
+        ):
             raise ValidationError(
-                "Cannot submit for review: this version has never been "
-                "built. Run a Knowledge Graph build first."
+                "Cannot submit for review: this version has neither a "
+                "Knowledge Graph build nor a valid ontology. Define an "
+                "ontology (or run a Knowledge Graph build) first."
             )
 
         ReviewService._set_status(
@@ -586,6 +614,24 @@ class ReviewService:
         return svc, data.get("info", {}) or {}
 
     @staticmethod
+    def _has_ontology(
+        svc: RegistryService, folder: str, version: str
+    ) -> bool:
+        """True when *version* declares at least one ontology class.
+
+        Best-effort: a read failure reads as "no ontology" so the caller
+        falls back to the ``last_build`` precondition rather than raising.
+        """
+        try:
+            ok, data, _ = svc.read_version(folder, version)
+            if not ok:
+                return False
+            return RegistryService.version_document_has_ontology(data, version)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("_has_ontology(%s/%s) failed: %s", folder, version, exc)
+            return False
+
+    @staticmethod
     def _set_status(
         svc: RegistryService,
         session_mgr: SessionManager,
@@ -726,8 +772,17 @@ class ReviewService:
         summary: Dict[str, Any],
         quorum: int,
         last_build: str,
+        *,
+        can_submit_content: Optional[bool] = None,
     ) -> List[Dict[str, str]]:
-        """Actionable items for the My Tasks worklist (only pending ones)."""
+        """Actionable items for the My Tasks worklist (only pending ones).
+
+        ``can_submit_content`` overrides the default "has a build" precondition
+        so a "No Backend" (ontology-only) domain can be submitted on its
+        ontology alone. Defaults to ``bool(last_build)`` when not supplied.
+        """
+        if can_submit_content is None:
+            can_submit_content = bool(last_build)
         actions: List[Dict[str, str]] = []
         is_builder = role in ("builder", ROLE_ADMIN)
         is_admin = role == ROLE_ADMIN
@@ -735,7 +790,7 @@ class ReviewService:
         already = email.lower() in {a.lower() for a in summary["approvers"]}
 
         if status == STATUS_DRAFT:
-            if is_builder and last_build:
+            if is_builder and can_submit_content:
                 actions.append({"id": "submit", "label": "Submit for review"})
         elif status == STATUS_IN_REVIEW:
             if is_member and not already:

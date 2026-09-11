@@ -1,0 +1,1933 @@
+================================================================================
+MCP: dedicated compute_virtual_attributes tool for virtual attribute values
+================================================================================
+
+Context
+-------
+Virtual attribute declarations already rode along with `get_entity_context`, and
+values could be obtained with `compute_virtual_attributes=True`, but that flag
+sat on a broad context tool — easy to miss when a user asks "what is the risk
+score of customer C-42?". Actions already had a dedicated verb
+(`invoke_entity_action`); virtual attributes did not.
+
+Changes
+-------
+1. `src/mcp-server/server/app.py` — added `compute_virtual_attributes(entity_uri,
+   function?)` MCP tool calling `GET /api/v1/digitaltwin/nodes/virtual-attributes`.
+   Docstring states explicitly: call this when the user asks about a virtual
+   attribute value. Hints in `describe_entity` and `get_entity_context` now
+   point at this tool instead of the inline flag.
+2. `src/api/routers/digitaltwin.py` — external REST endpoint
+   `GET /api/v1/digitaltwin/nodes/virtual-attributes` (same allow-list and MCP
+   policy enforcement as the internal `/dtwin/nodes/virtual-attributes` route).
+3. `src/back/core/mcp_tools.py` — registered the tool in the domain-scoped MCP
+   catalog (eighth configurable tool).
+4. `.planning/virtual-attributes/SPEC.md`, `tests/eval/datasets/mcp/virtual_attributes.jsonl`,
+   documentation (`mcp.md`, `api.md`, `features.md`, `user-guide.md`,
+   `data-access.md`, `README.md`) — updated tool surface and eval constraints.
+5. Tests — MCP gating, formatting, external API, and MCP catalog guards.
+
+Modified files:
+- `src/mcp-server/server/app.py`
+- `src/api/routers/digitaltwin.py`
+- `src/back/core/mcp_tools.py`
+- `.planning/virtual-attributes/SPEC.md`
+- `tests/eval/datasets/mcp/virtual_attributes.jsonl`
+- `tests/units/mcp/test_domain_policy_gating.py`
+- `tests/units/mcp/test_virtual_attribute_formatting.py`
+- `tests/units/api/test_virtual_attributes_endpoint.py`
+- `tests/units/core/test_mcp_tools_policy.py`
+- `documentation/mcp.md`
+- `documentation/api.md`
+- `documentation/features.md`
+- `documentation/user-guide.md`
+- `documentation/data-access.md`
+- `README.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5343 passed, 281
+skipped, 6 deselected, 1 xfailed, 0 failed in 40.04s (+8 new/updated tests).
+
+================================================================================
+Backend foundation for configurable UI branding (Tasks 1-3)
+================================================================================
+
+Context
+-------
+Implemented the backend baseline for Settings -> UI branding: immutable branding
+normalization and palette derivation, unified `ui_branding` persistence with
+legacy `navbar_logo` compatibility, and new atomic admin API routes.
+
+Changes
+-------
+1. `src/back/core/helpers/UIBranding.py` + `src/back/core/helpers/__init__.py`
+   - Added immutable `BrandPalette` and `UIBranding` dataclasses.
+   - Added deterministic normalization/validation for title and `#RRGGBB` color.
+   - Added derived palette generation (`dark`, `darker`, alpha variants),
+     WCAG-based foreground selection, and serialization helpers.
+2. `src/back/objects/session/GlobalConfigService.py`
+   - Added default `ui_branding` object in `_empty()`.
+   - Added `get_ui_branding()` and `set_ui_branding()` with normalization.
+   - Preserved legacy `navbar_logo` read fallback when unified logo is empty.
+   - Delegated legacy `get/set_navbar_logo` through unified branding storage.
+   - Ensured cache state is preserved on failed unified branding persistence.
+3. `src/back/objects/domain/SettingsService.py`
+   - Added `get_ui_branding_result()` and atomic `save_ui_branding_result()`.
+   - Reused existing logo MIME/size constraints through a shared logo validator.
+   - Enforced reset/upload conflict validation and normalized payload writes.
+   - Kept navbar-logo compatibility endpoints aligned with unified branding.
+4. `src/api/routers/internal/settings.py`
+   - Added admin `GET /settings/ui-branding`.
+   - Added admin multipart `POST /settings/ui-branding` with
+     `app_title` / `primary_color` / optional `logo_file` / `reset_logo`.
+5. Tests
+   - Added `tests/units/ui/test_branding.py`.
+   - Added `tests/units/settings/test_ui_branding.py`.
+   - Added `tests/units/api/test_ui_branding_settings.py`.
+
+Modified files:
+- `src/back/core/helpers/UIBranding.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `tests/units/ui/test_branding.py`
+- `tests/units/settings/test_ui_branding.py`
+- `tests/units/api/test_ui_branding_settings.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py -q` -> failed with
+    `ModuleNotFoundError: No module named 'back.core.helpers.UIBranding'`.
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py -q` ->
+    11 failed (missing `ui_branding` defaults/methods and missing service methods).
+  - `uv run --frozen pytest tests/units/api/test_ui_branding_settings.py -q` ->
+    8 failed (`404` for both `/settings/ui-branding` routes).
+- GREEN:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py -q` -> 16 passed.
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py tests/units/settings/test_config.py -q` -> 22 passed.
+  - `uv run --frozen pytest tests/units/api/test_ui_branding_settings.py tests/units/settings/test_settings_domain_permissions.py -q` -> 33 passed.
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py tests/units/settings/test_config.py tests/units/settings/test_settings_domain_permissions.py -q` -> 71 passed.
+  - `uv run --frozen pytest -q -m "not scenario"` -> 5378 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 46.99s.
+
+================================================================================
+Backend branding review findings remediation
+================================================================================
+
+Context
+-------
+Addressed all Critical/High/Medium backend review findings for the new
+UI-branding foundation with strict test-first regressions before fixes.
+
+Changes
+-------
+1. `src/back/objects/session/GlobalConfigService.py`
+   - Restored `_save(...)->load(..., force=True)` semantics to avoid widening
+     lost-update windows on unrelated global config writes.
+   - Updated `set_ui_branding()` to keep top-level legacy `navbar_logo`
+     synchronized with `ui_branding.logo_data_url` (including reset to empty),
+     preventing legacy-logo resurrection.
+   - Preserved rollback behavior on failed save and ensured cache updates only
+     after successful persistence.
+2. `src/back/objects/domain/SettingsService.py`
+   - Hardened `get_ui_branding_result()` with admin service guard
+     (`require_admin_error`) to align with existing settings save patterns.
+3. `src/api/routers/internal/settings.py`
+   - Enforced route-level admin guard on `GET /settings/ui-branding`
+     (`Depends(require(ROLE_ADMIN))`).
+   - Made multipart logo parsing robust: filename-less or empty `UploadFile`
+     is treated as absent (title/color-only saves no longer fail spuriously).
+4. Tests
+   - `tests/units/settings/test_ui_branding.py`: added regressions for
+     legacy-reset synchronization, `_save` force-refresh behavior, and
+     successful cache updates after persistence.
+   - `tests/units/api/test_ui_branding_settings.py`: added reset flag test,
+     empty-file/filename-less upload behavior tests, and a non-admin GET
+     permission enforcement test through real middleware gating.
+   - `tests/units/ui/test_branding.py`: tightened palette derivation checks
+     to exact fixture values for `primary_dark`/`primary_darker`.
+
+Modified files:
+- `src/back/objects/session/GlobalConfigService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/internal/settings.py`
+- `tests/units/settings/test_ui_branding.py`
+- `tests/units/api/test_ui_branding_settings.py`
+- `tests/units/ui/test_branding.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py -q`
+  -> 6 failed (legacy sync/cache assertions, force-refresh regression, empty-upload handling, non-admin GET enforcement).
+- GREEN:
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py -q`
+  -> 42 passed.
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py tests/units/settings/test_config.py tests/units/settings/test_settings_domain_permissions.py -q`
+  -> 78 passed.
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5386 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 43.32s.
+
+================================================================================
+Post-review cache cleanup for branding
+================================================================================
+
+Context
+-------
+Applied the reviewer-requested non-blocking cleanup before Task 1-3 closure:
+removed redundant cache mutation in `set_ui_branding` and aligned tests with a
+realistic persistence path.
+
+Changes
+-------
+1. `src/back/objects/session/GlobalConfigService.py`
+   - Removed redundant post-`_save` manual cache overwrite in
+     `set_ui_branding()`. Success now relies on `_save`'s force-refreshed cache.
+2. `tests/units/settings/test_ui_branding.py`
+   - Added regression proving `set_ui_branding` must not replace the
+     force-refreshed union with a stale pre-save snapshot.
+   - Switched cache-success coverage to a realistic store-backed `_save` path
+     instead of requiring manual cache assignment.
+3. `src/back/objects/domain/SettingsService.py`
+   - Removed dead `NAVBAR_LOGO_DEFAULT_PATH` constant (unused).
+
+Modified files:
+- `src/back/objects/session/GlobalConfigService.py`
+- `tests/units/settings/test_ui_branding.py`
+- `src/back/objects/domain/SettingsService.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py -q`
+  -> 1 failed (`test_set_ui_branding_does_not_overwrite_force_refreshed_cache_union`).
+- GREEN:
+  - `uv run --frozen pytest tests/units/settings/test_ui_branding.py -q`
+  -> 15 passed.
+  - `uv run --frozen pytest tests/units/ui/test_branding.py tests/units/settings/test_ui_branding.py tests/units/api/test_ui_branding_settings.py tests/units/settings/test_config.py tests/units/settings/test_settings_domain_permissions.py -q`
+  -> 79 passed.
+
+================================================================================
+Domain Information tabs flush with the content card (top and right)
+================================================================================
+
+Context
+-------
+On Domain / Information the Global / AI / Knowledge Graph / MCP tab strip sat
+short of the form card: a seam under the tab baseline and a 12px step on the
+right. The strip is inset 12px for the stable scrollbar gutter, but the
+following `.card` kept the sidebar `width: 100%` rule, so the two boxes did
+not share an outer edge.
+
+Changes
+-------
+1. `src/front/static/global/css/components.css`
+   Adjacent `ob-tabs + card|ob-tab-content|tab-content` now also uses
+   `margin-top: 0`, `margin-right: 12px`, and `width: auto` so the body
+   matches the strip inset and sits flush under it.
+2. `tests/units/front/test_clarity_design_contract.py`
+   Contract that the adjacent-card rule carries that inset pairing.
+
+Modified files:
+- src/front/static/global/css/components.css
+- tests/units/front/test_clarity_design_contract.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5379 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.32s
+
+================================================================================
+UI branding first-paint integration (Tasks 4-5)
+================================================================================
+
+Context
+-------
+Implemented server-first UI branding rendering and runtime token wiring so every
+HTML page paints with configured title/logo/colors immediately, while preserving
+safe defaults when branding cannot be resolved.
+
+Changes
+-------
+1. `src/shared/fastapi/ui_branding.py`, `src/shared/fastapi/main.py`,
+   `src/front/fastapi/dependencies.py`
+   - Added request-scoped `UIBrandingMiddleware` using cached global config context.
+   - Added template helpers for composed titles, resolved branding payload, and
+     first-paint CSS variable injection with fallback defaults.
+2. `src/front/templates/base.html`, `src/front/templates/access_denied.html`,
+   `src/front/templates/home.html`, `src/front/templates/domain.html`,
+   `src/front/templates/ontology.html`, `src/front/templates/mapping.html`,
+   `src/front/templates/settings.html`, `src/front/templates/dtwin.html`,
+   `src/front/templates/about.html`
+   - Replaced hardcoded browser titles with composed `brand_page_title(...)`.
+   - Injected resolved favicon/logo and runtime CSS tokens into initial HTML.
+   - Server-rendered navbar/home branding text and logo from request branding.
+3. `src/front/templates/partials/layout/help_modal.html`,
+   `src/front/templates/partials/dtwin/_query_chat.html`,
+   `src/front/templates/partials/ontology/_ontology_map.html`
+   - Wired brand icon consumers to resolved logo URL and app-title alt text.
+4. `src/back/fastapi/graphql_routes.py`, `src/back/objects/domain/HomeService.py`,
+   `src/front/static/global/js/navbar.js`, `src/front/static/ontology/js/ontology-map.js`
+   - Applied branding to GraphiQL title/favicon and injected CSS vars there too.
+   - Extended navbar-state branding payload (title + logo) for live refresh.
+   - Switched JS highlight/color fallback to read `--db-primary` at runtime.
+5. `src/front/static/global/css/main.css`,
+   `src/front/static/global/css/components.css`,
+   `src/front/static/global/css/sidebar-layout.css`,
+   `src/front/static/global/ontoviz/css/ontoviz.css`
+   - Replaced hardcoded primary indigo consumers with runtime tokens.
+   - Added/used derived foreground and selected-text tokens.
+6. `tests/units/front/test_ui_branding_rendering.py`,
+   `tests/units/front/test_clarity_design_contract.py`
+   - Added RED/GREEN coverage for first-paint rendering, GraphQL branding,
+     runtime-token enforcement, and ontology-map tokenized highlight logic.
+
+Modified files:
+- `src/shared/fastapi/ui_branding.py`
+- `src/shared/fastapi/main.py`
+- `src/front/fastapi/dependencies.py`
+- `src/front/templates/base.html`
+- `src/front/templates/access_denied.html`
+- `src/front/templates/home.html`
+- `src/front/templates/domain.html`
+- `src/front/templates/ontology.html`
+- `src/front/templates/mapping.html`
+- `src/front/templates/settings.html`
+- `src/front/templates/dtwin.html`
+- `src/front/templates/about.html`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `src/back/fastapi/graphql_routes.py`
+- `src/back/objects/domain/HomeService.py`
+- `src/front/static/global/js/navbar.js`
+- `src/front/static/ontology/js/ontology-map.js`
+- `src/front/static/global/css/main.css`
+- `src/front/static/global/css/components.css`
+- `src/front/static/global/css/sidebar-layout.css`
+- `src/front/static/global/ontoviz/css/ontoviz.css`
+- `tests/units/front/test_ui_branding_rendering.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py`
+  -> 10 failed, 14 passed.
+- GREEN:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py`
+  -> 24 passed.
+  - `uv run --frozen pytest -q tests/units/front/test_backend_brand_icons.py tests/units/front/test_knowledge_graph_icon.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 167 passed.
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5392 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+================================================================================
+UI branding Tasks 4-5 review findings fixes
+================================================================================
+
+Context
+-------
+Addressed all blocking/medium review findings for server-first branding, XSS hardening, middleware request gating, and token-contract coverage.
+
+Changes
+-------
+1. `src/front/templates/base.html`, `tests/units/front/test_ui_branding_rendering.py`,
+   `tests/units/front/test_clarity_design_contract.py`
+   - Moved `#uiBrandingTokens` style after `permissions.css` and before `extra_css`.
+   - Added order regressions asserting exact rendered/source order.
+2. `src/back/fastapi/graphql_routes.py`,
+   `tests/units/front/test_ui_branding_rendering.py`
+   - Escaped GraphiQL title/logo/CSS with `html.escape` and used JS-safe URL serialization.
+   - Added stored-XSS regression coverage for app title, domain display name, and logo URL.
+3. `src/shared/fastapi/ui_branding.py`,
+   `tests/units/core/test_ui_branding_middleware.py`,
+   `tests/units/front/test_ui_branding_rendering.py`
+   - Restricted middleware resolution to HTML navigation requests (`Accept: text/html`).
+   - Preserved `/access-denied` HTML branding behavior.
+   - Added middleware tests for HTML vs JSON behavior and updated rendering tests with realistic HTML Accept headers.
+4. `src/shared/fastapi/ui_branding.py`, `tests/units/front/test_ui_branding_rendering.py`
+   - Extended emitted overrides with `--db-focus-ring` and `--db-shadow-primary`.
+5. `src/shared/fastapi/ui_branding.py`,
+   `tests/units/core/test_ui_branding_middleware.py`,
+   `tests/units/front/test_clarity_design_contract.py`
+   - Memoized normalized branding on `request.state`.
+   - Strengthened color-literal guard to include bare RGB tuple and JS fallback scope assertions.
+
+Modified files:
+- `src/shared/fastapi/ui_branding.py`
+- `src/back/fastapi/graphql_routes.py`
+- `src/front/templates/base.html`
+- `tests/units/front/test_ui_branding_rendering.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/core/test_ui_branding_middleware.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/core/test_ui_branding_middleware.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 1 failed, 182 passed.
+- GREEN:
+  - `uv run --frozen pytest -q tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/core/test_ui_branding_middleware.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 183 passed.
+
+================================================================================
+UI branding app-level context + browser regression fixes
+================================================================================
+
+Context
+-------
+Fixed the remaining browser regressions by removing domain-scoped context drift
+from instance-wide branding reads/writes, then updated rendering hooks and
+contracts for first-paint and live preview consistency.
+
+Changes
+-------
+1. `src/back/core/helpers/DatabricksHelpers.py`, `src/back/core/helpers/__init__.py`
+   - Added shared `resolve_app_registry_context(settings)` resolver using
+     `domain=None` (`get_databricks_host_and_token(None, settings)` +
+     `RegistryCfg.from_domain(None, settings)`).
+2. `src/back/objects/domain/SettingsService.py`
+   - Switched branding-only flows to the app-level resolver:
+     unified UI branding GET/POST and legacy navbar-logo GET/POST/DELETE.
+   - Left non-branding global settings context behavior unchanged.
+3. `src/shared/fastapi/ui_branding.py`, `src/back/objects/domain/HomeService.py`
+   - Switched request first-paint branding and `/navbar/state` refresh branding
+     to the shared app-level resolver so they match Settings persistence.
+4. `src/front/templates/base.html`, `src/front/templates/home.html`,
+   `src/front/templates/partials/layout/help_modal.html`,
+   `src/front/templates/partials/dtwin/_query_chat.html`,
+   `src/front/templates/partials/ontology/_ontology_map.html`
+   - Added explicit `data-brand-icon` hooks on shared brand image consumers.
+   - Added `data-brand-title` hooks for visible brand titles.
+   - Updated visible branded help headings to configured app title:
+     "`<app title>` Help Center" and "Welcome to `<app title>`".
+5. Tests and contracts
+   - Added/updated regressions for app-level branding context consistency,
+     HTML first-paint behavior with `Accept: text/html`, data-brand hooks,
+     and navbar branding context resolution.
+
+Modified files:
+- `src/back/core/helpers/DatabricksHelpers.py`
+- `src/back/core/helpers/__init__.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/shared/fastapi/ui_branding.py`
+- `src/back/objects/domain/HomeService.py`
+- `src/front/templates/base.html`
+- `src/front/templates/home.html`
+- `src/front/templates/partials/layout/help_modal.html`
+- `src/front/templates/partials/dtwin/_query_chat.html`
+- `src/front/templates/partials/ontology/_ontology_map.html`
+- `tests/units/settings/test_ui_branding.py`
+- `tests/units/front/test_ui_branding_rendering.py`
+- `tests/units/api/test_ui_rendering.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/domain/test_home_service_navbar_branding.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest -q tests/units/settings/test_ui_branding.py tests/units/core/test_ui_branding_middleware.py tests/units/front/test_ui_branding_rendering.py tests/units/domain/test_home_service_navbar_branding.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 1 failed, 180 passed.
+- GREEN:
+  - `uv run --frozen pytest -q tests/units/settings/test_ui_branding.py tests/units/core/test_ui_branding_middleware.py tests/units/front/test_ui_branding_rendering.py tests/units/domain/test_home_service_navbar_branding.py tests/units/api/test_graphql.py tests/units/api/test_ui_rendering.py`
+  -> 181 passed.
+  - `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py tests/units/front/test_backend_brand_icons.py`
+  -> 29 passed.
+
+================================================================================
+Settings UI branding section (Task 6)
+================================================================================
+
+Context
+-------
+Implemented the Settings -> Configuration -> UI section with draft/saved branding
+state, immediate local preview for title/color/icon, guarded navigation for
+unsaved changes, and one atomic multipart save to `/settings/ui-branding`.
+
+Changes
+-------
+1. `src/front/config/menu_config.json`
+   - Added the `ui` sidebar item under Configuration (`bi-palette`) after Global.
+2. `src/front/templates/settings.html`
+   - Added `#ui-section` with Branding and Theme cards.
+   - Moved Default Entity Icon and Application Logo controls out of Global.
+   - Added title + synchronized color inputs, swatches/component preview, local
+     icon file input, Save/Discard/Reset actions, and accessible status region.
+3. `src/front/static/global/css/config.css`
+   - Added UI section token-driven preview/swatch styles and section activation
+     scroll support without inline state styling.
+4. `src/front/static/config/js/settings.js`
+   - Added `loadUIBranding`, `previewUIBranding`, `saveUIBranding`,
+     `discardUIBrandingChanges`, and `resetUIBrandingDefaults`.
+   - Added saved baseline/draft tracking, dirty/valid state, color/title/logo
+     live preview, favicon/navbar/icon refresh hooks, object URL revocation, and
+     unsaved leave guard for sidebar navigation.
+   - Refactored away standalone legacy logo upload/reset requests to avoid
+     duplicate listeners and use one atomic branding save path.
+5. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added contracts for menu placement, template structure, no duplicate ids,
+     JS workflow functions, atomic API FormData usage, CSS/title/icon preview
+     behavior, and baseline/discard/reset lifecycle guards.
+
+Modified files:
+- `src/front/config/menu_config.json`
+- `src/front/templates/settings.html`
+- `src/front/static/global/css/config.css`
+- `src/front/static/config/js/settings.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 7 failed, 1 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 8 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_rendering.py tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_button_design_contract.py tests/units/front/test_clarity_design_contract.py -q`
+  -> 52 passed.
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5405 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+================================================================================
+Task 6 review fixes: SidebarNav guard + parity
+================================================================================
+
+Context
+-------
+Addressed Task 6 review findings by replacing the fragile async capture-click
+guard with SidebarNav's awaited `onBeforeSectionChange` contract and aligning
+client-side branding parity rules with backend behavior.
+
+Changes
+-------
+1. `src/front/static/global/js/sidebar-nav.js`
+   - Made `SidebarNav.init()` idempotent with callback refresh support.
+   - Prevented duplicate nav-link listener wiring when a page re-initializes
+     SidebarNav with custom hooks.
+2. `src/front/static/config/js/settings.js`
+   - Removed capture-phase async click guard for sidebar links.
+   - Added awaited `handleUIBrandingBeforeSectionChange(targetSection)` and
+     wired it through `SidebarNav.init({ onBeforeSectionChange, onSectionChange })`.
+   - Kept UI preview active on cancel; confirmed navigation now discards and
+     allows the requested section switch.
+   - Matched backend parity for `chooseOnPrimary` fallback to `#000000` when
+     both `#111827` and `#FFFFFF` are below 4.5:1.
+   - Switched title length validation to Unicode code-point counting.
+   - Normalized title trimming consistently for draft/saved comparisons so
+     whitespace-only edits do not stay dirty.
+   - Added no-op reset handling when saved branding is already full defaults
+     (including default logo), avoiding false dirty/save enablement.
+3. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added regression contracts for SidebarNav onBefore integration, no capture
+     click guard, idempotent SidebarNav init, code-point validation, fallback
+     foreground parity, consistent trimming, and no-op reset behavior.
+
+Modified files:
+- `src/front/static/global/js/sidebar-nav.js`
+- `src/front/static/config/js/settings.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 7 failed, 7 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 15 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_button_design_contract.py tests/units/front/test_settings_subnav_hidden.py -q`
+  -> 63 passed.
+
+================================================================================
+Task 6 high fix: settings initialization order
+================================================================================
+
+Context
+-------
+Fixed the remaining high-severity initialization-order defect in Settings so
+SidebarNav does not auto-wire before the UI branding guard callback is installed,
+and hardened callback retention on idempotent `SidebarNav.init()` calls.
+
+Changes
+-------
+1. `src/front/static/config/js/settings.js`
+   - Added top-level `window.SIDEBAR_NAV_MANUAL_INIT = true;` before
+     DOMContentLoaded registration.
+   - Kept explicit `SidebarNav.init({...})` setup and restored URL/section parity
+     by wiring `popstate` and initial `section` activation in Settings init.
+2. `src/front/static/global/js/sidebar-nav.js`
+   - Updated callback assignment to only mutate callback fields when the
+     corresponding option key is explicitly present.
+   - Preserved ability to clear intentionally by passing `null` explicitly.
+3. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added contracts proving manual-init flag order and callback-preserving
+     `SidebarNav.init` semantics (`hasOwnProperty`-gated updates).
+
+Modified files:
+- `src/front/static/config/js/settings.js`
+- `src/front/static/global/js/sidebar-nav.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 2 failed, 14 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 16 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_settings_subnav_hidden.py tests/units/front/test_ui_branding_rendering.py -q`
+  -> 24 passed.
+
+================================================================================
+Task 6 accessibility and UI polish fixes
+================================================================================
+
+Context
+-------
+Fixed Settings UI browser accessibility/UI issues for branding controls with
+test-first coverage: dedicated icon reset preview, input labeling/help wiring,
+dynamic ARIA validation state, and semantic swatch announcements.
+
+Changes
+-------
+1. `src/front/templates/settings.html`
+   - Added dedicated `Reset icon` action (`#uiBrandingResetIconBtn`) in Branding card.
+   - Added explicit logo file input label + help association:
+     `for="uiBrandingLogoFile"`, `aria-describedby="uiBrandingLogoHelp"`.
+   - Added title/color help+error regions and `aria-describedby` bindings:
+     `uiBrandingTitleHelp/uiBrandingTitleError`,
+     `uiBrandingColorHelp/uiBrandingColorError`.
+   - Added semantic swatch attributes (`role="img"`, stable `aria-label`/`title`)
+     for Primary/Hover/Selected/Focus Ring/On Primary tokens.
+   - Marked component preview block as decorative (`aria-hidden="true"`).
+2. `src/front/static/config/js/settings.js`
+   - Added `resetUIBrandingIconDraft()` for preview-only logo reset:
+     resets only logo draft to bundled default, preserves title/color draft,
+     revokes object URL, updates favicon/navbar/icons, and keeps Save as the
+     persistence boundary.
+   - Added dynamic ARIA validation handling with `aria-invalid` + error text
+     toggling for title, color picker, and hex input.
+   - Added semantic swatch label refresh during preview (`aria-label`/`title`
+     include token name + resolved color value).
+   - Preserved dirty semantics so icon reset only marks dirty when saved logo
+     differs from default.
+3. `tests/units/front/test_ui_branding_settings_contract.py`
+   - Added focused contracts for reset-icon action, label/help associations,
+     dynamic ARIA validation behavior contracts, and semantic swatch exposure.
+
+Modified files:
+- `src/front/templates/settings.html`
+- `src/front/static/config/js/settings.js`
+- `tests/units/front/test_ui_branding_settings_contract.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 7 failed, 14 passed.
+- GREEN:
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py -q`
+  -> 21 passed.
+  - `uv run --frozen pytest tests/units/front/test_ui_branding_settings_contract.py tests/units/front/test_ui_branding_rendering.py tests/units/front/test_clarity_design_contract.py tests/units/front/test_button_design_contract.py tests/units/front/test_settings_subnav_hidden.py -q`
+  -> 69 passed.
+
+================================================================================
+Document UC HTTP connection + Genie One attach for OntoBricks MCP
+================================================================================
+
+Context
+-------
+Operators needed a repeatable procedure to register the deployed
+mcp-ontobricks Databricks App as a Unity Catalog HTTP (OAuth M2M) connection
+and then attach that connection to a Genie One chat. The 08x sandbox
+connection already exists; this is documentation only.
+
+Changes
+-------
+1. documentation/uc-mcp-connection-genie-one.md
+   End-to-end procedure: service principal, CAN_USE, HTTP connection, optional
+   MCP Service, grants, Genie One + picker, Playground/Genie Code, 08x example.
+2. documentation/sphinx/guides/uc-mcp-connection-genie-one.md
+   Sphinx MyST include of the new guide.
+3. documentation/sphinx/index.rst
+   Added the guide to the topic-guides toctree after MCP.
+4. documentation/mcp.md
+   Pointer from the Playground section to the new procedure.
+
+Modified files:
+- documentation/uc-mcp-connection-genie-one.md
+- documentation/sphinx/guides/uc-mcp-connection-genie-one.md
+- documentation/sphinx/index.rst
+- documentation/mcp.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-26.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5405 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.89s
+
+================================================================================
+Configurable UI branding — feature summary (Tasks 1–6)
+================================================================================
+
+Context
+-------
+This section provides a feature-level summary of the full configurable UI
+branding implementation (Tasks 1–6 from .planning/ui-branding-settings/SPEC.md /
+documentation/superpowers/plans/2026-08-26-ui-branding-settings.md).
+Individual task-level RED/GREEN records are in the earlier sections of this log.
+
+Changes by layer
+----------------
+1. Value object and palette derivation (Task 1)
+   - `src/back/core/helpers/UIBranding.py`: immutable `BrandPalette` and
+     `UIBranding` dataclasses; deterministic WCAG foreground selection; title
+     trimming/length and uppercase hex normalization; `to_dict()` serialization.
+
+2. Persistence and service layer (Task 2)
+   - `src/back/objects/session/GlobalConfigService.py`: unified `ui_branding`
+     default in `_empty()`; `get_ui_branding()` / `set_ui_branding()` with
+     legacy `navbar_logo` fallback and force-refresh semantics; atomic cache
+     update only after successful persistence.
+   - `src/back/objects/domain/SettingsService.py`: `get_ui_branding_result()` /
+     `save_ui_branding_result()` with reused logo MIME/size validation;
+     reset/upload conflict guard; admin service guard on GET.
+
+3. Admin API (Task 3)
+   - `src/api/routers/internal/settings.py`: `GET /settings/ui-branding` and
+     multipart `POST /settings/ui-branding`; admin `Depends(require(ROLE_ADMIN))`
+     on both routes; robust empty-filename upload handling.
+
+4. Server-first rendering and token injection (Tasks 4–5)
+   - `src/shared/fastapi/ui_branding.py`: request-scoped middleware (HTML only);
+     Jinja helpers `ui_branding_for(request)` and `brand_page_title()`; escaped
+     CSS variable injection as `<style id="uiBrandingTokens">` after static CSS.
+   - All page templates: replaced hardcoded titles with `brand_page_title()`;
+     favicon and navbar logo wired from `branding.logo_url`.
+   - CSS files: replaced all hardcoded primary-indigo literals with runtime
+     tokens; added `--db-on-primary` and `--db-primary-selected-text`.
+   - JS: `ontology-map.js` reads `--db-primary` from computed style with
+     `#4F46E5` as a fallback; `navbar.js` carries title + logo in navbar state.
+
+5. Settings UI (Task 6)
+   - `src/front/config/menu_config.json`: `ui` sidebar entry under Configuration.
+   - `src/front/templates/settings.html`: `#ui-section` with Branding and Theme
+     cards; title/color inputs with swatch preview; icon file input; Save /
+     Discard / Reset actions; accessible status region.
+   - `src/front/static/config/js/settings.js`: `loadUIBranding`,
+     `previewUIBranding`, `saveUIBranding`, `discardUIBrandingChanges`,
+     `resetUIBrandingDefaults`; saved/draft state tracking; SidebarNav
+     `onBeforeSectionChange` guard (awaited, no capture-phase hack); manual init
+     flag to prevent premature auto-wire; object URL revocation.
+
+Modified files (complete list — Tasks 1–6):
+- src/back/core/helpers/UIBranding.py
+- src/back/core/helpers/__init__.py
+- src/back/objects/session/GlobalConfigService.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/settings.py
+- src/shared/fastapi/ui_branding.py
+- src/shared/fastapi/main.py
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html
+- src/front/templates/access_denied.html
+- src/front/templates/home.html
+- src/front/templates/domain.html
+- src/front/templates/ontology.html
+- src/front/templates/mapping.html
+- src/front/templates/settings.html
+- src/front/templates/dtwin.html
+- src/front/templates/about.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/partials/dtwin/_query_chat.html
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/back/fastapi/graphql_routes.py
+- src/back/objects/domain/HomeService.py
+- src/front/static/global/js/navbar.js
+- src/front/static/global/js/sidebar-nav.js
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/global/css/main.css
+- src/front/static/global/css/components.css
+- src/front/static/global/css/sidebar-layout.css
+- src/front/static/global/ontoviz/css/ontoviz.css
+- src/front/static/global/css/config.css
+- src/front/static/config/js/settings.js
+- src/front/config/menu_config.json
+- tests/units/ui/test_branding.py
+- tests/units/settings/test_ui_branding.py
+- tests/units/api/test_ui_branding_settings.py
+- tests/units/front/test_ui_branding_rendering.py
+- tests/units/front/test_clarity_design_contract.py
+- tests/units/front/test_ui_branding_settings_contract.py
+- tests/units/core/test_ui_branding_middleware.py
+
+Targeted tests (last known GREEN results — see earlier sections):
+- tests/units/ui/test_branding.py — 16 passed
+- tests/units/settings/test_ui_branding.py — 15 passed
+- tests/units/api/test_ui_branding_settings.py — verified GREEN (78 combined)
+- tests/units/front/test_ui_branding_rendering.py — GREEN (183 combined)
+- tests/units/front/test_ui_branding_settings_contract.py — 16 passed
+- tests/units/front/test_clarity_design_contract.py — GREEN (63 combined)
+Full suite (last known): 5405 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+Browser verification: not yet performed (Task 7 Step 3 — pending).
+
+================================================================================
+Configurable UI branding — Task 7 browser verification and final suite
+================================================================================
+
+Context
+-------
+Task 7 (Documentation, changelog, browser verification, and full suite) verified
+at desktop 1600×1000 and mobile 390×844. All browser checks pass. Full test
+suite confirms zero regressions.
+
+Browser verification results (PASS)
+------------------------------------
+- First HTML response (Accept: text/html, no session) includes configured
+  title/primary-color CSS variable/icon; token style block is placed after
+  permissions.css and before page CSS.
+- Help modal heading shows configured app title ("… Help Center").
+- Ontology Assistant welcome heading shows configured app title.
+- Live preview (title, color, icon) applies immediately in Settings → UI
+  without page reload.
+- Reset icon button (`#uiBrandingResetIconBtn`) reverts icon draft to bundled
+  default while preserving title/color draft state.
+- Discard restores exact saved baseline (title, color, icon).
+- Dirty guard blocks sidebar navigation with unsaved changes and allows
+  proceed-or-cancel.
+- Validation: invalid color sets `aria-invalid="true"` on the color inputs;
+  Save is disabled until resolved.
+- Responsive overflow: all controls accessible and not clipped at 390×844.
+- Exact baseline restored to OntoBricks / #4F46E5 / default icon after
+  reset-defaults + save in a fresh browser context.
+- Unrelated known `/ontology/get-loaded-ontology` 404 (no ontology loaded)
+  remains; no new console/network errors introduced.
+
+Screenshot artifacts
+--------------------
+- /tmp/branding-fix-first-paint-home.png
+- /tmp/branding-fix-desktop-preview.png
+- /tmp/branding-fix-reset-icon.png
+- /tmp/branding-fix-aria-invalid.png
+- /tmp/branding-fix-guard.png
+- /tmp/branding-fix-mobile-preview.png
+- /tmp/branding-fix-help-center.png
+- /tmp/branding-fix-ontology-assistant.png
+- /tmp/branding-fix-restored-fresh.png
+
+Changes
+-------
+1. `documentation/superpowers/plans/2026-08-26-ui-branding-settings.md`
+   - Task 7 Steps 2, 3, 4, 6 checkboxes marked [x] (targeted tests, browser
+     verification, full suite, diagnostics/diff — all passed).
+2. `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+   - Appended this Task 7 final verification section (browser evidence, test
+     results, screenshot artifacts). Earlier RED/GREEN history preserved.
+3. `documentation/user-guide.md`
+   - Added note about the dedicated **Reset icon** button
+     (`#uiBrandingResetIconBtn`) that reverts only the icon draft to the bundled
+     default while keeping title and color draft values intact.
+4. `.cursor/11-frontend-design.mdc`
+   - Expanded Brand icon and title hooks note to cover the dedicated Reset icon
+     action and ARIA validation state for Settings UI branding controls.
+
+Modified files:
+- documentation/superpowers/plans/2026-08-26-ui-branding-settings.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-26.log
+- documentation/user-guide.md
+- .cursor/11-frontend-design.mdc
+
+Test result:
+- Targeted suite (Task 7 Step 2):
+  uv run --frozen pytest tests/units/ui/test_branding.py
+    tests/units/settings/test_ui_branding.py
+    tests/units/api/test_ui_branding_settings.py
+    tests/units/front/test_ui_branding_rendering.py
+    tests/units/front/test_ui_branding_settings_contract.py
+    tests/units/front/test_clarity_design_contract.py -q
+  -> all pass (subsets confirmed GREEN in earlier sections).
+- Full suite (Task 7 Step 4):
+  uv run --frozen pytest -q -m "not scenario"
+  -> 5422 passed, 281 skipped, 6 deselected, 1 xfailed, 23 warnings, 0 failed.
+- IDE lints on changed core files: no errors.
+
+## Add a togglable dotted grid on Ontology Designer
+
+Context: Ontology → Designer (the D3 force-directed graph) sat on a plain white canvas. OntoViz already uses a 24px radial-gradient dot grid; users wanted the same visual on Designer, with an explicit show/hide control in the header.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_map.html
+   Added `mapToggleGrid` in the layout/display button cluster and defaulted the canvas to `map-grid-visible`.
+2. src/front/static/ontology/css/ontology-map.css
+   OntoViz-matching 24px dotted background on `#ontology-map-container.map-grid-visible`, using `--db-*` tokens.
+3. src/front/static/ontology/js/ontology-map.js
+   Toggle applies/removes the class, updates `aria-pressed` / title, and persists in `sessionStorage` (`mapGridVisible`), same pattern as inheritance visibility.
+4. tests/units/front/test_button_design_contract.py
+   Contract that the grid toggle lives in the joined display cluster and that the CSS uses the 24px radial-gradient.
+5. documentation/features.md
+   Documented the persisted grid toggle on the Designer D3 graph.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/static/ontology/css/ontology-map.css
+- src/front/static/ontology/js/ontology-map.js
+- tests/units/front/test_button_design_contract.py
+- documentation/features.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5423 passed, 281 skipped, 6 deselected, 1 xfailed in 44.47s. Browser: toggle on Designer (`/ontology/?section=map`) shows/hides `map-grid-visible` and the radial-gradient.
+
+================================================================================
+Implement Mapping Designer split layout (Tasks 1-2)
+================================================================================
+
+Context
+-------
+Mapping Designer still used a drawer-style bottom panel (`height: 0` plus
+`.panel-open`) and a shadowed single-card wrapper, which drifted from the
+Ontology Designer split-card contract. This change applies the planned
+column split shell with always-visible bottom detail panel, horizontal resize
+handle, and persisted panel height while keeping Manual Mapping behavior
+unchanged.
+
+Changes
+-------
+1. `tests/units/front/test_mapping_designer_split_layout.py`
+   Added contract coverage for Mapping split markup, shared split CSS wiring,
+   panel sizing rules, drawer-rule removal, always-open JS behavior, resize
+   persistence key (`mappingDesignerPanelHeight`), and guarded canvas-clear path.
+2. `src/front/templates/partials/mapping/_mapping_design.html`
+   Reworked Designer markup to `ob-split-shell ob-split-shell--column` with
+   two `ob-split-pane` cards plus `.detail-panel-resize-handle`, removed
+   `shadow-sm`, and added a default panel placeholder.
+3. `src/front/templates/mapping.html`
+   Linked `ontology/css/ontology-shared-panels.css` in page `extra_css` so
+   Mapping can reuse the same split-panel chrome as Ontology.
+4. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Added `.ob-split-shell--column` and row-resize handle variant rules
+   (`height: 8px`, bar `40px x 3px`) using shared split tokens.
+5. `src/front/static/global/css/mapping.css`
+   Removed Mapping Designer drawer mechanics (`height: 0`, `.panel-open` split),
+   set always-visible panel defaults (`320px`, min `200px`, max `50%`), and
+   aligned design-section insets with Ontology split layout expectations.
+6. `src/front/static/mapping/js/mapping-design.js`
+   Switched panel behavior from show/hide to hydrate/clear, restored placeholder
+   on close, kept canvas background click on `guardedCloseMappingPanel`, added
+   horizontal drag-resize setup, and persisted/restored panel height from
+   `sessionStorage` via `mappingDesignerPanelHeight`.
+7. `.cursor/11-frontend-design.mdc`
+   Documented that Mapping Designer uses the same split cards as Ontology with
+   column orientation and always-visible bottom detail panel.
+
+Modified files:
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/templates/mapping.html`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/global/css/mapping.css`
+- `src/front/static/mapping/js/mapping-design.js`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Test result:
+- RED (Task 1 contracts before implementation):
+  - `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py`
+  -> 6 failed, 1 passed.
+- RED (Task 2 JS contracts before implementation):
+  - `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py`
+  -> 4 failed, 8 passed.
+- GREEN (focused):
+  - `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py tests/units/front/test_manual_mapping_panel_host.py`
+  -> 25 passed.
+- GREEN (full required suite):
+  - `uv run --frozen pytest -q -m "not scenario"`
+  -> 5435 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed in 42.00s.
+
+## Keep the Mapping Designer resize handle between the two cards
+
+Context: The column-split handle inherited `order: 998` from the Ontology
+right-panel handle, so it rendered below the bottom card instead of between
+canvas and panel.
+
+Changes:
+
+1. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Set `.ob-split-shell--column > .detail-panel-resize-handle { order: 0 }` so
+   DOM order (canvas, handle, panel) wins.
+2. `tests/units/front/test_mapping_designer_split_layout.py`
+   Assert the column handle `order` is `0`.
+
+Modified files:
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py tests/units/front/test_manual_mapping_panel_host.py` → 25 passed.
+
+## Make Mapping Designer resizing explicitly manual and add the dot grid
+
+Context: The resize interaction must never continue when the primary mouse
+button is no longer held. Mapping Designer also needs the same default-visible,
+session-persisted dotted grid and accessible toolbar toggle as Ontology
+Designer.
+
+Changes:
+
+1. `src/front/static/mapping/js/mapping-design.js`
+   Restricted resize start to the primary button, aborts stale drag state when
+   mouse movement reports no primary button, and added the persisted Mapping
+   grid toggle.
+2. `src/front/templates/partials/mapping/_mapping_design.html`
+   Added the active grid toolbar button and default grid-visible canvas class.
+3. `src/front/static/mapping/css/mapping-design.css`
+   Added the token-based 24px dotted grid matching Ontology Designer.
+4. `tests/units/front/test_mapping_designer_split_layout.py`
+   Added regression contracts for manual-only resizing and grid parity.
+5. `documentation/superpowers/specs/2026-08-26-mapping-designer-split-layout-design.md`
+   Added the approved grid behavior to the design contract.
+6. `documentation/superpowers/plans/2026-08-26-mapping-designer-split-layout.md`
+   Added the grid implementation and verification steps.
+
+Modified files:
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `src/front/static/mapping/css/mapping-design.css`
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `documentation/superpowers/specs/2026-08-26-mapping-designer-split-layout-design.md`
+- `documentation/superpowers/plans/2026-08-26-mapping-designer-split-layout.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_mapping_designer_split_layout.py tests/units/front/test_manual_mapping_panel_host.py` → 29 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5439 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+## Align Ontology Designer empty-panel title and square panel tabs
+
+Context: Clicking the Ontology Designer canvas left the right panel titled
+"Details", unlike Mapping Designer ("Select Item"). Form tabs inside the
+split pane also needed an explicit square treatment so selected fills do
+not pick up card-edge rounding from `.ob-tabs`.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Empty-state title is now "Select Item" on first paint and on canvas clear.
+2. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Forced `border-radius: 0` on form tabs and on `.ob-tabs` nested in a
+   split-pane panel.
+3. `src/front/static/global/css/mapping.css`
+   Flattened leftover `.panel-tabs` top radii inside mapping/manual panels.
+4. `tests/units/front/test_ontology_split_panel_layout.py`
+   Contract for the empty title and square form tabs.
+5. `.cursor/11-frontend-design.mdc`
+   Documented the Select Item empty title and square in-panel tabs.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/global/css/mapping.css`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5441 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+## Standardize in-panel tabs and drop the empty-state title icon
+
+Context: Clicking the Designer canvas left the entity/relationship icon in
+the panel header. The Details / Attributes / References / Constraints
+strip was a custom `.form-tab-link` control whose edges did not match
+`.ob-tabs`, including the rounded first/last fill from the card-strip
+variant.
+
+Changes:
+
+1. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Empty header is now "Select Item" with no icon. Entity and relationship
+   forms render `nav nav-tabs ob-tabs`.
+2. `src/front/static/ontology/css/ontology-shared-panels.css`
+   In-panel `.ob-tabs` are square (`border-radius: 0`) with compact padding
+   so the 4-tab strip still fits the 420px default.
+3. `src/front/static/mapping/js/mapping-design.js`
+   Canvas-clear title is "Select Item" with no cube icon.
+4. `src/front/templates/partials/mapping/_mapping_design.html`
+   Matching empty-state markup on first paint.
+5. `tests/units/front/test_ontology_split_panel_layout.py`
+   `tests/units/front/test_mapping_designer_split_layout.py`
+   Contracts for icon-free empty title and square in-panel ob-tabs.
+6. `.cursor/11-frontend-design.mdc`
+   Documented icon-free Select Item and square in-panel `.ob-tabs`.
+
+Modified files:
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/templates/partials/mapping/_mapping_design.html`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `tests/units/front/test_mapping_designer_split_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5441 passed, 281 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+## Segment the level 2 workspace navigation
+
+Context: The level 2 navigation used a full-width warm strip and baseline that
+felt disconnected from the application's compact Clarity controls. The
+approved treatment exposes the page canvas and groups workspace navigation
+inside a self-contained segmented control.
+
+Changes:
+
+1. `src/front/templates/base.html`
+   Grouped Domain, Ontology, Mapping, and Knowledge Graph in a semantic
+   workspace list while preserving breadcrumb and domain action order.
+2. `src/front/static/global/css/main.css`
+   Removed the L2 row background and bottom border, added the white segmented
+   workspace control, and aligned selected, focus, Save, and Close states with
+   shared design tokens.
+3. `src/front/static/global/js/navbar.js`
+   Made the active workspace non-navigating and exposed `aria-current="page"`
+   while retaining dropdown behavior on inactive workspaces.
+4. `tests/units/front/test_segmented_subnav_contract.py`
+   Added contracts for transparent chrome, segmented structure, inactive
+   dropdown preservation, active dropdown removal, and mobile overflow safety.
+5. `tests/units/front/test_clarity_design_contract.py`
+   Updated the L2 active-state contract for the rounded segmented treatment.
+6. `.cursor/11-frontend-design.mdc`
+   Documented the transparent L2 row, segmented workspace control, and
+   dropdown behavior.
+7. `documentation/superpowers/plans/2026-08-26-level-2-navbar-segmented.md`
+   Recorded the TDD implementation and verification plan.
+
+Modified files:
+- `src/front/templates/base.html`
+- `src/front/static/global/css/main.css`
+- `src/front/static/global/js/navbar.js`
+- `tests/units/front/test_segmented_subnav_contract.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `.cursor/11-frontend-design.mdc`
+- `documentation/superpowers/plans/2026-08-26-level-2-navbar-segmented.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py tests/units/front/test_clarity_design_contract.py::test_main_css_l2_segment_and_nav_tabs_use_indigo_soft_selection tests/units/front/test_clarity_design_contract.py::test_navbar_dropdown_hover_matches_sidebar` → 13 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5448 passed, 289 skipped, 6 deselected, 1 xfailed, 3 failed. The failures are pre-existing worktree contracts for unfinished sidebar/ontology viewport and inset changes, outside this L2 navigation change.
+- Browser verification at 1600×1000 and 390×844 → passed; inactive dropdowns overlay content, the active workspace does not open a dropdown, and mobile has no horizontal overflow.
+
+## Replace sidebar magic heights with flex sizing
+
+Context: Sidebar-owned panes duplicated viewport arithmetic and bottom padding,
+causing canvas, list, and GraphQL sections to overflow or stop above the shared
+shell boundary. The root sidebar shell is now the sole viewport-height owner.
+
+Changes:
+
+1. `src/front/static/global/css/ontology.css`
+   Replaced the OWL card, Entities, Relationships, and Visual Designer
+   (`#ontology-designer-canvas-wrapper`) magic heights with flex sizing and
+   scoped mobile natural-flow resets, and dropped the stale `#ontologyGraph`
+   viewport-height rule. The OWL card keeps its native textarea scroller (no
+   overflow clamp) so long Turtle content is not clipped.
+2. `src/front/static/ontology/css/ontology-map.css`
+   Reduced the Designer section inset to 0.5rem with no bottom inset and added
+   the matching mobile overflow reset.
+3. `src/front/static/global/css/mapping.css`
+   Removed stale entity/relationship and read-only height overrides, converted
+   the Designer pane to shared flex sizing, and preserved mobile natural flow.
+4. `src/front/static/global/css/query.css`
+   Converted result, grouped-list, context, and GraphQL panes to flex sizing
+   with internal overflow and aligned GraphQL to the shell bottom.
+5. `src/front/static/query/css/query-sigmagraph.css`
+   Converted Graph Explorer and its nested canvas/panel chain to min-height-safe
+   flex sizing, corrected its inset, and added a stacked mobile reset.
+
+Modified files:
+- `src/front/static/global/css/ontology.css`
+- `src/front/static/ontology/css/ontology-map.css`
+- `src/front/static/global/css/mapping.css`
+- `src/front/static/global/css/query.css`
+- `src/front/static/query/css/query-sigmagraph.css`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py tests/units/front/test_ontology_split_panel_layout.py` → 47 passed.
+- `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/navigation/test_sidebar_bottom_alignment.py` → 8 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5451 passed, 289 skipped, 6 deselected, 1 xfailed, 0 failed.
+
+## Align level 2 navigation with the sidebar
+
+Context: The segmented level 2 workspace control started flush against the
+viewport while the framed sidebar uses the shared 0.5rem shell gutter. A
+later-loaded full-width layout rule also reset nested container padding with
+`!important`, so matching values alone did not produce runtime alignment.
+
+Changes:
+
+1. `src/front/static/global/css/main.css`
+   Applied the 0.5rem L2 left gutter through the higher-specificity
+   `#obSubnav .container-fluid` selector and preserved the independent desktop
+   and mobile right gutters.
+2. `tests/units/front/test_segmented_subnav_contract.py`
+   Added a regression contract tying the L2 left edge to the sidebar shell
+   gutter and locking the required specificity.
+3. `tests/units/front/test_mobile_subnav_contract.py`
+   Updated the mobile contract for the canonical `#obSubnav` selector.
+4. `.cursor/11-frontend-design.mdc`
+   Documented the alignment, specificity requirement, ownership, and
+   anti-pattern.
+
+Modified files:
+- `src/front/static/global/css/main.css`
+- `tests/units/front/test_segmented_subnav_contract.py`
+- `tests/units/front/test_mobile_subnav_contract.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_segmented_subnav_contract.py tests/units/front/test_mobile_subnav_contract.py` → 12 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5543 passed, 289 skipped, 6 deselected, 1 xfailed, 0 failed.
+- Browser verification at 1600×1000 → L2 workspace x=8px, sidebar x=8px, delta=0px; inactive dropdown passed.
+
+## Normalize sidebar content stretch roots
+
+Context: Several Domain, Ontology, and Mapping section partials bypassed the
+shared `.content-section` flex chain, leaving their primary surfaces shorter
+than the sidebar. The normalized roots preserve modal siblings and scoped
+internal-scroll variants.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added a complete sidebar-section inventory, root stretch assertions,
+   balanced-markup checks, explicit internal-scroll variants, and modal-sibling
+   contracts.
+2. `src/front/templates/partials/domain/_domain_metadata.html`
+   Wrapped the primary Data Sources surface while leaving its modals as siblings.
+3. `src/front/templates/partials/domain/_domain_documents.html`
+   Added the shared root around the complete long-form documents surface.
+4. `src/front/templates/partials/domain/_domain_owl_content.html`
+   Added the shared root around the OWL header and editor card.
+5. `src/front/templates/partials/domain/_domain_r2rml.html`
+   Added the shared root around the R2RML header and editor card.
+6. `src/front/templates/partials/ontology/_ontology_information.html`
+   Added the shared root around the information header and card.
+7. `src/front/templates/partials/ontology/_ontology_entities.html`
+   Added the shared root around the hierarchy header and split panel.
+8. `src/front/templates/partials/ontology/_ontology_relationships.html`
+   Added the shared root around the relationships header and split panel.
+9. `src/front/templates/partials/ontology/_ontology_groups.html`
+   Wrapped the primary groups surface while keeping the editor modal outside.
+10. `src/front/templates/partials/ontology/_ontology_business_rules.html`
+    Wrapped the rules surface while preserving modal and context-menu siblings.
+11. `src/front/templates/partials/ontology/_ontology_axioms.html`
+    Wrapped the primary axioms surface while keeping its modal outside.
+12. `src/front/templates/partials/ontology/_ontology_owl_content.html`
+    Added the shared root around the ontology OWL editor.
+13. `src/front/templates/partials/ontology/_pitfalls.html`
+    Added the shared root around the full analysis surface and attribution.
+14. `src/front/templates/partials/mapping/_mapping_information.html`
+    Wrapped the loading and loaded summary states in one shared root.
+15. `src/front/templates/partials/mapping/_mapping_manual.html`
+    Added the shared root around the manual mapping split surface.
+16. `src/front/templates/partials/mapping/_mapping_autoassign.html`
+    Added the shared root around the complete auto-map surface.
+17. `src/front/templates/partials/mapping/_mapping_diagnostics.html`
+    Added the shared root around all diagnostics states and results.
+18. `src/front/templates/partials/mapping/_mapping_r2rml.html`
+    Wrapped the loading state, header, and R2RML editor together.
+19. `src/front/templates/partials/mapping/_mapping_sparksql.html`
+    Wrapped the primary Spark SQL surface while leaving its script sibling intact.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `src/front/templates/partials/domain/_domain_metadata.html`
+- `src/front/templates/partials/domain/_domain_documents.html`
+- `src/front/templates/partials/domain/_domain_owl_content.html`
+- `src/front/templates/partials/domain/_domain_r2rml.html`
+- `src/front/templates/partials/ontology/_ontology_information.html`
+- `src/front/templates/partials/ontology/_ontology_entities.html`
+- `src/front/templates/partials/ontology/_ontology_relationships.html`
+- `src/front/templates/partials/ontology/_ontology_groups.html`
+- `src/front/templates/partials/ontology/_ontology_business_rules.html`
+- `src/front/templates/partials/ontology/_ontology_axioms.html`
+- `src/front/templates/partials/ontology/_ontology_owl_content.html`
+- `src/front/templates/partials/ontology/_pitfalls.html`
+- `src/front/templates/partials/mapping/_mapping_information.html`
+- `src/front/templates/partials/mapping/_mapping_manual.html`
+- `src/front/templates/partials/mapping/_mapping_autoassign.html`
+- `src/front/templates/partials/mapping/_mapping_diagnostics.html`
+- `src/front/templates/partials/mapping/_mapping_r2rml.html`
+- `src/front/templates/partials/mapping/_mapping_sparksql.html`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 24 failed, 25 passed.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 90 passed.
+- `uv run --frozen pytest -q tests/units/front` → 874 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5543 passed, 289 skipped, 6 deselected, 1 xfailed.
+- Rendered 1600×1000 changed-section matrix → 20 passed with zero bottom delta and no horizontal overflow; four modal open/close checks and forced-overflow document scrolling passed.
+
+## Close sidebar internal-scroll height gaps
+
+Context: Review identified viewport-relative pane heights beneath the shared
+sidebar shell and a direct-card stretch collision on Domain Documents. The
+affected sections now rely on bounded flex chains, with one scoped scroll owner
+per component and natural document-page scrolling.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Replaced marker-only scroll checks with selector-specific flex, min-height,
+   and overflow assertions; added the document stack and all-modal sibling
+   contracts.
+2. `tests/units/front/test_clarity_design_contract.py`
+   Expanded the pane-level `100vh` prohibition to the five sidebar-loaded
+   component styles identified by review.
+3. `src/front/templates/partials/domain/_domain_documents.html`
+   Added a neutral inner stack so both cards remain in natural page flow.
+4. `src/front/templates/partials/ontology/_ontology_dataquality.html`
+   Added the shared stretch root while preserving all four modals as siblings.
+5. `src/front/static/ontology/css/ontology-wizard.css`
+   Made tab content the bounded scroll owner and removed viewport arithmetic
+   from the metadata table.
+6. `src/front/static/ontology/css/ontology-pitfalls.css`
+   Moved overflow ownership to the min-height-safe tab content.
+7. `src/front/static/ontology/css/ontology-dataquality.css`
+   Added the card-to-tab flex chain and removed viewport-relative list sizing.
+8. `src/front/static/ontology/css/ontology-business-rules.css`
+   Added the card-to-tab flex chain and routed all rule-list overflow through it.
+9. `src/front/static/registry/css/registry-teams.css`
+   Converted the matrix wrapper to a flexing, min-height-safe scroll owner.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/units/front/test_clarity_design_contract.py`
+- `src/front/templates/partials/domain/_domain_documents.html`
+- `src/front/templates/partials/ontology/_ontology_dataquality.html`
+- `src/front/static/ontology/css/ontology-wizard.css`
+- `src/front/static/ontology/css/ontology-pitfalls.css`
+- `src/front/static/ontology/css/ontology-dataquality.css`
+- `src/front/static/ontology/css/ontology-business-rules.css`
+- `src/front/static/registry/css/registry-teams.css`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py tests/units/front/test_clarity_design_contract.py::test_only_the_root_shell_owns_viewport_height` → 12 failed, 121 passed.
+- GREEN: same focused command → 133 passed.
+- `uv run --frozen pytest -q tests/units/front` → 917 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5585 passed, 289 skipped, 6 deselected, 1 xfailed.
+- Rendered 1600×1000 checks → wizard, pitfalls, ontology data quality, business rules, and settings teams retained zero bottom delta, no horizontal overflow, and functional scoped scrolling; Domain Documents retained natural pane scrolling with two stacked cards; Data Quality and Business Rules modals opened and dismissed.
+
+## Restore standard rounding on Designer panel tabs
+
+Context: The Ontology Designer right-panel tabs explicitly removed every
+standard `.ob-tabs` radius and border, leaving Details, Attributes, References,
+and Constraints visually square while the rest of the application uses a
+rounded tab-strip header.
+
+Changes:
+
+1. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Removed panel-specific radius and border overrides so form tabs inherit the
+   shared rounded strip and edge-tab treatment while retaining compact sizing.
+2. `tests/units/front/test_ontology_split_panel_layout.py`
+   Replaced the square-tab contract with assertions that panel tabs inherit the
+   canonical `.ob-tabs` rounding and keep all four labels on one line.
+3. `.cursor/11-frontend-design.mdc`
+   Updated the split-panel directive to require standard `.ob-tabs` rounding
+   without local border or radius overrides.
+
+Modified files:
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/front/test_ontology_split_panel_layout.py tests/units/front/test_mapping_designer_split_layout.py` → 38 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5585 passed, 289 skipped, 6 deselected, 1 xfailed, 0 failed.
+- Browser verification at the 420px default panel → strip radius `14px 14px 0 0`, active Details top-left radius `14px`, all four labels fit without overflow, and tab switching passed.
+
+## Align fixed-height data quality and logs panes
+
+Context: Rendered verification at 1600×1000 found an extra 8px bottom inset
+on Ontology Data Quality, Knowledge Graph Data Quality, and Settings Logs.
+The fixed-height shells now preserve their top and side spacing without
+shortening the primary pane relative to the sidebar.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added exact static contracts requiring zero bottom padding for the shared
+   Data Quality shell and the Settings Logs section.
+2. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Added rendered bottom-alignment coverage for the three affected routes.
+3. `src/front/static/global/css/sidebar-layout.css`
+   Removed only the bottom padding from the fixed-height Data Quality and Logs
+   shells while retaining their existing top, side, overflow, and mobile rules.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `src/front/static/global/css/sidebar-layout.css`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: focused static padding contract → 1 failed with the previous `0.5rem` Data Quality padding.
+- RED: fake-credential rendered 1600×1000 contracts → all three routes reproduced an 8px bottom delta.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 133 passed.
+- GREEN: fake-credential rendered alignment contracts for Ontology Data Quality, Knowledge Graph Data Quality, and Settings Logs → 3 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5586 passed, 292 skipped, 6 deselected, 1 xfailed.
+- `git diff --check` → passed.
+
+## Harden mobile data quality and logs layout contracts
+
+Context: Review found that the Knowledge Graph Data Quality desktop override
+could still defeat shared mobile natural flow, while Settings Logs kept its
+scroll ownership inline. The rendered contracts also needed to measure the
+visible Data Quality card and exercise real page scrolling on mobile.
+
+Changes:
+
+1. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added an exact mobile override contract, a CSS-owned Logs console scrolling
+   contract, and winning-declaration checks for fixed-height shell padding.
+2. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Changed the Knowledge Graph desktop measurement to the visible Data Quality
+   card and added real wheel/window-scroll checks for mobile Data Quality and
+   Settings Logs, including horizontal-overflow assertions.
+3. `src/front/static/query/css/query-dataquality.css`
+   Restored auto height and visible overflow for the active Data Quality
+   section at mobile widths after its desktop rule.
+4. `src/front/static/global/css/config.css`
+   Made the Logs console the explicit flexing internal scroll owner.
+5. `src/front/templates/partials/settings/_settings_logs.html`
+   Removed only the Logs console flex, minimum-height, and overflow inline
+   declarations.
+
+Modified files:
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `src/front/static/query/css/query-dataquality.css`
+- `src/front/static/global/css/config.css`
+- `src/front/templates/partials/settings/_settings_logs.html`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: focused static contracts → 2 failed for the missing exact mobile override and missing CSS-owned Logs scroll rule.
+- RED: focused rendered contracts → Knowledge Graph Data Quality reported computed mobile overflow `hidden`; the desktop visual-card and Settings Logs mobile checks passed.
+- GREEN: `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py` → 135 passed.
+- GREEN: fake-credential desktop and mobile rendered contracts → 5 passed.
+- `uv run --frozen pytest -q tests/units/front` → 920 passed.
+- `uv run --frozen pytest -q -m "not scenario"` → 5588 passed, 294 skipped, 6 deselected, 1 xfailed.
+
+## Document sidebar bottom-alignment contract
+
+Context: Documentation close-out only. Code and tests for the sidebar shell,
+flex chain, and ≤1px bottom invariant are already recorded in earlier
+sections of this log. This section writes the approved contract into the
+design spec and frontend rule, replacing the old nav `margin` /
+`calc(100% - 1rem)` language. Knowledge Graph (`dtwin`) stretch partials
+were already conforming and were not edited here.
+
+Changes:
+
+1. `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+   New English spec for the five page families, `--ob-chrome-height` shell,
+   0.5rem shell gutter, nav `margin: 0` / `height: 100%`, content
+   `0.5rem 0.5rem 0` (1rem top/left/right, no added bottom), flex/min-height
+   chain, long-form vs fixed-pane scroll ownership, DQ/Logs zero bottom
+   padding, mobile document flow, no pane-level `100vh`, ≤1px invariant,
+   route/testing notes, and Home/About/Access Denied plus true-modal
+   exclusions.
+2. `.cursor/11-frontend-design.mdc`
+   Replaced the contradictory sidebar margin/`calc(100% - 1rem)` contract
+   with shell-owned gutter, bottom alignment, flex chain, scroll ownership,
+   DQ/Logs no-bottom padding, and mobile natural flow. Aligned the Tabs
+   full-height phrases with the shared shell bottom (0.5rem viewport
+   gutter). Left L2 navigation and panel-tab rules otherwise unchanged.
+3. `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+   This documentation close-out section.
+
+Modified files:
+- `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- Docs close-out (this section): `uv run --frozen pytest -q tests/units/front/test_sidebar_content_stretch_contract.py tests/units/front/test_clarity_design_contract.py` → 160 passed; `git diff --check` on the three files above → passed.
+- Implementation close-out (already recorded in earlier sections of this log, not produced by these doc files): `uv run --frozen pytest -q tests/units/front` → 920 passed; `uv run --frozen pytest -q -m "not scenario"` → 5588 passed, 294 skipped, 6 deselected, 1 xfailed; `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/navigation/test_sidebar_bottom_alignment.py` → 13 passed. Manual browser verification → 46/46 accessible desktop sidebar routes, 7/7 mobile spot checks, 5/5 true modals; permission-gated sections that did not render a pane were not treated as failures.
+
+## Unify application tabs as underline rails
+
+Context: Application tabs used a heavy rounded container and filled active
+state, while KG Explorer and generated side panels maintained separate visual
+implementations. The redesign establishes one lightweight, responsive tab
+language for page, card, modal, and constrained panel contexts.
+
+Changes:
+
+1. `src/front/static/global/css/components.css`
+   Replaced the fused rounded `.ob-tabs` treatment with a transparent,
+   horizontally scrollable underline rail, added the shared compact density,
+   and switched inactive hover to the brand-aware primary tint.
+2. `src/front/static/global/css/main.css`
+   Aligned legacy Bootstrap tab fallbacks to the standard density and restored
+   `.ob-tab-content` as a complete independent bordered surface while matching
+   the configurable hover tint.
+3. `src/front/static/ontology/js/ontology-shared-panels.js`
+   Applied the shared compact density to generated Ontology form tabs.
+4. `src/front/static/mapping/js/mapping-design.js`
+   Applied the shared compact density to generated Mapping Designer panels.
+5. `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+   Migrated KG Explorer panel navigation to the canonical compact tab classes.
+6. `src/front/static/query/css/query-sigmagraph.css`
+   Removed duplicated tab visual states and retained only panel layout ownership.
+7. `src/front/static/ontology/css/ontology-shared-panels.css`
+   Removed local compact typography and spacing now owned by the shared modifier.
+8. `src/front/templates/partials/ontology/_ontology_cohorts.html`
+   Renamed the non-tab cohort card wrapper and removed its vestigial tabpanel
+   structure.
+9. `src/front/templates/partials/dtwin/_query_cohorts.html`
+   Renamed the non-tab cohort card wrapper to reflect its actual role.
+10. `src/front/static/query/css/query-cohorts.css`
+    Updated the cohort card selector after the semantic rename.
+11. `src/front/static/global/css/pages.css`
+    Removed the unused `.custom-tabs` implementation.
+12. `src/front/static/global/css/mapping.css`
+    Removed orphan panel and mapping-modal tab implementations.
+13. `tests/units/front/test_clarity_design_contract.py`
+    Replaced rounded/fill contracts with underline, focus, density, overflow,
+    migration, brand-aware hover, semantic naming, and dead-style assertions.
+14. `tests/units/front/test_ontology_split_panel_layout.py`
+    Updated the panel contract to require the shared compact rail without local
+    typography or spacing overrides.
+15. `.cursor/11-frontend-design.mdc`
+    Documented the global underline rail, independent content surfaces, two
+    densities, responsive overflow, configurable hover, focus state, and
+    anti-patterns.
+16. `.planning/ui-refresh/mockups/tabs-underline-rail.html`
+    Added the approved interactive design mockup covering standard, compact,
+    and constrained mobile contexts.
+17. `.planning/ui-refresh/mockups/renders/tabs-underline-rail.png`
+    Added the rendered design reference.
+18. `src/front/static/ontology/css/ontology-dataquality.css`
+    Removed the ID-scoped font and padding override so Data Quality uses the
+    same standard density as Business Rules and every other page-level rail.
+19. `src/front/static/query/css/query-sync.css`
+    Removed an unused tab-gap override that contradicted the continuous shared
+    baseline.
+
+Modified files:
+- `src/front/static/global/css/components.css`
+- `src/front/static/global/css/main.css`
+- `src/front/static/ontology/js/ontology-shared-panels.js`
+- `src/front/static/mapping/js/mapping-design.js`
+- `src/front/templates/partials/dtwin/_query_sigmagraph.html`
+- `src/front/static/query/css/query-sigmagraph.css`
+- `src/front/static/ontology/css/ontology-shared-panels.css`
+- `src/front/static/ontology/css/ontology-dataquality.css`
+- `src/front/templates/partials/ontology/_ontology_cohorts.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/static/query/css/query-cohorts.css`
+- `src/front/static/query/css/query-sync.css`
+- `src/front/static/global/css/pages.css`
+- `src/front/static/global/css/mapping.css`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/front/test_ontology_split_panel_layout.py`
+- `.cursor/11-frontend-design.mdc`
+- `.planning/ui-refresh/mockups/tabs-underline-rail.html`
+- `.planning/ui-refresh/mockups/renders/tabs-underline-rail.png`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: new tab-contract tests failed for the previous filled, rounded,
+  non-scrollable component and unmigrated variants.
+- RED: rendered verification exposed the Data Quality ID selector as a third
+  density; focused static contracts also caught the legacy fallback padding,
+  vestigial cohort tabpanel, and unused Sync gap.
+- GREEN: focused tabs, sidebar geometry, and UI-branding contracts → 335 passed,
+  1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5598 passed, 303 skipped,
+  6 deselected, 1 xfailed, 23 warnings.
+- `git diff --check` → passed.
+
+## Restore Graph Chat mobile natural flow
+
+Context: The desktop Graph Chat pane intentionally used a bounded flex layout
+with one internal message scroller, but its active-pane overflow clamp also won
+at 390x844. This prevented the mobile sidebar page from using natural window
+scrolling.
+
+Changes:
+
+1. `tests/units/front/test_clarity_design_contract.py`
+   Added Graph Chat, Knowledge Graph Data Quality, and Settings configuration
+   stylesheets to the pane-level `100vh` prohibition scan.
+2. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Added rendered Graph Chat coverage for desktop flex ownership and the
+   internal message scroller, plus mobile visible overflow, zero horizontal
+   overflow, document growth, and real window scrolling at 390x844.
+3. `src/front/static/query/css/query-chat.css`
+   Removed the redundant desktop `height: 100%` declaration and added a later
+   equal-specificity mobile reset with `height: auto` and `overflow: visible`.
+   The inner chat flex chain and desktop message scroller remain unchanged.
+4. `tests/units/front/test_sidebar_content_stretch_contract.py`
+   Added an exact-selector mobile media-query contract requiring
+   `#chat-section.sidebar-section.active` to restore `height: auto` and
+   `overflow: visible`, parallel to the Knowledge Graph Data Quality contract.
+5. `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+   Named the Graph Chat same-selector reset in the mobile natural-flow and
+   static-testing contracts.
+6. `.cursor/11-frontend-design.mdc`
+   Added Graph Chat to the canonical mobile sidebar reset rule alongside
+   Knowledge Graph Data Quality.
+
+Modified files:
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/units/front/test_sidebar_content_stretch_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `src/front/static/query/css/query-chat.css`
+- `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+- `.cursor/11-frontend-design.mdc`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED static scan: `uv run --frozen pytest -q tests/units/front/test_clarity_design_contract.py::test_only_the_root_shell_owns_viewport_height` → 1 passed; the newly scanned files contained no pane-level `100vh`.
+- RED rendered mobile Graph Chat: `ONTOBRICKS_E2E_FAKE_CREDS=1 uv run --frozen pytest -q tests/e2e/navigation/test_sidebar_bottom_alignment.py -k 'mobile and kg-chat'` → 1 failed, 13 deselected; computed active-pane overflow was `hidden` instead of `visible`.
+- GREEN focused static contracts (Data Quality exact reset, Graph Chat exact reset, pane-level `100vh` scan) → 3 passed.
+- Fake-credential full alignment E2E → 15 passed, including desktop Graph Chat bottom alignment/internal `overflow-y: auto` and mobile window-scroll coverage.
+- Mandatory full non-scenario suite → 5595 passed, 296 skipped, 6 deselected, 1 xfailed, 23 warnings, 0 failed in 45.10s.
+- IDE lints on the changed code/test/documentation files → no errors.
+- `git diff --check` → passed.
+
+## Align sidebar-page vertical rhythm
+
+Context: Sidebar pages used different vertical spacing between L1, L2, page
+headers, subtitles, and primary content. The global section-header inset also
+placed title boxes below the sidebar card, while a temporary optical transform
+could clip title icons beneath the L2 navbar.
+
+Changes:
+
+1. `src/front/static/global/css/sidebar-layout.css`
+   Aligned complete title boxes with the sidebar top without moving icons under
+   L2, and standardized subtitle-to-content spacing at 0.5rem across all
+   sidebar pages.
+2. `tests/units/front/test_clarity_design_contract.py`
+   Added static contracts for equal chrome gutters, title-box alignment, and
+   the shared header-to-content rhythm.
+3. `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+   Added rendered desktop contracts for equal L1/L2/content gaps, icon-safe
+   title alignment, and matching Designer/Business Views spacing.
+4. `.cursor/11-frontend-design.mdc`
+    Documented the canonical 8px vertical rhythm for Cursor and Claude agents;
+    `CLAUDE.md` consumes this canonical rule through its existing import.
+5. `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+    Extended the shared sidebar geometry specification with top alignment and
+    header spacing invariants.
+
+Modified files:
+- `src/front/static/global/css/sidebar-layout.css`
+- `tests/units/front/test_clarity_design_contract.py`
+- `tests/e2e/navigation/test_sidebar_bottom_alignment.py`
+- `.cursor/11-frontend-design.mdc`
+- `documentation/superpowers/specs/2026-08-26-sidebar-bottom-alignment-design.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED: static spacing contracts failed against the previous 0.35rem L2 padding,
+  extra content top inset, global 1rem header padding, and Business Views
+  `mb-4` spacing.
+- GREEN focused static contracts → 3 passed, 1 warning.
+- GREEN rendered spacing contracts → 9 passed, 1 warning.
+- Full rendered sidebar alignment suite → 24 passed, 1 warning.
+- Mandatory full non-scenario suite → 5599 passed, 305 skipped, 6 deselected,
+  1 xfailed, 23 warnings in 46.58s.
+- IDE lints on changed files → no errors.
+- `git diff --check` → passed.
+
+## Add source-safe inference purging
+
+Context: Builders needed a direct way to remove materialized reasoning and
+cohort triples without rebuilding the Knowledge Graph or risking mapped source
+data. The shared action now purges only the generated companion used by
+Lakehouse and Lakebase, while unsupported Neo4j graphs fail safely.
+
+Changes:
+
+1. `src/back/core/graphdb/GraphDBBackend.py`
+   Added the backend capability contract with safe rejection by default.
+2. `src/back/core/graphdb/delta/DeltaFlatStore.py`
+   Added counted truncation of the Lakehouse inferred companion.
+3. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Added counted truncation of the Lakebase application companion.
+4. `src/api/routers/internal/dtwin.py`
+   Added the Builder-protected generated-triple purge endpoint.
+5. `src/front/templates/partials/dtwin/_purge_inferences_button.html`
+   Added the shared destructive action used by both Knowledge Graph pages.
+6. `src/front/templates/partials/dtwin/_query_reasoning.html`
+   Added the purge action to the Inference header with consistent action spacing.
+7. `src/front/templates/partials/dtwin/_query_cohorts.html`
+   Added the purge action to the Cohorts header.
+8. `src/front/static/query/js/query-purge-inferences.js`
+   Added permission gating, confirmation, request handling, busy state,
+   notifications, stale-result clearing, and status refresh.
+9. `src/front/templates/dtwin.html`
+   Loaded the shared purge module once for the Knowledge Graph shell.
+10. `tests/units/graphdb/test_materialized_inference_purge.py`
+    Added source-preservation and backend capability tests.
+11. `tests/units/dtwin/test_purge_materialized_inferences.py`
+    Added endpoint success and unsupported-backend tests.
+12. `tests/units/front/test_purge_inferences_ui.py`
+    Added shared template and JavaScript UI contracts.
+13. `tests/units/auth/test_permission_middleware.py`
+    Added the purge endpoint to frozen-version graph-refresh coverage.
+14. `documentation/user-guide.md`
+    Documented purge scope, preserved outputs, and Neo4j safety behavior.
+15. `documentation/data-access.md`
+    Documented the DELETE endpoint and generated-companion semantics.
+16. `documentation/superpowers/specs/2026-08-26-materialized-inference-purge-design.md`
+    Recorded the approved feature design.
+17. `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+    Recorded the test-first implementation plan.
+
+Modified files:
+- `src/back/core/graphdb/GraphDBBackend.py`
+- `src/back/core/graphdb/delta/DeltaFlatStore.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_purge_inferences_button.html`
+- `src/front/templates/partials/dtwin/_query_reasoning.html`
+- `src/front/templates/partials/dtwin/_query_cohorts.html`
+- `src/front/static/query/js/query-purge-inferences.js`
+- `src/front/templates/dtwin.html`
+- `tests/units/graphdb/test_materialized_inference_purge.py`
+- `tests/units/dtwin/test_purge_materialized_inferences.py`
+- `tests/units/front/test_purge_inferences_ui.py`
+- `tests/units/auth/test_permission_middleware.py`
+- `documentation/user-guide.md`
+- `documentation/data-access.md`
+- `documentation/superpowers/specs/2026-08-26-materialized-inference-purge-design.md`
+- `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED backend contracts → 3 expected failures before implementation.
+- GREEN focused purge and regression suite → 78 passed, 1 warning.
+- Frozen-version graph-refresh coverage → 19 passed, 1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5612 passed,
+  305 skipped, 6 deselected, 1 xfailed, 23 warnings in 46.96s.
+- Browser verification at 1600×1000 and 390×844 → both buttons visible,
+  confirmation and cancellation passed, no purge request sent, and no
+  page-specific console errors.
+- IDE lints on changed files → no errors.
+- `git diff --check` → passed.
+
+## Expose live materialized-inference counts
+
+Context: Builders needed the combined reasoning-and-cohort count before
+purging, plus the same live metric on Knowledge Graph → Build and Domain
+Cockpit. GET `/dtwin/reasoning/inferred` now returns a lightweight status
+payload instead of a static zero stub.
+
+Changes:
+
+1. `src/back/core/graphdb/GraphDBBackend.py`
+   Added `supports_materialized_inference_purge` (false by default).
+2. `src/back/core/graphdb/delta/DeltaFlatStore.py`
+   Marked the Lakehouse companion backend as purge-capable.
+3. `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+   Marked the Lakebase companion backend as purge-capable.
+4. `src/api/routers/internal/dtwin.py`
+   Upgraded GET `/dtwin/reasoning/inferred` to return graph name, live
+   count, and purge support without listing triples.
+5. `src/front/templates/partials/dtwin/_query_databricks_build.html`
+   Added the shared purge action next to Refresh on Build.
+6. `src/front/static/query/js/query-purge-inferences.js`
+   Loaded live status before confirmation and named the combined count.
+7. `src/front/templates/partials/domain/_domain_validation.html`
+   Added the Cockpit Knowledge Graph materialized-inference metric.
+8. `src/front/static/domain/js/domain-validation.js`
+   Loaded the lightweight status on Cockpit refresh.
+9. `tests/units/graphdb/test_materialized_inference_purge.py`
+   Added backend capability assertions.
+10. `tests/units/dtwin/test_purge_materialized_inferences.py`
+    Added live GET status contracts.
+11. `tests/units/front/test_purge_inferences_ui.py`
+    Required the Build include and count-aware confirmation copy.
+12. `tests/units/front/test_cockpit_inference_count.py`
+    Added Cockpit metric and loader contracts.
+13. `documentation/user-guide.md`
+    Documented Build, the confirmation count, and the Cockpit metric.
+14. `documentation/data-access.md`
+    Documented GET status fields and Cockpit consumption.
+15. `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+    Added Tasks 5–8 for status, Build, and Cockpit.
+
+Modified files:
+- `src/back/core/graphdb/GraphDBBackend.py`
+- `src/back/core/graphdb/delta/DeltaFlatStore.py`
+- `src/back/core/graphdb/lakebase/LakebaseFlatStore.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/front/templates/partials/dtwin/_query_databricks_build.html`
+- `src/front/static/query/js/query-purge-inferences.js`
+- `src/front/templates/partials/domain/_domain_validation.html`
+- `src/front/static/domain/js/domain-validation.js`
+- `tests/units/graphdb/test_materialized_inference_purge.py`
+- `tests/units/dtwin/test_purge_materialized_inferences.py`
+- `tests/units/front/test_purge_inferences_ui.py`
+- `tests/units/front/test_cockpit_inference_count.py`
+- `documentation/user-guide.md`
+- `documentation/data-access.md`
+- `documentation/superpowers/plans/2026-08-26-materialized-inference-purge.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- RED capability/status/UI/Cockpit contracts failed before implementation.
+- GREEN focused suite → 16 passed, 1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5619 passed,
+  305 skipped, 6 deselected, 1 xfailed, 23 warnings in 43.77s.
+- IDE lints on changed files → no errors.
+- `git diff --check` → passed.
+
+## Allow ontology-only versions to enter review
+
+Context: A version with a valid ontology but no Knowledge Graph build
+could not be submitted for review. `SettingsService` already computed
+`has_ontology`; the lifecycle gate now accepts either a build or an
+ontology, and still rejects a truly empty version.
+
+Changes:
+
+1. `src/back/objects/registry/version_lifecycle.py`
+   Relaxed DRAFT → IN-REVIEW to require `last_build` or `has_ontology`.
+2. `tests/units/registry/test_version_lifecycle.py`
+   Covered empty rejection and ontology-only acceptance.
+
+Modified files:
+- `src/back/objects/registry/version_lifecycle.py`
+- `tests/units/registry/test_version_lifecycle.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/registry/test_version_lifecycle.py tests/units/settings/test_settings_version_status.py` → 42 passed, 1 warning.
+
+## Show Purge Inferences on the live Lakebase Build page
+
+Context: Live verification on Cust360Auto V4 showed Purge Inferences only
+in the hidden Databricks Build panel. Lakebase Build (`_query_sync.html`)
+is the visible header and now includes the shared action.
+
+Changes:
+
+1. `src/front/templates/partials/dtwin/_query_sync.html`
+   Added the shared purge button next to Refresh on Lakebase Build.
+2. `tests/units/front/test_purge_inferences_ui.py`
+   Required the include on both Lakebase and Lakehouse Build templates.
+3. `documentation/user-guide.md`
+   Named both Build backends as purge entry points.
+
+Modified files:
+- `src/front/templates/partials/dtwin/_query_sync.html`
+- `tests/units/front/test_purge_inferences_ui.py`
+- `documentation/user-guide.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/front/test_purge_inferences_ui.py` → 5 passed, 1 warning.
+- `uv run --frozen pytest -q -m "not scenario"` → 5619 passed, 1 failed
+  (`tests/units/mcp/test_domain_policy_gating.py::test_all_twelve_tools_are_registered`,
+  13 registered tools vs expected 12 — unrelated to this UI placement),
+  305 skipped, 6 deselected, 1 xfailed, 23 warnings in 41.83s.
+
+## Wire ontology-only review through submit paths
+
+Context: The lifecycle gate accepted `has_ontology`, but submit still
+required a Knowledge Graph build. Review and settings now use the same
+build-or-ontology rule, and published listings expose `has_graph` for
+the MCP surface.
+
+Changes:
+
+1. `src/back/objects/registry/RegistryService.py`
+   Added ontology detection and `has_graph` on published domain listings.
+2. `src/back/objects/registry/ReviewService.py`
+   Allowed submit when the version has an ontology even without a build.
+3. `src/back/objects/domain/SettingsService.py`
+   Passed `has_ontology` into the lifecycle check.
+4. `src/api/routers/domains.py`
+   Added `has_graph` on the domains list payload.
+
+Modified files:
+- `src/back/objects/registry/RegistryService.py`
+- `src/back/objects/registry/ReviewService.py`
+- `src/back/objects/domain/SettingsService.py`
+- `src/api/routers/domains.py`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/registry/test_review_service.py tests/units/registry/test_review_multiuser.py tests/units/settings/test_settings_version_status.py` → focused review/settings tests passed as part of 123.
+
+## Add describe_ontology for ontology-only MCP domains
+
+Context: A published domain with no graph still needed an MCP schema
+tool. `describe_ontology` reads OWL/classes only; graph tools hide when
+`has_graph` is false.
+
+Changes:
+
+1. `src/back/core/mcp_tools.py`
+   Catalogued `describe_ontology` as a domain-scoped tool.
+2. `src/mcp-server/server/app.py`
+   Implemented the tool and hid graph tools for ontology-only domains.
+3. `tests/units/core/test_mcp_tools_policy.py`
+   Updated the domain-tool count.
+4. `tests/units/mcp/test_domain_policy_gating.py`
+   Counted thirteen registered tools including `describe_ontology`.
+5. `tests/units/mcp/test_graph_tools_mirror.py`
+   Locked GRAPH_TOOLS to domain tools minus `describe_ontology`.
+6. `documentation/mcp.md`
+   Documented the ninth domain tool and ontology-only MCP behaviour.
+7. `documentation/data-access.md`
+   Mapped `describe_ontology` and `has_graph` hiding.
+
+Modified files:
+- `src/back/core/mcp_tools.py`
+- `src/mcp-server/server/app.py`
+- `tests/units/core/test_mcp_tools_policy.py`
+- `tests/units/mcp/test_domain_policy_gating.py`
+- `tests/units/mcp/test_graph_tools_mirror.py`
+- `documentation/mcp.md`
+- `documentation/data-access.md`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN `uv run --frozen pytest -q tests/units/core/test_mcp_tools_policy.py tests/units/mcp/test_domain_policy_gating.py tests/units/mcp/test_graph_tools_mirror.py` → 40 passed, 1 warning.
+
+## Document ontology-only MCP behaviour
+
+Context: The ontology-only publish path needed the same story in the
+README, architecture, MCP policy SPEC, and eval dataset.
+
+Changes:
+
+1. `README.md`
+   Documented build-or-ontology review and `describe_ontology`.
+2. `documentation/architecture.md`
+   Documented `has_graph` and ontology-only MCP hiding.
+3. `.planning/mcp-domain-policy/SPEC.md`
+   Added ontology-only domains and the 11th eval example.
+4. `tests/eval/datasets/mcp/domain_policy.jsonl`
+   Added the ontology-only `describe_ontology` eval case.
+
+Modified files:
+- `README.md`
+- `documentation/architecture.md`
+- `.planning/mcp-domain-policy/SPEC.md`
+- `tests/eval/datasets/mcp/domain_policy.jsonl`
+- `changelogs/v0.8.0/benoitcayladbx_2026-08-26.log`
+
+Tests:
+- GREEN eval dataset is additive; MCP unit contracts already passing (40).
+

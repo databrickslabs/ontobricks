@@ -1,0 +1,38 @@
+## Refresh Ontology Designer map metadata without a full rebuild
+
+Context: Saving an entity or relationship from the Ontology Designer always
+rebuilt the whole map (`initOntologyMap()`), even for metadata-only edits
+(label, emoji, direction, external-config badge). That reset layout and was
+unnecessary when the graph topology did not change. Entity and relationship
+saves now describe whether a rebuild is required; metadata-only updates patch
+the existing D3 node or link in place, and create/rename/parent/endpoint
+changes still rebuild.
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-map.js
+   Extract `_classHasExternalConfig` and `_appendMapExternalBadge`; add
+   `refreshMapNodeFromConfig` and `refreshMapRelationshipFromConfig` to update
+   label, icon, badge, and link direction/label on existing map elements;
+   scope `refreshMapLinkDirection` to `ontologyMapSvg`.
+2. src/front/static/ontology/js/ontology-shared-panels.js
+   Pass save callbacks `{ entityName|relationshipName, previousName,
+   requiresMapRebuild }`; add `refreshMapAfterEntitySave` /
+   `refreshMapAfterRelationshipSave` so map-tab saves incrementally refresh
+   when topology is unchanged, otherwise rebuild; drop the redundant
+   `refreshMapLinkDirection` call from relationship save.
+3. tests/units/front/test_ontology_map_external_badge.py
+   Point the `hasExternal` source contract at `_classHasExternalConfig`.
+4. tests/units/front/test_ontology_map_incremental_refresh.py (new)
+   Source-guard contracts for rebuild vs incremental refresh on entity and
+   relationship saves, including scoped D3 selections.
+
+Modified files:
+- src/front/static/ontology/js/ontology-map.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- tests/units/front/test_ontology_map_external_badge.py
+- tests/units/front/test_ontology_map_incremental_refresh.py (new)
+
+Test result: `uv run --frozen pytest -q -m "not scenario"` →
+5850 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 77.42s (0:01:17).
+Exit code: 0.

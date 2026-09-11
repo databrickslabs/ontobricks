@@ -1,0 +1,42 @@
+## Add OntoBricks website link to README
+
+Context: The product site at http://ontobricks.datacorner.net/ was not referenced
+from the repository README. Readers landing on GitHub had no pointer to the
+public landing page (overview, screenshots, videos).
+
+Changes:
+
+1. README.md
+   Header now links to the website and GitHub. Documentation section points at
+   ontobricks.datacorner.net for the product overview.
+
+Modified files:
+- README.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4991 passed, 281 skipped, 6 deselected, 1 xfailed in 37.64s
+
+## Stop embedding SQL quotes in exported R2RML column names
+
+Context: Issue #144 — auto-generated R2RML wrapped every column in SQL
+double-quotes. RDFLib then Turtle-escaped them (`rr:column "\"Label\""`,
+`rr:template ".../{\"ID\"}"`), so Ontop looked up a column named `"Label"`
+instead of `Label`. R2RML §7.2/`rr:column` is the bare name; §7.3 only
+quotes non-plain identifiers inside templates.
+
+Changes:
+
+1. src/back/core/w3c/r2rml/R2RMLGenerator.py
+   Emit raw names on `rr:column`; quote inside `rr:template` only when the
+   name is not a plain SQL identifier.
+2. src/back/core/w3c/r2rml/R2RMLParser.py
+   Keep `_unquote_column` for older always-quoted exports.
+3. tests/units/mapping/test_r2rml_generator.py
+   Regression for #144 plus restored helper/template assertions.
+
+Modified files:
+- src/back/core/w3c/r2rml/R2RMLGenerator.py
+- src/back/core/w3c/r2rml/R2RMLParser.py
+- tests/units/mapping/test_r2rml_generator.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-22.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 4993 passed, 281 skipped, 6 deselected, 1 xfailed in 40.92s

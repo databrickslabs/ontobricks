@@ -3,6 +3,8 @@
  * Settings page JavaScript – sidebar layout; global Save persists all sections including triple store
  */
 
+window.SIDEBAR_NAV_MANUAL_INIT = true;
+
 document.addEventListener('DOMContentLoaded', function () {
 
     let currentWarehouseId = null;
@@ -23,6 +25,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // failed or had not resolved yet would make the next Save silently write
     // "off" over an admin's "on" — with no error and nobody touching the box.
     let analyticsJobHydrated = false;
+    // Same contract for the graph-read bounds: their inputs live in the Global
+    // section but the Save handler posts them from every section, and a blank
+    // input means "clear the admin override". Without the flag a failed
+    // hydration would let an unrelated Save reset a configured bound.
+    let graphLimitsHydrated = false;
     // Registry rebuilt on every loadLakebaseObjects call; keyed by domain base name.
     // Avoids embedding JSON in onclick HTML attributes (double quotes break the attribute).
     let _lkDomainRegistry = {};
@@ -36,6 +43,33 @@ document.addEventListener('DOMContentLoaded', function () {
     let _dtDomainRegistry = {};
     // Analytics groups whose slug matches no domain, keyed by that slug.
     let _dtOrphanRegistry = {};
+    const UI_BRANDING_DEFAULTS = {
+        version: 1,
+        app_title: 'OntoBricks',
+        primary_color: '#4F46E5',
+        logo_url: '/static/global/img/favicon.svg',
+        logo_data_url: '',
+        is_custom_logo: false,
+        palette: {
+            primary_rgb: '79, 70, 229',
+            primary_dark: '#4338CA',
+            primary_darker: '#3730A3',
+            primary_light: 'rgba(79, 70, 229, 0.10)',
+            hover: 'rgba(79, 70, 229, 0.06)',
+            focus: 'rgba(79, 70, 229, 0.18)',
+            on_primary: '#FFFFFF',
+            selected_text: '#3730A3',
+        },
+    };
+    let savedUIBranding = null;
+    let draftUIBranding = null;
+    let uiBrandingLoaded = false;
+    let uiBrandingLoading = false;
+    let uiBrandingDirty = false;
+    let uiBrandingValid = false;
+    let uiBrandingPendingLogoFile = null;
+    let uiBrandingResetLogo = false;
+    let uiBrandingObjectUrl = null;
 
     function escapeHtmlSettings(str) { return escapeHtml(str); }
 
@@ -49,8 +83,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadRegistryCacheTtl();
     loadEditLockTtl();
+    loadGraphLimits();
     loadAnalyticsJobEnabled();
-    loadNavbarLogo();
     // Preload the Delta warehouse selection + registry location so the Delta
     // panel reflects the saved SQL warehouse. Also preload graph_engine_config
     // so Neo4j / Lakebase connection forms hydrate from the registry before
@@ -60,9 +94,43 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch((e) => console.log('Graph DB preload failed', e));
     loadGraphEngineConfig()
         .catch((e) => console.log('Graph engine config preload failed', e));
+    initializeUIBrandingSection();
 
     // Ensure the Lakebase / Delta configuration panels are visible on load.
     applyGraphDbEnginePanels();
+    setupSettingsTabRailAutoScroll();
+    function scrollTabIntoRailViewport(target) {
+        if (!target || typeof target.scrollIntoView !== 'function') return;
+        target.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest',
+        });
+    }
+
+    function setupSettingsTabRailAutoScroll() {
+        ['deltaTabs', 'lakebaseTabs', 'neo4jTabs', 'settingsRunsTabs', 'healthTabs'].forEach((tabsId) => {
+            const rail = document.getElementById(tabsId);
+            if (!rail) return;
+
+            const scrollSelected = (sourceTarget) => {
+                const candidate = sourceTarget && sourceTarget.closest
+                    ? sourceTarget.closest('[role="tab"]')
+                    : null;
+                const selected = candidate && rail.contains(candidate)
+                    ? candidate
+                    : rail.querySelector('[role="tab"][aria-selected="true"], .nav-link.active');
+                if (selected) scrollTabIntoRailViewport(selected);
+            };
+
+            rail.addEventListener('shown.bs.tab', (event) => {
+                scrollSelected(event.target);
+            });
+            rail.addEventListener('focusin', (event) => {
+                scrollSelected(event.target);
+            });
+        });
+    }
+
 
     // =====================================================================
     //  DATABRICKS TAB
@@ -456,7 +524,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function selectDefaultEmoji(emoji) {
+    async function selectDefaultEmoji(emoji, options) {
+        const notify = !options || options.notify !== false;
         try {
             const response = await fetch('/settings/set-default-emoji', {
                 method: 'POST',
@@ -467,7 +536,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
             if (result.success) {
                 document.getElementById('currentDefaultEmoji').textContent = emoji;
-                showNotification('Default entity icon updated to ' + emoji, 'success', 2000);
+                if (notify) {
+                    showNotification('Default entity icon updated to ' + emoji, 'success', 2000);
+                }
             } else {
                 showNotification('Error: ' + result.message, 'error');
             }
@@ -488,125 +559,645 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // =====================================================================
-    //  GLOBAL TAB – Application Logo (top-bar branding)
+    //  UI TAB – Branding and Theme
     // =====================================================================
 
-    async function loadNavbarLogo() {
-        try {
-            const resp = await fetch('/settings/navbar-logo', { credentials: 'same-origin' });
-            const result = await resp.json();
-            if (!result.success) return;
-            const previewEl = document.getElementById('navbarLogoPreview');
-            if (previewEl && result.logo_url) previewEl.src = result.logo_url;
-            const statusEl = document.getElementById('navbarLogoStatus');
-            if (statusEl) {
-                statusEl.textContent = result.is_custom ? 'Custom logo active' : 'Using default logo';
+    function parseHexColor(value) {
+        const normalized = String(value || '').trim().toUpperCase();
+        return /^#[0-9A-F]{6}$/.test(normalized) ? normalized : null;
+    }
+
+    function hexToRgb(hexColor) {
+        const normalized = parseHexColor(hexColor);
+        if (!normalized) return null;
+        return [
+            parseInt(normalized.slice(1, 3), 16),
+            parseInt(normalized.slice(3, 5), 16),
+            parseInt(normalized.slice(5, 7), 16),
+        ];
+    }
+
+    function rgbToHex(rgb) {
+        const chan = (value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0').toUpperCase();
+        return `#${chan(rgb[0])}${chan(rgb[1])}${chan(rgb[2])}`;
+    }
+
+    function mixWithBlack(rgb, ratio) {
+        const scale = 1 - ratio;
+        return rgb.map((channel) => Math.round(channel * scale));
+    }
+
+    function srgbToLinear(channel) {
+        const value = channel / 255;
+        if (value <= 0.03928) return value / 12.92;
+        return ((value + 0.055) / 1.055) ** 2.4;
+    }
+
+    function relativeLuminance(rgb) {
+        return (
+            0.2126 * srgbToLinear(rgb[0])
+            + 0.7152 * srgbToLinear(rgb[1])
+            + 0.0722 * srgbToLinear(rgb[2])
+        );
+    }
+
+    function contrastRatio(left, right) {
+        const l1 = relativeLuminance(left);
+        const l2 = relativeLuminance(right);
+        const light = Math.max(l1, l2);
+        const dark = Math.min(l1, l2);
+        return (light + 0.05) / (dark + 0.05);
+    }
+
+    function chooseOnPrimary(primaryRgb) {
+        const dark = [17, 24, 39];
+        const white = [255, 255, 255];
+        const darkRatio = contrastRatio(primaryRgb, dark);
+        const whiteRatio = contrastRatio(primaryRgb, white);
+        const bestColor = darkRatio >= whiteRatio ? '#111827' : '#FFFFFF';
+        const bestRatio = bestColor === '#111827' ? darkRatio : whiteRatio;
+        if (bestRatio < 4.5) {
+            const blackRatio = contrastRatio(primaryRgb, [0, 0, 0]);
+            if (blackRatio > bestRatio) return '#000000';
+        }
+        return bestColor;
+    }
+
+    function normalizeTitle(value) {
+        return String(value || '').trim();
+    }
+
+    function titleCodePointLength(value) {
+        return Array.from(normalizeTitle(value)).length;
+    }
+
+    function compositeOnWarmSurface(primaryRgb, alpha) {
+        const warm = [255, 248, 239];
+        return [
+            Math.round(primaryRgb[0] * alpha + warm[0] * (1 - alpha)),
+            Math.round(primaryRgb[1] * alpha + warm[1] * (1 - alpha)),
+            Math.round(primaryRgb[2] * alpha + warm[2] * (1 - alpha)),
+        ];
+    }
+
+    function deriveSelectedText(primaryRgb) {
+        const selectedBg = compositeOnWarmSurface(primaryRgb, 0.10);
+        if (contrastRatio(primaryRgb, selectedBg) >= 4.5) {
+            return rgbToHex(primaryRgb);
+        }
+        for (let step = 1; step <= 20; step++) {
+            const candidate = mixWithBlack(primaryRgb, Math.min(1, step * 0.05));
+            if (contrastRatio(candidate, selectedBg) >= 4.5) {
+                return rgbToHex(candidate);
             }
-        } catch (e) {
-            console.log('Could not load navbar logo settings');
+        }
+        return '#111827';
+    }
+
+    function deriveBrandPalette(primaryColor) {
+        const rgb = hexToRgb(primaryColor);
+        if (!rgb) return { ...UI_BRANDING_DEFAULTS.palette };
+        const csv = `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`;
+        return {
+            primary_rgb: csv,
+            primary_dark: rgbToHex(mixWithBlack(rgb, 0.15)),
+            primary_darker: rgbToHex(mixWithBlack(rgb, 0.30)),
+            primary_light: `rgba(${csv}, 0.10)`,
+            hover: `rgba(${csv}, 0.06)`,
+            focus: `rgba(${csv}, 0.18)`,
+            on_primary: chooseOnPrimary(rgb),
+            selected_text: deriveSelectedText(rgb),
+        };
+    }
+
+    function cloneUIBranding(branding) {
+        return JSON.parse(JSON.stringify(branding));
+    }
+
+    function normalizeUIBrandingDraft(raw) {
+        const source = raw || {};
+        const title = normalizeTitle(source.app_title || '');
+        const normalizedTitle = title || UI_BRANDING_DEFAULTS.app_title;
+        const normalizedColor = parseHexColor(source.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
+        const palette = source.palette && source.palette.primary_rgb
+            ? source.palette
+            : deriveBrandPalette(normalizedColor);
+        return {
+            version: Number(source.version || 1),
+            app_title: normalizedTitle,
+            primary_color: normalizedColor,
+            logo_data_url: String(source.logo_data_url || ''),
+            logo_url: String(source.logo_url || source.logo_data_url || UI_BRANDING_DEFAULTS.logo_url),
+            is_custom_logo: Boolean(source.is_custom_logo || source.logo_data_url),
+            palette: {
+                primary_rgb: String(palette.primary_rgb || deriveBrandPalette(normalizedColor).primary_rgb),
+                primary_dark: String(palette.primary_dark || deriveBrandPalette(normalizedColor).primary_dark),
+                primary_darker: String(palette.primary_darker || deriveBrandPalette(normalizedColor).primary_darker),
+                primary_light: String(palette.primary_light || deriveBrandPalette(normalizedColor).primary_light),
+                hover: String(palette.hover || deriveBrandPalette(normalizedColor).hover),
+                focus: String(palette.focus || deriveBrandPalette(normalizedColor).focus),
+                on_primary: String(palette.on_primary || deriveBrandPalette(normalizedColor).on_primary),
+                selected_text: String(palette.selected_text || deriveBrandPalette(normalizedColor).selected_text),
+            },
+        };
+    }
+
+    function showUIBrandingStatus(message, level) {
+        const statusEl = document.getElementById('uiBrandingStatus');
+        if (!statusEl) return;
+        statusEl.className = 'alert py-2 px-3 mb-3 small';
+        if (!message) {
+            statusEl.classList.add('d-none');
+            statusEl.textContent = '';
+            return;
+        }
+        if (level === 'error') {
+            statusEl.classList.add('alert-danger');
+        } else if (level === 'success') {
+            statusEl.classList.add('alert-success');
+        } else {
+            statusEl.classList.add('alert-info');
+        }
+        statusEl.classList.remove('d-none');
+        statusEl.textContent = message;
+    }
+
+    function clearUIBrandingPreviewObjectUrl() {
+        if (uiBrandingObjectUrl) {
+            URL.revokeObjectURL(uiBrandingObjectUrl);
+            uiBrandingObjectUrl = null;
         }
     }
 
-    const logoFileInput = document.getElementById('navbarLogoFile');
-    const logoUploadBtn = document.getElementById('btnUploadNavbarLogo');
-    const logoResetBtn  = document.getElementById('btnResetNavbarLogo');
-    const logoPreviewEl = document.getElementById('navbarLogoPreview');
-    const logoStatusEl  = document.getElementById('navbarLogoStatus');
-
-    if (logoFileInput) {
-        logoFileInput.addEventListener('change', () => {
-            const file = logoFileInput.files && logoFileInput.files[0];
-            if (logoUploadBtn) logoUploadBtn.disabled = !file;
-            if (file && logoPreviewEl) {
-                const reader = new FileReader();
-                reader.onload = (ev) => { logoPreviewEl.src = ev.target.result; };
-                reader.readAsDataURL(file);
-            }
+    function setAllBrandIconSources(nextUrl, nextTitle) {
+        document.querySelectorAll('[data-brand-icon]').forEach((img) => {
+            if (nextUrl) img.src = nextUrl;
+            if (img.alt !== '') img.alt = nextTitle;
+        });
+        const navImg = document.getElementById('brandLogoImg');
+        if (navImg) {
+            if (nextUrl) navImg.src = nextUrl;
+            navImg.alt = nextTitle;
+        }
+        document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"]').forEach((link) => {
+            if (nextUrl) link.setAttribute('href', nextUrl);
         });
     }
 
-    if (logoUploadBtn) {
-        logoUploadBtn.addEventListener('click', async () => {
-            const file = logoFileInput && logoFileInput.files && logoFileInput.files[0];
-            if (!file) return;
-            const MAX = 1024 * 1024;
-            if (file.size > MAX) {
-                showNotification(`Image too large (${file.size} bytes); max ${MAX} bytes`, 'error');
-                return;
-            }
-            logoUploadBtn.disabled = true;
-            const original = logoUploadBtn.innerHTML;
-            logoUploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading...';
-            try {
-                const fd = new FormData();
-                fd.append('file', file);
-                const resp = await fetch('/settings/navbar-logo', {
-                    method: 'POST',
-                    body: fd,
-                    credentials: 'same-origin'
-                });
-                const result = await resp.json();
-                if (result.success) {
-                    if (logoPreviewEl && result.logo_url) logoPreviewEl.src = result.logo_url;
-                    if (logoStatusEl) logoStatusEl.textContent = 'Custom logo active';
-                    if (logoFileInput) logoFileInput.value = '';
-                    if (typeof fetchCachedInvalidate === 'function') {
-                        fetchCachedInvalidate('/navbar/state');
-                    }
-                    const navImg = document.getElementById('brandLogoImg');
-                    if (navImg && result.logo_url) navImg.src = result.logo_url;
-                    showNotification('Application logo updated', 'success', 2500);
-                } else {
-                    showNotification('Error: ' + (result.message || 'upload failed'), 'error');
-                }
-            } catch (e) {
-                showNotification('Error uploading logo: ' + e.message, 'error');
-            } finally {
-                logoUploadBtn.innerHTML = original;
-                logoUploadBtn.disabled = !(logoFileInput && logoFileInput.files && logoFileInput.files[0]);
-            }
+    function updateBrandingSwatchAccessibility(primaryColor, palette) {
+        const labels = [
+            { id: 'uiSwatchPrimary', name: 'Primary', value: primaryColor },
+            { id: 'uiSwatchHover', name: 'Hover', value: palette.hover },
+            { id: 'uiSwatchLight', name: 'Selected', value: palette.primary_light },
+            { id: 'uiSwatchFocus', name: 'Focus Ring', value: palette.focus },
+            { id: 'uiSwatchOnPrimary', name: 'On Primary', value: palette.on_primary },
+        ];
+        labels.forEach((item) => {
+            const el = document.getElementById(item.id);
+            if (!el) return;
+            const semanticValue = `${item.name} color ${item.value}`;
+            el.setAttribute('aria-label', semanticValue);
+            el.setAttribute('title', semanticValue);
         });
     }
 
-    if (logoResetBtn) {
-        logoResetBtn.addEventListener('click', async () => {
-            const confirmed = await (typeof showConfirmDialog === 'function'
-                ? showConfirmDialog({
-                    title: 'Reset application logo',
-                    message: 'Restore the default OntoBricks logo for all users?',
-                    confirmText: 'Reset',
-                    confirmClass: 'btn-warning',
-                    icon: 'arrow-counterclockwise'
-                })
-                : Promise.resolve(window.confirm('Restore the default logo?')));
-            if (!confirmed) return;
-            logoResetBtn.disabled = true;
-            try {
-                const resp = await fetch('/settings/navbar-logo', {
-                    method: 'DELETE',
-                    credentials: 'same-origin'
-                });
-                const result = await resp.json();
-                if (result.success) {
-                    if (logoPreviewEl && result.logo_url) logoPreviewEl.src = result.logo_url;
-                    if (logoStatusEl) logoStatusEl.textContent = 'Using default logo';
-                    if (logoFileInput) logoFileInput.value = '';
-                    if (logoUploadBtn) logoUploadBtn.disabled = true;
-                    if (typeof fetchCachedInvalidate === 'function') {
-                        fetchCachedInvalidate('/navbar/state');
-                    }
-                    const navImg = document.getElementById('brandLogoImg');
-                    if (navImg && result.logo_url) navImg.src = result.logo_url;
-                    showNotification('Application logo reset to default', 'success', 2500);
-                } else {
-                    showNotification('Error: ' + (result.message || 'reset failed'), 'error');
-                }
-            } catch (e) {
-                showNotification('Error resetting logo: ' + e.message, 'error');
-            } finally {
-                logoResetBtn.disabled = false;
-            }
+    function previewUIBranding(draft) {
+        const titleText = String(draft.app_title || UI_BRANDING_DEFAULTS.app_title);
+        const section = document.getElementById('ui-section');
+        const palette = draft.palette || deriveBrandPalette(draft.primary_color);
+        const logoUrl = draft.preview_logo_url || draft.logo_url || UI_BRANDING_DEFAULTS.logo_url;
+
+        const brandTitleEl = document.getElementById('brandTitleText');
+        if (brandTitleEl) brandTitleEl.textContent = titleText;
+        document.querySelectorAll('[data-brand-title]').forEach((el) => {
+            el.textContent = titleText;
         });
+        const titleEl = document.querySelector('title');
+        if (titleEl && typeof titleEl.textContent === 'string') {
+            const idx = titleEl.textContent.lastIndexOf(' - ');
+            titleEl.textContent = idx >= 0
+                ? `${titleEl.textContent.slice(0, idx)} - ${titleText}`
+                : titleText;
+        }
+
+        document.documentElement.style.setProperty('--db-primary', draft.primary_color);
+        document.documentElement.style.setProperty('--db-primary-rgb', palette.primary_rgb);
+        document.documentElement.style.setProperty('--db-primary-dark', palette.primary_dark);
+        document.documentElement.style.setProperty('--db-primary-darker', palette.primary_darker);
+        document.documentElement.style.setProperty('--db-primary-light', palette.primary_light);
+        document.documentElement.style.setProperty('--db-hover-indigo', palette.hover);
+        document.documentElement.style.setProperty('--db-focus-ring', `0 0 0 0.2rem ${palette.focus}`);
+        document.documentElement.style.setProperty('--db-shadow-primary', `0 8px 20px ${palette.focus}`);
+        document.documentElement.style.setProperty('--db-on-primary', palette.on_primary);
+        document.documentElement.style.setProperty('--db-primary-selected-text', palette.selected_text);
+
+        if (section) {
+            section.style.setProperty('--ui-preview-primary', draft.primary_color);
+            section.style.setProperty('--ui-preview-primary-rgb', palette.primary_rgb);
+            section.style.setProperty('--ui-preview-primary-dark', palette.primary_dark);
+            section.style.setProperty('--ui-preview-hover', palette.hover);
+            section.style.setProperty('--ui-preview-light', palette.primary_light);
+            section.style.setProperty('--ui-preview-focus', `0 0 0 0.2rem ${palette.focus}`);
+            section.style.setProperty('--ui-preview-on-primary', palette.on_primary);
+            section.style.setProperty('--ui-preview-selected-text', palette.selected_text);
+        }
+
+        updateBrandingSwatchAccessibility(draft.primary_color, palette);
+        setAllBrandIconSources(logoUrl, titleText);
+        const previewImg = document.getElementById('navbarLogoPreview');
+        if (previewImg && logoUrl) previewImg.src = logoUrl;
+    }
+
+    function updateUIBrandingButtons() {
+        const saveBtn = document.getElementById('uiBrandingSaveBtn');
+        const discardBtn = document.getElementById('uiBrandingDiscardBtn');
+        const resetIconBtn = document.getElementById('uiBrandingResetIconBtn');
+        if (saveBtn) saveBtn.disabled = !uiBrandingDirty || !uiBrandingValid || uiBrandingLoading;
+        if (discardBtn) discardBtn.disabled = !uiBrandingDirty || uiBrandingLoading;
+        if (resetIconBtn) resetIconBtn.disabled = uiBrandingLoading;
+    }
+
+    function setBrandingInputErrorState(inputEl, errorEl, message) {
+        if (!inputEl || !errorEl) return;
+        if (message) {
+            inputEl.setAttribute('aria-invalid', 'true');
+            errorEl.textContent = message;
+            errorEl.classList.remove('d-none');
+            return;
+        }
+        inputEl.removeAttribute('aria-invalid');
+        errorEl.textContent = '';
+        errorEl.classList.add('d-none');
+    }
+
+    function updateUIBrandingValidity() {
+        const titleInput = document.getElementById('uiBrandingTitle');
+        const colorInput = document.getElementById('uiBrandingPrimaryColor');
+        const hexInput = document.getElementById('uiBrandingPrimaryHex');
+        const titleError = document.getElementById('uiBrandingTitleError');
+        const colorError = document.getElementById('uiBrandingColorError');
+        const title = normalizeTitle(titleInput?.value || '');
+        const color = parseHexColor(hexInput?.value || '');
+        const titleLength = titleCodePointLength(title);
+        const colorPickerValue = parseHexColor(colorInput?.value || '');
+
+        let titleErrorMessage = '';
+        if (titleLength < 1) titleErrorMessage = 'Application title is required.';
+        else if (titleLength > 60) titleErrorMessage = 'Application title must be 60 characters or fewer.';
+
+        let colorErrorMessage = '';
+        if (!color || !colorPickerValue) colorErrorMessage = 'Primary color must use #RRGGBB.';
+
+        uiBrandingValid = !titleErrorMessage && !colorErrorMessage;
+        setBrandingInputErrorState(titleInput, titleError, titleErrorMessage);
+        setBrandingInputErrorState(hexInput, colorError, colorErrorMessage);
+        setBrandingInputErrorState(colorInput, colorError, colorErrorMessage);
+        updateUIBrandingButtons();
+        if (!uiBrandingValid && uiBrandingDirty) {
+            showUIBrandingStatus('Please provide a title and a valid #RRGGBB color.', 'error');
+        } else if (uiBrandingValid) {
+            showUIBrandingStatus('', 'info');
+        }
+    }
+
+    function isCustomLogoBranding(branding) {
+        if (!branding) return false;
+        const logoData = String(branding.logo_data_url || '').trim();
+        const logoUrl = String(branding.logo_url || '').trim();
+        return Boolean(logoData) || (logoUrl && logoUrl !== UI_BRANDING_DEFAULTS.logo_url);
+    }
+
+    function isSavedUIBrandingDefaultState() {
+        if (!savedUIBranding) return false;
+        return (
+            normalizeTitle(savedUIBranding.app_title) === UI_BRANDING_DEFAULTS.app_title
+            && parseHexColor(savedUIBranding.primary_color) === UI_BRANDING_DEFAULTS.primary_color
+            && !isCustomLogoBranding(savedUIBranding)
+        );
+    }
+
+    function updateUIBrandingDirtyState() {
+        if (!savedUIBranding || !draftUIBranding) {
+            uiBrandingDirty = false;
+            updateUIBrandingButtons();
+            return;
+        }
+        const savedTitle = normalizeTitle(savedUIBranding.app_title);
+        const draftTitle = normalizeTitle(draftUIBranding.app_title);
+        const savedColor = parseHexColor(savedUIBranding.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
+        const draftColor = parseHexColor(draftUIBranding.primary_color) || UI_BRANDING_DEFAULTS.primary_color;
+        const resetChangesLogo = uiBrandingResetLogo && isCustomLogoBranding(savedUIBranding);
+        uiBrandingDirty = (
+            savedTitle !== draftTitle
+            || savedColor !== draftColor
+            || resetChangesLogo
+            || Boolean(uiBrandingPendingLogoFile)
+        );
+        updateUIBrandingButtons();
+    }
+
+    function applyUIBrandingDraftToInputs() {
+        if (!draftUIBranding) return;
+        const titleInput = document.getElementById('uiBrandingTitle');
+        const colorInput = document.getElementById('uiBrandingPrimaryColor');
+        const hexInput = document.getElementById('uiBrandingPrimaryHex');
+        if (titleInput) titleInput.value = draftUIBranding.app_title;
+        if (colorInput) colorInput.value = draftUIBranding.primary_color;
+        if (hexInput) hexInput.value = draftUIBranding.primary_color;
+    }
+
+    function updateDraftColor(colorValue) {
+        const normalized = parseHexColor(colorValue);
+        if (!normalized || !draftUIBranding) return;
+        draftUIBranding.primary_color = normalized;
+        draftUIBranding.palette = deriveBrandPalette(normalized);
+        previewUIBranding(draftUIBranding);
+        updateUIBrandingDirtyState();
+        updateUIBrandingValidity();
+    }
+
+    function bindUIBrandingInputEvents() {
+        const titleInput = document.getElementById('uiBrandingTitle');
+        const colorInput = document.getElementById('uiBrandingPrimaryColor');
+        const hexInput = document.getElementById('uiBrandingPrimaryHex');
+        const logoInput = document.getElementById('uiBrandingLogoFile');
+        const saveBtn = document.getElementById('uiBrandingSaveBtn');
+        const discardBtn = document.getElementById('uiBrandingDiscardBtn');
+        const resetIconBtn = document.getElementById('uiBrandingResetIconBtn');
+        const resetBtn = document.getElementById('uiBrandingResetDefaultsBtn');
+
+        if (titleInput) {
+            titleInput.addEventListener('input', () => {
+                if (!draftUIBranding) return;
+                draftUIBranding.app_title = normalizeTitle(titleInput.value);
+                previewUIBranding(draftUIBranding);
+                updateUIBrandingDirtyState();
+                updateUIBrandingValidity();
+            });
+        }
+
+        if (colorInput) {
+            colorInput.addEventListener('input', () => {
+                if (hexInput) hexInput.value = String(colorInput.value || '').toUpperCase();
+                updateDraftColor(colorInput.value);
+            });
+        }
+
+        if (hexInput) {
+            hexInput.addEventListener('input', () => {
+                const upper = String(hexInput.value || '').toUpperCase();
+                hexInput.value = upper;
+                const normalized = parseHexColor(upper);
+                if (normalized && colorInput) colorInput.value = normalized;
+                if (normalized) updateDraftColor(normalized);
+                else updateUIBrandingValidity();
+            });
+            hexInput.addEventListener('blur', () => {
+                if (!draftUIBranding || !hexInput) return;
+                hexInput.value = draftUIBranding.primary_color;
+                if (colorInput) colorInput.value = draftUIBranding.primary_color;
+            });
+        }
+
+        if (logoInput) {
+            logoInput.addEventListener('change', () => {
+                const file = logoInput.files && logoInput.files[0];
+                if (!draftUIBranding) return;
+                if (!file) {
+                    uiBrandingPendingLogoFile = null;
+                    draftUIBranding.preview_logo_url = '';
+                    clearUIBrandingPreviewObjectUrl();
+                    previewUIBranding(draftUIBranding);
+                    updateUIBrandingDirtyState();
+                    return;
+                }
+                clearUIBrandingPreviewObjectUrl();
+                uiBrandingObjectUrl = URL.createObjectURL(file);
+                uiBrandingPendingLogoFile = file;
+                uiBrandingResetLogo = false;
+                draftUIBranding.preview_logo_url = uiBrandingObjectUrl;
+                previewUIBranding(draftUIBranding);
+                updateUIBrandingDirtyState();
+                updateUIBrandingValidity();
+            });
+        }
+
+        saveBtn?.addEventListener('click', saveUIBranding);
+        discardBtn?.addEventListener('click', discardUIBrandingChanges);
+        resetIconBtn?.addEventListener('click', resetUIBrandingIconDraft);
+        resetBtn?.addEventListener('click', resetUIBrandingDefaults);
+    }
+
+    function resetUIBrandingIconDraft() {
+        if (!draftUIBranding) return;
+        clearUIBrandingPreviewObjectUrl();
+        uiBrandingPendingLogoFile = null;
+        uiBrandingResetLogo = isCustomLogoBranding(savedUIBranding);
+        draftUIBranding.preview_logo_url = '';
+        draftUIBranding.logo_url = UI_BRANDING_DEFAULTS.logo_url;
+        draftUIBranding.logo_data_url = '';
+        draftUIBranding.is_custom_logo = false;
+        const logoInput = document.getElementById('uiBrandingLogoFile');
+        if (logoInput) logoInput.value = '';
+        previewUIBranding(draftUIBranding);
+        updateUIBrandingDirtyState();
+        updateUIBrandingValidity();
+        showUIBrandingStatus('Logo reset previewed locally. Save to persist.', 'info');
+    }
+
+    function discardUIBrandingChanges() {
+        if (!savedUIBranding) return;
+        clearUIBrandingPreviewObjectUrl();
+        uiBrandingPendingLogoFile = null;
+        uiBrandingResetLogo = false;
+        const logoInput = document.getElementById('uiBrandingLogoFile');
+        if (logoInput) logoInput.value = '';
+        draftUIBranding = cloneUIBranding(savedUIBranding);
+        applyUIBrandingDraftToInputs();
+        previewUIBranding(draftUIBranding);
+        updateUIBrandingDirtyState();
+        updateUIBrandingValidity();
+        showUIBrandingStatus('Changes discarded. Saved branding restored.', 'info');
+    }
+
+    async function resetUIBrandingDefaults() {
+        const factoryEntityIcon = '📦';
+        const emojiEl = document.getElementById('currentDefaultEmoji');
+        const currentEmoji = emojiEl ? String(emojiEl.textContent || '').trim() : '';
+        if (currentEmoji && currentEmoji !== factoryEntityIcon) {
+            await selectDefaultEmoji(factoryEntityIcon, { notify: false });
+        }
+
+        if (!draftUIBranding) return;
+        if (isSavedUIBrandingDefaultState() && !uiBrandingPendingLogoFile) {
+            uiBrandingResetLogo = false;
+            draftUIBranding = cloneUIBranding(savedUIBranding);
+            applyUIBrandingDraftToInputs();
+            previewUIBranding(draftUIBranding);
+            updateUIBrandingDirtyState();
+            updateUIBrandingValidity();
+            showUIBrandingStatus('Saved branding already matches defaults.', 'info');
+            return;
+        }
+        clearUIBrandingPreviewObjectUrl();
+        uiBrandingPendingLogoFile = null;
+        uiBrandingResetLogo = isCustomLogoBranding(savedUIBranding);
+        const logoInput = document.getElementById('uiBrandingLogoFile');
+        if (logoInput) logoInput.value = '';
+        draftUIBranding = normalizeUIBrandingDraft({
+            ...UI_BRANDING_DEFAULTS,
+            palette: deriveBrandPalette(UI_BRANDING_DEFAULTS.primary_color),
+        });
+        applyUIBrandingDraftToInputs();
+        previewUIBranding(draftUIBranding);
+        updateUIBrandingDirtyState();
+        updateUIBrandingValidity();
+        showUIBrandingStatus('Default branding is previewed locally. Save to persist.', 'info');
+    }
+
+    async function saveUIBranding() {
+        if (!draftUIBranding || !uiBrandingValid || !uiBrandingDirty) return;
+        uiBrandingLoading = true;
+        updateUIBrandingButtons();
+        showUIBrandingStatus('Saving branding…', 'info');
+        const saveBtn = document.getElementById('uiBrandingSaveBtn');
+        const original = saveBtn ? saveBtn.innerHTML : '';
+        if (saveBtn) {
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+        }
+        try {
+            const formData = new FormData();
+            formData.append('app_title', normalizeTitle(draftUIBranding.app_title));
+            formData.append('primary_color', draftUIBranding.primary_color);
+            formData.append('reset_logo', uiBrandingResetLogo ? 'true' : 'false');
+            if (uiBrandingPendingLogoFile) {
+                formData.append('logo_file', uiBrandingPendingLogoFile);
+            }
+            const response = await fetch('/settings/ui-branding', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.detail || result.message || `HTTP ${response.status}`);
+            }
+            clearUIBrandingPreviewObjectUrl();
+            uiBrandingPendingLogoFile = null;
+            uiBrandingResetLogo = false;
+            const logoInput = document.getElementById('uiBrandingLogoFile');
+            if (logoInput) logoInput.value = '';
+            savedUIBranding = normalizeUIBrandingDraft(result.branding || {});
+            draftUIBranding = cloneUIBranding(savedUIBranding);
+            previewUIBranding(draftUIBranding);
+            applyUIBrandingDraftToInputs();
+            updateUIBrandingDirtyState();
+            updateUIBrandingValidity();
+            showUIBrandingStatus('UI branding saved.', 'success');
+            if (typeof fetchCachedInvalidate === 'function') {
+                fetchCachedInvalidate('/navbar/state');
+            }
+        } catch (error) {
+            showUIBrandingStatus(error.message || 'Failed to save branding.', 'error');
+        } finally {
+            uiBrandingLoading = false;
+            if (saveBtn) saveBtn.innerHTML = original;
+            updateUIBrandingButtons();
+        }
+    }
+
+    async function loadUIBranding(force = false) {
+        if (uiBrandingLoading) return;
+        if (uiBrandingLoaded && !force) return;
+        uiBrandingLoading = true;
+        updateUIBrandingButtons();
+        showUIBrandingStatus('Loading branding…', 'info');
+        try {
+            const response = await fetch('/settings/ui-branding', { credentials: 'same-origin' });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.detail || result.message || `HTTP ${response.status}`);
+            }
+            savedUIBranding = normalizeUIBrandingDraft(result.branding || {});
+            draftUIBranding = cloneUIBranding(savedUIBranding);
+            uiBrandingPendingLogoFile = null;
+            uiBrandingResetLogo = false;
+            clearUIBrandingPreviewObjectUrl();
+            applyUIBrandingDraftToInputs();
+            previewUIBranding(draftUIBranding);
+            uiBrandingLoaded = true;
+            updateUIBrandingDirtyState();
+            updateUIBrandingValidity();
+            showUIBrandingStatus('', 'info');
+        } catch (error) {
+            savedUIBranding = normalizeUIBrandingDraft(UI_BRANDING_DEFAULTS);
+            draftUIBranding = cloneUIBranding(savedUIBranding);
+            applyUIBrandingDraftToInputs();
+            previewUIBranding(draftUIBranding);
+            updateUIBrandingDirtyState();
+            updateUIBrandingValidity();
+            showUIBrandingStatus(error.message || 'Could not load UI branding.', 'error');
+        } finally {
+            uiBrandingLoading = false;
+            updateUIBrandingButtons();
+        }
+    }
+
+    function initializeUIBrandingSection() {
+        bindUIBrandingInputEvents();
+        const active = typeof SidebarNav !== 'undefined' && SidebarNav.getActiveSection
+            ? SidebarNav.getActiveSection()
+            : null;
+        if (active === 'ui') {
+            loadUIBranding();
+        }
+    }
+
+    async function handleUIBrandingBeforeSectionChange(targetSection) {
+        const activeSection = typeof SidebarNav !== 'undefined' && SidebarNav.getActiveSection
+            ? SidebarNav.getActiveSection()
+            : null;
+        if (activeSection !== 'ui' || targetSection === 'ui') return true;
+        if (!uiBrandingDirty) return true;
+        const confirmed = await (typeof showConfirmDialog === 'function'
+            ? showConfirmDialog({
+                title: 'Discard UI branding changes?',
+                message: 'You have unsaved UI branding changes. Discard and leave this section?',
+                confirmText: 'Discard',
+                confirmClass: 'btn-warning',
+                icon: 'exclamation-triangle',
+            })
+            : Promise.resolve(window.confirm('Discard unsaved UI branding changes?')));
+        if (!confirmed) return false;
+        discardUIBrandingChanges();
+        return true;
+    }
+
+    if (typeof SidebarNav !== 'undefined' && typeof SidebarNav.init === 'function') {
+        SidebarNav.init({
+            onBeforeSectionChange: async (targetSection) => {
+                return await handleUIBrandingBeforeSectionChange(targetSection);
+            },
+            onSectionChange: (section) => {
+                if (section === 'ui') {
+                    loadUIBranding();
+                }
+            },
+        });
+
+        window.addEventListener('popstate', SidebarNav._onPopState);
+
+        const params = new URLSearchParams(window.location.search);
+        const target = params.get('section') || window.location.hash.substring(1);
+        if (target) {
+            const link = document.querySelector(`.sidebar-nav .nav-link[data-section="${target}"]`);
+            if (link) {
+                setTimeout(() => {
+                    SidebarNav._activateSection(target);
+                    window.history.replaceState({ section: target }, '', window.location.href);
+                }, 100);
+            }
+        }
     }
 
     // =====================================================================
@@ -1582,6 +2173,33 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    /**
+     * Populate the graph-read bound inputs (statement timeout + chat cap).
+     * They sit in the Global section next to the other global bounds, so this
+     * runs on page load rather than behind a section-open trigger.
+     */
+    async function loadGraphLimits() {
+        const timeoutEl = document.getElementById('graphQueryTimeoutS');
+        const capEl = document.getElementById('graphChatResultCap');
+        if (!timeoutEl && !capEl) return;
+        graphLimitsHydrated = false;
+        try {
+            const resp = await fetch('/settings/graph-limits', { credentials: 'same-origin' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data || !data.success) return;
+            if (timeoutEl && typeof data.graph_query_timeout_s === 'number') {
+                timeoutEl.value = String(data.graph_query_timeout_s);
+            }
+            if (capEl && typeof data.graph_chat_result_cap === 'number') {
+                capEl.value = String(data.graph_chat_result_cap);
+            }
+            graphLimitsHydrated = true;
+        } catch (e) {
+            console.log('Graph limits load failed', e);
+        }
+    }
+
     async function loadDeltaTripleStoreHealth(options) {
         const opts = options || {};
         const healthPanel = opts.healthPanel !== false;
@@ -1595,6 +2213,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         try {
             const resp = await fetch('/settings/triple-store/databricks-health', { credentials: 'same-origin' });
+            if (!resp.ok) {
+                throw new Error('HTTP ' + resp.status);
+            }
             const data = await resp.json();
 
             if (regLoc && !regLoc.textContent.replace(/[—\s]/g, '')) {
@@ -1611,51 +2232,66 @@ document.addEventListener('DOMContentLoaded', function () {
                     '</div>';
                 return;
             }
-            if (!data.warehouse_configured) {
-                out.innerHTML =
-                    '<div class="alert alert-warning mb-0 py-2">' +
-                    '<i class="bi bi-exclamation-triangle me-1"></i>' +
-                    'SQL Warehouse is not configured. Select one on the <strong>SQL Warehouse</strong> tab ' +
-                    'or set the global warehouse under <strong>Settings → Databricks</strong>.' +
-                    '</div>';
-                return;
+
+            const permissions = Array.isArray(data.permissions) ? data.permissions : [];
+            const probeReachable = !!data.accessible;
+            const isOperational = !!data.operational;
+            const statusClass = isOperational ? 'text-success' : 'text-danger';
+            const statusIcon = isOperational ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+            const statusLabel = isOperational ? 'Operational' : 'Missing permissions';
+            const probeIcon = probeReachable ? 'bi-check-circle-fill text-success' : 'bi-x-circle-fill text-danger';
+            const probeLabel = probeReachable ? 'Reachable' : 'Unreachable';
+            const registryCatalog = escapeHtmlSettings(String(data.registry_catalog || ''));
+            const registrySchema = escapeHtmlSettings(String(data.registry_schema || ''));
+            const principal = escapeHtmlSettings(String(data.principal || ''));
+            const details = [];
+
+            permissions.forEach((item) => {
+                const name = escapeHtmlSettings(String((item && item.name) || ''));
+                const granted = !!(item && item.granted);
+                const inheritedFrom = escapeHtmlSettings(String((item && item.inherited_from) || ''));
+                const grantedClass = granted ? 'text-success' : 'text-danger';
+                const grantedIcon = granted ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+                const grantedLabel = granted ? 'Granted' : 'Missing';
+                const inheritedLabel = inheritedFrom || '—';
+                details.push(
+                    '<tr>'
+                    + '<td class="font-monospace small">' + name + '</td>'
+                    + '<td><span class="' + grantedClass + '"><i class="bi ' + grantedIcon + ' me-1"></i>' + grantedLabel + '</span></td>'
+                    + '<td class="font-monospace small">' + inheritedLabel + '</td>'
+                    + '</tr>'
+                );
+            });
+
+            let html = '<dl class="row small mb-3">';
+            html += '<dt class="col-sm-3">Registry</dt><dd class="col-sm-9 font-monospace">'
+                + registryCatalog + '.' + registrySchema + '</dd>';
+            html += '<dt class="col-sm-3">Principal</dt><dd class="col-sm-9 font-monospace">'
+                + principal + '</dd>';
+            html += '<dt class="col-sm-3">Permission probe</dt><dd class="col-sm-9">'
+                + '<span><i class="bi ' + probeIcon + ' me-1"></i>' + probeLabel + '</span></dd>';
+            html += '</dl>';
+
+            html += '<div class="small fw-semibold mb-2">Required permissions</div>';
+            if (details.length) {
+                html += '<div class="table-responsive"><table class="table table-sm table-hover mb-2">'
+                    + '<thead class="table-light"><tr>'
+                    + '<th>Permission</th><th>Status</th><th>Inherited from</th>'
+                    + '</tr></thead><tbody>'
+                    + details.join('')
+                    + '</tbody></table></div>';
+            } else {
+                html += '<p class="small text-muted mb-2">No permission details returned.</p>';
             }
 
-            const dt = data.data_table || {};
-            const viewErr = (data.view && data.view.error) ? data.view.error : '';
-            const dataErr = dt.error ? dt.error : '';
-            let html = '<dl class="row mb-0">';
-            if (data.warehouse_id) {
-                html += '<dt class="col-sm-3">Warehouse</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.warehouse_id) + '</dd>';
-            }
-            if (data.view_fqn) {
-                html += '<dt class="col-sm-3">R2RML VIEW</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.view_fqn) + '</dd>';
-            }
-            if (data.data_table_fqn) {
-                html += '<dt class="col-sm-3">Data TABLE</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.data_table_fqn) + '</dd>';
-            }
-            if (data.inferred_table_fqn) {
-                html += '<dt class="col-sm-3">Inferred TABLE</dt><dd class="col-sm-9 font-monospace">' +
-                    escapeHtmlSettings(data.inferred_table_fqn) + '</dd>';
-            }
-            if (data.data_table_fqn) {
-                const exists = dt.exists ? 'yes' : 'no';
-                const count = dt.count != null ? dt.count : '—';
-                html += '<dt class="col-sm-3">Data table</dt><dd class="col-sm-9">exists: ' +
-                    escapeHtmlSettings(exists) + ' · triples: <strong>' + escapeHtmlSettings(String(count)) +
-                    '</strong></dd>';
-            }
-            html += '</dl>';
-            if (!data.active_domain) {
-                html += '<p class="text-muted mt-2 mb-0">Open a domain to see resolved FQNs and row counts.</p>';
-            } else if (viewErr || dataErr) {
-                html += '<p class="text-warning mt-2 mb-0">' +
-                    escapeHtmlSettings(viewErr || dataErr) + '</p>';
-            } else if (!data.data_table_fqn) {
-                html += '<p class="text-muted mt-2 mb-0">Could not derive table names for the active domain.</p>';
+            html += '<p class="mb-0 fw-semibold ' + statusClass + '">'
+                + '<i class="bi ' + statusIcon + ' me-1"></i>' + statusLabel + '</p>';
+
+            if (data.error) {
+                html += '<p class="small text-warning mt-2 mb-0">'
+                    + '<i class="bi bi-exclamation-triangle me-1"></i>'
+                    + escapeHtmlSettings(String(data.error))
+                    + '</p>';
             }
             out.innerHTML = html;
         } catch (e) {
@@ -3301,6 +3937,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('sidebarSectionChanged', async (e) => {
         const s = e.detail?.section;
+        if (s === 'ui') {
+            await loadUIBranding();
+            return;
+        }
         if (s !== 'lakebase' && s !== 'delta' && s !== 'neo4j') return;
 
         // Neo4j only needs the registry graph_engine_config (URI / user / …).
@@ -3352,6 +3992,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 await loadLakebaseGraphHealth();
             }
         }
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (!uiBrandingDirty) return;
+        event.preventDefault();
+        event.returnValue = '';
     });
 
     // =====================================================================
@@ -3739,7 +4385,35 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        // 3c. Save the Databricks graph-analytics job toggle. An explicit "off"
+        // 3c. Save graph-read bounds (statement timeout + chat result cap;
+        // 0/blank leaves the env-var / built-in default in force).
+        const gTimeoutInput = document.getElementById('graphQueryTimeoutS');
+        const gCapInput = document.getElementById('graphChatResultCap');
+        const gTyped = (gTimeoutInput && gTimeoutInput.value.trim() !== '')
+            || (gCapInput && gCapInput.value.trim() !== '');
+        if ((gTimeoutInput || gCapInput) && (graphLimitsHydrated || gTyped)) {
+            const body = {};
+            if (gTimeoutInput) {
+                const v = parseInt(gTimeoutInput.value, 10);
+                body.graph_query_timeout_s = isNaN(v) ? 0 : Math.max(0, v);
+            }
+            if (gCapInput) {
+                const v = parseInt(gCapInput.value, 10);
+                body.graph_chat_result_cap = isNaN(v) ? 0 : Math.max(0, v);
+            }
+            try {
+                const resp = await fetch('/settings/save-graph-limits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body)
+                });
+                const r = await resp.json();
+                if (!r.success) errors.push('Graph limits: ' + (r.message || 'save failed'));
+            } catch (e) { errors.push('Graph limits: ' + e.message); }
+        }
+
+        // 3d. Save the Databricks graph-analytics job toggle. An explicit "off"
         // is sent as readily as an "on", because unchecking has to persist a
         // value that overrides the env-var default — but only once the checkbox
         // is known to hold the stored state. Posting an unhydrated box would

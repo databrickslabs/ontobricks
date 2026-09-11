@@ -118,12 +118,42 @@ class TestRunsSection:
         html = _html(client, "/settings")
         tags = _tags(html)
         for element_id in (
+            "settingsRunsTabs",
+            "settingsRunsTabContent",
             "srtab-btn-build",
             "srtab-btn-analytics",
             "srtab-build",
             "srtab-analytics",
         ):
             assert _find(tags, id_=element_id) is not None
+
+    def test_runs_tabs_use_card_integrated_canonical_hierarchy(self, client):
+        html = _html(client, "/settings")
+        section_start = html.index('id="runs-section"')
+        section_end = html.index('<!-- Run details modals for Automation → Runs.')
+        section = html[section_start:section_end]
+        pattern = re.compile(
+            r'<div class="card h-100">\s*'
+            r'<div class="card-body p-0 ob-tabs-wrap">\s*'
+            r'<ul class="nav nav-tabs ob-tabs nav-fill" id="settingsRunsTabs" role="tablist">[\s\S]*?</ul>\s*'
+            r'<div class="tab-content p-3" id="settingsRunsTabContent">[\s\S]*?</div>\s*'
+            r'</div>\s*</div>',
+            re.DOTALL,
+        )
+        assert pattern.search(section) is not None
+
+    def test_runs_tab_content_surface_does_not_use_ob_tab_content_class(self, client):
+        html = _html(client, "/settings")
+        section = html[html.index('id="runs-section"') :]
+        match = re.search(r'<div class="([^"]+)" id="settingsRunsTabContent">', section)
+        assert match is not None
+        assert "ob-tab-content" not in match.group(1)
+
+    def test_runs_tab_icons_do_not_force_primary_or_success_colors(self, client):
+        html = _html(client, "/settings")
+        section = html[html.index('id="settingsRunsTabs"') : html.index('id="settingsRunsTabContent"')]
+        assert "text-primary" not in section
+        assert "text-success" not in section
 
     def test_each_tab_button_targets_its_own_pane(self, client):
         html = _html(client, "/settings")

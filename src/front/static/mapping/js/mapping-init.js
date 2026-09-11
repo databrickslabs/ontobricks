@@ -261,6 +261,11 @@ const mappingSidebarConfig = {
             showNotification('Please wait until Auto-Map finishes before switching sections.', 'warning');
             return false;
         }
+        // Auto-save to registry when leaving the design section (mirrors ontology designer)
+        const currentSection = typeof SidebarNav !== 'undefined' ? SidebarNav.getActiveSection() : null;
+        if (currentSection === 'design' && typeof autoSaveToRegistry === 'function') {
+            await autoSaveToRegistry();
+        }
         return true; // Allow switch
     },
     onSectionChange: function(section, targetSection) {

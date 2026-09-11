@@ -50,6 +50,14 @@
         group_removed: { icon: 'dash-circle', cls: 'text-danger', label: 'Group removed' },
         ontology_reset: { icon: 'arrow-counterclockwise', cls: 'text-warning', label: 'Ontology reset' },
         mapping_reset: { icon: 'arrow-counterclockwise', cls: 'text-warning', label: 'Mappings reset' },
+        agent_auto_map_run: { icon: 'robot', cls: 'text-info', label: 'Auto-mapping agent run' },
+    };
+
+    // Terminal statuses of an agent run -> chip styling.
+    const RUN_STATUS_CLS = {
+        completed: 'bg-success-subtle text-success-emphasis',
+        failed: 'bg-danger-subtle text-danger-emphasis',
+        cancelled: 'bg-warning-subtle text-warning-emphasis',
     };
 
     let _cache = { events: [], runs: [], changes: [], versions: [], current: '' };
@@ -243,6 +251,59 @@
             .replace(/^\w/, (c) => c.toUpperCase());
     }
 
+    /**
+     * Full execution report of one auto-mapping agent run: status chip,
+     * counters, and the ordered step log the overlay showed live.
+     * Every value is escaped — step content is model output.
+     * @param {object} m — the event's `meta` payload
+     * @param {string} summary — the event summary (carries the error detail on a failed run)
+     * @returns {string}
+     */
+    function agentRunReport(m, summary) {
+        const status = String(m.status || '');
+        const chipCls = RUN_STATUS_CLS[status] || 'bg-secondary-subtle text-secondary-emphasis';
+        const chip = status
+            ? '<span class="badge ' + chipCls + ' me-2">' + esc(status) + '</span>'
+            : '';
+
+        const stats = m.stats || {};
+        const bits = [];
+        if (Number(stats.entities)) bits.push(esc(stats.entities) + ' entities');
+        if (Number(stats.relationships)) bits.push(esc(stats.relationships) + ' relationships');
+        if (Number(stats.failed)) bits.push(esc(stats.failed) + ' unmapped');
+        const errs = stats.chunk_errors || [];
+        if (errs.length) bits.push(esc(errs.length) + ' chunk error(s)');
+        if (Number(m.duration_ms)) bits.push(fmtDuration(Number(m.duration_ms) / 1000));
+
+        const summaryLine = '<div class="audit-comment">' + chip +
+            (bits.length ? '<span class="small text-muted">' + bits.join(' &middot; ') + '</span>' : '') +
+            (summary ? '<div class="small mt-1">' + esc(summary) + '</div>' : '') +
+            '</div>';
+
+        const steps = Array.isArray(m.steps) ? m.steps : [];
+        if (!steps.length) return summaryLine;
+
+        const rows = steps.map((s) => {
+            const type = String(s.type || '');
+            const label = type === 'tool_call'
+                ? '<strong>' + esc(s.tool) + '</strong>(' + esc(s.content || '') + ')'
+                : type === 'tool_result'
+                    ? '<span class="text-muted">' + esc(s.tool) + ' &rarr; ' + esc(s.content || '') + '</span>'
+                    : '<em>' + esc(s.content || 'Output produced') + '</em>';
+            const dur = Number(s.ms) ? '<span class="text-muted ms-2">' + esc(s.ms) + 'ms</span>' : '';
+            return '<div class="d-flex align-items-start gap-2 py-1" style="font-size:0.82rem;">' +
+                '<span class="text-muted" style="min-width:6.5rem;">' + esc(type) + '</span>' +
+                '<span class="flex-grow-1">' + label + '</span>' + dur + '</div>';
+        });
+
+        return summaryLine +
+            '<details class="mt-1">' +
+            '<summary class="small text-muted" style="cursor:pointer;">' +
+            'Agent execution report (' + esc(steps.length) + ' steps)</summary>' +
+            '<div class="border rounded p-2 mt-1" style="max-height:260px; overflow-y:auto; background:#fff;">' +
+            rows.join('') + '</div></details>';
+    }
+
     function changeItem(c) {
         const meta = CHANGE_META[c.action] ||
             { icon: 'pencil-square', cls: 'text-primary', label: prettyAction(c.action) };
@@ -251,7 +312,9 @@
             ? '<span class="badge bg-info-subtle text-info-emphasis ms-1" title="Change made by the AI assistant">' +
               '<i class="bi bi-robot me-1"></i>AI</span>'
             : '';
-        const ref = (c.summary || c.entity_ref)
+        const ref = (c.action === 'agent_auto_map_run')
+            ? agentRunReport(c.meta || {}, c.summary || '')
+            : (c.summary || c.entity_ref)
             ? '<div class="audit-comment"><code>' + esc(c.summary || c.entity_ref) + '</code></div>'
             : '';
         const head = '<div class="audit-head">' +

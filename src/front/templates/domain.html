@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Domain - OntoBricks{% endblock %}
+{% block title %}{{ brand_page_title('Domain') }}{% endblock %}
 
 {% block extra_css %}
 <!-- Domain module styles (extracted from partials) -->
 <link rel="stylesheet" href="{{ url_for('static', filename='query/css/query-sync.css') }}?v={{ asset_version }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-information.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-metadata.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-validation.css') }}?v={{ asset_version }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='domain/css/domain-review.css') }}?v={{ asset_version }}">

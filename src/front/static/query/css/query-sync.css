@@ -39,10 +39,6 @@
     z-index: 10;
 }
 
-#syncTabs.ob-nav-tabs-gap {
-    gap: 2px;
-}
-
 #syncProgressArea .progress.ob-progress-md {
     height: 20px;
 }
@@ -220,6 +216,12 @@
     align-items: stretch;
     flex: 2;
     gap: 0;
+}
+/* Storage-kind badge on the Lakehouse Build page: whether ..._data is a
+   materialized Delta table or a pass-through view over the gateway. */
+.dbx-storage-badge {
+    font-size: 0.65rem;
+    flex-shrink: 0;
 }
 .dt-arch-icon-triplestore   { color: #FF3621; }
 .dt-arch-icon-lakebase-img  { width: 1.5rem; height: 1.5rem; flex-shrink: 0; }

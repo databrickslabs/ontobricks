@@ -668,13 +668,19 @@ class _BuildPipeline:
             )
 
     def _materialize_data_table(self) -> bool:
-        """Snapshot the R2RML VIEW into ``…_data`` for every engine.
+        """Build the ``…_data`` relation from the R2RML VIEW for every engine.
 
-        Analytics reads this table and nothing else, which is what makes the
+        Analytics reads this relation and nothing else, which is what makes the
         KPIs identical across Lakehouse, Lakebase and Neo4j. It is therefore
         not optional: a build that skipped it would leave a domain that looks
         fine and cannot be analysed.
+
+        A Lakehouse domain can ask for the relation to be a pass-through view
+        instead of a materialized copy; Lakebase and Neo4j always get the copy,
+        since the view would resolve against a graph the analytics job cannot
+        read (see ``GraphDBFactory.resolve_lakehouse_materialization``).
         """
+        from back.core.graphdb.GraphDBFactory import GraphDBFactory
         from back.core.graphdb.delta import _table_naming, materialize
 
         data_table = _table_naming.data_table_fqn(self.domain, self.settings)
@@ -684,21 +690,35 @@ class _BuildPipeline:
             )
             return False
 
+        mode = GraphDBFactory.resolve_lakehouse_materialization(
+            self.domain, self.settings
+        )
         self.tm.update_progress(
-            self.task_id, 30, f"Materializing mapped triples into {data_table}..."
+            self.task_id,
+            30,
+            (
+                f"Exposing mapped triples through {data_table}..."
+                if mode == "view"
+                else f"Materializing mapped triples into {data_table}..."
+            ),
         )
         try:
-            materialize.materialize_from_view(
-                self.source_client, self.view_table, data_table
+            materialize.apply_data_relation(
+                self.source_client, self.view_table, data_table, mode=mode
             )
         except Exception as exc:  # noqa: BLE001
-            msg = f"Could not materialize {data_table}: {exc}"
+            msg = f"Could not build {data_table}: {exc}"
             logger.error("[DT-BUILD %s] %s", self.task_id, msg)
             self.tm.fail_task(self.task_id, msg)
             return False
 
         self.data_table = data_table
-        logger.info("[DT-BUILD %s] materialized %s", self.task_id, data_table)
+        logger.info(
+            "[DT-BUILD %s] built %s (materialization=%s)",
+            self.task_id,
+            data_table,
+            mode,
+        )
         return True
 
     def _announce_apply_step(self) -> None:

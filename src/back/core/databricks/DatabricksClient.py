@@ -139,6 +139,9 @@ class DatabricksClient:
     def get_current_user_email(self):
         return self.workspace.get_current_user_email()
 
+    def get_current_user_groups(self):
+        return self.workspace.get_current_user_groups()
+
     def list_workspace_users(self, max_results=500):
         return self.workspace.list_users(max_results)
 

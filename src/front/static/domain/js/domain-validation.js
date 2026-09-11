@@ -27,6 +27,7 @@ async function loadValidationDetails() {
         updateMissingItems(data);
         loadPrecisionScore();
         loadGraphMetricsSummary();
+        loadMaterializedInferenceCount();
     } catch (error) {
         console.error('Error loading validation:', error);
         const banner = document.getElementById('domainHealthBanner');
@@ -37,6 +38,25 @@ async function loadValidationDetails() {
         }
     } finally {
         hideValidationLoadingOverlay();
+    }
+}
+
+async function loadMaterializedInferenceCount() {
+    const target = document.getElementById('psDtMaterializedInferenceCount');
+    if (!target) return;
+    try {
+        const response = await fetch('/dtwin/reasoning/inferred', {
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success || !data.purge_supported) {
+            target.textContent = 'N/A';
+            return;
+        }
+        const count = Number(data.materialized_inference_count || 0);
+        target.textContent = count.toLocaleString();
+    } catch (error) {
+        target.textContent = 'N/A';
     }
 }
 

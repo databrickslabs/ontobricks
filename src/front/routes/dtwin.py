@@ -1,10 +1,11 @@
 """Frontend HTML route -- Knowledge Graph / Query page."""
 
 from fastapi import APIRouter, Request, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from front.fastapi.dependencies import templates, triplestore_page_context
 from back.objects.session import SessionManager, get_session_manager, get_domain
+from back.core.graphdb.GraphDBFactory import is_graphless_backend
 from back.core.helpers import effective_view_table
 from back.objects.digitaltwin import DigitalTwin
 from shared.config.settings import Settings, get_settings
@@ -18,8 +19,14 @@ async def query_page(
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """Query page."""
+    """Query page.
+
+    Ontology-only ("No Backend") domains have no graph, so the Knowledge
+    Graph page is disabled: fall back to the Domain Information page.
+    """
     domain_session = get_domain(session_mgr)
+    if is_graphless_backend((domain_session.info or {}).get("graph_backend")):
+        return RedirectResponse("/domain/?section=information", status_code=303)
 
     ont = domain_session.ontology or {}
     props = ont.get("properties", [])

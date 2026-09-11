@@ -133,23 +133,148 @@ class TestIsAdmin:
         assert svc.is_admin("a@b.com", "h", "t", "") is False
 
     def test_sdk_returns_true(self, svc):
-        with patch.object(svc, "_check_admin_sdk", return_value=True):
+        with (
+            patch.object(svc, "_can_manage_principals_sdk", return_value=["a@b.com"]),
+            patch.object(svc, "_get_user_groups", return_value=[]),
+        ):
             assert svc.is_admin("a@b.com", "h", "t", "app") is True
 
     def test_sdk_returns_false(self, svc):
-        with patch.object(svc, "_check_admin_sdk", return_value=False):
+        with (
+            patch.object(svc, "_can_manage_principals_sdk", return_value=["z@b.com"]),
+            patch.object(svc, "_get_user_groups", return_value=[]),
+        ):
             assert svc.is_admin("a@b.com", "h", "t", "app") is False
 
     def test_sdk_fails_rest_succeeds(self, svc):
         with (
-            patch.object(svc, "_check_admin_sdk", return_value=None),
-            patch.object(svc, "_check_admin_rest", return_value=True),
+            patch.object(svc, "_can_manage_principals_sdk", return_value=None),
+            patch.object(svc, "_can_manage_principals_rest", return_value=["a@b.com"]),
+            patch.object(svc, "_get_user_groups", return_value=[]),
         ):
             assert svc.is_admin("a@b.com", "h", "t", "app") is True
 
     def test_cache_hit(self, svc):
         svc._admin_cache["a@b.com"] = (True, time.time())
         assert svc.is_admin("a@b.com", "h", "t", "app") is True
+
+    def test_can_manage_group_makes_member_admin(self, svc):
+        """CAN_MANAGE on a group is inherited by every member."""
+        with (
+            patch.object(svc, "_can_manage_principals_sdk", return_value=["data-eng"]),
+            patch.object(svc, "_get_user_groups", return_value=["data-eng"]),
+        ):
+            assert svc.is_admin("a@b.com", "h", "t", "app") is True
+
+    def test_can_manage_group_does_not_leak_to_non_member(self, svc):
+        with (
+            patch.object(svc, "_can_manage_principals_sdk", return_value=["data-eng"]),
+            patch.object(svc, "_get_user_groups", return_value=["marketing"]),
+        ):
+            assert svc.is_admin("a@b.com", "h", "t", "app") is False
+
+    def test_group_match_is_case_insensitive(self, svc):
+        with (
+            patch.object(svc, "_can_manage_principals_sdk", return_value=["Data-Eng"]),
+            patch.object(svc, "_get_user_groups", return_value=["data-eng"]),
+        ):
+            assert svc.is_admin("a@b.com", "h", "t", "app") is True
+
+    def test_user_token_path_wins_over_sdk(self, svc):
+        """A definitive answer from the user token stops the fallback chain."""
+        with (
+            patch.object(
+                svc, "_can_manage_principals_rest", return_value=["a@b.com"]
+            ) as rest,
+            patch.object(svc, "_can_manage_principals_sdk") as sdk,
+            patch.object(svc, "_get_user_groups", return_value=[]),
+        ):
+            assert svc.is_admin("a@b.com", "h", "t", "app", user_token="ut") is True
+            rest.assert_called_once_with("h", "ut", "app")
+            sdk.assert_not_called()
+
+    def test_all_paths_fail_is_not_admin(self, svc):
+        with (
+            patch.object(svc, "_can_manage_principals_rest", return_value=None),
+            patch.object(svc, "_can_manage_principals_sdk", return_value=None),
+        ):
+            assert svc.is_admin("a@b.com", "h", "t", "app") is False
+
+
+class TestExtractCanManage:
+    def test_users_and_groups_are_both_returned(self, svc):
+        payload = {
+            "access_control_list": [
+                {
+                    "user_name": "alice@x.com",
+                    "all_permissions": [{"permission_level": "CAN_MANAGE"}],
+                },
+                {
+                    "group_name": "data-eng",
+                    "all_permissions": [{"permission_level": "CAN_MANAGE"}],
+                },
+                {
+                    "group_name": "readers",
+                    "all_permissions": [{"permission_level": "CAN_USE"}],
+                },
+            ]
+        }
+        assert svc._extract_can_manage(payload) == ["alice@x.com", "data-eng"]
+
+    def test_principal_listed_once_per_acl_entry(self, svc):
+        payload = {
+            "access_control_list": [
+                {
+                    "group_name": "data-eng",
+                    "all_permissions": [
+                        {"permission_level": "CAN_MANAGE"},
+                        {"permission_level": "CAN_MANAGE", "inherited": True},
+                    ],
+                }
+            ]
+        }
+        assert svc._extract_can_manage(payload) == ["data-eng"]
+
+    def test_empty_payload(self, svc):
+        assert svc._extract_can_manage({}) == []
+
+
+class TestGetUserGroups:
+    def test_scim_me_is_preferred_when_user_token_present(self, svc):
+        with (
+            patch.object(
+                svc, "_groups_via_scim_me", return_value=["data-eng"]
+            ) as me,
+            patch.object(svc, "_groups_via_scim_users") as users,
+        ):
+            groups = svc._get_user_groups("a@b.com", "h", "t", user_token="ut")
+            assert groups == ["data-eng"]
+            me.assert_called_once_with("h", "ut")
+            users.assert_not_called()
+
+    def test_falls_back_to_scim_users_when_me_fails(self, svc):
+        with (
+            patch.object(svc, "_groups_via_scim_me", return_value=None),
+            patch.object(svc, "_groups_via_scim_users", return_value=["fallback"]),
+        ):
+            groups = svc._get_user_groups("a@b.com", "h", "t", user_token="ut")
+            assert groups == ["fallback"]
+
+    def test_failure_is_not_cached(self, svc):
+        """A transient 403 must not pin an empty list for the cache window."""
+        with (
+            patch.object(svc, "_groups_via_scim_me", return_value=None),
+            patch.object(svc, "_groups_via_scim_users", return_value=None),
+        ):
+            assert svc._get_user_groups("a@b.com", "h", "t") == []
+        assert "a@b.com" not in svc._user_groups_cache
+
+    def test_success_is_cached(self, svc):
+        with patch.object(svc, "_groups_via_scim_me", return_value=["g1"]):
+            svc._get_user_groups("a@b.com", "h", "t", user_token="ut")
+        with patch.object(svc, "_groups_via_scim_me") as me:
+            assert svc._get_user_groups("a@b.com", "h", "t", user_token="ut") == ["g1"]
+            me.assert_not_called()
 
 
 class TestAdminCache:
@@ -399,6 +524,93 @@ class TestResolveDomainEntryRole:
                 "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
             )
             assert result == ROLE_VIEWER
+
+    def test_highest_role_wins_across_two_groups(self, svc):
+        dp = {
+            "version": 1,
+            "permissions": [
+                {"principal": "readers", "principal_type": "group", "role": "viewer"},
+                {"principal": "builders", "principal_type": "group", "role": "builder"},
+            ],
+        }
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(
+                svc, "_get_user_groups", return_value=["readers", "builders"]
+            ),
+        ):
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
+            assert result == ROLE_BUILDER
+
+    def test_group_role_beats_lower_direct_role(self, svc):
+        dp = {
+            "version": 1,
+            "permissions": [
+                {"principal": "a@b.com", "principal_type": "user", "role": "viewer"},
+                {"principal": "editors", "principal_type": "group", "role": "editor"},
+            ],
+        }
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(svc, "_get_user_groups", return_value=["editors"]),
+        ):
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
+            assert result == ROLE_EDITOR
+
+    def test_direct_role_beats_lower_group_role(self, svc):
+        dp = {
+            "version": 1,
+            "permissions": [
+                {"principal": "a@b.com", "principal_type": "user", "role": "builder"},
+                {"principal": "readers", "principal_type": "group", "role": "viewer"},
+            ],
+        }
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(svc, "_get_user_groups", return_value=["readers"]),
+        ):
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
+            assert result == ROLE_BUILDER
+
+    def test_membership_is_not_resolved_without_group_entries(self, svc):
+        """No group rows on the domain means no SCIM round-trip."""
+        dp = {
+            "version": 1,
+            "permissions": [
+                {"principal": "a@b.com", "principal_type": "user", "role": "editor"}
+            ],
+        }
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(svc, "_get_user_groups") as groups,
+        ):
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
+            assert result == ROLE_EDITOR
+            groups.assert_not_called()
+
+    def test_non_member_of_group_gets_no_role(self, svc):
+        dp = {
+            "version": 1,
+            "permissions": [
+                {"principal": "data-team", "principal_type": "group", "role": "viewer"}
+            ],
+        }
+        with (
+            patch.object(svc, "load_domain_permissions", return_value=dp),
+            patch.object(svc, "_get_user_groups", return_value=["other-team"]),
+        ):
+            result = svc._resolve_domain_entry_role(
+                "a@b.com", "h", "t", REGISTRY_CFG, DOMAIN
+            )
+            assert result is None
 
 
 class TestDomainPermCRUD:

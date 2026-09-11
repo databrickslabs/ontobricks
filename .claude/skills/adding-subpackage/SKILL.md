@@ -37,3 +37,5 @@ state or session-awareness justifies it.
 - Don't put `Request`/`Response` in `back/objects/`.
 - Don't import from internal modules outside the package — always import from the package (`.cursor/07 §__init__.py Conventions`).
 - Don't skip the Sphinx page — `make docs` warnings will fail review.
+- Don't write comments, docstrings, logs, changelog sections, or audit-trail
+  strings in a language other than English (`.cursor/05 §English-only artifacts`).

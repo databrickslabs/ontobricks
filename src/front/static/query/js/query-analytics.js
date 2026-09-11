@@ -12,6 +12,13 @@
     var _jobAvailable = false;       // Databricks analytics job can run for this domain
     var _jobBlockedReason = '';      // why not, when an admin has enabled it and expects it to work
 
+    // Whether the live probe found no graph to analyse — set by
+    // _loadEntityTypes, read by analyticsResume. The stored result comes from
+    // the registry and survives the graph objects being dropped, so without
+    // this the page would show KPIs and charts describing a graph that no
+    // longer exists, next to a banner saying it was never built.
+    var _graphMissing = false;
+
     // The class URI the on-screen result was actually computed with (null =
     // full graph). Deliberately separate from the scope modal's select: that
     // select is a request being composed, this is a fact about what is
@@ -104,7 +111,11 @@
 
     var _selectedMetric = 'pagerank';
     var _distCharts = {};
-    var _logScale = false;
+    var _logScale = true;
+    var _metricSeriesCache = {};
+    var _metricSeriesController = null;
+    var _analyticsGeneration = '';
+    var _metricSeriesRequestId = 0;
 
     // Chart.js renders at 0px in a hidden pane, so charts are resized when the
     // Dashboard tab becomes visible.
@@ -138,9 +149,16 @@
         if (show && !existing) {
             var banner = document.createElement('div');
             banner.id = 'analyticsNoGraphBanner';
-            banner.className = 'alert alert-warning d-flex align-items-center gap-2 small mb-3';
-            banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>'
-                + '<span>No Knowledge Graph has been built yet. Go to <strong>KG → Sync</strong> to build one before running analysis.</span>';
+            banner.className = 'alert alert-warning d-flex align-items-start gap-2 small mb-3';
+            // Naming the hidden result matters: a user who saw charts here
+            // before would otherwise read the empty dashboard as a broken page
+            // and go looking for the numbers rather than rebuilding.
+            banner.innerHTML = '<i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>'
+                + '<span>No Knowledge Graph has been built yet. Go to <strong>KG → Sync</strong> '
+                + 'to build one before running analysis.'
+                + '<span class="d-block mt-1">Results from an earlier analysis are '
+                + 'no longer shown, because the graph they describe does not exist. '
+                + 'The run history is kept under <strong>KG → Management → Runs</strong>.</span></span>';
             var section = document.getElementById('analyticsSection');
             var header = section && section.querySelector('.section-header');
             if (header) header.insertAdjacentElement('afterend', banner);
@@ -197,6 +215,7 @@
         // Quick check: if the graph_name is empty, no KG has been built
         var cfg = window.__TRIPLESTORE_CONFIG || {};
         if (!cfg.graph_name) {
+            _graphMissing = true;
             _setComputeBtnState(false, 'Build the Knowledge Graph first (KG → Sync)');
             _showNoGraphBanner(true);
             _showLimitInfo(false);
@@ -212,12 +231,17 @@
             var resp = await fetch('/dtwin/sync/stats', { credentials: 'same-origin' });
             var data = await resp.json();
             if (!data.success) {
+                // How dropped Unity Catalog objects surface: the stats query
+                // against the graph relation errors out. The graph is gone even
+                // though the domain still names one.
+                _graphMissing = true;
                 _setComputeBtnState(false, 'Build the Knowledge Graph first (KG → Sync)');
                 _showNoGraphBanner(true);
                 _showLimitInfo(false);
                 sel.innerHTML = '<option value="">All types (full graph)</option>';
                 return;
             }
+            _graphMissing = false;
             _allTypes = data.entity_types || [];
             _populateTypeSelect(sel);
             _showNoGraphBanner(false);
@@ -289,6 +313,50 @@
         if (_ias) _ias.textContent = '';
     }
 
+    // The inverse of _renderAnalyticsData: put the dashboard back to the state
+    // it has before any result has been rendered. Used when the graph the
+    // stored result describes no longer exists — the numbers are not merely
+    // stale, they are about something that is gone.
+    function _clearAnalyticsResults() {
+        _analyticsData = null;
+        _analyticsLastSections = null;
+        _resultScope = null;
+        _analyticsGeneration = '';
+        _metricSeriesCache = {};
+        _invalidateMetricSeriesRequest();
+
+        var results = document.getElementById('analyticsResults');
+        if (results) results.classList.add('d-none');
+
+        // Interpret would otherwise post the dropped graph's payload to the LLM.
+        var interpretBtn = document.getElementById('analyticsInterpretBtn');
+        if (interpretBtn) interpretBtn.classList.add('d-none');
+        var auditBtn = document.getElementById('analyticsAuditBtn');
+        if (auditBtn) auditBtn.classList.add('d-none');
+
+        var subtitle = document.getElementById('analyticsSubtitle');
+        if (subtitle) subtitle.classList.add('d-none');
+        var computedAt = document.getElementById('analyticsComputedAt');
+        if (computedAt) computedAt.classList.add('d-none');
+
+        // Chart.js keeps drawing a destroyed-in-name-only chart on resize, so
+        // the instances have to go, not just their container.
+        Object.keys(_charts).forEach(function (key) {
+            if (_charts[key] && typeof _charts[key].destroy === 'function') {
+                _charts[key].destroy();
+            }
+            delete _charts[key];
+        });
+        Object.keys(_distCharts).forEach(function (key) {
+            if (_distCharts[key] && typeof _distCharts[key].destroy === 'function') {
+                _distCharts[key].destroy();
+            }
+            delete _distCharts[key];
+        });
+
+        _resetAnalyticsCards();
+    }
+
     // Format an ISO timestamp into a short "x ago" / locale string.
     function _formatComputedAt(iso) {
         if (!iso) return '';
@@ -307,6 +375,12 @@
     function _renderAnalyticsData(data, meta) {
         meta = meta || {};
         _analyticsData = data;
+        var generation = meta.computed_at || '';
+        if (generation !== _analyticsGeneration) {
+            _analyticsGeneration = generation;
+            _metricSeriesCache = {};
+            _invalidateMetricSeriesRequest();
+        }
 
         // ``meta`` describes the result being rendered, so it is the authority
         // on scope — including clearing it, which is what makes a full-graph
@@ -447,6 +521,13 @@
     // background, re-show the spinner and resume waiting (the last result stays
     // visible underneath until the new one lands).
     window.analyticsResume = async function () {
+        // The stored result lives in the registry and outlives the graph it
+        // describes. Rendering it next to the "not built yet" banner told the
+        // user two contradictory things; the live probe wins.
+        if (_graphMissing) {
+            _clearAnalyticsResults();
+            return;
+        }
         await window.analyticsLoadLatest();
         var running = await _findRunningAnalyticsTask();
         if (running) {
@@ -564,6 +645,11 @@
     window.analyticsRenderCharts = function () {
         if (!_analyticsData) return;
         _renderRankingChart();
+        window.analyticsRenderDetailTable();
+    };
+
+    window.analyticsRenderDetailTable = function () {
+        if (!_analyticsData) return;
         var topN = _topN();
         _renderPagerankTable(
             Object.keys(_analyticsData.nodes || {}),
@@ -578,6 +664,187 @@
         return Math.max(3, parseInt(el && el.value, 10) || 10);
     }
 
+    function _seriesCacheKey(metric, generation) {
+        return (generation || '') + '::' + metric;
+    }
+
+    function _staleSeriesError() {
+        var err = new Error('stale metric series response');
+        err.name = 'AbortError';
+        return err;
+    }
+
+    function _invalidateMetricSeriesRequest() {
+        _metricSeriesRequestId += 1;
+        if (_metricSeriesController) {
+            _metricSeriesController.abort();
+            _metricSeriesController = null;
+        }
+        return _metricSeriesRequestId;
+    }
+
+    async function _loadMetricSeries(metric, generation, onProgress) {
+        var requestId = _invalidateMetricSeriesRequest();
+        var cacheKey = _seriesCacheKey(metric, generation);
+        if (_metricSeriesCache[cacheKey]) {
+            return _metricSeriesCache[cacheKey];
+        }
+        _metricSeriesController = new AbortController();
+        var controller = _metricSeriesController;
+
+        try {
+            var resp = await fetch(
+                '/dtwin/metrics/series?metric=' + encodeURIComponent(metric),
+                { credentials: 'same-origin', signal: controller.signal }
+            );
+            var payload = await resp.json();
+            if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
+                throw _staleSeriesError();
+            }
+            if (!resp.ok) {
+                throw new Error(payload.message || 'Could not load metric series');
+            }
+            if (!payload.success) {
+                throw new Error(payload.message || 'Could not load metric series');
+            }
+            if (!payload.has_result) {
+                throw new Error('No metric series available for the current analysis');
+            }
+
+            var uris = payload.uris || [];
+            var labels = payload.labels || [];
+            var scores = payload.scores || [];
+            var ranks = payload.ranks || [];
+            var points = [];
+            var count = Math.max(uris.length, labels.length, scores.length, ranks.length);
+            for (var i = 0; i < count; i++) {
+                var rank = Number(ranks[i] || (i + 1));
+                if (!Number.isFinite(rank)) rank = i + 1;
+                points.push({
+                    x: Number(ranks[i] || (i + 1)),
+                    y: Number(scores[i] || 0),
+                    uri: uris[i] || '',
+                    label: labels[i] || _localName(uris[i] || '')
+                });
+                points[i].x = rank;
+            }
+
+            var series = {
+                metric: payload.metric || metric,
+                computedAt: payload.computed_at || generation,
+                total: Number(payload.total || points.length),
+                sampled: !!payload.sampled,
+                points: points
+            };
+
+            if (requestId !== _metricSeriesRequestId || generation !== _analyticsGeneration) {
+                throw _staleSeriesError();
+            }
+            if (typeof onProgress === 'function') {
+                onProgress(points.length, series.total, series.sampled);
+            }
+            _metricSeriesCache[cacheKey] = series;
+            return series;
+        } finally {
+            if (_metricSeriesController === controller) {
+                _metricSeriesController = null;
+            }
+        }
+    }
+
+    function _metricSeriesStatusText(total, shown, sampled) {
+        var totalSafe = Math.max(0, Number(total || 0));
+        var shownSafe = Math.max(0, Number(shown || 0));
+        if (!totalSafe) {
+            return shownSafe.toLocaleString() + ' points shown';
+        }
+        if (sampled) {
+            return totalSafe.toLocaleString() + ' nodes total · visually sampled to '
+                + shownSafe.toLocaleString() + ' retained points';
+        }
+        return totalSafe.toLocaleString() + ' nodes total · '
+            + shownSafe.toLocaleString() + ' points shown';
+    }
+
+    function _renderMetricSeriesChart(meta, points, canvas, onPointClick) {
+        if (_charts.ranking) { _charts.ranking.destroy(); _charts.ranking = null; }
+        _charts.ranking = new Chart(canvas, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: meta.label,
+                    data: points,
+                    parsing: false,
+                    showLine: true,
+                    pointRadius: 2,
+                    pointHoverRadius: 4,
+                    borderWidth: 1.5,
+                    borderColor: meta.color,
+                    backgroundColor: meta.color,
+                    fill: false,
+                    tension: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                onClick: function (event, elements) {
+                    if (!elements || !elements.length) return;
+                    var hit = elements[0];
+                    var point = null;
+                    if (event && event.chart && event.chart.data && event.chart.data.datasets
+                        && event.chart.data.datasets[hit.datasetIndex]
+                        && event.chart.data.datasets[hit.datasetIndex].data) {
+                        point = event.chart.data.datasets[hit.datasetIndex].data[hit.index];
+                    }
+                    if (point && point.uri && typeof onPointClick === 'function') {
+                        onPointClick(point.uri);
+                    }
+                },
+                onHover: function (event) {
+                    event.native.target.style.cursor =
+                        event.chart.getElementsAtEventForMode(
+                            event.native, 'nearest', { intersect: true }, true
+                        ).length ? 'pointer' : 'default';
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function (items) {
+                                var point = items[0].raw || points[items[0].dataIndex];
+                                return 'Rank #' + ((point && point.x) || (items[0].dataIndex + 1));
+                            },
+                            label: function (item) {
+                                var point = item.raw || {};
+                                return [
+                                    (point.label || _localName(point.uri || '')),
+                                    'URI: ' + (point.uri || '—'),
+                                    meta.label + ': ' + Number(point.y || 0).toFixed(6)
+                                ];
+                            },
+                            afterLabel: function () { return '\nClick to open in Graph Viewer'; }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Rank' },
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    y: {
+                        title: { display: true, text: meta.label },
+                        ticks: { font: { size: 11 } },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    }
+                }
+            }
+        });
+    }
+
     function _renderRankingChart() {
         var host = document.getElementById('analyticsRankingCard');
         if (!host || !_analyticsData) return;
@@ -589,6 +856,8 @@
         var unavailable = _analyticsData.unavailable_metrics || [];
         var approximate = _analyticsData.approximate_metrics || [];
         var pivotCount = _analyticsData.pivot_count || 0;
+        var renderMetric = meta.key;
+        var renderGeneration = _analyticsGeneration;
 
         var segments = _ALL_METRICS.map(function (m) {
             return '<button type="button" class="analytics-rank-seg'
@@ -606,7 +875,7 @@
             + '<div class="card mt-2">'
             + '  <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">'
             + '    <span class="small fw-semibold">'
-            + '      <i class="bi ' + meta.icon + ' me-1"></i>Top nodes by ' + meta.label
+            + '      <i class="bi ' + meta.icon + ' me-1"></i>Nodes by ' + meta.label
             + '      <button class="btn btn-link btn-sm p-0 text-muted ms-1"'
             + '              onclick="_showMetricInfo(\'' + meta.key + '\')"'
             + '              title="What is ' + meta.label + '?">'
@@ -616,6 +885,7 @@
             + '  </div>'
             + '  <div class="card-body">'
             + '    <div id="analyticsRankingNotice"></div>'
+            + '    <div id="analyticsRankingStatus" class="analytics-rank-status"></div>'
             + '    <div class="analytics-rank-canvas-wrap">'
             + '      <canvas id="analyticsRankingChart"></canvas>'
             + '    </div>'
@@ -629,26 +899,9 @@
         });
 
         var notice = document.getElementById('analyticsRankingNotice');
+        var status = document.getElementById('analyticsRankingStatus');
         var canvas = document.getElementById('analyticsRankingChart');
-        if (!canvas || !notice) return;
-
-        var allNodes = _analyticsData.nodes || {};
-        var sorted = Object.keys(allNodes).sort(function (a, b) {
-            return (allNodes[b][meta.key] || 0) - (allNodes[a][meta.key] || 0);
-        }).slice(0, _topN());
-        var values = sorted.map(function (uri) {
-            return +(allNodes[uri][meta.key] || 0).toFixed(6);
-        });
-
-        // A flat zero chart would imply a measurement of zero. Explain instead.
-        if (!values.length || values.every(function (v) { return v === 0; })) {
-            canvas.style.display = 'none';
-            notice.innerHTML = '<div class="alert alert-light border small text-muted mb-0">'
-                + '<i class="bi bi-info-circle me-1"></i>'
-                + _zeroReason(meta.key, unavailable) + '</div>';
-            return;
-        }
-        canvas.style.display = '';
+        if (!canvas || !notice || !status) return;
 
         notice.innerHTML = approximate.indexOf(meta.key) !== -1
             ? '<div class="alert alert-warning border small py-1 px-2 mb-2">'
@@ -659,67 +912,62 @@
               + 'not as an absolute value — nodes with similar scores may be ordered '
               + 'wrongly. Analyse a single Entity Type for exact values.</div>'
             : '';
+        canvas.classList.add('d-none');
+        status.textContent = 'Loading metric series…';
+        notice.insertAdjacentHTML(
+            'beforeend',
+            '<div class="analytics-rank-loading">'
+            + '<div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>'
+            + '<span class="small text-muted">Loading ranked node scores…</span>'
+            + '</div>'
+        );
 
-        var labels = sorted.map(_displayName);
-        _charts.ranking = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: meta.label,
-                    data: values,
-                    backgroundColor: meta.color,
-                    borderRadius: 4,
-                    borderSkipped: false
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                onClick: function (event, elements) {
-                    if (!elements || !elements.length) return;
-                    var uri = sorted[elements[0].index];
-                    if (uri) _navigateToGraph(uri);
-                },
-                onHover: function (event) {
-                    event.native.target.style.cursor =
-                        event.chart.getElementsAtEventForMode(
-                            event.native, 'nearest', { intersect: true }, true
-                        ).length ? 'pointer' : 'default';
-                },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            title: function (items) {
-                                var uri = sorted[items[0].dataIndex];
-                                var type = (_analyticsData.node_types || {})[uri];
-                                return type ? uri + '  [' + _localName(type) + ']' : uri;
-                            },
-                            beforeBody: function (items) {
-                                var nm = allNodes[sorted[items[0].dataIndex]] || {};
-                                return _ALL_METRICS.map(function (m) {
-                                    return m.label + ' : ' + (nm[m.key] || 0).toFixed(6);
-                                }).concat(['──────────────────────────']);
-                            },
-                            label: function (item) {
-                                return '► ' + item.dataset.label + ' : ' + item.formattedValue;
-                            },
-                            afterLabel: function () { return '\nClick to open in Graph Viewer'; }
-                        }
-                    }
-                },
-                scales: {
-                    x: { beginAtZero: true, ticks: { font: { size: 11 } },
-                         grid: { color: 'rgba(0,0,0,0.05)' } },
-                    y: { ticks: { font: { size: 11 },
-                                  callback: function (val, idx) {
-                                      var l = labels[idx];
-                                      return l.length > 40 ? l.slice(0, 39) + '…' : l;
-                                  } },
-                         grid: { display: false } }
-                }
+        _loadMetricSeries(meta.key, _analyticsGeneration, function (loaded, total) {
+            if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
+            status.textContent = total
+                ? ('Loading ' + loaded.toLocaleString() + ' / ' + total.toLocaleString() + ' nodes…')
+                : ('Loading ' + loaded.toLocaleString() + ' nodes…');
+        }).then(function (series) {
+            if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
+            if (!host.querySelector('#analyticsRankingChart')) return;
+            var points = (series && series.points) || [];
+            if (!points.length || points.every(function (p) { return Number(p.y || 0) === 0; })) {
+                canvas.classList.add('d-none');
+                notice.innerHTML = '<div class="alert alert-light border small text-muted mb-0">'
+                    + '<i class="bi bi-info-circle me-1"></i>'
+                    + _zeroReason(meta.key, unavailable) + '</div>';
+                status.textContent = '';
+                return;
+            }
+
+            canvas.classList.remove('d-none');
+            notice.innerHTML = approximate.indexOf(meta.key) !== -1
+                ? '<div class="alert alert-warning border small py-1 px-2 mb-2">'
+                  + '<i class="bi bi-exclamation-triangle me-1"></i><strong>Estimate.</strong> '
+                  + meta.label + ' is sampled from ' + pivotCount + ' source node'
+                  + (pivotCount === 1 ? '' : 's') + ' rather than all of them, because the '
+                  + 'exact computation is quadratic in the graph size. Use it to rank nodes, '
+                  + 'not as an absolute value — nodes with similar scores may be ordered '
+                  + 'wrongly. Analyse a single Entity Type for exact values.</div>'
+                : '';
+            _renderMetricSeriesChart(meta, points, canvas, function (uri) {
+                _navigateToGraph(uri);
+            });
+            status.textContent = _metricSeriesStatusText(
+                series && series.total,
+                points.length,
+                !!(series && series.sampled)
+            );
+        }).catch(function (err) {
+            if (_selectedMetric !== renderMetric || _analyticsGeneration !== renderGeneration) return;
+            if (err && err.name === 'AbortError') return;
+            canvas.classList.add('d-none');
+            notice.innerHTML = '<div class="alert alert-danger small mb-0">'
+                + '<i class="bi bi-exclamation-triangle me-1"></i>'
+                + 'Unable to load metric series.</div>';
+            status.textContent = '';
+            if (typeof showNotification === 'function') {
+                showNotification("Unable to load metric series", "error");
             }
         });
     }

@@ -35,6 +35,7 @@ def patched_mcp(monkeypatch):
     """Same patching strategy as test_smoke_tools.py — patch httpx.AsyncClient."""
     try:
         import server.app as _app  # type: ignore[import-not-found]
+        import server.http_client as _http  # type: ignore[import-not-found]
     except ImportError as exc:
         pytest.skip(f"server.app not importable: {exc}")
 
@@ -60,8 +61,8 @@ def patched_mcp(monkeypatch):
             super().__init__(*args, **kwargs)
 
     monkeypatch.setattr(_app.httpx, "AsyncClient", _PatchedAsyncClient)
-    monkeypatch.setattr(_app, "_get_auth_headers", lambda mode: {"Authorization": "Bearer test"})
-    monkeypatch.setattr(_app, "_base_url", lambda mode: "http://test.local")
+    monkeypatch.setattr(_http, "_get_auth_headers", lambda mode: {"Authorization": "Bearer test"})
+    monkeypatch.setattr(_http, "_base_url", lambda mode: "http://test.local")
 
     mcp = _app.create_mcp_server(mode="standalone")
 

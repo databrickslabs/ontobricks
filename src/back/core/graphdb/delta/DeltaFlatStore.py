@@ -21,6 +21,8 @@ class DeltaFlatStore(GraphDBBackend):
     health probes (the ``"view"`` engine) and direct materialisation.
     """
 
+    supports_materialized_inference_purge = True
+
     def __init__(
         self,
         client: Any,
@@ -205,6 +207,14 @@ class DeltaFlatStore(GraphDBBackend):
                 "OPTIMIZE inferred companion failed for %s: %s", table_name, exc
             )
 
+    def purge_materialized_triples(self, table_name: str) -> int:
+        """Truncate the inferred companion and preserve mapped source triples."""
+        inferred = self._writable_table_fqn(table_name)
+        count = self.count_triples(inferred)
+        materialize.truncate_table(self._client, inferred)
+        logger.info("Purged %d materialized triples from %s", count, inferred)
+        return count
+
     def query_triples(self, table_name: str) -> List[Dict[str, str]]:
         """SELECT all triples."""
         validate_table_name(table_name)
@@ -259,6 +269,20 @@ class DeltaFlatStore(GraphDBBackend):
         self._client.execute_statement(f"OPTIMIZE {table_name}")
 
     def execute_query(self, query: str) -> List[Dict[str, Any]]:
+        """Execute a graph read query, bounded by the graph statement timeout.
+
+        Routed through :meth:`SQLWarehouse.execute_query` with a
+        ``statement_timeout_s`` so a runaway traversal (e.g. the recursive BFS
+        CTE) is cancelled server-side instead of pinning a warehouse session.
+        The unbounded ``client.execute_query`` is intentionally reserved for
+        full-graph dumps (``query_triples``) and the build pipeline.
+        """
+        from back.core.query_limits import get_graph_query_timeout_s
+
+        timeout_s = get_graph_query_timeout_s()
+        sql_service = getattr(self._client, "sql", None)
+        if sql_service is not None and hasattr(sql_service, "execute_query"):
+            return sql_service.execute_query(query, statement_timeout_s=timeout_s)
         return self._client.execute_query(query)
 
     def get_inferred_triple_count(self, table_name: str) -> int:

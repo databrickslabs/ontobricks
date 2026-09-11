@@ -8,12 +8,13 @@ the success payload as ``message``.
 
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List, Optional
 
 from back.core.errors import InfrastructureError, NotFoundError, ValidationError
 from back.core.graphdb import get_graphdb
 from back.core.helpers import (
+    SAFE_COL_IDENT as _SAFE_COL_IDENT,
+    SAFE_SQL_IDENT as _SAFE_SQL_IDENT,
     effective_graph_query_table,
     extract_local_name,
     get_databricks_client,
@@ -21,12 +22,15 @@ from back.core.helpers import (
     sql_escape,
 )
 from back.core.logging import get_logger
+from back.core.mcp_tools import MCP_CONTEXT_MODE_DEFAULT, coerce_mcp_policy
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+from back.objects.digitaltwin.VirtualAttributeService import (
+    VIRTUAL_ATTRIBUTES_FEATURE,
+    VirtualAttributeService,
+)
 
 logger = get_logger(__name__)
 
-_SAFE_SQL_IDENT = re.compile(r"^[A-Za-z0-9_.]+$")
-_SAFE_COL_IDENT = re.compile(r"^[A-Za-z0-9_]+$")
 _RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 
 
@@ -36,6 +40,28 @@ class NodeContextService:
     SAFE_SQL_IDENT = _SAFE_SQL_IDENT
     SAFE_COL_IDENT = _SAFE_COL_IDENT
     RDF_TYPE = _RDF_TYPE
+
+    @staticmethod
+    def resolve_context_policy(domain: Any) -> Dict[str, str]:
+        """Return the domain's ``{feature: mode}`` context policy.
+
+        Reads the per-domain MCP policy the ontology designer edited in
+        Domain → Information → MCP. Missing or malformed policies yield an
+        empty mapping, which every consumer reads as "all normal".
+        """
+        info = getattr(domain, "info", None) or {}
+        if not isinstance(info, dict):
+            return {}
+        return coerce_mcp_policy(info.get("mcp_policy")).get("context", {})
+
+    @staticmethod
+    def context_feature_disabled(
+        context_policy: Optional[Dict[str, str]], feature: str
+    ) -> bool:
+        """True when *feature* must be withheld from external consumers."""
+        if not context_policy:
+            return False
+        return context_policy.get(feature, MCP_CONTEXT_MODE_DEFAULT) == "disabled"
 
     @staticmethod
     def match_ontology_class(
@@ -118,6 +144,10 @@ class NodeContextService:
         the front-end all read ``target_domain``. This mirrors the alias
         resolution :meth:`_resolve_bridges` already does so a shallow, static
         listing (no traversal) stays consistent with the traversal path.
+
+        Description enrichment / MCP-visibility filtering are opt-in via
+        :meth:`enrich_bridge_targets` — the raw shape here stays authoring-
+        friendly (UI callers keep seeing every bridge).
         """
         entries: List[Dict[str, Any]] = []
         for b in cls.get("bridges") or []:
@@ -134,6 +164,109 @@ class NodeContextService:
         return entries
 
     @staticmethod
+    def enrich_bridge_targets(
+        bridges: List[Dict[str, Any]],
+        *,
+        session_mgr: Any,
+        settings: Any,
+        registry_catalog: Optional[str] = None,
+        registry_schema: Optional[str] = None,
+        registry_volume: Optional[str] = None,
+        drop_unavailable: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Attach ``target_domain_description`` to each bridge.
+
+        Fetches the MCP-visible domain map from
+        :meth:`RegistryService.list_mcp_domains` once and looks each bridge's
+        ``target_domain`` up (accepts the historical ``target_project`` alias).
+
+        When *drop_unavailable* is True (default — the MCP / external REST
+        contract), bridges whose target is not MCP-visible are omitted so an
+        interrogating agent can only see targets it can actually hop to via
+        ``select_domain``. Internal UI callers (``/dtwin/classes``) pass
+        ``drop_unavailable=False`` so the ontology designer keeps seeing every
+        authored bridge.
+
+        Registry lookup errors soft-fail: the input bridges pass through
+        with an empty description and without filtering. This matches the
+        soft-fail contract of the rest of ``NodeContextService`` — a broken
+        registry never breaks a node-context response.
+        """
+        normalized: List[Dict[str, Any]] = []
+        for b in bridges:
+            if not isinstance(b, dict):
+                continue
+            entry = dict(b)
+            entry["target_domain"] = b.get("target_domain") or b.get("target_project", "")
+            normalized.append(entry)
+        if not normalized:
+            return []
+
+        descriptions = NodeContextService._load_mcp_target_descriptions(
+            session_mgr=session_mgr,
+            settings=settings,
+            registry_catalog=registry_catalog,
+            registry_schema=registry_schema,
+            registry_volume=registry_volume,
+        )
+        if descriptions is None:
+            for entry in normalized:
+                entry.setdefault("target_domain_description", "")
+            return normalized
+
+        enriched: List[Dict[str, Any]] = []
+        for entry in normalized:
+            target = entry["target_domain"]
+            if target in descriptions:
+                entry["target_domain_description"] = descriptions[target] or ""
+                enriched.append(entry)
+            elif not drop_unavailable:
+                entry["target_domain_description"] = ""
+                enriched.append(entry)
+        return enriched
+
+    @staticmethod
+    def _load_mcp_target_descriptions(
+        *,
+        session_mgr: Any,
+        settings: Any,
+        registry_catalog: Optional[str],
+        registry_schema: Optional[str],
+        registry_volume: Optional[str],
+    ) -> Optional[Dict[str, str]]:
+        """Return ``{domain_name: description}`` for MCP-visible domains.
+
+        Returns ``None`` on any failure so :meth:`enrich_bridge_targets` can
+        soft-fail. Kept private because the exact registry wiring may evolve
+        (e.g. request-scoped caching) without affecting the enricher contract.
+        """
+        try:
+            from back.objects.registry import RegistryCfg, RegistryService
+            from back.objects.session import get_domain
+
+            if session_mgr is None:
+                return None
+            base_cfg = RegistryCfg.from_session(session_mgr, settings)
+            cfg = RegistryCfg(
+                catalog=registry_catalog or base_cfg.catalog,
+                schema=registry_schema or base_cfg.schema,
+                volume=registry_volume or base_cfg.volume,
+                lakebase_schema=base_cfg.lakebase_schema,
+                lakebase_database=base_cfg.lakebase_database,
+            )
+            domain = get_domain(session_mgr)
+            svc = RegistryService(cfg, DigitalTwin.uc_from_domain(domain, settings))
+            ok, items, _ = svc.list_mcp_domains()
+            if not ok:
+                return None
+            return {p["name"]: (p.get("description") or "") for p in items}
+        except Exception as exc:  # noqa: BLE001 — soft-fail is the contract
+            logger.debug(
+                "enrich_bridge_targets: registry lookup failed — %s", exc
+            )
+            return None
+
+    @staticmethod
     async def resolve_context(
         domain: Any,
         settings: Any,
@@ -144,11 +277,24 @@ class NodeContextService:
         dataset_row_limit: int = 5,
         follow_bridges: bool = False,
         bridge_depth: int = 1,
+        compute_virtual_attributes: bool = False,
         registry_catalog: Optional[str] = None,
         registry_schema: Optional[str] = None,
         registry_volume: Optional[str] = None,
+        context_policy: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Build the node-context payload for *entity_uri*.
+
+        *context_policy* is the domain's ``{feature: mode}`` MCP context
+        policy (see :meth:`resolve_context_policy`). Disabled features are
+        withheld from the payload and the work needed to produce them is
+        skipped entirely. ``None`` — the default, used by the internal
+        authoring routes — surfaces everything, mirroring
+        ``enrich_bridge_targets(drop_unavailable=False)``.
+
+        Virtual attribute *declarations* always ride along; their *values*
+        only when *compute_virtual_attributes* is set, since each function
+        costs a warehouse round-trip.
 
         Raises:
             ValidationError: invalid dataset identifiers or bridge_depth.
@@ -175,42 +321,69 @@ class NodeContextService:
                 "entity_local_id": local_id,
             }
 
+        disabled = NodeContextService.context_feature_disabled
         class_name = matched_cls.get("name", "")
         raw_dataset = matched_cls.get("dataset") or None
         raw_bridges = matched_cls.get("bridges") or []
-        actions_out = NodeContextService.class_action_entries(matched_cls)
-
-        dataset_out, fetch_error = await NodeContextService._resolve_dataset(
-            domain,
-            settings,
-            raw_dataset=raw_dataset,
-            local_id=local_id,
-            entity_uri=entity_uri,
-            fetch_dataset_rows=fetch_dataset_rows,
-            dataset_row_limit=dataset_row_limit,
+        actions_out = (
+            []
+            if disabled(context_policy, "actions")
+            else NodeContextService.class_action_entries(matched_cls)
         )
 
-        bridges_out = await NodeContextService._resolve_bridges(
-            matched_cls=matched_cls,
-            raw_bridges=raw_bridges,
-            local_id=local_id,
-            follow_bridges=follow_bridges,
-            bridge_depth=bridge_depth,
-            session_mgr=session_mgr,
-            settings=settings,
-            registry_catalog=registry_catalog,
-            registry_schema=registry_schema,
-            registry_volume=registry_volume,
-        )
+        # Declarations are cheap (a read of the class dict); the values cost a
+        # warehouse round-trip per function, so they only come when asked for.
+        virtual_out: List[Dict[str, Any]] = []
+        if not disabled(context_policy, VIRTUAL_ATTRIBUTES_FEATURE):
+            if compute_virtual_attributes:
+                virtual_out = await VirtualAttributeService.compute(
+                    domain,
+                    settings,
+                    entity_uri=entity_uri,
+                    matched_cls=matched_cls,
+                )
+            else:
+                virtual_out = VirtualAttributeService.class_entries(matched_cls)
+
+        dataset_out: Optional[Dict[str, Any]] = None
+        fetch_error: Optional[str] = None
+        if not disabled(context_policy, "dataset"):
+            dataset_out, fetch_error = await NodeContextService._resolve_dataset(
+                domain,
+                settings,
+                raw_dataset=raw_dataset,
+                local_id=local_id,
+                entity_uri=entity_uri,
+                fetch_dataset_rows=fetch_dataset_rows,
+                dataset_row_limit=dataset_row_limit,
+            )
+
+        bridges_out: List[Dict[str, Any]] = []
+        if not disabled(context_policy, "bridges"):
+            bridges_out = await NodeContextService._resolve_bridges(
+                matched_cls=matched_cls,
+                raw_bridges=raw_bridges,
+                local_id=local_id,
+                follow_bridges=follow_bridges,
+                bridge_depth=bridge_depth,
+                session_mgr=session_mgr,
+                settings=settings,
+                registry_catalog=registry_catalog,
+                registry_schema=registry_schema,
+                registry_volume=registry_volume,
+            )
 
         logger.info(
-            "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d actions=%d",
+            "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d "
+            "actions=%d virtual=%d computed=%s",
             local_id,
             class_name,
             dname,
             bool(dataset_out),
             len(bridges_out),
             len(actions_out),
+            len(virtual_out),
+            compute_virtual_attributes,
         )
 
         return {
@@ -221,7 +394,59 @@ class NodeContextService:
             "dataset": dataset_out,
             "bridges": bridges_out or None,
             "actions": actions_out or None,
+            "virtual_attributes": virtual_out or None,
             "message": fetch_error,
+        }
+
+    @staticmethod
+    async def compute_virtual_attributes(
+        domain: Any,
+        settings: Any,
+        *,
+        entity_uri: str,
+        function_full_name: Optional[str] = None,
+        context_policy: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Compute the virtual attributes of the class matching *entity_uri*.
+
+        Standalone counterpart of the ``compute_virtual_attributes`` flag on
+        :meth:`resolve_context`, for callers that only want the values and not
+        a fresh dataset/bridge resolution — the Graph Explorer's Compute
+        button. Class matching lives here so it stays in one place; the
+        computation itself is :class:`VirtualAttributeService`.
+
+        Raises:
+            NotFoundError: no ontology class matches the entity.
+            ValidationError: virtual attributes disabled for the domain, or the
+                requested function is not declared on the class.
+            InfrastructureError: Databricks client missing.
+        """
+        if NodeContextService.context_feature_disabled(
+            context_policy, VIRTUAL_ATTRIBUTES_FEATURE
+        ):
+            raise ValidationError(
+                "Virtual attributes are disabled for this domain by its MCP policy"
+            )
+
+        local_id = DigitalTwin.extract_local_id(entity_uri)
+        raw_classes = domain.get_classes() or []
+        matched_cls = NodeContextService.match_ontology_class(entity_uri, raw_classes)
+        if matched_cls is None:
+            raise NotFoundError("No ontology class matches this entity URI")
+
+        groups = await VirtualAttributeService.compute(
+            domain,
+            settings,
+            entity_uri=entity_uri,
+            matched_cls=matched_cls,
+            function_full_name=function_full_name,
+        )
+        return {
+            "success": True,
+            "entity_uri": entity_uri,
+            "entity_local_id": local_id,
+            "class_name": matched_cls.get("name", ""),
+            "virtual_attributes": groups,
         }
 
     @staticmethod
@@ -231,14 +456,26 @@ class NodeContextService:
         *,
         entity_uri: str,
         action_full_name: str,
+        context_policy: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Invoke a class-declared Unity Catalog function for *entity_uri*.
 
+        A domain that disabled the ``actions`` context element refuses every
+        invocation, independently of whether the ``invoke_entity_action`` MCP
+        tool is still exposed: hiding the actions must also stop them being
+        run by a caller that already knows their names.
+
         Raises:
             NotFoundError: no ontology class matches the entity.
-            ValidationError: action not on the class allow-list.
+            ValidationError: actions disabled for the domain, or action not on
+                the class allow-list.
             InfrastructureError: Databricks client missing or SQL execution failed.
         """
+        if NodeContextService.context_feature_disabled(context_policy, "actions"):
+            raise ValidationError(
+                "Actions are disabled for this domain by its MCP policy"
+            )
+
         local_id = DigitalTwin.extract_local_id(entity_uri)
         dname = domain.domain_folder or (domain.info or {}).get("name", "")
 
@@ -394,15 +631,25 @@ class NodeContextService:
         registry_volume: Optional[str],
     ) -> List[Dict[str, Any]]:
         del matched_cls  # reserved for future class-scoped bridge filters
+        enriched = NodeContextService.enrich_bridge_targets(
+            raw_bridges,
+            session_mgr=session_mgr,
+            settings=settings,
+            registry_catalog=registry_catalog,
+            registry_schema=registry_schema,
+            registry_volume=registry_volume,
+        )
         bridges_out: List[Dict[str, Any]] = []
-        for b in raw_bridges:
-            target_domain = b.get("target_domain") or b.get("target_project", "")
+        for b in enriched:
+            target_domain = b.get("target_domain", "")
             target_class_name = b.get("target_class_name", "")
             target_class_uri = b.get("target_class_uri", "")
             label = b.get("label", "")
+            target_domain_description = b.get("target_domain_description", "")
 
             bridge_entry: Dict[str, Any] = {
                 "target_domain": target_domain,
+                "target_domain_description": target_domain_description,
                 "target_class_name": target_class_name,
                 "target_class_uri": target_class_uri,
                 "label": label,
@@ -461,6 +708,7 @@ class NodeContextService:
                             ]
                             bridge_entry = {
                                 "target_domain": target_domain,
+                                "target_domain_description": target_domain_description,
                                 "target_class_name": target_class_name,
                                 "target_class_uri": target_class_uri,
                                 "label": label,

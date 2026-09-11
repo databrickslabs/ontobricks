@@ -3,7 +3,7 @@
 Mounted at ``/api/v1/domains`` and ``/api/v1/domain/...`` (prefix ``/v1`` on the sub-app).
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -18,6 +18,8 @@ from back.core.errors import (
 )
 from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
+from back.objects.digitaltwin.NodeContextService import NodeContextService
+from back.objects.digitaltwin.VirtualAttributeService import VirtualAttributeService
 from back.objects.registry import RegistryCfg, RegistryService
 from back.objects.session import SessionManager, get_domain, get_session_manager
 
@@ -62,6 +64,19 @@ class SparkSQLResponse(BaseModel):
 class DomainInfo(BaseModel):
     name: str
     description: str = ""
+    graph_backend: Literal["none", "lakebase", "databricks", "neo4j"] = Field(
+        default="lakebase",
+        description="Backend configured on the numeric-latest PUBLISHED version; "
+        "'none' denotes an ontology-only domain.",
+    )
+    # Per-domain MCP surface policy. Empty means "every tool exposed, every
+    # ontology attachment surfaced normally".
+    mcp_policy: Dict[str, Any] = Field(default_factory=dict)
+    # False when the numeric-latest PUBLISHED version has never been built:
+    # the domain is ontology-only, so the MCP surface exposes describe_ontology
+    # (plus the registry tools) and hides every graph tool. Defaults True so a
+    # client that predates the field keeps the full surface.
+    has_graph: bool = True
 
 
 class DomainsResponse(BaseModel):
@@ -128,6 +143,7 @@ class ClassActionsItem(BaseModel):
     dataset: Optional[dict] = None
     bridges: List[dict] = Field(default_factory=list)
     actions: List[dict] = Field(default_factory=list)
+    virtualAttributes: List[dict] = Field(default_factory=list)
 
 
 class ClassActionsResponse(BaseModel):
@@ -180,7 +196,14 @@ async def list_registry_domains(
     return DomainsResponse(
         success=True,
         domains=[
-            DomainInfo(name=p["name"], description=p["description"]) for p in items
+            DomainInfo(
+                name=p["name"],
+                description=p["description"],
+                graph_backend=p.get("graph_backend", "lakebase"),
+                mcp_policy=p.get("mcp_policy") or {},
+                has_graph=p.get("has_graph", True),
+            )
+            for p in items
         ],
     )
 
@@ -456,10 +479,12 @@ async def get_domain_design_status(
     "/domain/classes",
     response_model=ClassActionsResponse,
     response_model_exclude_none=True,
-    summary="List class Actions (dataset + bridges + UC function actions)",
-    description="Return per-class dataset, bridge and Unity Catalog function "
-    "action metadata for all classes in the domain's published ontology. "
-    "Only non-empty values are included.",
+    summary="List class Actions (dataset + bridges + actions + virtual attributes)",
+    description="Return per-class dataset, bridge, Unity Catalog function "
+    "action and virtual attribute metadata for all classes in the domain's "
+    "published ontology. Virtual attributes are declarations only — their "
+    "values come from the node-context endpoint. Only non-empty values are "
+    "included.",
 )
 async def get_domain_classes(
     domain_name: Optional[str] = Query(
@@ -489,11 +514,32 @@ async def get_domain_classes(
     dname = _raw_dname if isinstance(_raw_dname, str) else ""
     raw_classes = domain.get_classes() or []
 
+    # External surface: honour the domain's MCP context policy so a disabled
+    # attachment is never handed to an MCP client.
+    policy = NodeContextService.resolve_context_policy(domain)
+    disabled = NodeContextService.context_feature_disabled
+
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
-        dataset = cls.get("dataset") or None
-        bridges = cls.get("bridges") or []
-        actions = cls.get("actions") or []
+        dataset = None if disabled(policy, "dataset") else cls.get("dataset") or None
+        bridges = (
+            []
+            if disabled(policy, "bridges")
+            else NodeContextService.enrich_bridge_targets(
+                cls.get("bridges") or [],
+                session_mgr=session_mgr,
+                settings=settings,
+                registry_catalog=registry_catalog,
+                registry_schema=registry_schema,
+                registry_volume=registry_volume,
+            )
+        )
+        actions = [] if disabled(policy, "actions") else cls.get("actions") or []
+        virtual_attributes = (
+            []
+            if disabled(policy, "virtual_attributes")
+            else VirtualAttributeService.class_entries(cls)
+        )
         items.append(
             ClassActionsItem(
                 name=cls.get("name", ""),
@@ -501,6 +547,7 @@ async def get_domain_classes(
                 dataset=dataset,
                 bridges=bridges,
                 actions=actions,
+                virtualAttributes=virtual_attributes,
             )
         )
 

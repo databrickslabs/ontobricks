@@ -6,17 +6,22 @@
         <h4 class="mb-1"><i class="bi bi-magic me-2"></i>Generate Ontology</h4>
         <p class="text-muted mb-0 small">Auto-generate an ontology from your data sources using AI</p>
     </div>
-    <button type="button" class="btn btn-sm btn-outline-primary me-2" id="wizardTopGenerateBtn" data-action="wizard-generate">
-        <i class="bi bi-magic me-1"></i> Generate Ontology
-    </button>
-    <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
-            title="Open the ontology discussion" onclick="openOntologyDiscussion()">
-        <i class="bi bi-chat-dots"></i>
-    </button>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary onto-discuss-btn"
+                title="Open the ontology discussion" aria-label="Open the ontology discussion"
+                onclick="openOntologyDiscussion()">
+            <i class="bi bi-chat-dots"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-primary" id="wizardTopGenerateBtn" data-action="wizard-generate">
+            <i class="bi bi-magic me-1"></i> Generate Ontology
+        </button>
+    </div>
 </div>
 
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
         <!-- Tab Navigation -->
-        <ul class="nav nav-tabs ob-tabs" id="wizardTabs" role="tablist">
+        <ul class="nav nav-tabs ob-tabs nav-fill" id="wizardTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="wizard-tab-metadata" data-bs-toggle="tab" data-bs-target="#wizard-pane-metadata"
                         type="button" role="tab" aria-controls="wizard-pane-metadata" aria-selected="true">
@@ -44,7 +49,7 @@
         </ul>
 
         <!-- Tab Content -->
-        <div class="tab-content ob-tab-content" id="wizardTabContent">
+        <div class="tab-content p-3" id="wizardTabContent">
 
             <!-- Data Sources Tab -->
             <div class="tab-pane fade show active" id="wizard-pane-metadata" role="tabpanel" aria-labelledby="wizard-tab-metadata">
@@ -205,7 +210,8 @@
             <i class="bi bi-info-circle me-1"></i>
             Generation uses AI and may take a few seconds. The ontology will be applied automatically when ready.
         </div>
+        </div>
+    </div>
 
         <!-- Progress overlay is now dynamically created by JavaScript -->
     </div>
-</div>

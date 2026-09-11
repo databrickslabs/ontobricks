@@ -1,7 +1,7 @@
 /**
  * OntoBricks - Help Center Documentation controller
  *
- * Renders documentation/*.md inside the Help Center modal. Fetches the index once,
+ * Renders docs/*.md inside the Help Center modal. Fetches the index once,
  * then fetches and renders each document on demand using marked.js.
  *
  * Exposes window.HelpDocs = { activate(slug?) } which help-modal.js calls
@@ -17,7 +17,7 @@
     var SCREENSHOT_PREFIX = '/api/help/docs/screenshots/';
     var STATIC_PREFIX = '/static/';
     var GITHUB_BASE =
-        'https://github.com/databrickslabs/ontobricks/blob/develop/documentation/';
+        'https://github.com/databrickslabs/ontobricks/blob/develop/docs/';
 
     var state = {
         loadedIndex: false,
@@ -43,7 +43,7 @@
         var t = $('helpDocsTitle');
         if (t) t.textContent = title || 'Documentation';
         var meta = $('helpDocsMeta');
-        if (meta) meta.textContent = file ? 'documentation/' + file : '';
+        if (meta) meta.textContent = file ? 'docs/' + file : '';
         var gh = $('helpDocsGithub');
         if (gh) {
             if (file) {
@@ -256,7 +256,7 @@
                 img.setAttribute('loading', 'lazy');
                 return;
             }
-            // Normalise: strip a leading "./", "docs/", or "documentation/" when present
+            // Normalise: strip a leading "./", "documentation/" (legacy), or "docs/" when present
             var rel = src
                 .replace(/^\.\//, '')
                 .replace(/^documentation\//, '')

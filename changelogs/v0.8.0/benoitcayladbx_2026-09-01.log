@@ -1,0 +1,407 @@
+## Align Home and Explorer e2e with current UI
+
+Context: Playwright e2e on develop still expected the old Home 3-card workflow
+strip and KPI counters, plus a "Knowledge Graph" sidebar label. The UI has
+been All Domains + New Domain and "Explorer" since earlier branches; those
+assertion updates never landed on develop, so the nightly e2e suite failed
+on stale selectors. Unit contracts now pin the templates so routine pytest
+catches the same drift without Playwright.
+
+Changes:
+
+1. tests/e2e/navigation/test_navigation_flows.py
+   Replace workflow-card / classCount checks with the All Domains gateway
+   and New Domain CTA.
+2. tests/e2e/dtwin/test_dtwin_flows.py
+   Accept the current Explorer sidebar label on the sigmagraph link.
+3. tests/units/ui/test_home_and_explorer_contracts.py
+   Pin home.html and menu_config.json so the old selectors cannot return
+   unnoticed in routine runs.
+
+Modified files:
+- tests/e2e/navigation/test_navigation_flows.py
+- tests/e2e/dtwin/test_dtwin_flows.py
+- tests/units/ui/test_home_and_explorer_contracts.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5763 passed, 304 skipped, 1 xfailed in 49.35s; targeted Playwright Home/Explorer e2e → 4 passed in 18.96s
+
+## Reuse unchanged Mapping Designer previews
+
+Context: Switching between already-mapped entities always reran the preview
+query and displayed a loading spinner, even when the entity SQL and preview
+limit had not changed. Mapping Designer now keeps successful entity previews
+in memory and restores them immediately on subsequent selections.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Cache successful entity previews by entity URI, SQL, and row limit, then
+   reuse unchanged results instead of repeating the preview API request.
+2. tests/units/front/test_mapping_designer_split_layout.py
+   Add regression contracts for cache restoration and successful-result caching.
+3. docs/user-guide.md
+   Document automatic first-load previews, cache reuse, and explicit refresh.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_designer_split_layout.py
+- docs/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5765 passed, 304 skipped, 6 deselected, 1 xfailed in 42.90s; targeted mapping panel tests → 31 passed in 0.19s; browser flow Agent → Claim → Agent → 2 initial POST /mapping/test-query requests, 0 repeat requests, no visible spinner on cache restore
+
+## Skip unchanged Mapping Designer saves
+
+Context: Clicking an entity and then the empty canvas always treated the panel
+as edited. The close path saved the mapping and rebuilt the designer, causing
+an unnecessary spinner even when the user had only inspected the entity.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Track editable panel interactions and close unchanged panels without saving
+   or refreshing the designer.
+2. tests/units/front/test_mapping_designer_split_layout.py
+   Add regression contracts for the unchanged canvas-close path and dirty-state
+   tracking on entity and relationship SQL fields.
+3. docs/user-guide.md
+   Document that closing an unchanged panel from the canvas is side-effect free.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_designer_split_layout.py
+- docs/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5767 passed, 304 skipped, 6 deselected, 1 xfailed in 46.34s; targeted mapping panel tests → 33 passed in 0.15s; browser flow Customer → canvas → 0 requests, 0 saves, no designer rebuild, no visible spinner
+
+## Default Analytics distributions to logarithmic scale
+
+Context: Knowledge Graph Analytics distributions are typically heavy-tailed,
+but every visit started on a linear count axis. The Log scale option is now
+selected on initial load and remains user-toggleable for linear inspection.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_analytics.html
+   Render the Log scale switch as selected by default.
+2. src/front/static/query/js/query-analytics.js
+   Initialize the chart state consistently with the selected switch.
+3. tests/units/front/test_analytics_dashboard.py
+   Replace the legacy linear-default contract with the logarithmic default.
+4. docs/user-guide.md
+   Document the default scale and how to return to raw linear counts.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/static/query/js/query-analytics.js
+- tests/units/front/test_analytics_dashboard.py
+- docs/user-guide.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5767 passed, 304 skipped, 6 deselected, 1 xfailed in 46.59s; targeted Analytics UI contracts → 108 passed in 0.28s
+
+## Add exhaustive metric-series SQL contract
+
+Context: Task 1 of the KG Analytics all-node series requires a validated SQL
+query helper that returns an exhaustive metric series payload. This adds the
+allowlisted metric contract, deterministic ordering, and pagination controls
+for downstream tasks to consume.
+
+Changes:
+
+1. tests/units/core/test_job_metrics.py
+   Add TDD contracts for metric-series SQL text, full allowlist acceptance, and invalid metric rejection with ValidationError.
+2. src/back/core/graph_analysis/JobMetrics.py
+   Add METRIC_SERIES_COLUMNS and metric_series_query() with strict metric validation plus normalized limit/offset bounds.
+3. src/back/core/graph_analysis/__init__.py
+   Export metric_series_query and METRIC_SERIES_COLUMNS from the graph_analysis package surface.
+4. .superpowers/sdd/task-1-report.md
+   Record task status, RED/GREEN evidence, commit metadata, and self-review notes for Task 1.
+
+Modified files:
+- tests/units/core/test_job_metrics.py
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/__init__.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+- .superpowers/sdd/task-1-report.md
+
+Tests: uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series → 7 passed, 62 deselected, 1 warning in 0.87s; uv run --frozen pytest -q -m "not scenario" → 5774 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 50.23s
+
+## Expose paginated analytics metric series
+
+Context: Task 2 of the KG Analytics all-node series introduces the API contract
+for paginated exhaustive metric distributions. The endpoint must read the
+existing registry result first, keep centralized error handling, preserve the
+current analytics payload shape, and delegate SQL assembly to Task 1 helpers.
+
+Changes:
+
+1. tests/units/api/test_dtwin_metric_series.py
+   Add TDD contracts for the service payload shape and endpoint behavior (no-result gate, 25k limit clamp, computed_at passthrough, and unsupported metric HTTP 400).
+2. src/back/objects/digitaltwin/DigitalTwin.py
+   Add load_graph_metric_series() to resolve Databricks connectivity and output table naming with existing helpers, execute metric_series_query(), and serialize arrays with pagination metadata.
+3. src/api/routers/internal/dtwin.py
+   Add GET /dtwin/metrics/series to load stored analytics first, return has_result=false when absent, and return paginated metric payload with metric and computed_at fields.
+4. .superpowers/sdd/task-2-report.md
+   Record implementation status, RED/GREEN evidence, commit metadata, self-review, and concerns for Task 2.
+
+Modified files:
+- tests/units/api/test_dtwin_metric_series.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+- .superpowers/sdd/task-2-report.md
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_metric_series.py → RED: 4 failed (missing method/route), then GREEN: 4 passed in 1.30s; uv run --frozen pytest -q -m "not scenario" → 5778 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.28s
+
+## Harden metric-series limit contract
+
+Context: Task 2 review found a drift risk where the `25_000` page limit was
+duplicated across SQL helper and API layer. This follow-up centralizes the
+limit in graph-analysis code, removes a redundant route cast, and adds a guard
+test for missing stored `graph_name` to prevent unnecessary Databricks calls.
+
+Changes:
+
+1. src/back/core/graph_analysis/JobMetrics.py
+   Add `METRIC_SERIES_MAX_LIMIT` and use it in `metric_series_query()` clamping logic.
+2. src/back/core/graph_analysis/__init__.py
+   Export `METRIC_SERIES_MAX_LIMIT` through the package surface.
+3. src/back/objects/digitaltwin/DigitalTwin.py
+   Consume the shared max-limit constant in `load_graph_metric_series()` instead of a duplicated literal.
+4. src/api/routers/internal/dtwin.py
+   Use the shared limit constant in typed query default/clamp and remove redundant `int(limit)` casting.
+5. tests/units/api/test_dtwin_metric_series.py
+   Add focused early-exit contract for empty stored `graph_name` and switch clamp assertion to the shared constant.
+6. tests/units/core/test_job_metrics.py
+   Add a focused contract test ensuring metric-series SQL clamps to `METRIC_SERIES_MAX_LIMIT`.
+7. .superpowers/sdd/task-2-report.md
+   Append RED/GREEN evidence and rationale for keeping `computed_at` fallback and duplicate offset boundary defenses.
+
+Modified files:
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- tests/units/api/test_dtwin_metric_series.py
+- tests/units/core/test_job_metrics.py
+- .superpowers/sdd/task-2-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: uv run --frozen pytest -q tests/units/api/test_dtwin_metric_series.py → RED: import error for missing `METRIC_SERIES_MAX_LIMIT`, then GREEN: 5 passed, 1 warning in 1.31s; uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series → RED: import error for missing `METRIC_SERIES_MAX_LIMIT`, then GREEN: 8 passed, 62 deselected, 1 warning in 0.90s
+
+## Chart all node scores by rank
+
+Context: Task 3 of the KG Analytics all-node series replaces the Top-N bar
+ranking chart with an all-node ranked point-and-line chart loaded from the new
+paginated metric-series endpoint, while keeping Top N table-only and preserving
+existing notices, metric switching, Explorer drill-through, and bounded payload
+behavior for table/AI consumers.
+
+Changes:
+
+1. tests/units/front/test_analytics_dashboard.py
+   Add focused source-contract tests for line+points chart type, LTTB settings,
+   paginated series API usage, `AbortController` presence, `Nodes by` title,
+   and table-only Top N wiring.
+2. tests/units/front/test_analytics_stale_result_gate.py
+   Add regression contract asserting `_clearAnalyticsResults` clears
+   `_metricSeriesCache`.
+3. src/front/static/query/js/query-analytics.js
+   Implement generation+metric series cache, paginated `/dtwin/metrics/series`
+   assembly, stale request abort/rejection, Chart.js line renderer with points,
+   rank axis + metric axis titles, LTTB decimation threshold (5,000 -> 2,000),
+   loading progress text, decimation notice, and local/global error handling.
+4. src/front/templates/partials/dtwin/_query_analytics.html
+   Rewire `analyticsTopN` `onchange` to `analyticsRenderDetailTable()` so Top N
+   affects only the detail table.
+5. src/front/static/query/css/query-analytics.css
+   Add ranking status/loading classes using existing design tokens.
+6. .superpowers/sdd/task-3-report.md
+   Record RED/GREEN execution evidence, full-suite verification, changed files,
+   and self-review concerns.
+
+Modified files:
+- src/front/static/query/js/query-analytics.js
+- src/front/templates/partials/dtwin/_query_analytics.html
+- src/front/static/query/css/query-analytics.css
+- tests/units/front/test_analytics_dashboard.py
+- tests/units/front/test_analytics_stale_result_gate.py
+- .superpowers/sdd/task-3-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED: 7 failed, 108 passed, 1 warning; interim fix rerun exposed 1 legacy click-through contract failure; final GREEN: 115 passed, 1 warning in 0.25s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5787 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 47.18s.
+
+## Harden all-node chart review fixes
+
+Context: Task 3 review flagged a cache-hit race and stale-closure risk in the
+all-node metric series renderer, plus decimated click-through using full-series
+indexing. This follow-up hardens request invalidation, stale gating, and
+decimation wiring without changing intended dashboard UX.
+
+Changes:
+
+1. tests/units/front/test_analytics_dashboard.py
+   Add focused contracts for request invalidation before cache-hit return,
+   stale closure guards in ranking `then/catch`, decimated click-through raw
+   datum mapping, `resp.ok` handling in series loader, and decimation constants.
+2. src/front/static/query/js/query-analytics.js
+   Add `_invalidateMetricSeriesRequest()` and call it before cache lookup in
+   `_loadMetricSeries()` so cache-hits also abort/invalidate stale in-flight
+   requests; gate ranking async progress/then/catch on active metric+generation;
+   read clicked point from rendered `$context.raw` to keep decimated clicks
+   aligned; switch decimation samples to `_DECIMATION_SAMPLES`; add localized
+   `resp.ok` and `has_result` handling in series loading.
+3. .superpowers/sdd/task-3-report.md
+   Append full RED/GREEN follow-up evidence and review-fix rationale.
+
+Modified files:
+- src/front/static/query/js/query-analytics.js
+- tests/units/front/test_analytics_dashboard.py
+- .superpowers/sdd/task-3-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED: 5 failed, 114 passed, 1 warning; interim rerun: 1 failed, 118 passed, 1 warning; final GREEN: 119 passed, 1 warning in 0.28s.
+
+## Finalize analytics docs and verification
+
+Context: Tasks 1-3 implemented the all-node analytics series behavior. This
+final pass consolidates user-facing documentation for the shipped UX and records
+the focused plus full-suite automated verification required before parent-run
+external validation.
+
+Changes:
+
+1. docs/user-guide.md
+   Update Analytics dashboard guidance for ranked all-node point-and-line
+   rendering, paginated loading progress, visible >5,000-node LTTB notice, and
+   Top N affecting the detail table only.
+2. docs/features.md
+   Update the Graph Analytics feature summary to reflect exhaustive ranked chart
+   behavior, paginated series loading progress, LTTB notice, and table-only Top N.
+3. changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+   Append this final Task 4 delivery section with documentation and test evidence
+   without duplicating prior implementation narratives.
+
+Modified files:
+- docs/user-guide.md
+- docs/features.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_job_metrics.py tests/units/api/test_dtwin_metric_series.py tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → GREEN: 194 passed, 1 warning in 2.35s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5791 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 53.84s. Browser validation intentionally deferred to parent task flow.
+
+## Task 5 backend: one-query series with server LTTB
+
+Context: Runtime evidence on `bigcustomers` showed client pagination required
+dozens of ordered scans and excessive transfer. The backend metric-series
+contract now runs exactly one exhaustive ordered Databricks query per metric
+and applies deterministic pure server-side LTTB sampling when the total exceeds
+5,000 rows.
+
+Changes:
+
+1. tests/units/core/test_job_metrics.py
+   Replaced paginated SQL expectations with one-query ordering contracts and
+   added TDD coverage for threshold pass-through, exact 2,000-point sampling,
+   first/last preservation, original one-based ranks, and deterministic output.
+2. tests/units/api/test_dtwin_metric_series.py
+   Replaced pagination payload contracts with compact exhaustive payload fields
+   (`total`, `sampled`, `ranks`, `uris`, `labels`, `scores`) and added a guard
+   test proving metric validation occurs before Databricks client construction.
+3. src/back/core/graph_analysis/JobMetrics.py
+   Removed pagination SQL helpers, added strict metric validation helper,
+   switched to one exhaustive ordered query per metric, and implemented pure
+   LTTB sampling with fixed `threshold=5000` and `sample_size=2000`.
+4. src/back/core/graph_analysis/__init__.py
+   Updated graph-analysis exports to remove obsolete pagination constants and
+   expose the new metric validation and sampling helpers.
+5. src/back/objects/digitaltwin/DigitalTwin.py
+   Updated metric-series loading to validate metric before credentials/client
+   setup, execute one exhaustive query, apply server-side LTTB, and serialize
+   only the retained representative source rows with original ranks.
+6. src/api/routers/internal/dtwin.py
+   Simplified `/dtwin/metrics/series` to metric-only input and aligned response
+   shape with the new non-paginated backend contract.
+7. .superpowers/sdd/task-5-backend-report.md
+   Added implementation report with RED/GREEN evidence, final verification,
+   commit metadata, concerns, and scope notes for backend-only delivery.
+
+Modified files:
+- src/back/core/graph_analysis/JobMetrics.py
+- src/back/core/graph_analysis/__init__.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- tests/units/core/test_job_metrics.py
+- tests/units/api/test_dtwin_metric_series.py
+- .superpowers/sdd/task-5-backend-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/core/test_job_metrics.py -k metric_series tests/units/api/test_dtwin_metric_series.py` → RED: collection error (`sample_metric_series` missing), then GREEN: 16 passed, 62 deselected, 1 warning in 1.09s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5794 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.86s.
+
+## Task 5 frontend: one-response ranked rendering
+
+Context: Backend Task 5 now returns one compact ranked series payload per metric
+(`total`, `sampled`, `ranks`, `uris`, `labels`, `scores`) after one exhaustive
+ordered query plus server-side sampling when needed. The Analytics frontend no
+longer paginates metric series in the browser and no longer applies Chart.js
+decimation locally.
+
+Changes:
+
+1. `tests/units/front/test_analytics_dashboard.py`
+   Updated frontend contracts to enforce one-response `/dtwin/metrics/series`
+   loading, server-provided `ranks` usage for x-values, removal of browser
+   pagination/decimation state, and deterministic click extraction from
+   `event.chart.data.datasets[hit.datasetIndex].data[hit.index]`.
+2. `src/front/static/query/js/query-analytics.js`
+   Replaced sequential page loading with one fetch per metric, switched to
+   complete cache entries keyed by generation+metric, consumed backend-retained
+   points directly, preserved request abort + stale-render gates, removed
+   obsolete `_SERIES_PAGE_SIZE` and client LTTB settings, and made touch click
+   resolution deterministic from dataset data (no `$context` dependency).
+3. `docs/user-guide.md`
+   Rewrote ranking-chart behavior to document one exhaustive backend query with
+   server-side visual sampling and corrected tooltip content to rank/label/URI/score.
+4. `docs/features.md`
+   Updated Graph Analytics feature text to describe one-response series loading
+   and backend-retained point rendering (instead of browser pagination/LTTB).
+5. `.superpowers/sdd/task-5-frontend-report.md`
+   Added implementation report with RED/GREEN/full-suite evidence, commit info,
+   and residual concerns.
+
+Modified files:
+- tests/units/front/test_analytics_dashboard.py
+- src/front/static/query/js/query-analytics.js
+- docs/user-guide.md
+- docs/features.md
+- .superpowers/sdd/task-5-frontend-report.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_analytics_dashboard.py tests/units/front/test_analytics_stale_result_gate.py` → RED #1: 4 failed, 116 passed, 1 warning; RED #2: 2 failed, 118 passed, 1 warning; GREEN: 120 passed, 1 warning in 0.20s. `uv run --frozen pytest -q -m "not scenario"` → GREEN: 5795 passed, 304 skipped, 6 deselected, 1 xfailed, 23 warnings in 42.59s.
+
+## Task 5 runtime validation: optimized exhaustive metric chart
+
+Context: Validate the approved one-query server-sampling design against the
+1.35-million-node `bigcustomers` graph before deployment and compare it with
+the discarded client-pagination baseline.
+
+Changes:
+
+1. changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+   Record measured browser, network, interaction, and responsive-layout
+   evidence for the final implementation.
+
+Modified files:
+- changelogs/v0.8.0/benoitcayladbx_2026-09-01.log
+
+Tests: Browser validation on `bigcustomers` loaded PageRank with one
+`/dtwin/metrics/series?metric=pagerank` HTTP 200 request, no pagination
+parameters, 222,207 transferred bytes, and 14.3 seconds from request start to
+chart render. The response represented all 1,349,202 scored nodes with 2,000
+retained LTTB points. This replaced the measured 54-request, approximately
+137 MB, 5 minute 29 second baseline. Clustering abort completed in 0.23 seconds;
+the cached PageRank chart restored in 1 ms with no request. Top N changed only
+the table, logarithmic distributions remained enabled, Explorer click-through
+worked, the 390 px viewport had no page overflow, and no Analytics JavaScript
+errors were observed.

@@ -1,0 +1,182 @@
+================================================================================
+Settings UI: Default button restores factory branding
+================================================================================
+
+Context
+-------
+Settings → Configuration → UI already previewed factory title, color, and logo
+via a long "Reset to defaults" action. The control is now labeled Default, and
+it also restores the factory default entity icon immediately.
+
+Changes
+-------
+1. src/front/templates/settings.html
+   Relabeled `#uiBrandingResetDefaultsBtn` to Default with an accessible
+   restore-factory description.
+2. src/front/static/config/js/settings.js
+   `resetUIBrandingDefaults()` still previews OntoBricks / #4F46E5 / bundled
+   logo; it now also persists the factory entity icon (📦) when needed.
+3. tests/units/front/test_ui_branding_settings_contract.py
+   Contract coverage for the Default label and entity-icon reset.
+4. documentation/user-guide.md
+   Documented Default vs Save persistence for branding vs entity icon.
+5. .cursor/11-frontend-design.mdc
+   Runtime theme contract now names the Default button.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- tests/units/front/test_ui_branding_settings_contract.py
+- documentation/user-guide.md
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped, 6 deselected, 1 xfailed, 0 failed in 53.91s
+
+================================================================================
+Document UI branding persistence in user guide and Sphinx
+================================================================================
+
+Context
+-------
+Settings → Configuration → UI already persisted title/color/logo and the
+default entity icon in registry `global_config`, but the user guide, API
+guide, architecture notes, and Sphinx autodoc did not describe that path
+or the Default button vs Save split.
+
+Changes
+-------
+1. documentation/user-guide.md
+   Added Default entity icon, registry persistence table, and Save vs
+   Default write timing.
+2. documentation/features.md
+   Added a Navigation & UX bullet for configurable UI branding.
+3. documentation/architecture.md
+   Documented `ui_branding` on `GlobalConfigService` and the Lakebase
+   `global_config` JSONB payload.
+4. documentation/api.md
+   Documented `GET`/`POST /settings/ui-branding`.
+5. README.md
+   Clarified that branding lives in registry `global_config`.
+6. documentation/sphinx/api/app.core.helpers.rst
+   Autodoc for `back.core.helpers.UIBranding`.
+7. documentation/sphinx/api/app.fastapi.rst
+   Autodoc for `shared.fastapi.ui_branding`.
+8. `ci/build_docs.sh`
+   Rebuilt Sphinx HTML (no new warnings for the branding modules).
+
+Modified files:
+- documentation/user-guide.md
+- documentation/features.md
+- documentation/architecture.md
+- documentation/api.md
+- README.md
+- documentation/sphinx/api/app.core.helpers.rst
+- documentation/sphinx/api/app.fastapi.rst
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped, 6 deselected, 1 xfailed, 0 failed in 46.14s
+
+================================================================================
+Marketing-oriented README rewrite
+================================================================================
+
+Context
+-------
+The top-level README mixed a one-line pitch with deep operational detail
+(prerequisites, Lakebase grant tables, build-performance internals, per-domain
+graph-engine keys). Reworked it into a marketing-first landing page that leads
+with the value proposition and pushes technical depth to pointers into the
+existing `documentation/` set.
+
+Changes
+-------
+1. README.md
+   - New hero + tagline ("Turn your Databricks tables into a living knowledge
+     graph — in four clicks"), refreshed badges, and a "data semantics gap"
+     opening drawn from documentation/product.md.
+   - Benefit-framed sections: Why OntoBricks, the 4-click table, "What's inside"
+     pillars (Design / Map / Build &amp; reason / Publish to AI / Govern /
+     Pluggable engine), and "Runs entirely on your Databricks".
+   - Condensed Get Started (local + deploy) with the full prerequisites and
+     idempotent deploy checklist moved behind links to get-started.md and
+     deployment.md. Dropped the verbose Lakebase grant tables, build-performance
+     and managed-synced notes from the README (they live in
+     lakebase-graphdb.md / graphdb-integration.md).
+   - Added a Documentation hub block linking product.md, user-guide.md,
+     features.md, architecture.md, api.md, mcp.md, lakebase-graphdb.md,
+     import-export.md and development.md. Kept the databrickslabs Project
+     Support disclaimer verbatim. Dropped the hard-coded version from the H1.
+
+Modified files:
+- README.md
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: docs-only change (README). `uv run --frozen pytest -q -m "not scenario"`
+re-run for hygiene → GREEN (no code paths touched).
+
+================================================================================
+Code-review cleanups (persistence fix)
+================================================================================
+
+Context
+-------
+Follow-ups from the global code review of the "deleted attribute resurrects"
+fix. Cosmetic only — no behaviour change.
+
+Changes
+-------
+1. src/front/static/global/js/ontology-design.js
+   Removed the informational `[BEACON]` / `[SYNC]` / `[LOAD]` `console.log`
+   debug traces shipped in the persistence paths; kept the `console.warn`
+   error-path logs (useful in the field).
+2. src/back/objects/ontology/Ontology.py
+   `prune_orphaned_datatype_properties`: annotate the accumulator as
+   `List[Dict[str, Any]]` (typing import) for consistency with the file style.
+
+Modified files:
+- src/front/static/global/js/ontology-design.js
+- src/back/objects/ontology/Ontology.py
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped,
+6 deselected, 1 xfailed in 41.78s. GREEN.
+
+================================================================================
+Security: bump vulnerable dependencies (Dependabot)
+================================================================================
+
+Context
+-------
+Dependabot reported 16 open alerts on the default branch. Raised the security
+floors and re-locked. The lockfile was regenerated through the internal proxy
+(the only reachable index in this environment) and then host-normalized back to
+`files.pythonhosted.org` — the proxy fronts identical `/packages/<hash>/<file>`
+paths, so the URLs and hashes are byte-identical to a public-index lock. Verified
+zero `pypi-proxy.dev.databricks.com` URLs remain (deploy-safe per
+`.cursor/09-package-management`).
+
+Changes
+-------
+1. pyproject.toml
+   - mlflow  >=3.11.1 → >=3.15.0  (critical)   → locked 3.15.1
+   - gitpython >=3.1.55 → >=3.1.58 (high)       → locked 3.1.59
+   - aiohttp  >=3.14.1 → >=3.14.3 (high+medium) → locked 3.14.3
+   - sqlparse: new constraint >=0.6.0 (high, ReDoS; transitive) → locked 0.6.0
+2. uv.lock
+   - Regenerated for the above (and transitive mlflow-skinny / mlflow-tracing
+     3.15.1). Host-normalized to files.pythonhosted.org.
+
+Not applied (blocked upstream)
+------------------------------
+- cryptography: advisory patched in 50.0.0, but mlflow pins cryptography<50, so
+  bumping makes the graph unsatisfiable. Kept at >=48.0.1 with a NOTE in
+  pyproject.toml; revisit once mlflow relaxes the cap.
+
+Modified files:
+- pyproject.toml
+- uv.lock
+- changelogs/v0.8.0/benoitcayladbx_2026-08-28.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5675 passed, 305 skipped,
+6 deselected, 1 xfailed in 43.27s. GREEN. Lockfile verified proxy-free.

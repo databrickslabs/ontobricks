@@ -288,9 +288,21 @@
         return permissions.hasDomainRole('editor');
     }
 
+    /*
+     * Graph refreshes rebuild data from the version's frozen design; they do
+     * not edit that design. Builders may therefore refresh IN-REVIEW and
+     * PUBLISHED versions. A live edit lock still blocks the operation because
+     * a DRAFT build first saves the editor's in-session design.
+     */
+    function canRefreshGraph() {
+        if (window.editLockMode === 'view') return false;
+        return permissions.hasDomainRole('builder');
+    }
+
     window.OB = window.OB || {};
     window.OB.permissions = permissions;
     window.OB.canEditOntology = canEditOntology;
+    window.OB.canRefreshGraph = canRefreshGraph;
     window.OB.installReadOnlyContextMenuBlocker = installReadOnlyContextMenuBlocker;
     window.OB.showRoleNavBadge = showRoleNavBadge;
     window.OB.annotateRoleNavBadge = annotateRoleNavBadge;

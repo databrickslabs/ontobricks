@@ -1,0 +1,100 @@
+## Fix undefined names and enforce F821
+
+Context: `GET /api/v1/digitaltwin/triples` raised `NameError` for every request
+because its backend selection referenced undefined variable `be`. Three more
+undefined names prevented enabling a focused repository-wide F821 quality gate.
+This change resolves GitHub issue #163 and rebases pull request #164 onto develop.
+
+Changes:
+
+1. src/api/routers/digitaltwin.py
+   Select the view or graph table using the documented `backend` parameter.
+2. src/api/routers/internal/ontology.py
+   Use the built-in generic `dict` for the evaluated local annotation.
+3. src/back/core/external/pitfalls/runner.py
+   Import the lazily loaded sentiment analyzer under `TYPE_CHECKING`.
+4. src/back/core/graphdb/delta/DeltaBase.py
+   Resolve the Delta warehouse with the existing Delta-specific helper.
+5. tests/units/dtwin/test_digitaltwin_api.py
+   Cover graph and view backend table selection and the reported NameError.
+6. .github/workflows/ci.yml
+   Add a blocking, frozen, repository-wide Ruff F821 gate.
+
+Modified files:
+- .github/workflows/ci.yml
+- changelogs/v0.8.0/benoitcayladbx_2026-09-11.log
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/ontology.py
+- src/back/core/external/pitfalls/runner.py
+- src/back/core/graphdb/delta/DeltaBase.py
+- tests/units/dtwin/test_digitaltwin_api.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5859 passed, 304
+skipped, 6 deselected, 1 xfailed, 23 warnings in 46.48s.
+`uv run --frozen ruff check --select F821 --output-format=concise src tests`
+-> all checks passed. The two triples regression tests failed with `NameError`
+before the fix and passed after it.
+
+---
+
+## Complete v0.8.0 release notes for September follow-up
+
+Context: `releases/ReleaseNotes_V0.8.0.md` stopped at the August freeze and
+omitted Analytics LTTB, Lakehouse Health, Mapping preview cache, MCP server
+split, digit-leading UC names, Ontology Designer in-place refresh, and the
+digitaltwin triples NameError / F821 gate.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.8.0.md
+   Extend the window and test status; add a September follow-up section that
+   does not claim v0.9.0 Lakehouse//RT work.
+
+Modified files:
+- releases/ReleaseNotes_V0.8.0.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5859 passed, 304
+skipped, 6 deselected, 1 xfailed, 23 warnings in 45.37s.
+
+---
+
+## Resolve the v0.8.0 release merge conflicts
+
+Context: Pull request #165 from `develop` to `master` conflicted where the
+v0.7.1 release changed files that had newer v0.8.0 equivalents. The resolution
+preserves the v0.8.0 application, deployment, documentation, and legacy Neo4j
+secret-removal behavior while incorporating non-conflicting fixes from master.
+
+Changes:
+
+1. README.md, app.yaml.template, databricks.yml, pyproject.toml
+   Retain the v0.8.0 product version and current deployment configuration.
+2. scripts/bootstrap/lakebase-perms.sh
+   Retain the newer pgcrypto-aware registry initialization diagnostics.
+3. src/back/objects/domain/SettingsService.py
+   Retain the v0.8.0 Databricks permissions dependencies.
+4. tests/units/settings/test_deploy_app_rename_guard.py
+   Retain coverage proving the removed Neo4j secret is not rebound.
+5. src/back/core/graph_analysis/profiles.py, docs/user-guide.md
+   Incorporate master's temporal predicate token-boundary fix and documentation.
+6. releases/ReleaseNotes_V0.8.0.md
+   Record the post-merge test total with the former xfail now passing.
+
+Modified files:
+- README.md
+- app.yaml.template
+- databricks.yml
+- pyproject.toml
+- scripts/bootstrap/lakebase-perms.sh
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_deploy_app_rename_guard.py
+- src/back/core/graph_analysis/models.py
+- src/back/core/graph_analysis/profiles.py
+- tests/units/core/test_profiles.py
+- docs/user-guide.md
+- releases/ReleaseNotes_V0.8.0.md
+- changelogs/v0.8.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5860 passed, 304
+skipped, 6 deselected, 23 warnings in 46.12s.
