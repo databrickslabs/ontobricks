@@ -71,10 +71,10 @@
             <div class="card">
                 <div class="card-body p-0">
                     <!-- Sigma Container -->
-                    <div id="sgContainer">
-                        <div id="sgLoading" class="position-absolute top-50 start-50 translate-middle text-center">
-                            <div class="ob-loading-spinner">
-                                <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none">
+                    <div id="sgContainer" aria-busy="false">
+                        <div id="sgLoading" class="sg-loading-overlay">
+                            <div class="ob-loading-spinner" role="status" aria-live="polite">
+                                <svg class="ob-spinner-svg" viewBox="0 0 80 80" fill="none" aria-hidden="true">
                                     <g class="ob-ring">
                                         <g stroke="#CBD5E1" stroke-width="1.2" opacity="0.5">
                                             <line x1="40" y1="10" x2="61" y2="19"/><line x1="61" y1="19" x2="70" y2="40"/>
@@ -95,14 +95,9 @@
                                         </g>
                                     </g>
                                 </svg>
-                                <span class="ob-spinner-label">Loading graph data...</span>
+                                <span class="ob-spinner-label" id="sgLoadingLabel">Loading graph data…</span>
                             </div>
                         </div>
-                    </div>
-                    <!-- Non-blocking expand spinner (top-right) -->
-                    <div id="sgExpandSpinner" class="sg-expand-spinner d-none" role="status" aria-live="polite">
-                        <div class="spinner-border spinner-border-sm text-primary me-2" aria-hidden="true"></div>
-                        <span class="small fw-semibold" id="sgExpandSpinnerLabel">Expanding…</span>
                     </div>
                     <!-- Node Context Menu (dynamic content) -->
                     <div id="sgNodeContextMenu" class="graph-context-menu"></div>
@@ -317,15 +312,13 @@
                             <label class="form-label small mb-1" for="sgFilterDepth">Depth: <span id="sgFilterDepthValue">2</span></label>
                             <input type="range" class="form-range form-range-sm mb-2" id="sgFilterDepth" min="1" max="10" value="2" title="Number of relationship levels to traverse" data-sg-input="updateFilterDepthLabel">
                             <div class="d-flex gap-1">
-                                <button type="button" class="btn btn-sm btn-primary flex-grow-1" data-sg-action="executeGraphSearch">
+                                <button type="button" class="btn btn-sm btn-primary flex-grow-1"
+                                        id="sgGraphSearchBtn" data-sg-action="executeGraphSearch">
                                     <i class="bi bi-search"></i> Search
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-warning d-none" data-sg-action="clearGraphFilter" title="Clear" id="sgClearGraphFilterBtn">
                                     <i class="bi bi-x-circle"></i>
                                 </button>
-                            </div>
-                            <div id="sgGraphFilterInfo" class="mt-2 small d-none">
-                                <span class="text-info"><i class="bi bi-info-circle"></i> <span id="sgGraphFilterInfoText"></span></span>
                             </div>
                         </div>
                     </div>

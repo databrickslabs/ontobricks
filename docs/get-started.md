@@ -389,7 +389,9 @@ files.
 In **Knowledge Graph → Explorer**, the bottom-left stopwatch reports the latest
 search's total browser-observed response time. Click it to see Preview request,
 Expansion request, Display, and Total. Time spent choosing seeds is excluded
-from Total.
+from Total. With the Delta/Lakehouse backend, Expansion traverses the selected
+depth and retrieves the bounded subgraph in one Query Warehouse statement;
+other graph backends retain their native or iterative traversal.
 
 ## Ontology Sidebar Navigation
 

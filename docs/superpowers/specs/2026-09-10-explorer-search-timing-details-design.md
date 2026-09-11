@@ -26,8 +26,9 @@ The breakdown contains:
    request until its response is parsed.
 3. **Display** — from the parsed expansion payload through graph construction
    and completion of the Sigma render.
-4. **Total** — the existing search stopwatch: search click through displayed
-   graph, excluding time spent choosing seeds.
+4. **Total** — the active search stopwatch: search click through displayed
+   graph. It pauses immediately before the seed-selection popup opens and
+   resumes only after Explore closes the popup, excluding the full user dwell.
 
 For a single seed, Preview flows directly into Expansion without a selection
 pause. If a phase does not run or does not complete, its value is displayed as

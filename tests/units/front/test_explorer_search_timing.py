@@ -43,6 +43,36 @@ def test_display_and_total_finish_after_render() -> None:
     assert "_showSearchTiming(_searchTiming);" in js[total_done:]
 
 
+def test_timer_pauses_before_the_seed_selection_modal_opens() -> None:
+    js = _js()
+    search_block = js.split(
+        "async function _executeGraphSearch()", 1
+    )[1].split("async function _expandAndRenderGraph", 1)[0]
+    pause = search_block.index("_searchTimerPause();")
+    modal_show = search_block.index("modal.show();")
+    assert pause < modal_show
+
+
+def test_timer_resumes_after_the_selection_modal_has_closed() -> None:
+    js = _js()
+    hide_block = js.split(
+        "function _hideSeedPreviewModal()", 1
+    )[1].split("// -- Phase 2:", 1)[0]
+    hidden_listener = hide_block.index("'hidden.bs.modal'")
+    modal_hide = hide_block.index("modal.hide();", hidden_listener)
+    assert "{ once: true }" in hide_block[hidden_listener:modal_hide]
+
+    select_block = js.split(
+        "async function _expandSelectedSeeds()", 1
+    )[1].split("function _clearGraphFilter()", 1)[0]
+    modal_closed = select_block.index("await _hideSeedPreviewModal();")
+    resume = select_block.index("_searchTimerResume();", modal_closed)
+    expansion = select_block.index(
+        "await _expandAndRenderGraph(selectedUris);", resume
+    )
+    assert modal_closed < resume < expansion
+
+
 def test_starting_search_resets_latest_details() -> None:
     js = _js()
     start = js.index("async function _executeGraphSearch()")

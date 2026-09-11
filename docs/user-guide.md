@@ -665,6 +665,11 @@ Click **Data Quality** in the sidebar to run SHACL-based quality checks against 
 
 Click **Explorer** in the sidebar to explore triples as an interactive sigma.js WebGL-powered graph. Triple store data is **automatically loaded** when you navigate to this section:
 
+While Explorer searches, expands, reloads, or renders graph data, a centered
+canvas overlay hides the previous graph, blocks interaction, and names the
+current step. For searches with multiple matches, the overlay closes while you
+select seed entities and returns after you choose **Explore selected**.
+
 **Main Graph Area (left):**
 - **Nodes**: Entities (colored by class type with emoji icons in labels)
 - **Edges**: Relationships between entities
@@ -702,9 +707,15 @@ If an entity type has an assigned Databricks dashboard (configured in Ontology â
 Right-click any entity node and pick **Expand neighbours (N hops)** to enrich the displayed graph in place â€” without re-running a full SPARQL query.
 
 - The hop count follows the **Depth** slider in the right-pane filter panel (default `2`).
-- A small spinner appears in the top-right corner of the canvas while the request is running; the rest of the UI stays interactive.
+- The centered canvas overlay reports the expansion and rendering phases and blocks graph interaction until the update finishes.
 - Newly added entities are merged with the existing graph, briefly ringed with a highlight, and the camera zooms to frame them.
 - The same context menu still exposes the existing **View Dashboard**, **Dataset preview**, **Actions**, **Bridges** and **Compute virtual attributes** entries when configured for the entity's class.
+
+**Spark SPARQL support boundary (fail-closed):**
+
+- The Spark translator accepts this subset only: `SELECT`/`SELECT *`, `DISTINCT`, `LIMIT`, basic graph patterns, `OPTIONAL` on supported patterns, string filters (`CONTAINS`, string equality, `STRSTARTS`, `STRENDS`), predicate `IN`, literal `BIND`, and the specialized relationship `UNION` pattern used by the Explorer relationship filter.
+- Unsupported constructs are rejected with a validation error instead of being partially translated: `GROUP BY`, `HAVING`, `ORDER BY`, `OFFSET`, numeric or complex filters, property paths, subqueries, `MINUS`, `VALUES`, `SERVICE`, `GRAPH`, arbitrary `UNION`, and non-literal `BIND`.
+- The local RDFLib execution path is not an equivalent fallback for Spark execution because it queries the mapping graph, not warehouse triples from your Databricks data.
 
 **Data Clusters:**
 

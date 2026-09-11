@@ -29,10 +29,11 @@ percentages is out of scope.
 ## Interaction and Visual Design
 
 `#sgLoading` becomes a full-canvas overlay within `#sgContainer`. When active,
-it covers the graph with a high-opacity warm surface, centers the existing
-`.ob-loading-spinner`, and intercepts pointer input to the canvas. The details
-panel remains visible. The Search action is disabled until the current load
-finishes, preventing overlapping Filter searches.
+it covers the graph with an opaque warm surface, hides every canvas sibling
+(including Sigma WebGL canvases), centers the existing `.ob-loading-spinner`,
+and intercepts pointer input to the canvas. The details panel remains visible.
+The Search action is disabled until the current load finishes, preventing
+overlapping Filter searches.
 
 The overlay uses the existing `.ob-spinner-svg`; no new spinner artwork or
 animation is introduced. Its label is a polite live region so assistive

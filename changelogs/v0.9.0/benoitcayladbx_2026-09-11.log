@@ -67,3 +67,229 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 5930 passed, 304
 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.18s.
+
+---
+
+## Exclude user selection time from Explorer performance
+
+Context: Knowledge Graph Explorer's phase timings excluded the time spent in
+the seed-selection popup. Total now pauses at the popup boundary and resumes
+only after the user's Explore action has fully closed the popup.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Pause Total before opening the entity picker and resume after it closes.
+2. tests/units/front/test_explorer_search_timing.py
+   Assert the exact pause, modal close, resume, and expansion ordering.
+3. docs/superpowers/specs/2026-09-10-explorer-search-timing-details-design.md
+   Document the popup lifecycle timing contract.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_search_timing.py
+- docs/superpowers/specs/2026-09-10-explorer-search-timing-details-design.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5942 passed, 304
+skipped, 6 deselected, 1 xfailed, 32 warnings in 44.02s.
+
+---
+
+## Add the workspace map modal
+
+Context: The L1 Domain + version badge navigated directly to the Domain page.
+Users needed one visual directory containing the Domain, Ontology, Mapping,
+and Knowledge Graph menus and their sub-menus.
+
+Changes:
+
+1. src/front/templates/partials/layout/_workspace_map_modal.html
+   Render a four-column Bootstrap modal from the existing menu configuration.
+2. src/front/templates/base.html
+   Include the shared workspace map beside the other app-shell modals.
+3. src/front/static/global/css/components.css
+   Add token-based directory, hover, focus, current-item, and mobile styles.
+4. src/front/static/global/js/navbar.js
+   Open the map from the Domain badge, synchronize domain status, and identify
+   the current workspace section.
+5. tests/units/front/test_workspace_map_modal.py
+   Verify rendered menu order, icons, routes, gates, styles, and badge wiring.
+6. .cursor/11-frontend-design.mdc
+   Document the shared component and its L1 navigation behavior.
+7. docs/superpowers/specs/2026-09-11-workspace-map-modal-design.md and
+   docs/superpowers/plans/2026-09-11-workspace-map-modal.md
+   Record the approved design and test-driven implementation sequence.
+
+Modified files:
+- .cursor/11-frontend-design.mdc
+- changelogs/v0.9.0/benoitcayladbx_2026-09-11.log
+- docs/superpowers/plans/2026-09-11-workspace-map-modal.md
+- docs/superpowers/specs/2026-09-11-workspace-map-modal-design.md
+- src/front/static/global/css/components.css
+- src/front/static/global/js/navbar.js
+- src/front/templates/base.html
+- src/front/templates/partials/layout/_workspace_map_modal.html
+- tests/units/front/test_workspace_map_modal.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5942 passed, 304
+skipped, 6 deselected, 1 xfailed, 32 warnings in 44.14s.
+
+---
+
+## Centralize Explorer graph loading feedback
+
+Context: Knowledge Graph Explorer displayed Filter progress below the Search
+button and neighbor expansion in a separate corner spinner. All graph loads now
+use one blocking, centered canvas overlay whose label follows the active phase.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Reuse the shared brand spinner as an accessible canvas overlay and remove
+   duplicate status regions.
+2. src/front/static/query/css/query-sigmagraph.css
+   Add token-based blocking overlay geometry and remove the corner spinner.
+3. src/front/static/query/js/query-sigmagraph.js
+   Centralize loading state and route search, expansion, rendering, reload,
+   inferred refresh, focus load, and neighbor expansion through phase labels.
+4. tests/units/front/test_explorer_loading_overlay.py
+   Verify overlay structure, accessibility, paint boundaries, load-path
+   coverage, and cleanup.
+5. docs/user-guide.md
+   Document centered phase feedback and the seed-selection transition.
+6. docs/superpowers/specs/2026-09-11-explorer-canvas-loading-overlay-design.md
+   Record the approved loading overlay behavior and acceptance criteria.
+7. docs/superpowers/plans/2026-09-11-explorer-canvas-loading-overlay.md
+   Record the test-driven implementation and verification sequence.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/css/query-sigmagraph.css
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_loading_overlay.py
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-11-explorer-canvas-loading-overlay-design.md
+- docs/superpowers/plans/2026-09-11-explorer-canvas-loading-overlay.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5952 passed, 304
+skipped, 6 deselected, 1 xfailed, 32 warnings in 53.21s.
+
+---
+
+## Hide previous Explorer graph during loading
+
+Context: The centered loading overlay used a translucent warm surface, so the
+previous Sigma WebGL graph still showed through the spinner. Loading now
+covers the canvas fully and hides all graph siblings until the overlay
+clears.
+
+Changes:
+
+1. src/front/static/query/css/query-sigmagraph.css
+   Use an opaque overlay surface and hide every `#sgContainer` sibling while
+   `aria-busy` is true.
+2. tests/units/front/test_explorer_loading_overlay.py
+   Assert the opaque background and sibling-hiding rule.
+3. docs/superpowers/specs/2026-09-11-explorer-canvas-loading-overlay-design.md
+   Record that previous canvas content is hidden, not dimmed.
+4. docs/user-guide.md
+   Note that the overlay hides the previous graph.
+
+Modified files:
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_explorer_loading_overlay.py
+- docs/superpowers/specs/2026-09-11-explorer-canvas-loading-overlay-design.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5962 passed, 304
+skipped, 6 deselected, 1 xfailed, 32 warnings in 49.37s.
+
+---
+
+## Collapse Explorer Delta expansion into one RT statement
+
+Context: Explorer's Delta/Lakehouse expansion submitted one query per BFS
+level and then fetched triples in 250-entity batches. A fixed-depth CTE chain
+now traverses and retrieves the bounded subgraph in one Query Warehouse
+statement while other graph backends retain their existing traversal.
+
+Changes:
+
+1. src/back/core/graphdb/delta/DeltaFlatStore.py
+   Generate bounded forward/reverse BFS levels and fetch triples in one SQL statement.
+2. src/back/objects/digitaltwin/DigitalTwin.py
+   Dispatch to the Delta capability while preserving fallback and API metadata.
+3. tests/units/graphdb/delta/test_delta_flat_store.py
+   Cover SQL levels, traversal directions, bounds, escaping, and capping.
+4. tests/units/dtwin/test_filter_expand.py
+   Cover capability dispatch, fallback, relationship exclusion, errors, and columns.
+5. docs/get-started.md and docs/features.md
+   Document the bounded single-statement Delta/Lakehouse expansion path.
+6. docs/superpowers/specs/2026-09-11-explorer-single-statement-expansion-design.md
+   Record the approved architecture and safety constraints.
+7. docs/superpowers/plans/2026-09-11-explorer-single-statement-expansion.md
+   Record the test-driven implementation and verification sequence.
+
+Modified files:
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- src/back/objects/digitaltwin/DigitalTwin.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/dtwin/test_filter_expand.py
+- docs/get-started.md
+- docs/features.md
+- docs/superpowers/specs/2026-09-11-explorer-single-statement-expansion-design.md
+- docs/superpowers/plans/2026-09-11-explorer-single-statement-expansion.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5962 passed, 304
+skipped, 6 deselected, 1 xfailed, 32 warnings in 48.52s. Critical Ruff checks
+passed.
+
+Browser benchmark: three controlled depth-1 Lakehouse//RT expansions completed
+in 5.30s, 15.13s, and 4.90s (5.30s median). Each used one expansion SQL
+statement, returned 17 entities / 119 triples with HTTP 200, rendered the graph,
+and produced no scoped browser or network errors. The 5.2s selection dwell
+remained excluded from Total.
+
+---
+
+## Port Spark SPARQL fail-closed fix from 0.8.1 (#167)
+
+Context:
+Task 5 ports the fully reviewed Spark SPARQL safety fix from `0.8.1`
+(verified at commit `5b9beb82`) into the active `0.9.0` worktree without
+altering existing unrelated in-progress changes. The port includes the
+capability validator, translator hardening, translator/validator regression
+tests, and additive architecture + user guide updates for the Spark support
+boundary.
+
+Changes:
+
+1. src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+   Added the fail-closed SPARQL algebra validator (supported subset whitelist + unsupported feature rejection).
+2. src/back/core/w3c/sparql/SparqlTranslator.py
+   Integrated capability preflight validation and aligned specialized UNION gating with reviewed `0.8.1` behavior.
+3. tests/back/core/w3c/sparql/test_sparql_capability_validator.py
+   Added direct validator acceptance and rejection coverage, including alias and UNION-shape boundaries.
+4. tests/back/core/w3c/sparql/test_sparql_translator_units.py
+   Added fail-closed translator regressions, OPTIONAL semantics checks, alias coverage, and stricter success assertions.
+5. docs/architecture.md
+   Documented the Spark SPARQL fail-closed boundary (supported subset, rejected constructs, and fallback caveat).
+6. docs/user-guide.md
+   Added an Explorer-facing Spark SPARQL support boundary section (kept additive for Task 6 verification).
+
+Modified files:
+- src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- tests/back/core/w3c/sparql/test_sparql_capability_validator.py
+- tests/back/core/w3c/sparql/test_sparql_translator_units.py
+- docs/architecture.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-11.log
+
+Tests:
+- `uv run --frozen pytest -q tests/back/core/w3c/sparql` -> 68 passed, 1 warning in 1.48s
+- `uv run --frozen pytest -q -m "not scenario"` -> 6009 passed, 304 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.41s

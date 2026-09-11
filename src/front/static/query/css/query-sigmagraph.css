@@ -72,6 +72,25 @@
     position: relative;
 }
 
+.sg-loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--db-surface-warm);
+    pointer-events: auto;
+}
+
+.sg-loading-overlay.is-active {
+    display: flex;
+}
+
+#sgContainer[aria-busy="true"] > :not(#sgLoading) {
+    visibility: hidden;
+}
+
 .sg-search-timing {
     position: absolute;
     left: 0.5rem;
@@ -147,22 +166,6 @@
 .sg-search-timing-details dd {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-}
-
-.sg-expand-spinner {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    z-index: 1050;
-    display: inline-flex;
-    align-items: center;
-    padding: 0.4rem 0.75rem;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    pointer-events: none;
-    backdrop-filter: blur(4px);
 }
 
 .sg-compact-select {
@@ -304,9 +307,8 @@
     display: none;
 }
 
-/* Search / filter info banners: dark-grey accent instead of Bootstrap info blue */
-#sgSearchInfo .text-info,
-#sgGraphFilterInfo .text-info {
+/* Find-in-graph info banner */
+#sgSearchInfo .text-info {
     color: var(--db-primary) !important;
 }
 
