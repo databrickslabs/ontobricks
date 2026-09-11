@@ -1,0 +1,25 @@
+## Add Spark SPARQL capability validator
+
+Context:
+Task 1 of the Spark SPARQL fail-closed implementation for issue #167 required a
+new capability validator that rejects unsupported SPARQL constructs before
+translation. The change was developed with strict TDD: a new validator test
+suite was added first, observed failing at import time, then minimal production
+code was implemented to satisfy the required accepted and rejected constructs.
+
+Changes:
+
+1. src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+   Added a fail-closed SPARQL algebra validator using rdflib `prepareQuery`,
+   explicit unsupported-feature labels, filter-expression shape checks, path
+   rejection, and union branch restrictions.
+2. tests/back/core/w3c/sparql/test_sparql_capability_validator.py
+   Added unit tests covering valid basic SELECT, invalid syntax handling, and
+   rejection of GROUP BY, ORDER BY, numeric FILTER, property paths, subquery,
+   MINUS, VALUES, SERVICE, GRAPH, arbitrary UNION, non-literal BIND, and OFFSET.
+
+Modified files:
+- src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+- tests/back/core/w3c/sparql/test_sparql_capability_validator.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" -> 5874 passed, 304 skipped, 6 deselected in 48.36s
