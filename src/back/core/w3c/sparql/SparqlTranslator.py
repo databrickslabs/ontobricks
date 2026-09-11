@@ -10,6 +10,7 @@ from back.core.helpers import (
     extract_local_name as _extract_local,
     sql_cast as _sql_cast,
 )
+from back.core.w3c.sparql.SparqlCapabilityValidator import SparqlCapabilityValidator
 from back.core.w3c.sparql.constants import DIALECT_SPARK
 
 logger = get_logger(__name__)
@@ -166,6 +167,8 @@ class SparqlTranslator:
         Returns:
             dict: Translation result with SQL and variables
         """
+        SparqlCapabilityValidator.validate(sparql_query)
+
         # Normalize query
         query = " ".join(sparql_query.split())
 

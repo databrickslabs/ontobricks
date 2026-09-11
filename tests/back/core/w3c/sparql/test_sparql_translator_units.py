@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import pytest
 
+from back.core.errors import ValidationError
 from back.core.w3c.sparql.SparqlTranslator import SparqlTranslator
 from tests.fixtures.factories import R2RMLMappingFactory
 
@@ -44,6 +45,47 @@ def _translate(sparql, entity_mappings, relationship_mappings=None, limit=10):
         limit=limit,
         relationship_mappings=relationship_mappings or [],
     )
+
+
+@pytest.fixture
+def translator_entity_mappings() -> dict:
+    return {
+        "http://ex/Person": {
+            "table": "people",
+            "sql_query": "SELECT * FROM people",
+            "id_column": "person_id",
+            "label_column": "name",
+            "uri_template": "http://ex/person/{person_id}",
+            "predicates": {
+                "http://ex/name": {"type": "column", "column": "name"},
+                "http://ex/age": {"type": "column", "column": "age"},
+                "http://ex/worksWith": {"type": "column", "column": "peer_id"},
+                "http://ex/manages": {"type": "column", "column": "report_id"},
+            },
+        }
+    }
+
+
+@pytest.fixture
+def translator_relationship_mappings() -> list[dict]:
+    return [
+        {
+            "predicate": "http://ex/worksWith",
+            "sql_query": "SELECT person_id, peer_id FROM person_works_with",
+            "subject_template": "http://ex/person/{person_id}",
+            "object_template": "http://ex/person/{peer_id}",
+            "subject_column": "person_id",
+            "object_column": "peer_id",
+        },
+        {
+            "predicate": "http://ex/manages",
+            "sql_query": "SELECT manager_id, report_id FROM person_manages",
+            "subject_template": "http://ex/person/{manager_id}",
+            "object_template": "http://ex/person/{report_id}",
+            "subject_column": "manager_id",
+            "object_column": "report_id",
+        },
+    ]
 
 
 @pytest.mark.unit
@@ -223,3 +265,75 @@ class TestSqlSafety:
             return  # Acceptable — rejected at parse time.
         if result.get("success"):
             assert "DROP TABLE" not in result["sql"].upper()
+
+
+@pytest.mark.unit
+class TestCapabilityBoundaryOnPublicTranslator:
+    @pytest.mark.parametrize(
+        ("query", "feature"),
+        [
+            (
+                "SELECT ?s WHERE { ?s ?p ?o } GROUP BY ?s",
+                "GROUP BY",
+            ),
+            (
+                "SELECT ?s WHERE { ?s <http://ex/age> ?age . FILTER(?age > 5) }",
+                "numeric FILTER",
+            ),
+            (
+                "SELECT ?s WHERE { ?s <http://ex/name> ?name . "
+                "FILTER(CONTAINS(LCASE(STR(?name)), \"an\") && STRSTARTS(LCASE(STR(?name)), \"a\")) }",
+                "numeric FILTER",
+            ),
+            (
+                "SELECT ?s WHERE { ?s <http://ex/worksWith>+ ?o }",
+                "property paths",
+            ),
+        ],
+    )
+    def test_rejects_unsupported_queries_fail_closed(
+        self, translator_entity_mappings, query, feature
+    ):
+        with pytest.raises(ValidationError, match=feature):
+            _translate(query, translator_entity_mappings)
+
+    def test_accepts_basic_bgp(self, translator_entity_mappings):
+        query = "SELECT ?s WHERE { ?s a <http://ex/Person> }"
+        result = _translate(query, translator_entity_mappings)
+        assert result["success"] is True
+        assert result["sql"]
+
+    def test_accepts_supported_string_filter(self, translator_entity_mappings):
+        query = (
+            "SELECT ?s WHERE { "
+            "?s <http://ex/name> ?name . "
+            'FILTER(CONTAINS(LCASE(STR(?name)), "an")) '
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings)
+        assert result["success"] is True
+        assert result["sql"]
+
+    def test_accepts_literal_bind(self, translator_entity_mappings):
+        query = (
+            "SELECT ?s ?kind WHERE { "
+            "?s a <http://ex/Person> . "
+            'BIND("Person" AS ?kind) '
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings)
+        assert result["success"] is True
+        assert "'Person' AS kind" in result["sql"] or '"Person" AS kind' in result["sql"]
+
+    def test_accepts_relationship_filter_union(self, translator_entity_mappings):
+        query = (
+            "PREFIX : <http://ex/> "
+            "SELECT ?subject ?predicate ?object WHERE { "
+            "{ ?subject :worksWith ?object . BIND(:worksWith AS ?predicate) } "
+            "UNION "
+            "{ ?subject :manages ?object . BIND(:manages AS ?predicate) } "
+            "}"
+        )
+        result = _translate(query, translator_entity_mappings)
+        assert result["success"] is True
+        assert result["sql"]
