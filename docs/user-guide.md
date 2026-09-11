@@ -1200,8 +1200,8 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
 
 #### Creating a New Version
 
-1. **Domain** → **Versions** → **New Version**.
-2. OntoBricks increments the version number, saves under `/domains/<folder>/V<n>/`, and keeps prior versions.
+1. Open **Domain** → **Versions** → **New Version**, or click **New Version** in the navbar **Versions** popup. Both entry points share the same ungated create-version workflow.
+2. OntoBricks increments the version number, saves under `/domains/<folder>/V<n>/`, and keeps prior versions. After you confirm from the popup, the popup closes and the branded loading overlay stays until the new version is loaded; a failure restores the popup.
 
 #### Loading a Domain from Registry
 
@@ -1444,6 +1444,19 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 ---
 
 ## Settings Reference
+
+### Lakehouse SQL warehouses and CloudFetch
+
+> **Required role:** Administrator.
+
+**Settings → Lakehouse → SQL Warehouse** owns both compute roles:
+
+- **Build SQL Warehouse** — classic or serverless warehouse (never Lakehouse//RT) used for mapping views, materialization, and other writes. You can override the Databricks App `sql-warehouse` resource default from this selector.
+- **Query SQL Warehouse** — disabled by default and mirrored from Build. Enable **Use Lakehouse//RT for queries** to choose a distinct warehouse for Knowledge Graph reads. RT warehouses reject `CREATE VIEW` / CTAS, so builds never use the Query warehouse. Disabling the option and applying restores Build for reads.
+
+**Settings → Databricks → Use CloudFetch** controls whether SQL clients download result files via CloudFetch. Leave it on unless Databricks Apps cannot reach the CloudFetch storage host; then Explorer can time out after SQL has already finished.
+
+Explorer search duration is documented in [Get Started](get-started.md#sql-warehouses-and-explorer-timing).
 
 ### Configuration → UI (Application Branding)
 

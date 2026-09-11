@@ -87,8 +87,10 @@ Materialize triples incrementally, then **reason** over the graph with OWL 2 RL
 inference, SWRL rules and SHACL validation. Explore interactively: two-phase
 search, N-hop neighbour expansion, cross-domain bridge navigation, community
 detection (Louvain, Label Propagation, Greedy Modularity), and explainable
-**cohort discovery**. Query everything through an auto-generated **GraphQL**
-API. Details in the [User Guide](docs/user-guide.md) and
+**cohort discovery**. Lakehouse domains can optionally read from a **Lakehouse//RT**
+query warehouse while builds stay on a classic or serverless warehouse. Query
+everything through an auto-generated **GraphQL** API. Details in the
+[User Guide](docs/user-guide.md), [Get Started](docs/get-started.md), and
 [Cohort Discovery](docs/cohort_discovery.md).
 
 ### Publish to AI agents (MCP)

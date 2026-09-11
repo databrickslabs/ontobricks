@@ -46,4 +46,5 @@ OntoBricks is a **Graph Viewer Builder** for the Databricks platform. It lets yo
 ## Quick Links
 
 - [Main README](../README.md) — project overview
+- [Release notes V0.9.0](../releases/ReleaseNotes_V0.9.0.md) — what shipped in this version
 - [Swagger UI](http://localhost:8000/docs) — interactive API docs (when running locally)

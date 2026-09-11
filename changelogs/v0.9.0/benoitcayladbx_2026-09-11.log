@@ -34,3 +34,36 @@ Tests: `uv run --frozen pytest -q -m "not scenario"` -> 5930 passed, 304
 skipped, 6 deselected, 1 xfailed, 32 warnings in 45.53s.
 `uv run --frozen ruff check --select F821 --output-format=concise src tests`
 -> all checks passed. The two triples regression tests passed on 0.9.0.
+
+---
+
+## Align documentation with v0.9.0 release notes
+
+Context: v0.9.0 had changelogs and operator docs for Lakehouse//RT, but no
+`releases/ReleaseNotes_V0.9.0.md`. Get Started mixed warehouse settings into
+the navbar table, and Features / User Guide / README / the September roadmap
+still described v0.8.0 as current.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.9.0.md
+   Product release notes synthesized from `changelogs/v0.9.0/`.
+2. docs/get-started.md
+   Split navbar navigation from Build/Query/CloudFetch and Explorer timing.
+3. docs/features.md, docs/user-guide.md, README.md, docs/README.md
+   Document RT query path, Versions popup, digit-leading UC names, Explorer timing.
+4. releases/Roadmap_2026-09.md
+   Record v0.9.0 as current without claiming the Asana authoring-journey items shipped.
+
+Modified files:
+- releases/ReleaseNotes_V0.9.0.md
+- docs/get-started.md
+- docs/features.md
+- docs/user-guide.md
+- README.md
+- docs/README.md
+- releases/Roadmap_2026-09.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-11.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5930 passed, 304
+skipped, 6 deselected, 1 xfailed, 32 warnings in 45.18s.

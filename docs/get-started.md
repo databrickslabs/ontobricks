@@ -359,20 +359,27 @@ The OntoBricks interface has a navigation bar with status indicators:
 
 | Element | Description |
 |---------|-------------|
-| **Build SQL Warehouse** | Non-RT warehouse used for mapping views, materialization, and other build DDL/writes |
-| **Lakehouse Query Warehouse** | Optional query warehouse; may use Lakehouse//RT for low-latency graph reads |
-| **CloudFetch** | Global SQL option under **Settings → Databricks**. Leave on unless Databricks Apps cannot download warehouse result files |
 | **Ontology** | Shows ✓ (green) when ontology is loaded, ✗ (red) otherwise |
 | **Mapping** | Shows ✓ (green) when R2RML mapping exists, ✗ (red) otherwise |
 | **Knowledge Graph** | Access the sync, graph viewer, and quality checks interface |
 | **Settings** | Manage Databricks connection and settings |
+| **Versions** (navbar popup) | Switch or reload versions; **New Version** branches the open domain without opening Domain → Versions |
 
-Under **Settings → Lakehouse → SQL Warehouse**, Query mirrors Build and stays
-disabled by default. Administrators can change Build there; RT warehouses are
-excluded from that selector. Enable **Use Lakehouse//RT for queries** to select
-a different query warehouse from the same workspace list (standard or RT).
-Turning the option off and applying clears the query override and restores
-Build for reads.
+## SQL warehouses and Explorer timing
+
+Warehouse selection lives under Settings, not in the navbar.
+
+| Setting | Where | Role |
+|---------|-------|------|
+| **Build SQL Warehouse** | **Settings → Lakehouse → SQL Warehouse** | Non-RT warehouse for mapping views, materialization, and other build DDL/writes |
+| **Query SQL Warehouse** | Same panel; disabled until RT queries are enabled | Optional read warehouse; may be Lakehouse//RT |
+| **Use CloudFetch** | **Settings → Databricks** | Leave on unless Databricks Apps cannot download warehouse result files |
+
+Query mirrors Build and stays disabled by default. Administrators can change
+Build in that panel; RT warehouses are excluded from the Build selector.
+Enable **Use Lakehouse//RT for queries** to select a different query warehouse
+from the same workspace list (standard or RT). Turning the option off and
+applying clears the query override and restores Build for reads.
 
 If Explorer searches time out while Lakehouse//RT queries themselves finish
 quickly, uncheck **Use CloudFetch** in **Settings → Databricks**. Databricks

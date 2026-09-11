@@ -1,7 +1,7 @@
 # OntoBricks — Product Roadmap
 
-> **Version:** 0.8.0 → beyond<br>
-> **Last updated:** 2026-09-01<br>
+> **Version:** 0.9.0 → beyond<br>
+> **Last updated:** 2026-09-11<br>
 > **Status:** Living document — Asana-first prioritization<br>
 > **Scheduling policy:** priorities and dependencies are directional; this roadmap contains no delivery-date commitments.
 
@@ -13,12 +13,14 @@
 
 OntoBricks is a Databricks-native semantic engineering platform: teams design OWL ontologies, map Unity Catalog data, build interchangeable Lakehouse/Lakebase/Neo4j knowledge graphs, apply rules and reasoning, and publish governed graph capabilities through REST, GraphQL, Graph Chat, and MCP.
 
-Version 0.8.0 closes the most immediate product-integrity gaps and broadens the AI-facing surface. It adds ontology-only domains, per-domain MCP policy, virtual attributes, metadata/mapping drift protection, Lakehouse view-only materialization, safer generated-inference management, configurable UI branding, and a unified application design system.
+Version 0.8.0 closed the most immediate product-integrity gaps and broadened the AI-facing surface. Version 0.9.0 adds Lakehouse//RT query support (split Build vs Query warehouses, Statement Execution API, CloudFetch control), faster Knowledge Graph Explorer first paint and search timing, navbar New Version, Unity Catalog digit-leading table names, and related reliability fixes. See `releases/ReleaseNotes_V0.9.0.md`.
+
+The Asana board still owns the remaining **authoring-journey** work originally listed under v0.9.0 (durable parsed documents, three-stage Generate, selective Auto-Map). Those items are not delivered in this release.
 
 The forward roadmap is now driven primarily by the active **OntoBricks-Product** Asana board:
 
-1. **Finish and package v0.8.x** — complete the full validation campaign and turn current deployment analysis into a distributable, repeatable path.
-2. **Rebuild the authoring journey in v0.9.0** — parse documents once, make ontology generation human-in-the-loop, and make Auto-Map the single selective mapping workflow.
+1. **Finish and package v0.8.x / v0.9.0** — complete the full validation campaign and turn current deployment analysis into a distributable, repeatable path.
+2. **Rebuild the authoring journey** — parse documents once, make ontology generation human-in-the-loop, and make Auto-Map the single selective mapping workflow.
 3. **Extend platform integration and governance** — Genie Pages/Databricks Domains, Ontos, API identity, audit, RBAC, scale, migration, and federation.
 4. **Prepare the v1.0 contract** — stable API semantics, enterprise identity, ecosystem connectors, Marketplace distribution, and community reuse.
 
@@ -68,11 +70,11 @@ Within a release:
 3. Dependency order.
 4. Product value and risk reduction.
 
-Asana owns planned scope and priority. The repository and v0.8.0 changelogs own delivered status.
+Asana owns planned scope and priority. The repository and `changelogs/v0.9.0/` own delivered status for this line.
 
 ---
 
-## Current State — v0.8.0
+## Current State — v0.9.0 (includes v0.8.0)
 
 ### Semantic authoring
 
@@ -85,6 +87,7 @@ Asana owns planned scope and priority. The repository and v0.8.0 changelogs own 
 
 - Per-domain **Lakehouse**, **Lakebase**, **Neo4j**, or **No Backend** selection.
 - Lakehouse materialized-table or live-view modes.
+- Split **Build** vs **Query** SQL warehouses, optional Lakehouse//RT reads over the Statement Execution API, and a global CloudFetch toggle for Databricks Apps egress.
 - OWL 2 RL, SWRL, Data Quality, cohorts, generated-inference count and safe purge.
 - Graph Analytics, Graph Explorer, Graph Chat, and bounded graph-read execution.
 
@@ -102,10 +105,11 @@ Asana owns planned scope and priority. The repository and v0.8.0 changelogs own 
 - Builder graph refresh on frozen versions.
 - Dual Volume/Lakebase registry, domain audit trail, task/run history, scheduler, and DAB deployment.
 - Configurable instance-wide title, color, logo, and default entity icon.
+- Navbar Versions popup can create a new version; Unity Catalog identifiers may start with a digit.
 
 ---
 
-## Known Limitations After v0.8.0
+## Known Limitations After v0.9.0
 
 - Uploaded binary documents can still be parsed repeatedly by different agent runs; there is no durable shared parsed corpus.
 - Ontology Generate still completes too much work before the user validates the entity set.
