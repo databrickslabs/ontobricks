@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from rdflib.paths import Path
 from rdflib.plugins.sparql import prepareQuery

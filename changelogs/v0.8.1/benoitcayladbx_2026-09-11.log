@@ -111,3 +111,29 @@ Tests:
 - `uv run --frozen pytest -q tests/back/core/w3c/sparql` -> 57 passed, 1 warning
 - `uv run --frozen ruff check src/back/core/w3c/sparql/SparqlCapabilityValidator.py src/back/core/w3c/sparql/SparqlTranslator.py tests/back/core/w3c/sparql` -> failed with 9 findings in pre-existing translator/validator files (`UP035`, `I001`, `UP045`, `F541`, `W291`, `B007`)
 - `uv run --frozen pytest -q -m "not scenario"` -> 5896 passed, 304 skipped, 6 deselected, 32 warnings
+
+## Fix Task 4 feature-introduced lint findings
+
+Context:
+Follow-up on Task 4 to remove only the two lint findings introduced by the
+Spark SPARQL fail-closed feature before porting to `0.9.0`, while preserving
+the seven known pre-existing findings in `SparqlTranslator.py`.
+
+Changes:
+
+1. `src/back/core/w3c/sparql/SparqlCapabilityValidator.py`
+   Replaced `from typing import Iterable` with
+   `from collections.abc import Iterable` to resolve `UP035`.
+2. `src/back/core/w3c/sparql/SparqlTranslator.py`
+   Sorted the import block (no behavior change) to resolve `I001` introduced
+   when adding the capability-validator import in Task 2.
+
+Modified files:
+- src/back/core/w3c/sparql/SparqlCapabilityValidator.py
+- src/back/core/w3c/sparql/SparqlTranslator.py
+- changelogs/v0.8.1/benoitcayladbx_2026-09-11.log
+
+Tests:
+- `uv run --frozen ruff check src/back/core/w3c/sparql/SparqlCapabilityValidator.py src/back/core/w3c/sparql/SparqlTranslator.py` -> failed with 7 findings, all pre-existing in `SparqlTranslator.py` (`UP045`, `F541`, `W291`, `B007` x4); no feature-introduced lint findings remain
+- `uv run --frozen pytest -q tests/back/core/w3c/sparql` -> 57 passed, 1 warning
+- `uv run --frozen pytest -q -m "not scenario"` -> 5896 passed, 304 skipped, 6 deselected, 32 warnings
