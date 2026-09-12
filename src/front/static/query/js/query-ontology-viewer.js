@@ -11,7 +11,7 @@
 const OntologyViewer = (() => {
     const MODAL_ID = 'ontologyViewerModal';
     const CONTAINER_ID = 'ontologyViewerContainer';
-    const D3_CDN = 'https://d3js.org/d3.v7.min.js';
+    const D3_CDN = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
 
     let _modal = null;
     let _zoom = null;
