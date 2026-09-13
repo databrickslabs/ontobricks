@@ -98,7 +98,7 @@ These packages are used by the MCP server (`src/mcp-server/`) which runs as a se
 | **Version** | 1.0.0 |
 | **Location** | `src/front/static/global/ontoviz/ontoviz.js`, `src/front/static/global/ontoviz/css/` |
 | **Description** | Custom entity-relationship visual editor for ontology design |
-| **License** | MIT |
+| **License** | [Databricks License](../LICENSE.txt) |
 | **Author** | OntoBricks Team |
 
 OntoViz is a lightweight, self-contained library for creating and managing ER diagrams. It provides:
@@ -263,7 +263,8 @@ new gridjs.Grid({
 
 | License | Packages |
 |---------|----------|
-| **MIT** | FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, Chart.js, OntoViz, strawberry-graphql, pytest, pytest-asyncio, pytest-cov, black, flake8 |
+| **Databricks License** | OntoViz (first-party OntoBricks component) |
+| **MIT** | FastAPI, pydantic, pydantic-settings, Bootstrap, Bootstrap Icons, Sigma.js, Graphology, Grid.js, Chart.js, strawberry-graphql, pytest, pytest-asyncio, pytest-cov, black, flake8 |
 | **BSD-3-Clause** | Uvicorn, Starlette, Jinja2, itsdangerous, RDFLib, python-dotenv, httpx, NetworkX |
 | **Apache-2.0** | databricks-sql-connector, databricks-sdk, pyarrow, python-multipart, aiofiles, requests, fastmcp, MLflow, pyshacl, responses, playwright |
 | **LGPL-3.0** | psycopg (binary + pool) |

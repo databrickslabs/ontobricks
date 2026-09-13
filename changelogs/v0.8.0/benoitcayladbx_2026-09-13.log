@@ -1,0 +1,39 @@
+## Align project licensing
+
+Context: GitHub issue #169 identified conflicting MIT, Apache 2.0, and
+Databricks License claims across first-party project surfaces. The Databricks
+License is authoritative for OntoBricks and its OntoViz component; third-party
+dependency and vendored-component notices remain unchanged.
+
+Changes:
+
+1. README.md, docs/INFO.md, docs/product.md
+   Identify OntoBricks as source-available under the Databricks License.
+2. docs/architecture.md, docs/development.md
+   Align the first-party OntoViz license documentation with the project license.
+3. docs/deployment.md
+   Correct the description of the shipped project license and notice files.
+4. src/api/constants.py, src/shared/fastapi/main.py
+   Publish Databricks License metadata in both generated OpenAPI schemas.
+5. src/front/static/global/ontoviz/ontoviz.js
+   Replace the stale MIT header with the Databricks License and canonical link.
+6. src/front/templates/about.html
+   Point the existing license link at the master branch.
+7. tests/contract/test_openapi_contract.py
+   Cover Databricks License metadata for both main and external OpenAPI schemas.
+
+Modified files:
+- README.md
+- docs/INFO.md
+- docs/architecture.md
+- docs/deployment.md
+- docs/development.md
+- docs/product.md
+- src/api/constants.py
+- src/front/static/global/ontoviz/ontoviz.js
+- src/front/templates/about.html
+- src/shared/fastapi/main.py
+- tests/contract/test_openapi_contract.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 5861 passed, 304 skipped,
+6 deselected, 32 warnings in 46.70s
