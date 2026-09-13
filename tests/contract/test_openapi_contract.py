@@ -45,6 +45,13 @@ class TestOpenAPISchemaShape:
         assert "title" in info
         assert len(info["title"]) > 0
 
+    def test_openapi_declares_databricks_license(self, client):
+        license_info = client.get("/openapi.json").json()["info"]["license"]
+        assert license_info == {
+            "name": "Databricks License",
+            "url": "https://github.com/databrickslabs/ontobricks/blob/master/LICENSE.txt",
+        }
+
 
 @pytest.mark.contract
 @pytest.mark.integration
@@ -120,7 +127,10 @@ class TestMCPContractPaths:
         assert "graph_backend" in tags["Domain"]
         assert "materialized graph" in tags["GraphQL"]
         assert spec["info"]["contact"]["name"] == "OntoBricks Support"
-        assert spec["info"]["license"]["name"] == "Apache 2.0"
+        assert spec["info"]["license"] == {
+            "name": "Databricks License",
+            "url": "https://github.com/databrickslabs/ontobricks/blob/master/LICENSE.txt",
+        }
 
 
 @pytest.mark.contract
