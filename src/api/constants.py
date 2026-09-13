@@ -111,8 +111,8 @@ EXTERNAL_API_CONTACT: Dict[str, str] = {
 }
 
 EXTERNAL_API_LICENSE_INFO: Dict[str, str] = {
-    "name": "Apache 2.0",
-    "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    "name": "Databricks License",
+    "url": "https://github.com/databrickslabs/ontobricks/blob/master/LICENSE.txt",
 }
 
 __all__ = [

@@ -213,7 +213,7 @@ OntoBricks is the **only** solution that combines all of the following in a sing
 - LLM-automated (ontology generation + data mapping)
 - Graph-visualizing (interactive graph viewer)
 - Industry-standard ready (FIBO, CDISC, IOF)
-- Open-source (MIT license)
+- Source-available under the [Databricks License](../LICENSE.txt)
 
 ---
 
@@ -271,7 +271,7 @@ databricks apps deploy --app-name ontobricks
 
 | Resource                 | Link                                                |
 | ------------------------ | --------------------------------------------------- |
-| Source Code              | GitHub repository (MIT license)                     |
+| Source Code              | GitHub repository ([Databricks License](../LICENSE.txt)) |
 | Documentation            | Full user guide, architecture docs, API reference   |
 | Automated Pipeline Guide | Step-by-step: tables to graph viewer in 4 clicks |
 | Import Guide             | FIBO, CDISC, IOF import instructions                |
@@ -385,7 +385,7 @@ OntoBricks provides an end-to-end, web-based solution that runs directly on Data
 
 #### Deliverable
 
-A **production-ready Databricks App** (open-source, MIT license) that:
+A **production-ready, source-available Databricks App** under the [Databricks License](../LICENSE.txt) that:
 
 - Deploys in minutes via `databricks apps deploy`
 - Requires only a SQL Warehouse and (optionally) a Model Serving endpoint
