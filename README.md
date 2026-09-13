@@ -174,6 +174,11 @@ by the Databricks CLI.
 Product overview, screenshots and videos:
 [ontobricks.org](https://ontobricks.org/).
 
+## License
+
+OntoBricks, including OntoViz, is source-available under the
+[Databricks License](LICENSE.txt).
+
 ## Project Support
 
 Please note that all projects in the /databrickslabs github account are provided

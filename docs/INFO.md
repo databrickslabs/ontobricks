@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/license-Databricks-blue.svg" alt="Databricks License">
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/fastapi-0.109+-green.svg" alt="FastAPI">
 </p>
@@ -557,7 +557,7 @@ make help
 
 ## License
 
-MIT License - see [LICENSE](LICENSE)
+Databricks License - see [LICENSE.txt](../LICENSE.txt)
 
 ## Resources
 

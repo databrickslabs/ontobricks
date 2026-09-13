@@ -1522,7 +1522,7 @@ and unit tests — **the Databricks CLI does not apply it**.
 |------|-----|
 | `src/` | App code. Includes `src/mcp-server/` (MCP `source_code_path`) and `src/jobs/` (graph-analytics workspace file). |
 | `run.py`, `app.yaml`, `pyproject.toml`, `uv.lock`, `requirements.txt` | Process entry + dependency install |
-| `LICENSE.txt`, `NOTICE.txt` | Apache notices |
+| `LICENSE.txt`, `NOTICE.txt` | Databricks License and project notice |
 | Catalogued `docs/*.md` | Help Center (`/api/help/docs/{slug}`) — allow-list in `src/api/routers/internal/help.py` |
 | `docs/images/`, `docs/screenshots/` | Help Center assets |
 

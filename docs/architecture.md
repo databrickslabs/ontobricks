@@ -2499,7 +2499,8 @@ No external dependencies required (uses vanilla JavaScript and CSS).
 
 ### License
 
-MIT License - OntoViz is open source and can be used in commercial projects.
+OntoViz is part of OntoBricks and is licensed under the
+[Databricks License](../LICENSE.txt).
 
 ---
 

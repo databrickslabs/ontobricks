@@ -3,7 +3,8 @@
  * A lightweight library for creating and managing ER diagrams
  * 
  * @version 1.0.0
- * @license MIT
+ * @license Databricks License
+ * @see https://github.com/databrickslabs/ontobricks/blob/master/LICENSE.txt
  */
 
 (function(global) {

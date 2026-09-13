@@ -74,7 +74,7 @@ def test_external_openapi_preserves_descriptive_metadata(self, client):
     assert "graph_backend" in tags["Domain"]
     assert "materialized graph" in tags["GraphQL"]
     assert spec["info"]["contact"]["name"] == "OntoBricks Support"
-    assert spec["info"]["license"]["name"] == "Apache 2.0"
+    assert spec["info"]["license"]["name"] == "Databricks License"
 ```
 
 - [ ] **Step 2: Verify RED**
