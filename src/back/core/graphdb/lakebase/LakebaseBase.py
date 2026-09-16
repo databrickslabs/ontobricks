@@ -169,7 +169,9 @@ class LakebaseBase(GraphDBBackend):
     def get_query_translator(self, table_name: str = "") -> Any:
         from back.core.reasoning.SWRLSQLTranslator import SWRLSQLTranslator
 
-        return SWRLSQLTranslator()
+        # Lakebase is Postgres: without the dialect, builtin filters emit
+        # Databricks-only TRY_CAST/DOUBLE and fail with a syntax error.
+        return SWRLSQLTranslator(dialect="postgres")
 
     def get_connection(self) -> Any:
         raise InfrastructureError(

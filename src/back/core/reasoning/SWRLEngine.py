@@ -212,7 +212,17 @@ class SWRLEngine:
             if name:
                 uri_map[name.lower()] = uri
 
-        for prop in self._ontology.get("properties", []):
+        # Datatype properties live on each class; the R2RML generator writes
+        # their predicates under the data namespace exactly like object
+        # properties, so they need the same normalisation — without this,
+        # rule atoms like ``nights(?x, ?n)`` translate to the ontology ``#``
+        # URI and match nothing in the store.
+        data_props = [
+            p
+            for cls_def in self._ontology.get("classes", [])
+            for p in cls_def.get("dataProperties", [])
+        ]
+        for prop in list(self._ontology.get("properties", [])) + data_props:
             name = prop.get("name", "") or prop.get("localName", "")
             uri = prop.get("uri", "")
             if data_ns and uri and not uri.startswith(data_ns):

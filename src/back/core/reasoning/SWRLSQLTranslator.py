@@ -15,7 +15,17 @@ logger = get_logger(__name__)
 
 
 class SWRLSQLTranslator:
-    """Build SQL from SWRL rules for the flat triple-store table."""
+    """Build SQL from SWRL rules for the flat triple-store table.
+
+    ``dialect`` selects the SQL flavour for built-in templates:
+    ``"databricks"`` (default, ``TRY_CAST``) or ``"postgres"`` (plain
+    ``CAST`` — Postgres has no ``TRY_CAST``, so Lakebase-backed stores
+    must pass ``dialect="postgres"`` or every built-in filter is a
+    syntax error).
+    """
+
+    def __init__(self, dialect: str = "databricks") -> None:
+        self._dialect = dialect
 
     @staticmethod
     def _escape(val: str) -> str:
@@ -42,6 +52,7 @@ class SWRLSQLTranslator:
     def _build_builtin_filters(
         builtin_atoms: List[Dict],
         var_bindings: Dict[str, tuple],
+        dialect: str = "databricks",
     ) -> List[str]:
         filters: List[str] = []
         for atom in builtin_atoms:
@@ -70,6 +81,16 @@ class SWRLSQLTranslator:
             elif bi.arity <= len(resolved):
                 expr = bi.sql_template.format(*resolved[: bi.arity])
                 filters.append(expr)
+        if dialect == "postgres":
+            # Postgres has neither TRY_CAST nor a bare DOUBLE type. Plain
+            # CAST is the closest equivalent (raises on non-numeric literals
+            # instead of yielding NULL).
+            filters = [
+                f.replace("TRY_CAST(", "CAST(").replace(
+                    " AS DOUBLE)", " AS DOUBLE PRECISION)"
+                )
+                for f in filters
+            ]
         return filters
 
     @staticmethod
@@ -236,6 +257,7 @@ class SWRLSQLTranslator:
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
             builtin_atoms,
             var_bindings,
+            dialect=getattr(self, "_dialect", "databricks"),
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
@@ -437,6 +459,7 @@ class SWRLSQLTranslator:
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
             builtin_atoms,
             var_bindings,
+            dialect=getattr(self, "_dialect", "databricks"),
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
@@ -475,8 +498,16 @@ class SWRLSQLTranslator:
         if not ante_atoms or not cons_atoms:
             return None
 
-        class_atoms = [a for a in ante_atoms if a["arity"] == 1]
-        prop_atoms = [a for a in ante_atoms if a["arity"] == 2]
+        # Built-in atoms are WHERE filters, not triple patterns — leaving
+        # them in prop_atoms turns them into joins on a predicate that
+        # cannot exist, so the rule silently matches nothing.
+        class_atoms = [
+            a for a in ante_atoms if a["arity"] == 1 and not a.get("builtin")
+        ]
+        prop_atoms = [
+            a for a in ante_atoms if a["arity"] == 2 and not a.get("builtin")
+        ]
+        builtin_atoms = [a for a in ante_atoms if a.get("builtin")]
         if not class_atoms:
             return None
 
@@ -535,6 +566,12 @@ class SWRLSQLTranslator:
                 var_bindings[obj_var] = (a_cls, "subject")
             else:
                 var_bindings[obj_var] = (a_prop, "object")
+
+        builtin_filters = SWRLSQLTranslator._build_builtin_filters(
+            builtin_atoms, var_bindings, dialect=getattr(self, "_dialect", "databricks")
+        )
+        if builtin_filters:
+            where_parts.extend(builtin_filters)
 
         stmts: List[str] = []
         for atom in cons_atoms:
@@ -600,8 +637,15 @@ class SWRLSQLTranslator:
         if not ante_atoms or not cons_atoms:
             return None
 
-        class_atoms = [a for a in ante_atoms if a["arity"] == 1]
-        prop_atoms = [a for a in ante_atoms if a["arity"] == 2]
+        # Built-in atoms are WHERE filters, not triple patterns (see
+        # build_materialization_sql for the same handling).
+        class_atoms = [
+            a for a in ante_atoms if a["arity"] == 1 and not a.get("builtin")
+        ]
+        prop_atoms = [
+            a for a in ante_atoms if a["arity"] == 2 and not a.get("builtin")
+        ]
+        builtin_atoms = [a for a in ante_atoms if a.get("builtin")]
         if not class_atoms:
             return None
 
@@ -681,6 +725,12 @@ class SWRLSQLTranslator:
                     var_bindings[new_var] = (a_cls, "subject")
                 else:
                     var_bindings[new_var] = (a_prop, new_col)
+
+        builtin_filters = SWRLSQLTranslator._build_builtin_filters(
+            builtin_atoms, var_bindings, dialect=getattr(self, "_dialect", "databricks")
+        )
+        if builtin_filters:
+            where_parts.extend(builtin_filters)
 
         selects: List[str] = []
         for atom in cons_atoms:

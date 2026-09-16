@@ -247,15 +247,24 @@ class SWRLBuiltinRegistry:
     # Public API
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _normalize(name: str) -> str:
+        """Case-fold and strip a namespace prefix (``swrlb:greaterThanOrEqual``).
+
+        The graphical rule editor emits the standard ``swrlb:`` prefix; the
+        registry keys are bare names, so lookups must accept both spellings.
+        """
+        return name.rsplit(":", 1)[-1].lower()
+
     @classmethod
     def get(cls, name: str) -> Optional[SWRLBuiltin]:
-        """Look up a built-in by name (case-insensitive)."""
-        return cls._BUILTINS.get(name.lower())
+        """Look up a built-in by name (case-insensitive, prefix-tolerant)."""
+        return cls._BUILTINS.get(cls._normalize(name))
 
     @classmethod
     def is_builtin(cls, name: str) -> bool:
         """Return True if *name* is a registered built-in."""
-        return name.lower() in cls._BUILTINS
+        return cls._normalize(name) in cls._BUILTINS
 
     @classmethod
     def all(cls) -> Dict[str, SWRLBuiltin]:
