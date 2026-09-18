@@ -1,0 +1,42 @@
+## Fix SWRL builtin atoms in inference and materialization (issue #171, PR #172)
+Context: Editor-generated rules with `swrlb:` builtins over datatype
+properties inferred zero triples while reporting success (#171). Four
+stacked defects: bare-name builtin lookup, datatype properties missing from
+the SWRL uri_map, builtin atoms joined as phantom predicates in the
+inference/materialization builders, and Databricks-only `TRY_CAST` reaching
+the Lakebase (Postgres) backend. Review follow-up in the same PR: IRI-safe
+normalisation, shared atom partition, negated atoms as NOT EXISTS, uri_map
+precedence aligned with AggregateRuleEngine, dialect gap documented.
+Changes:
+1. src/back/core/reasoning/SWRLBuiltinRegistry.py
+   `get` / `is_builtin` accept bare names, `swrlb:` / `swrl:` prefixes and
+   full IRIs via `uri_local_name` plus a known-prefix strip.
+2. src/back/core/reasoning/SWRLEngine.py
+   `_build_uri_map` folds class `dataProperties` into the data namespace;
+   object properties are written last so they win a same-name clash, as in
+   `AggregateRuleEngine._build_uri_map`.
+3. src/back/core/reasoning/SWRLSQLTranslator.py
+   `build_inference_sql` and `build_materialization_sql` reuse
+   `SWRLParser.partition_rule_atoms`; builtin atoms become WHERE filters and
+   negated atoms `NOT EXISTS`, matching `build_violation_sql`. `dialect`
+   selects the SQL flavour; `dialect="postgres"` rewrites `TRY_CAST` /
+   `DOUBLE`. The remaining Postgres gap (`matches`, `dateDiff`, `now`;
+   CAST raising on non-numeric literals) is documented at the rewrite site.
+4. src/back/core/graphdb/lakebase/LakebaseBase.py
+   `get_query_translator` returns a Postgres-dialect translator.
+5. tests/units/ontology/test_swrl_builtin_defects.py
+   One regression class per defect (13 tests), including full-IRI lookup,
+   object-property precedence, and negated-atom NOT EXISTS on both builders.
+Modified files:
+- src/back/core/reasoning/SWRLBuiltinRegistry.py
+- src/back/core/reasoning/SWRLEngine.py
+- src/back/core/reasoning/SWRLSQLTranslator.py
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- tests/units/ontology/test_swrl_builtin_defects.py
+- changelogs/v0.8.0/rickynho-rccl_2026-09-18.log
+Tests: `pytest tests/units/ontology/test_swrl_builtin_defects.py` — 13 passed.
+`pytest tests/ --ignore=tests/e2e -m "not e2e and not property and not eval and
+not external"` — 5846 passed, 29 skipped (two readiness-probe groups deselected
+locally because the Databricks SQL connector retries for minutes against the
+fake test host behind a corporate proxy; they run normally in CI). flake8
+(100 cols), ruff F821 and black clean on the changed files.
