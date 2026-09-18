@@ -222,7 +222,9 @@ class SWRLEngine:
             for cls_def in self._ontology.get("classes", [])
             for p in cls_def.get("dataProperties", [])
         ]
-        for prop in list(self._ontology.get("properties", [])) + data_props:
+        # Object properties come last so they win a same-name clash, as in
+        # AggregateRuleEngine._build_uri_map.
+        for prop in data_props + list(self._ontology.get("properties", [])):
             name = prop.get("name", "") or prop.get("localName", "")
             uri = prop.get("uri", "")
             if data_ns and uri and not uri.startswith(data_ns):

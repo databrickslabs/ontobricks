@@ -9,6 +9,8 @@ references or literal values.
 from dataclasses import dataclass
 from typing import Dict, Optional
 
+from back.core.w3c.rdf_utils import uri_local_name
+
 
 @dataclass(frozen=True)
 class SWRLBuiltin:
@@ -249,12 +251,16 @@ class SWRLBuiltinRegistry:
 
     @staticmethod
     def _normalize(name: str) -> str:
-        """Case-fold and strip a namespace prefix (``swrlb:greaterThanOrEqual``).
+        """Case-fold *name* and drop its namespace.
 
-        The graphical rule editor emits the standard ``swrlb:`` prefix; the
-        registry keys are bare names, so lookups must accept both spellings.
+        Accepts the bare name, the editor's ``swrlb:``/``swrl:`` prefix and a
+        full IRI (``http://www.w3.org/2003/11/swrlb#greaterThanOrEqual``).
         """
-        return name.rsplit(":", 1)[-1].lower()
+        local = uri_local_name(name).lower()
+        for prefix in ("swrlb:", "swrl:"):
+            if local.startswith(prefix):
+                return local[len(prefix) :]
+        return local
 
     @classmethod
     def get(cls, name: str) -> Optional[SWRLBuiltin]:

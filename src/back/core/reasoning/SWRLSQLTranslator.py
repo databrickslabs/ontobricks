@@ -21,7 +21,9 @@ class SWRLSQLTranslator:
     ``"databricks"`` (default, ``TRY_CAST``) or ``"postgres"`` (plain
     ``CAST`` — Postgres has no ``TRY_CAST``, so Lakebase-backed stores
     must pass ``dialect="postgres"`` or every built-in filter is a
-    syntax error).
+    syntax error). The Postgres mapping is a post-format rewrite that covers
+    the numeric comparison and math templates only; see
+    ``_build_builtin_filters`` for the gap.
     """
 
     def __init__(self, dialect: str = "databricks") -> None:
@@ -82,9 +84,15 @@ class SWRLSQLTranslator:
                 expr = bi.sql_template.format(*resolved[: bi.arity])
                 filters.append(expr)
         if dialect == "postgres":
-            # Postgres has neither TRY_CAST nor a bare DOUBLE type. Plain
-            # CAST is the closest equivalent (raises on non-numeric literals
-            # instead of yielding NULL).
+            # Postgres has neither TRY_CAST nor a bare DOUBLE type; plain CAST
+            # is the closest equivalent. Known gaps of this post-format rewrite:
+            #  * semantics: TRY_CAST yields NULL for a non-numeric literal,
+            #    CAST raises and fails the whole inference statement;
+            #  * coverage: only the TRY_CAST/DOUBLE templates (comparison,
+            #    math) are mapped. ``matches`` (RLIKE), ``dateDiff`` (DATEDIFF)
+            #    and ``now`` (CURRENT_TIMESTAMP()) stay Databricks-shaped and
+            #    still error on Lakebase.
+            # Proper fix: per-dialect templates on ``SWRLBuiltin`` (follow-up).
             filters = [
                 f.replace("TRY_CAST(", "CAST(").replace(
                     " AS DOUBLE)", " AS DOUBLE PRECISION)"
@@ -257,7 +265,7 @@ class SWRLSQLTranslator:
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
             builtin_atoms,
             var_bindings,
-            dialect=getattr(self, "_dialect", "databricks"),
+            dialect=self._dialect,
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
@@ -459,7 +467,7 @@ class SWRLSQLTranslator:
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
             builtin_atoms,
             var_bindings,
-            dialect=getattr(self, "_dialect", "databricks"),
+            dialect=self._dialect,
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
@@ -488,28 +496,17 @@ class SWRLSQLTranslator:
         Finds rows where the antecedent matches AND the consequent is
         missing, then inserts the missing consequent triples.
         """
-        antecedent = params.get("antecedent", "")
-        consequent = params.get("consequent", "")
         base_uri = params.get("base_uri", "")
         uri_map = params.get("uri_map") or {}
 
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
-        if not ante_atoms or not cons_atoms:
+        part = SWRLParser.partition_rule_atoms(params)
+        if part is None:
             return None
-
-        # Built-in atoms are WHERE filters, not triple patterns — leaving
-        # them in prop_atoms turns them into joins on a predicate that
-        # cannot exist, so the rule silently matches nothing.
-        class_atoms = [
-            a for a in ante_atoms if a["arity"] == 1 and not a.get("builtin")
-        ]
-        prop_atoms = [
-            a for a in ante_atoms if a["arity"] == 2 and not a.get("builtin")
-        ]
-        builtin_atoms = [a for a in ante_atoms if a.get("builtin")]
-        if not class_atoms:
-            return None
+        class_atoms = part.class_atoms
+        prop_atoms = part.prop_atoms
+        builtin_atoms = part.builtin_atoms
+        negated_atoms = part.negated_atoms
+        cons_atoms = part.consequent_atoms
 
         var_class: Dict[str, str] = {}
         for a in class_atoms:
@@ -568,10 +565,21 @@ class SWRLSQLTranslator:
                 var_bindings[obj_var] = (a_prop, "object")
 
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
-            builtin_atoms, var_bindings, dialect=getattr(self, "_dialect", "databricks")
+            builtin_atoms, var_bindings, dialect=self._dialect
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
+
+        negated_sql = SWRLSQLTranslator._build_negated_atoms(
+            negated_atoms,
+            table,
+            var_bindings,
+            base_uri,
+            uri_map,
+            _next,
+        )
+        if negated_sql:
+            where_parts.extend(negated_sql)
 
         stmts: List[str] = []
         for atom in cons_atoms:
@@ -632,22 +640,14 @@ class SWRLSQLTranslator:
         base_uri = params.get("base_uri", "")
         uri_map = params.get("uri_map") or {}
 
-        ante_atoms = SWRLParser.parse_atoms(antecedent)
-        cons_atoms = SWRLParser.parse_atoms(consequent)
-        if not ante_atoms or not cons_atoms:
+        part = SWRLParser.partition_rule_atoms(params)
+        if part is None:
             return None
-
-        # Built-in atoms are WHERE filters, not triple patterns (see
-        # build_materialization_sql for the same handling).
-        class_atoms = [
-            a for a in ante_atoms if a["arity"] == 1 and not a.get("builtin")
-        ]
-        prop_atoms = [
-            a for a in ante_atoms if a["arity"] == 2 and not a.get("builtin")
-        ]
-        builtin_atoms = [a for a in ante_atoms if a.get("builtin")]
-        if not class_atoms:
-            return None
+        class_atoms = part.class_atoms
+        prop_atoms = part.prop_atoms
+        builtin_atoms = part.builtin_atoms
+        negated_atoms = part.negated_atoms
+        cons_atoms = part.consequent_atoms
 
         var_class: Dict[str, str] = {}
         for a in class_atoms:
@@ -727,10 +727,21 @@ class SWRLSQLTranslator:
                     var_bindings[new_var] = (a_prop, new_col)
 
         builtin_filters = SWRLSQLTranslator._build_builtin_filters(
-            builtin_atoms, var_bindings, dialect=getattr(self, "_dialect", "databricks")
+            builtin_atoms, var_bindings, dialect=self._dialect
         )
         if builtin_filters:
             where_parts.extend(builtin_filters)
+
+        negated_sql = SWRLSQLTranslator._build_negated_atoms(
+            negated_atoms,
+            table,
+            var_bindings,
+            base_uri,
+            uri_map,
+            _next,
+        )
+        if negated_sql:
+            where_parts.extend(negated_sql)
 
         selects: List[str] = []
         for atom in cons_atoms:

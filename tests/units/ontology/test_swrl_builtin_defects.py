@@ -2,9 +2,12 @@
 
 The rule editor emits ``swrlb:``-prefixed builtins over datatype
 properties; four independent defects made every such rule silently infer
-zero triples. See scripts/repro_swrl_builtin_defects.py for the
-end-to-end red/green harness.
+zero triples.
 """
+
+import re
+
+import pytest
 
 from back.core.reasoning.SWRLBuiltinRegistry import SWRLBuiltinRegistry
 from back.core.reasoning.SWRLEngine import SWRLEngine
@@ -23,7 +26,10 @@ ONTOLOGY = {
         },
         {"name": "LongSailing", "uri": BASE + "LongSailing", "dataProperties": []},
     ],
-    "properties": [{"name": "operatedBy", "uri": BASE + "operatedBy"}],
+    "properties": [
+        {"name": "operatedBy", "uri": BASE + "operatedBy"},
+        {"name": "cancelled", "uri": BASE + "cancelled"},
+    ],
 }
 
 
@@ -48,9 +54,15 @@ class TestDefect1BuiltinPrefix:
         assert SWRLBuiltinRegistry.is_builtin("greaterThanOrEqual")
         assert SWRLBuiltinRegistry.is_builtin("GREATERTHANOREQUAL")
 
+    def test_full_iri_is_recognised(self):
+        iri = "http://www.w3.org/2003/11/swrlb#greaterThanOrEqual"
+        assert SWRLBuiltinRegistry.is_builtin(iri)
+        assert SWRLBuiltinRegistry.get(iri).name == "greaterThanOrEqual"
+
     def test_non_builtin_stays_false(self):
         assert not SWRLBuiltinRegistry.is_builtin("swrlb:notARealBuiltin")
         assert not SWRLBuiltinRegistry.is_builtin("operatedBy")
+        assert not SWRLBuiltinRegistry.is_builtin(DATA + "operatedBy")
 
 
 class TestDefect2UriMapDataProperties:
@@ -59,6 +71,21 @@ class TestDefect2UriMapDataProperties:
         assert uri_map["sailing"] == BASE + "Sailing"  # classes keep '#'
         assert uri_map["operatedby"] == DATA + "operatedBy"
         assert uri_map["nights"] == DATA + "nights"
+
+    def test_object_property_wins_same_name_clash(self):
+        # Same precedence as AggregateRuleEngine._build_uri_map.
+        onto = {
+            "base_uri": BASE,
+            "classes": [
+                {
+                    "name": "Sailing",
+                    "uri": BASE + "Sailing",
+                    "dataProperties": [{"name": "ref", "uri": BASE + "refLiteral"}],
+                }
+            ],
+            "properties": [{"name": "ref", "uri": BASE + "refObject"}],
+        }
+        assert SWRLEngine(onto)._build_uri_map()["ref"] == DATA + "refObject"
 
 
 class TestDefect3BuiltinsAreFiltersNotJoins:
@@ -75,12 +102,27 @@ class TestDefect3BuiltinsAreFiltersNotJoins:
         assert "greaterThanOrEqual" not in sql
         assert "TRY_CAST" in sql and ">=" in sql
 
+    @pytest.mark.parametrize(
+        "builder", ["build_inference_sql", "build_materialization_sql"]
+    )
+    def test_negated_atom_is_not_exists_not_a_join(self, builder):
+        params = _params()
+        params["antecedent"] += " ∧ not(cancelled(?x, ?c))"
+        sql = getattr(SWRLSQLTranslator(), builder)("t", params)
+        assert sql is not None
+        joins = [ln for ln in sql.splitlines() if ln.lstrip().startswith("JOIN")]
+        assert not any("cancelled" in ln for ln in joins)
+        assert re.search(
+            r"NOT EXISTS \(SELECT 1 FROM t (\w+) "
+            rf"WHERE \1\.predicate = '{re.escape(DATA)}cancelled' "
+            r"AND \1\.subject = \w+\.subject\)",
+            sql,
+        ), sql
+
 
 class TestDefect4PostgresDialect:
     def test_postgres_dialect_maps_cast_and_double(self):
-        sql = SWRLSQLTranslator(dialect="postgres").build_inference_sql(
-            "t", _params()
-        )
+        sql = SWRLSQLTranslator(dialect="postgres").build_inference_sql("t", _params())
         assert sql is not None
         assert "TRY_CAST" not in sql
         assert "CAST(" in sql
