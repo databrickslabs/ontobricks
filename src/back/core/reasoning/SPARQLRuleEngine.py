@@ -37,10 +37,17 @@ class SPARQLRuleEngine:
         sep = "" if base_uri.endswith("#") or base_uri.endswith("/") else "#"
         data_ns = base_uri.rstrip("#").rstrip("/") + "/" if base_uri else ""
 
-        for cls in ontology.get("classes", []):
+        base_ns = base_uri.rstrip("#").rstrip("/") if base_uri else ""
+        for cls in ontology.get("classes", []):   # (o self._ontology en SWRLEngine)
             name = cls.get("name", "") or cls.get("localName", "")
             uri = cls.get("uri", "")
-            if not uri and name:
+            if base_ns and uri and not uri.startswith(base_ns):
+                # URI obsoleta de un Base URI anterior (p.ej. el dominio se
+                # re-basó tras crear la clase) — se reconstruye contra el
+                # base_uri actual, igual que ya se hace con las propiedades.
+                local = uri_local_name(uri)
+                uri = base_uri + sep + local
+            elif not uri and name:
                 uri = base_uri + sep + name
             if name:
                 uri_map[name.lower()] = uri

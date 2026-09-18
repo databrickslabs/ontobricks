@@ -195,8 +195,10 @@ class SWRLEngine:
         Property URIs are normalised to the **data namespace** (``base_uri``
         with a trailing ``/``) so they match the predicates written by the
         R2RML generator when syncing data to the triple store.  Class URIs
-        keep their original ``#`` separator because ``rdf:type`` objects in
-        the store use the ontology class URI as-is.
+        are normalised against the current ``base_uri`` too — if a class's
+        stored ``uri`` was minted under a previous Base URI (e.g. the domain
+        was re-based after the class was created), it is rebuilt against the
+        current ``base_uri``, mirroring what already happens for properties.
         """
         uri_map: Dict[str, str] = {}
         base_uri = self._ontology.get("base_uri", "")
@@ -204,10 +206,17 @@ class SWRLEngine:
 
         data_ns = base_uri.rstrip("#").rstrip("/") + "/" if base_uri else ""
 
+        base_ns = base_uri.rstrip("#").rstrip("/") if base_uri else ""
         for cls in self._ontology.get("classes", []):
             name = cls.get("name", "") or cls.get("localName", "")
             uri = cls.get("uri", "")
-            if not uri and name:
+            if base_ns and uri and not uri.startswith(base_ns):
+                # URI obsoleta de un Base URI anterior (p.ej. el dominio se
+                # re-baso tras crear la clase) - se reconstruye contra el
+                # base_uri actual, igual que ya se hace con las propiedades.
+                local = uri_local_name(uri)
+                uri = base_uri + sep + local
+            elif not uri and name:
                 uri = base_uri + sep + name
             if name:
                 uri_map[name.lower()] = uri
