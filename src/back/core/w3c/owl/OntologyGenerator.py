@@ -168,10 +168,39 @@ class OntologyGenerator:
         return self._local_name(prop_name).lower() not in class_attrs
 
     def _resolve_uri(self, ref: str):
-        """Convert a name or full URI string to a URIRef, or None if empty."""
+        """Convert a name or full URI string to a URIRef, or None if empty.
+
+        Values coming straight from stored ``classes``/``properties`` entries
+        (as opposed to a bare local name) occasionally carry a full URI under
+        a namespace that no longer matches the domain's current ``base_uri``
+        — e.g. after a rename/rebrand of the ontology's namespace, when only
+        newly-created entities picked up the new one. Every *other* place in
+        this generator (``_add_class``, ``_add_property``,
+        ``_add_data_property_for_class``, ``_add_groups``, ...) sidesteps
+        that problem entirely by always rebuilding the URI from the entity's
+        local *name* plus the current ``base_uri`` — it never trusts a
+        stored ``uri`` field directly. Expressions & Axioms is the one path
+        that hands this method a full URI straight from the picker (which
+        reads the class's stored, possibly stale ``uri``), so we normalize
+        it the same way here: keep the local name, but always re-anchor it
+        under the CURRENT ``base_uri``. This guarantees an axiom/expression
+        subject or object always resolves to the exact same URIRef the
+        class's own ``a owl:Class`` declaration uses, regardless of what
+        namespace happens to be stored on the class.
+
+        Mirrors the same defensive pattern already used elsewhere in the
+        app for this exact class of drift (see
+        ``ReasoningService._normalize_property_uri`` and
+        ``AggregateRuleEngine._resolve_rule``'s ``uri_map`` construction).
+        """
         if not ref:
             return None
         if ref.startswith("http://") or ref.startswith("https://"):
+            if ref.startswith(self.base_uri):
+                return URIRef(ref)
+            local = self._local_name(ref)
+            if local:
+                return URIRef(self.base_uri + local)
             return URIRef(ref)
         return URIRef(self.base_uri + ref)
 

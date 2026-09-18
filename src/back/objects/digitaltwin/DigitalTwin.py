@@ -313,9 +313,17 @@ class DigitalTwin:
             if class_uri in excluded_class_uris:
                 continue
 
-            full_class_uri = (
-                class_uri if class_uri.startswith("http") else f"{base_uri}{class_uri}"
-            )
+            full_class_uri = None
+            domain_root = base_uri.rstrip("/").rstrip("#")
+            if class_uri.startswith("http://") or class_uri.startswith("https://"):
+                if class_uri.startswith(domain_root):
+                    full_class_uri = class_uri
+                else:
+                    # Stale class URI from a previous base_uri — rebuild using '#',
+                    # matching how classes are declared in the OWL ontology.
+                    full_class_uri = f"{domain_root}#{extract_local_name(class_uri)}"
+            else:
+                full_class_uri = f"{base_uri}{class_uri}"
 
             sanitized_label = DigitalTwin._safe_class_label(class_label, class_uri)
 

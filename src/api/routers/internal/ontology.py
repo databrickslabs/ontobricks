@@ -418,6 +418,58 @@ async def list_constraints(session_mgr: SessionManager = Depends(get_session_man
     domain = get_domain(session_mgr)
     return {"success": True, "constraints": domain.constraints}
 
+@router.post("/constraints/save")
+async def save_constraint(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
+    """Add or update a legacy constraint by index.
+
+    Mirrors the ``rules/{rule_type}/save`` pattern: ``index == -1`` appends a
+    new constraint, otherwise the constraint at that index is replaced. Used
+    by the Designer's entity Constraints tab (disjointWith/equivalentTo) and
+    relationship Constraints tab (cardinality, functional/inverseFunctional/
+    symmetric/transitive characteristics).
+    """
+    with map_route_errors("Saving constraint failed", logger):
+        data = await request.json()
+        constraint = data.get("constraint", {})
+        index = data.get("index", -1)
+
+        if not constraint:
+            raise ValidationError("Constraint payload is required")
+
+        domain = get_domain(session_mgr)
+        constraints = list(domain.constraints or [])
+
+        if 0 <= index < len(constraints):
+            constraints[index] = constraint
+        else:
+            constraints.append(constraint)
+
+        domain.constraints = constraints
+        domain.save()
+        return {"success": True, "message": "Constraint saved", "constraints": constraints}
+
+@router.post("/constraints/delete")
+async def delete_constraint(
+    request: Request, session_mgr: SessionManager = Depends(get_session_manager)
+):
+    """Delete a legacy constraint by index."""
+    with map_route_errors("Deleting constraint failed", logger):
+        data = await request.json()
+        index = data.get("index", -1)
+
+        domain = get_domain(session_mgr)
+        constraints = list(domain.constraints or [])
+
+        if not (0 <= index < len(constraints)):
+            raise ValidationError("Invalid constraint index")
+
+        constraints.pop(index)
+        domain.constraints = constraints
+        domain.save()
+        return {"success": True, "message": "Constraint deleted", "constraints": constraints}
+
 
 # ===========================================
 # Data Quality (SHACL Shapes)
