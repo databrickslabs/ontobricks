@@ -63,6 +63,16 @@ def test_documents_tab_copy_reads_knowledge_store():
     assert "Domain &gt; Knowledge Store" in html
 
 
+def test_docs_preview_pane_revealed_with_explicit_block():
+    """The docs list pane carries `.ob-hidden { display:none }`; revealing it
+    must set an explicit `block` (not ''), otherwise the class re-hides the
+    checkboxes and the user cannot include/exclude ready documents."""
+    js = _read(WIZARD_JS)
+    # The reveal path must not clear the inline style to empty (regression).
+    assert "previewEl.style.display = '';" not in js
+    assert "previewEl.style.display = 'block';" in js
+
+
 def test_documents_tab_button_labelled_knowledge_store():
     """The wizard nav tab reads 'Knowledge Store' (internal id unchanged)."""
     html = _read(HTML)

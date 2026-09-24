@@ -1064,18 +1064,21 @@ async function loadWizardDocuments() {
                     <div><strong>${readyCount} of ${wizardDocsCache.length} documents</strong> ready</div>
                 </div>`;
             renderWizardDocsList();
-            previewEl.style.display = '';
+            // Use an explicit block (not '') — the panes carry the
+            // `.ob-hidden { display: none }` class, so clearing the inline
+            // style would let the class re-hide the list and its checkboxes.
+            if (previewEl) previewEl.style.display = 'block';
             if (noDocsEl) noDocsEl.style.display = 'none';
         } else {
             statusEl.innerHTML = '';
             if (previewEl) previewEl.style.display = 'none';
-            if (noDocsEl) noDocsEl.style.display = '';
+            if (noDocsEl) noDocsEl.style.display = 'block';
         }
     } catch (err) {
         console.warn('[Wizard] Could not load documents:', err);
         statusEl.innerHTML = '';
         if (previewEl) previewEl.style.display = 'none';
-        if (noDocsEl) noDocsEl.style.display = '';
+        if (noDocsEl) noDocsEl.style.display = 'block';
     }
 }
 

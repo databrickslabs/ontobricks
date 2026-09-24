@@ -177,3 +177,25 @@ Modified files:
 - tests/units/front/test_ontology_generate_wizard_staged.py
 
 Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_generate_wizard_staged.py` → 67 passed
+
+
+## Fix: Generate wizard Knowledge Store list stayed hidden (no checkboxes)
+
+Context: In Ontology → Generate → Knowledge Store, ready documents showed a
+green "Ready" summary but no selectable list — users could not include/exclude
+documents. The docs preview pane carries the `.ob-hidden { display: none }`
+class; the reveal code cleared the inline style to `''`, which lets the class
+re-hide the pane (unlike the tables pane, which sets an explicit `block`).
+
+Changes:
+
+1. src/front/static/ontology/js/ontology-wizard.js
+   Reveal `wizardDocsPreview` with `style.display = 'block'` (and show the empty-state with `'block'`) instead of `''`, so the document list and its checkboxes render.
+2. tests/units/front/test_ontology_generate_wizard_staged.py
+   Added `test_docs_preview_pane_revealed_with_explicit_block` regression guard.
+
+Modified files:
+- src/front/static/ontology/js/ontology-wizard.js
+- tests/units/front/test_ontology_generate_wizard_staged.py
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_generate_wizard_staged.py` → 68 passed
