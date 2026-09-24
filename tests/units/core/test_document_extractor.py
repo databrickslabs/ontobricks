@@ -1,10 +1,10 @@
 """Unit tests for ``back.core.databricks.DocumentExtractor``.
 
 Covers the generic, reusable extractor: the swap-contract surface
-(``supports`` / ``file_extension`` / ``is_available`` / ``extract``), the
-warehouse query (schema pinned to v2.0), caching, graceful fallbacks, and the
-``extract_text_from_parsed`` schema logic (v2.0 elements-first, with page and
-markdown-blob fallbacks).
+(``supports`` / ``file_extension`` / ``is_available`` / ``extract_from_bytes``),
+graceful fallbacks, and the ``extract_text_from_parsed`` schema logic (v2.0
+elements-first, with page and markdown-blob fallbacks). The inline-base64 SQL
+contract is asserted in ``test_document_extractor_bytes.py``.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def test_supports_and_extension():
 
 
 # ---------------------------------------------------------------------------
-# extract()
+# extract_from_bytes()
 # ---------------------------------------------------------------------------
 
 
@@ -61,41 +61,22 @@ def test_is_available_requires_warehouse():
 
 def test_extract_without_warehouse_returns_none():
     ex = DocumentExtractor(client=_FakeClient(_V2, warehouse_id=""))
-    assert ex.extract("/Volumes/x/spec.pdf") is None
-
-
-def test_extract_runs_pinned_v2_query():
-    client = _FakeClient(_V2)
-    ex = DocumentExtractor(client=client)
-    assert ex.extract("/Volumes/x/spec.pdf") == "Hello"
-    assert "ai_parse_document" in client.last_query
-    assert "map('version', '2.0')" in client.last_query
-    assert "READ_FILES" in client.last_query
-    assert "spec.pdf" in client.last_query
-
-
-def test_extract_uses_cache():
-    client = _FakeClient(_V2)
-    ex = DocumentExtractor(client=client)
-    cache: dict = {}
-    ex.extract("/Volumes/x/spec.pdf", cache=cache)
-    ex.extract("/Volumes/x/spec.pdf", cache=cache)
-    assert client.call_count == 1
+    assert ex.extract_from_bytes(b"%PDF") is None
 
 
 def test_extract_returns_none_on_query_failure():
     ex = DocumentExtractor(client=_FakeClient(_V2, raises=True))
-    assert ex.extract("/Volumes/x/spec.pdf") is None
+    assert ex.extract_from_bytes(b"%PDF") is None
 
 
 def test_extract_returns_none_on_empty_text():
     ex = DocumentExtractor(client=_FakeClient(json.dumps({"document": {}})))
-    assert ex.extract("/Volumes/x/spec.pdf") is None
+    assert ex.extract_from_bytes(b"%PDF") is None
 
 
 def test_extract_handles_bad_json():
     ex = DocumentExtractor(client=_FakeClient("not-json"))
-    assert ex.extract("/Volumes/x/spec.pdf") is None
+    assert ex.extract_from_bytes(b"%PDF") is None
 
 
 # ---------------------------------------------------------------------------

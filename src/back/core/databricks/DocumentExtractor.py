@@ -1,15 +1,17 @@
 """Document text extraction via Databricks ``ai_parse_document``.
 
-Databricks-specific: converts binary documents (PDF, Office, images) stored in
-a Unity Catalog Volume into text using the ``ai_parse_document`` SQL function on
-a SQL warehouse. Generic and reusable across the app (agents, services, jobs);
-it has no dependency on the agent layer.
+Databricks-specific: converts in-memory binary documents (PDF, Office, images)
+into text using the ``ai_parse_document`` SQL function on a SQL warehouse — no
+Unity Catalog Volume involved. The bytes are base64-encoded and inlined into
+the SQL statement, then decoded warehouse-side with ``unbase64``. Generic and
+reusable across the app (agents, services, jobs); it has no dependency on the
+agent layer.
 
 Typical use::
 
     extractor = DocumentExtractor(host=host, token=token, warehouse_id=wh_id)
     if extractor.is_available() and DocumentExtractor.supports(ext):
-        text = extractor.extract("/Volumes/cat/sch/vol/path/file.pdf")
+        text = extractor.extract_from_bytes(raw_pdf_bytes)
 
 Output schema is pinned to v2.0 (verified live): text lives in
 ``document.elements[].content`` (figures expose an AI ``description``);
@@ -79,46 +81,6 @@ class DocumentExtractor:
         """Return *True* when a SQL warehouse is configured (parsing needs one)."""
         return bool(getattr(self._client, "warehouse_id", ""))
 
-    def extract(
-        self, file_path: str, *, cache: Optional[Dict[str, str]] = None
-    ) -> Optional[str]:
-        """Convert a binary document at *file_path* (a ``/Volumes/...`` path) to text.
-
-        Returns the extracted text, or ``None`` when no SQL warehouse is
-        configured or parsing fails / yields nothing so the caller can fall
-        back. When *cache* is provided, results are memoized by ``file_path``.
-        """
-        if cache is not None and file_path in cache:
-            return cache[file_path]
-
-        if not self.is_available():
-            logger.info("DocumentExtractor: no SQL warehouse — cannot parse %s", file_path)
-            return None
-
-        raw = self._run_query(file_path)
-        if not raw:
-            return None
-
-        try:
-            parsed = json.loads(raw) if isinstance(raw, str) else raw
-        except (ValueError, TypeError) as exc:
-            logger.warning("DocumentExtractor: bad parsed JSON for %s: %s", file_path, exc)
-            return None
-
-        text = self.extract_text_from_parsed(parsed) if isinstance(parsed, dict) else ""
-        if not text:
-            logger.info("DocumentExtractor: no text extracted for %s", file_path)
-            return None
-
-        logger.info(
-            "DocumentExtractor: parsed '%s' → %d chars via ai_parse_document",
-            file_path,
-            len(text),
-        )
-        if cache is not None:
-            cache[file_path] = text
-        return text
-
     def extract_from_bytes(self, content: bytes) -> Optional[str]:
         """Parse in-memory document *content* to text — no UC Volume involved.
 
@@ -170,24 +132,6 @@ class DocumentExtractor:
             return None
         if not rows:
             logger.info("DocumentExtractor: no rows returned for inline parse")
-            return None
-        return rows[0].get("parsed")
-
-    def _run_query(self, file_path: str) -> Optional[str]:
-        safe_path = file_path.replace("'", "''")
-        # Pin the output schema so extraction stays stable across upgrades.
-        query = (
-            "SELECT to_json(ai_parse_document(content, "
-            f"map('version', '{self.OUTPUT_SCHEMA_VERSION}'))) AS parsed "
-            f"FROM READ_FILES('{safe_path}', format => 'binaryFile')"
-        )
-        try:
-            rows = self._client.execute_query(query)
-        except Exception as exc:
-            logger.warning("DocumentExtractor: warehouse query failed for %s: %s", file_path, exc)
-            return None
-        if not rows:
-            logger.info("DocumentExtractor: no rows returned for %s", file_path)
             return None
         return rows[0].get("parsed")
 

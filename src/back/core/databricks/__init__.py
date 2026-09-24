@@ -24,7 +24,6 @@ from back.core.databricks.DashboardService import DashboardService  # noqa: F401
 from back.core.databricks.DocumentExtractor import DocumentExtractor  # noqa: F401
 from back.core.databricks.DocumentParseService import (  # noqa: F401
     DocumentParseService,
-    ParseManifest,
     ParseStatus,
     ParseSubmission,
 )
@@ -79,7 +78,6 @@ __all__ = [
     "UCDomainIO",
     "DocumentExtractor",
     "DocumentParseService",
-    "ParseManifest",
     "ParseStatus",
     "ParseSubmission",
     "is_databricks_app",
