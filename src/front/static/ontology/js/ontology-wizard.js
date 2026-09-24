@@ -1036,7 +1036,7 @@ window.WizardCore = {
 // =====================================================
 
 /**
- * Load documents from the domain volume.
+ * Load documents from the domain's Knowledge Store.
  */
 async function loadWizardDocuments() {
     const statusEl = document.getElementById('wizardDocsStatus');
@@ -1110,7 +1110,7 @@ function renderWizardDocsList() {
                </span>`;
         const size = file.size != null ? formatDocSize(file.size) : '';
         const docNameAttr = encodeURIComponent(file.name);
-        // Document names come straight from the domain volume listing —
+        // Document names come straight from the Knowledge Store listing —
         // this rendering path was substantially rewritten for the staged
         // wizard, so every server-supplied field is escaped before it
         // reaches innerHTML, both in text content and inside the quoted

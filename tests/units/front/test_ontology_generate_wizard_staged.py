@@ -54,6 +54,15 @@ def test_review_js_file_exists_and_is_not_empty():
     assert len(_read(REVIEW_JS)) > 200
 
 
+def test_documents_tab_copy_reads_knowledge_store():
+    html = _read(HTML)
+    assert "Knowledge Store" in html
+    assert "Domain Documents" not in html
+    # The deep link into the domain page keeps its section id.
+    assert 'href="/domain/?section=documents"' in html
+    assert "Domain &gt; Knowledge Store" in html
+
+
 def test_detection_note_aligns_with_the_padded_tab_content():
     html = _read(HTML)
     note = re.search(
