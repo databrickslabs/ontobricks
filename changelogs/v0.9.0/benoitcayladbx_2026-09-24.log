@@ -155,3 +155,25 @@ Modified files:
 - .planning/agents/agent_owl_generator/SPEC.md
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 6892 passed, 308 skipped, 6 deselected, 1 xfailed in 50.41s
+
+
+## Generate wizard — rename Documents tab to Knowledge Store
+
+Context: Follow-up to the Knowledge Store migration. The Ontology → Generate
+wizard's third tab still read "Documents"; its heading, per-item select/unselect
+(Select All / Select None + checkboxes) and per-item parsed-content preview
+(`DocumentPreview.open`, same viewer as Domain → Knowledge Store) were already in
+place — only the nav tab label was stale.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_wizard.html
+   Renamed the wizard nav tab label "Documents" → "Knowledge Store" (internal id `wizard-tab-documents` unchanged).
+2. tests/units/front/test_ontology_generate_wizard_staged.py
+   Added `test_documents_tab_button_labelled_knowledge_store` locking the tab label.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- tests/units/front/test_ontology_generate_wizard_staged.py
+
+Tests: `uv run --frozen pytest -q tests/units/front/test_ontology_generate_wizard_staged.py` → 67 passed

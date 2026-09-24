@@ -63,6 +63,20 @@ def test_documents_tab_copy_reads_knowledge_store():
     assert "Domain &gt; Knowledge Store" in html
 
 
+def test_documents_tab_button_labelled_knowledge_store():
+    """The wizard nav tab reads 'Knowledge Store' (internal id unchanged)."""
+    html = _read(HTML)
+    m = re.search(
+        r'id="wizard-tab-documents"[^>]*>(.*?)</button>',
+        html,
+        re.DOTALL,
+    )
+    assert m, "wizard documents tab button not found"
+    label = m.group(1)
+    assert "Knowledge Store" in label
+    assert ">Documents<" not in label and " Documents\n" not in label
+
+
 def test_detection_note_aligns_with_the_padded_tab_content():
     html = _read(HTML)
     note = re.search(
