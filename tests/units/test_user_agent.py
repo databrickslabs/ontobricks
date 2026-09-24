@@ -135,34 +135,6 @@ class TestSyncedTableManagerHeaders:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Mapping.fetch_documents_for_agent
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestMappingDocumentHeaders:
-    def test_documents_use_shared_volume_service(self, monkeypatch):
-        from back.objects.mapping.Mapping import Mapping
-
-        domain = MagicMock()
-        volume = MagicMock()
-        volume.list_directory.return_value = (True, [], "listed")
-        with patch(
-            "back.core.helpers.effective_uc_version_path",
-            return_value="/Volumes/cat/sch/vol/v1",
-        ), patch(
-            "back.objects.mapping.Mapping.VolumeFileService",
-            return_value=volume,
-        ) as service_cls:
-            Mapping.fetch_documents_for_agent(domain, "https://ws.example.com", "tok")
-
-        service_cls.assert_called_once_with(
-            host="https://ws.example.com", token="tok"
-        )
-        volume.list_directory.assert_called_once_with(
-            "/Volumes/cat/sch/vol/v1/documents"
-        )
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # health._check_lakebase_accelerated_sync
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -183,19 +155,6 @@ class TestHealthAcceleratedSyncHeaders:
             _check_lakebase_accelerated_sync()
 
         assert _headers_kwarg(mock_get).get("User-Agent") == HTTP_USER_AGENT
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# agents/tools/documents._headers
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestDocumentToolHeaders:
-    def test_user_agent_present(self):
-        from agents.tools.documents import _headers
-        from agents.tools.context import ToolContext
-
-        ctx = ToolContext(host="https://ws.example.com", token="tok")
-        assert _headers(ctx).get("User-Agent") == HTTP_USER_AGENT
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -103,7 +103,7 @@ and the engine that ultimately runs (column **Engine**).
 | Data Sources (UC tables preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables (sample queries) |
 | Data source deletion guard | `domain-metadata` | `POST /domain/metadata/removal-impact` | REST | `Mapping.find_mappings_referencing` over the session `assignment` (no warehouse call) |
 | Metadata refresh diff preview | `domain-metadata` | `POST /domain/metadata/update-async` → `GET /tasks/{id}` | REST → Spark SQL | `compute_column_diff` over the pre-merge snapshot; applied only after the user confirms |
-| Documents upload / status / retry | `domain-documents.js` | `/domain/documents/upload`, `/domain/documents/list`, `/domain/documents/retry-parse` | REST → Files API; binary parse via Spark SQL | Originals and `_parsed` sidecars on UC Volumes; one asynchronous `ai_parse_document` call per changed source hash |
+| Knowledge Store upload / status / retry / purge | `domain-documents.js` | `/domain/documents/upload`, `/domain/documents/list`, `/domain/documents/retry-parse` | REST → Spark SQL parse → Lakebase | Parsed text stored in Lakebase `domain_documents` (no originals kept); one asynchronous inline-base64 `ai_parse_document` call per changed source hash; 10 MB per-file cap |
 | Versions | `domain-versions` | `/api/v1/domain/versions` | REST | UC Volume listing |
 
 ### 4.2 Ontology Designer
@@ -113,7 +113,7 @@ and the engine that ultimately runs (column **Engine**).
 | Visual ontology editor (`Model`, `Entities`, `Relationships`, `Groups`, `Business Views`) | `ontology-design.js`, `ontology-shared-panels.js`, `ontology-groups.js` | Internal REST `/ontology/...` | REST | Python ontology object model |
 | OWL viewer / generator | `ontology-owl.js`, agent `OWLGenerator` | `/ontology/owl/...`, `/agents/owl-generator/run` | REST | `OntologyParser`, `OntologyGenerator` (rdflib) |
 | Import (OWL, FIBO, CDISC, IOF) | `ontology-import.js` | `/ontology/import/*` | REST | rdflib parsers |
-| Generate (Wizard) | `ontology-wizard.js` | Domain LLM via `agent_owl_generator` | REST → LLM | Saved domain LLM: Databricks AI Gateway or Model Serving + tool-calling; selected ready documents come from the shared parsed corpus |
+| Generate (Wizard) | `ontology-wizard.js` | Domain LLM via `agent_owl_generator` | REST → LLM | Saved domain LLM: Databricks AI Gateway or Model Serving + tool-calling; selected ready documents come from the shared parsed corpus in the Lakebase Knowledge Store (`domain_documents`) |
 | AI Assistant | Designer floating chat, `agent_ontology_assistant` | `POST /ontology/assistant/chat`, `POST /ontology/assistant/invoke` | REST → LLM | Saved domain LLM (`llm_endpoint` + `llm_endpoint_kind`): AI Gateway chat completions or Model Serving invocations |
 | **Data Quality** rules editor | `ontology-dataquality.js` | `/ontology/dataquality/...` | REST | SHACL (`SHACLService`) on the in-memory ontology |
 | **Business Rules (SWRL)** editor | `ontology-business-rules.js` | `/ontology/swrl/...` | REST | `SWRLParser`, validated against ontology |
@@ -257,17 +257,21 @@ These agents do not query the triple store at runtime; they operate on the
 
 ### Document reading (`documents.read` / `read_document`)
 
-Both `agent_owl_generator` and `agent_business_rules_generator` read uploaded
-domain documents from the UC Volume via `read_document`:
+Both `agent_owl_generator` and `agent_business_rules_generator` read the parsed
+text of domain documents from the Lakebase Knowledge Store (`domain_documents`)
+via `read_document` — the original binary is never stored, so there is nothing to
+re-read from a Volume:
 
-- **Plain text** (`.txt`, `.md`, `.json`, `.csv`, `.xml`) is fetched through the
-  Files API and decoded as UTF-8.
-- **Binary documents** (`.pdf`, `.docx`, `.pptx`, images) are converted to
-  markdown on the fly using the Databricks **`ai_parse_document`** SQL function
-  (output schema pinned to v2.0):
-  `SELECT to_json(ai_parse_document(content, map('version', '2.0'))) FROM READ_FILES(<volume path>, format => 'binaryFile')`.
-  This runs on the configured **SQL warehouse**, so the warehouse identity (app
-  service principal or user) must have `READ VOLUME` on the documents volume.
+- Documents are parsed **once, at upload time**, and only their parsed text is
+  persisted. `read_document` returns that stored parsed text directly from
+  Lakebase.
+- Parsing uses the Databricks **`ai_parse_document`** SQL function with the
+  uploaded bytes passed **inline as base64** (output schema pinned to v2.0):
+  `SELECT to_json(ai_parse_document(unbase64('<base64>'), map('version', '2.0'))) AS parsed`.
+  This runs on the configured **SQL warehouse**. Because the bytes are inlined,
+  it no longer reads from a Volume path / `READ_FILES`, so **no `READ VOLUME`
+  grant is required**. A hard **10 MB per-file cap** applies (base64 inflation
+  against the Statement Execution API's ~16 MiB limit).
   The function returns a `VARIANT` (output schema **v2.0**, verified live): text
   is read from `document.elements[].content` (figures expose an AI-generated
   `description`); `document.pages[]` only carries `id`/`image_uri`. The extractor
@@ -277,10 +281,11 @@ domain documents from the UC Volume via `read_document`:
   exposing `supports()` / `is_available()` / `extract()` /
   `extract_text_from_parsed()`) — so it can be used outside the agents and
   swapped for a different parser without changing callers.
-- When no SQL warehouse is configured, binary documents are skipped (the tool
-  returns an explanatory message) and generation proceeds from metadata + text
-  documents only. Parsed text is cached per file for the duration of an agent
-  run and truncated to the per-document character cap.
+- Parsing requires a SQL warehouse **at upload time**; documents that could not
+  be parsed (e.g. no warehouse configured, or parse failure) stay in a `failed`
+  state and are skipped, so generation proceeds from metadata + the successfully
+  parsed documents only. At agent runtime `read_document` just returns the stored
+  parsed text (truncated to the per-document character cap).
 
 ---
 

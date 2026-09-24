@@ -22,3 +22,136 @@ Modified files:
 - tests/units/front/test_sidebar_content_stretch_contract.py
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 6891 passed, 308 skipped, 6 deselected, 1 xfailed in 49.22s
+
+
+## Knowledge Store — migrate document management from UC Volumes to Lakebase
+
+Context: Domain document management previously uploaded files, parsed them with
+`ai_parse_document`, and copied both the original binary and a `_parsed` sidecar
+into a Unity Catalog Volume. This change keeps the parsing step but stops
+storing the original document anywhere: only the parsed text is persisted, in
+Lakebase Postgres (`domain_documents`). The feature is renamed from
+"Document Management" to "Knowledge Store". Users can now view the parsed
+content in-app, upload new files (hard 10 MB per-file cap), and purge one or
+several parsed documents at once. `ai_parse_document` is now invoked with inline
+base64 (`unbase64(...)`) so no UC Volume — and no `READ VOLUME`/`WRITE VOLUME`
+grant — is required. The registry UC Volume is removed end-to-end from settings,
+the deploy pipeline (DAB + app.yaml), health probes, and the MCP server.
+
+Changes:
+
+1. src/back/objects/registry/store/lakebase/schema.sql
+   Added `domain_documents` table (FK cascade on domain, UNIQUE(domain_id, version, filename), status CHECK).
+2. src/back/objects/registry/store/lakebase/store.py
+   Implemented the document store API (upsert/list/get/read text/read bytes/ready/failed/pending/delete/copy/count) with list queries that never select parsed_text/source_bytes.
+3. src/back/objects/registry/store/base.py
+   Added `DocumentRow` TypedDict and non-abstract default document methods on the store ABC.
+4. src/back/core/databricks/DocumentExtractor.py
+   Replaced Volume-path extraction with `extract_from_bytes()` — inline base64 `ai_parse_document(unbase64(...), map('version','2.0'))`.
+5. src/back/core/databricks/DocumentParseService.py
+   Rewrote the service on the store: 10 MB cap, async parse of pending rows, retry, read, list (parse_status), count, multi-delete; removed ParseManifest.
+6. src/back/core/databricks/__init__.py
+   Dropped ParseManifest from the package facade.
+7. src/api/routers/internal/domain.py
+   Repointed the document routes to the store: 10 MB guard on upload, multi-filename purge, parsed-text-only preview.
+8. src/back/objects/ontology/GenerateWorkflow.py
+   `list_ready_document_manifests` now reads ready rows from the Lakebase store.
+9. src/back/objects/mapping/Mapping.py
+   `fetch_documents_for_agent` reads parsed text from the store instead of a Volume.
+10. src/agents/tools/documents.py
+    `list_documents`/`read_document` tools read the Lakebase Knowledge Store (removed requests/User-Agent/VolumeFileService).
+11. src/back/objects/domain/Domain.py
+    Replaced `get_documents_volume_path`/`count_documents_in_volume` with `count_documents(settings)` over the store.
+12. src/back/objects/domain/HomeService.py
+    Uses `Domain.count_documents`.
+13. src/back/objects/registry/RegistryService.py
+    Version copy carries parsed text via the store; delete_version purges version doc rows; removed dead path/marker builders.
+14. src/front/config/menu_config.json
+    Renamed the "Documents" nav item to "Knowledge Store" (id unchanged).
+15. src/front/templates/partials/domain/_domain_documents.html
+    Knowledge Store heading, "max 10 MB per file", "Parsed Documents" card, multi-select purge control.
+16. src/front/static/domain/js/domain-documents.js
+    10 MB client guard, multi-select + select-all, purgeSelected(), parsed-content preview.
+17. src/front/static/global/js/utils.js
+    DocumentPreview now always fetches parsed-text JSON (removed binary/pdf/image branches).
+18. src/front/templates/partials/ontology/_ontology_wizard.html, src/front/static/ontology/js/ontology-wizard.js
+    Generate wizard wording: "Knowledge Store" (heading, subtitle, deep link).
+19. src/shared/config/settings.py
+    Removed `registry_volume`/`registry_volume_path` settings (kept catalog/schema).
+20. src/shared/fastapi/health.py
+    Removed the registry UC Volume read/write probes and relaxed the registry cfg probe to catalog/schema.
+21. src/mcp-server/server/session.py, src/mcp-server/server/factory.py
+    Stopped resolving REGISTRY_VOLUME_PATH/REGISTRY_VOLUME.
+22. src/back/objects/domain/SettingsService.py, src/back/objects/registry/scheduler.py
+    Dropped volume-based registry lock/creds resolution; scheduler emits the sentinel volume name.
+23. databricks.yml, app.yaml.template
+    Removed the UC Volume resource binding and `registry_volume` variable from both apps.
+24. scripts/deploy.sh, scripts/deploy.config.sh, scripts/update-deployed-app.sh, scripts/_internal/check-deploy-prerequisites.sh
+    Removed the volume FQN, `--var=registry_volume`, `databricks volumes read` preflight, and volume verification.
+25. tests/fixtures/factories/registry/fake_document_store.py (+ __init__)
+    Added an in-memory FakeDocumentStore reference implementation for the document API.
+26. tests/units/** (registry/api/core/domain/mapping/agents/front/settings/config)
+    Added/rewrote contract, service, route, consumer, UI, settings, and config-guard tests; removed obsolete Volume/User-Agent document tests.
+27. src/front/templates/partials/settings/_settings_health.html
+    Dropped the UC Volume read/write rows from the health copy.
+
+Modified files:
+- src/back/objects/registry/store/lakebase/schema.sql
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/store/base.py
+- src/back/core/databricks/DocumentExtractor.py
+- src/back/core/databricks/DocumentParseService.py
+- src/back/core/databricks/__init__.py
+- src/api/routers/internal/domain.py
+- src/back/objects/ontology/GenerateWorkflow.py
+- src/back/objects/mapping/Mapping.py
+- src/agents/tools/documents.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/HomeService.py
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/registry/scheduler.py
+- src/back/objects/domain/SettingsService.py
+- src/front/config/menu_config.json
+- src/front/templates/partials/domain/_domain_documents.html
+- src/front/static/domain/js/domain-documents.js
+- src/front/static/global/js/utils.js
+- src/front/templates/partials/ontology/_ontology_wizard.html
+- src/front/static/ontology/js/ontology-wizard.js
+- src/front/templates/partials/settings/_settings_health.html
+- src/shared/config/settings.py
+- src/shared/fastapi/health.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/factory.py
+- databricks.yml
+- app.yaml.template
+- scripts/deploy.sh
+- scripts/deploy.config.sh
+- scripts/update-deployed-app.sh
+- scripts/_internal/check-deploy-prerequisites.sh
+- tests/fixtures/factories/registry/__init__.py
+- tests/fixtures/factories/registry/fake_document_store.py
+- tests/units/registry/test_document_store.py
+- tests/units/registry/test_registry_document_copy.py
+- tests/units/registry/test_registry.py
+- tests/units/api/test_document_routes.py
+- tests/units/core/test_document_extractor.py
+- tests/units/core/test_document_extractor_bytes.py
+- tests/units/core/test_document_parse_service.py
+- tests/units/core/test_health.py
+- tests/units/domain/test_domain_document_count.py
+- tests/units/domain/test_home_service.py
+- tests/units/mapping/test_parsed_document_preload.py
+- tests/units/agents/test_documents_tool.py
+- tests/units/front/test_domain_documents_ui.py
+- tests/units/front/test_ontology_generate_wizard_staged.py
+- tests/units/settings/test_config.py
+- tests/units/config/test_no_registry_volume.py
+- tests/units/test_user_agent.py
+- docs/architecture.md
+- docs/data-access.md
+- docs/user-guide.md
+- docs/import-export.md
+- README.md
+- .planning/agents/agent_owl_generator/SPEC.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6892 passed, 308 skipped, 6 deselected, 1 xfailed in 50.41s

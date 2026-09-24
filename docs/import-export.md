@@ -75,7 +75,6 @@ needed to reproduce a domain in another environment:
 manifest.json
 domains/<folder>/.domain_permissions.json        (optional, if --include-permissions)
 domains/<folder>/V1/V1.json
-domains/<folder>/V1/documents/<files...>
 domains/<folder>/V2/V2.json
 ...
 ```
@@ -83,7 +82,7 @@ domains/<folder>/V2/V2.json
 | File | Included? | Reason |
 |------|-----------|--------|
 | `V{n}.json` | Yes | Ontology, mappings, design layout, metadata — including the domain's `mcp_policy` (see below) |
-| `V{n}/documents/**` | Yes | User-uploaded files attached to the version |
+| Knowledge Store documents | **No** | Since v0.9.0 uploaded documents are parsed text rows in the Lakebase `domain_documents` table, not files on the Volume. They are **not** carried in the `.zip` bundle; re-upload them in the target environment (their parsed text is copied forward within an environment when a new version is created) |
 | `.domain_permissions.json` | Optional (`--include-permissions`) | Role assignments for the domain |
 | `manifest.json` | Yes | Schema version, source env, per-domain/version inventory |
 | `.schedule_history.json` | **Never** | Per-env scheduling history, not portable |
@@ -179,7 +178,9 @@ Finance360           V1, V2       0
 ```
 
 Add `--json` to get a machine-readable payload suitable for piping into
-`jq` or another script.
+`jq` or another script. The `Documents` column is an informational count of each
+domain's Knowledge Store documents (Lakebase `domain_documents` rows); those
+parsed documents are not included in export bundles.
 
 ### 2. Export every domain, every version
 
@@ -212,9 +213,11 @@ ONTOBRICKS_PROFILE=src scripts/registry_transfer.sh export \
 
 ### 5. Preview an import in the target environment
 
-Always preview before committing — this shows the manifest, the per-version
-status (`new` vs `conflict`), and the list of documents that would be
-written. Nothing is written yet.
+Always preview before committing — this shows the manifest and the per-version
+status (`new` vs `conflict`). Nothing is written yet. The `Documents` column is
+an informational count of each version's Knowledge Store documents in the source;
+the parsed documents themselves live in Lakebase and are **not** carried in the
+bundle.
 
 ```bash
 ONTOBRICKS_PROFILE=dst scripts/registry_transfer.sh import-preview \
@@ -277,7 +280,7 @@ ONTOBRICKS_PROFILE=dst scripts/registry_transfer.sh import-commit \
 | Mode | Behavior |
 |------|----------|
 | `skip` | If the target already has `domain/V{n}`, leave it alone and skip the incoming copy |
-| `overwrite` | Replace the target `domain/V{n}` (and its `documents/`) with the incoming copy |
+| `overwrite` | Replace the target `domain/V{n}` with the incoming copy |
 | `rename` | Write the incoming version as `V{n}_imported_<epoch>`, preserving the target's original |
 
 If you run `import-commit` without `--conflict` and the archive has any

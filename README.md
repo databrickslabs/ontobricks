@@ -55,8 +55,9 @@ months-long integration project.
 - **Governed by design.** Versioned domains, DRAFT → IN-REVIEW → PUBLISHED
   lifecycle, single-editor locking, and an append-only review audit trail.
 - **Parse documents once, reuse them everywhere.** Uploaded PDF, Office, image,
-  and text sources become a versioned document corpus shared by ontology
-  Generate and Mapping; failed parses are visible and retryable.
+  and text sources are parsed into a versioned **Knowledge Store** (parsed text
+  in Lakebase; originals are not retained) shared by ontology Generate and
+  Mapping; failed parses are visible and retryable.
 
 ## From tables to a knowledge graph in four clicks
 

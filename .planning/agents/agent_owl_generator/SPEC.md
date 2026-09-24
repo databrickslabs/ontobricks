@@ -63,10 +63,16 @@ persistence and the final append-only merge against the live ontology — see
 
 ## 3. Tool surface
 
+> **v0.9.0 — Knowledge Store on Lakebase.** The agent's document inputs now come
+> from the Lakebase **Knowledge Store** (`domain_documents` table) rather than a
+> Unity Catalog Volume; only parsed text is persisted (no original binary).
+> `list_documents` and `read_document` read that parsed text directly from
+> Lakebase — they never touch a Volume and never trigger parsing.
+
 | Tool name | Input schema | Output type | Purpose |
 |---|---|---|---|
-| `list_documents` | `{}` | `{files: [{name, size, parse_status}], count}` | Discover source documents without exposing `_parsed`; never starts parsing |
-| `read_document` | `{filename: string}` | Ready text payload or structured pending/failed payload | Read only the durable parsed corpus; never calls `DocumentExtractor` |
+| `list_documents` | `{}` | `{files: [{name, size, parse_status}], count}` | Discover Knowledge Store documents (Lakebase `domain_documents`) without exposing `_parsed`; never starts parsing |
+| `read_document` | `{filename: string}` | Ready text payload or structured pending/failed payload | Read only the durable parsed text from the Lakebase Knowledge Store; never calls `DocumentExtractor` |
 | `get_metadata` | `{}` | Catalog metadata JSON | Inspect selected table metadata |
 | `get_table_detail` | `{table_name: string}` | Columns and table details | Inspect one relevant source table |
 

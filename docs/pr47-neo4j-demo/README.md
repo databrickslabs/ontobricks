@@ -34,7 +34,7 @@ on 2026-06-12 using a real PFAS research-paper ontology.
 
 - ✅ Settings → Back end → Neo4j engine swap
 - ✅ Settings → Neo4j config form (URI / database / basic-auth / encrypted)
-- ✅ Domain → Documents PDF upload → Ontology → Generate (AI)
+- ✅ Domain → Knowledge Store PDF upload → Ontology → Generate (AI)
 - ✅ Ontology Designer (with auto-generated icons)
 - ✅ Domain → Data Sources (UC table import)
 - ✅ Mapping → Auto-Map (batch + per-entity)

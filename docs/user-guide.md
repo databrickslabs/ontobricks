@@ -63,24 +63,27 @@ Lakehouse backend; UC objects belonging to Lakebase or Neo4j versions are
 excluded. Health answers only one question: "Can this principal operate on the
 configured Registry schema?"
 
-## Domain documents
+## Knowledge Store
 
-Use **Domain → Documents** to upload specifications, glossaries, and other
-evidence for ontology Generate and Mapping. OntoBricks stores each original in
-the domain version's Unity Catalog Volume and parses supported binary formats
-once after upload. Both agents then read the same durable text sidecar; agent
-runs never re-parse the source.
+Use **Domain → Knowledge Store** to upload specifications, glossaries, and other
+evidence for ontology Generate and Mapping. OntoBricks parses each supported
+file once after upload and stores **only the parsed text** in Lakebase (the
+original binary is **not** retained). Both agents then read the same durable
+parsed text; agent runs never re-parse the source. You can view a document's
+parsed content directly in the Knowledge Store, upload new files, and **purge one
+or several documents at once** (multi-select). There is a **10 MB per-file upload
+limit**, and previews show the parsed text only — there is no binary download.
 
 The document list shows one of three states:
 
 - **Parsing** — extraction is running; the page refreshes status automatically.
-- **Ready** — the document can be selected as agent evidence.
-- **Parse failed** — the source remains stored; use **Retry** after fixing
-  warehouse access or a transient parser issue.
+- **Ready** — the document can be viewed and selected as agent evidence.
+- **Parse failed** — the parsed text could not be produced; use **Retry** after
+  fixing warehouse access or a transient parser issue.
 
 UTF-8 text formats are ready immediately. Unsupported formats remain failed
-and are not sent to Generate or Mapping. New domain versions copy originals,
-manifests, and ready sidecars together.
+and are not sent to Generate or Mapping. Creating a new domain version copies the
+parsed documents forward.
 
 ## Application Workflow
 
@@ -424,7 +427,7 @@ process — you can navigate away and come back at any point, and every step
 in progress survives a page reload:
 
 1. **Configure & Detect** — choose which **catalog/schema** metadata to
-   include, (optionally) select uploaded **Documents**, write custom
+   include, (optionally) select uploaded **Knowledge Store** documents, write custom
    **Guidelines** or pick a **Quick Template**, then click **Detect
    Entities**. Detection only proposes entities — relationships and
    attributes are inferred later, after review. This runs as a background
@@ -464,13 +467,13 @@ Unity AI Gateway model service or a legacy Model Serving endpoint). With
 
 #### Documents (PDF and other formats)
 
-Documents uploaded under **Domain → Documents** feed the Wizard. Plain-text
-files (`.txt`, `.md`, `.json`, `.csv`, `.xml`) are read directly. Binary
-documents (`.pdf`, `.docx`, `.pptx`, images) are automatically converted to
-markdown using the Databricks `ai_parse_document` function, which runs on your
-configured **SQL warehouse** — so a warehouse must be configured and its
-identity must have read access to the documents volume. Without a SQL warehouse,
-binary documents are skipped and generation uses metadata, guidelines, and text
+Documents uploaded under **Domain → Knowledge Store** feed the Wizard. Files are
+parsed once at upload using the Databricks `ai_parse_document` function (called
+inline with the uploaded bytes as base64), which runs on your configured **SQL
+warehouse** — so a warehouse must be configured. No Volume access grant is
+required. The Wizard then reads the stored parsed text; documents that could not
+be parsed (e.g. no warehouse at upload time) stay in a failed state and are
+skipped, so generation uses metadata, guidelines, and the successfully parsed
 documents only.
 
 #### Quick Templates

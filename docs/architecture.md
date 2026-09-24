@@ -315,17 +315,16 @@ paths are derived through `effective_uc_version_path` in `DatabricksHelpers.py`.
     └── {domain_name}/
         ├── .domain_permissions.json  # Optional per-domain role overrides
         ├── V1/
-        │   ├── V1.json                                    # Domain version payload
-        │   └── documents/                                 # Version-scoped source documents
-        │       ├── specification.pdf                      # Original bytes
-        │       └── _parsed/                               # Internal shared corpus
-        │           ├── specification.pdf.md               # ai_parse_document text
-        │           └── specification.pdf.json             # Hash, parser, and status manifest
+        │   └── V1.json                                    # Domain version payload
         ├── V2/
-        │   ├── V2.json
-        │   └── documents/
+        │   └── V2.json
         └── ...
 ```
+
+> **Knowledge Store documents.** Uploaded documents are **not** stored on the
+> Volume. As of v0.9.0 they are parsed on upload and only the parsed text is
+> persisted in the Lakebase `domain_documents` table (the original binary is
+> never retained). See [Registry Storage](#registry-storage).
 
 ### Key Design Principles
 
@@ -338,13 +337,15 @@ paths are derived through `effective_uc_version_path` in `DatabricksHelpers.py`.
 7. **Observability**: MLflow tracing captures every agent → LLM → tool span for debugging, cost tracking, and evaluation
 8. **MCP Integration**: The MCP server exposes knowledge-graph tools (entity search, GraphQL queries, domain selection) to LLM clients via the Model Context Protocol (see [MCP Server](mcp.md))
 
-`DocumentParseService` owns the version-scoped document lifecycle. Uploads
-write a SHA-256 manifest in `pending`, `ready`, or `failed` state. Supported
-binary files are parsed asynchronously through `ai_parse_document`; markdown is
-written before the manifest becomes `ready`. Generate and Mapping are
-read-only corpus consumers and never invoke the extractor. `_parsed` is hidden
-from public lists and document counts but is copied when a new version is
-created.
+`DocumentParseService` owns the Knowledge Store document lifecycle, backed by
+the Lakebase `domain_documents` table (parsed text only — the original binary is
+never persisted). Uploads are tracked per row with a `source_hash` and a
+`pending`, `ready`, or `failed` status. Supported files are parsed
+asynchronously through `ai_parse_document` (inline base64, see below); the
+parsed text is written before the row becomes `ready`. There is a hard **10 MB
+per-file upload cap** (base64 inflation against the Statement Execution API's
+~16 MiB limit). Generate and Mapping are read-only corpus consumers and never
+invoke the extractor. Creating a new version copies the parsed-text rows.
 
 ---
 
@@ -723,38 +724,38 @@ The `DomainSession` class (`src/back/objects/session/DomainSession.py`) provides
 Since v0.4.0 the domain registry lives in **Databricks Lakebase**
 (Postgres). The historical JSON-on-Volume backend was removed —
 operators with pre-v0.4.0 deployments must run
-`scripts/migrations/migrate-registry-to-lakebase.sh` once before upgrading. The
-Unity Catalog Volume is still wired in but is now reserved for binary
-artefacts (`documents/` uploads and registry export bundles).
+`scripts/migrations/migrate-registry-to-lakebase.sh` once before upgrading.
+Uploaded Knowledge Store documents also live in Lakebase (parsed text in
+`domain_documents`); the Unity Catalog Volume is now reserved only for ad-hoc
+registry export bundles (OWL import / R2RML export use arbitrary user-chosen
+volumes).
 
 | Storage | Identifier | What lives in it |
 |---|---|---|
-| Databricks Lakebase (Postgres) | `lakebase` | Domain JSON, permissions, schedules, history, global config — normalised into seven Postgres tables (with JSONB columns for the larger blobs) |
-| Unity Catalog Volume | n/a | `documents/` uploads + ad-hoc registry exports |
+| Databricks Lakebase (Postgres) | `lakebase` | Domain JSON, permissions, schedules, history, global config, and Knowledge Store parsed documents (`domain_documents`) — normalised into relational tables (with JSONB columns for the larger blobs) |
+| Unity Catalog Volume | n/a | Ad-hoc registry export bundles (no document uploads) |
 
 The single :class:`RegistryStore` implementation
 (`LakebaseRegistryStore`) is constructed via `RegistryFactory.from_cfg`.
 Route handlers and services talk to the abstract interface and stay
 storage-agnostic.
 
-### Volume layout (binaries only)
+### Volume layout (export bundles only)
 
 ```
 Unity Catalog
 └── catalog (e.g., main)
     └── schema (e.g., ontobricks)
         └── volume (e.g., OntoBricksRegistry)
-            └── domains/
-                └── {domain_name}/
-                    ├── V1/
-                    │   └── documents/           # user-uploaded files
-                    ├── V2/…
-                    └── V3/…
+            └── (ad-hoc registry export bundles)
 ```
+
+> Uploaded documents are no longer written to the Volume — they are parsed on
+> upload and stored as text in the Lakebase `domain_documents` table.
 
 ### Lakebase layout
 
-The Postgres schema (default `ontobricks_registry`) holds fifteen
+The Postgres schema (default `ontobricks_registry`) holds sixteen
 relational tables:
 
 | Table | Purpose |
@@ -763,6 +764,7 @@ relational tables:
 | `global_config` | Instance-wide settings (warehouse, emoji, base URI, `ui_branding`, …) as JSONB |
 | `domains` | Stable per-domain identity (UUID, name, base URI, description) plus `mcp_policy` — a JSONB blob holding the [per-domain MCP policy](mcp.md#per-domain-mcp-policy) (which tools the domain publishes, how its ontology attachments are surfaced). Defaults to `{}`, which reproduces pre-0.8 behaviour, so no backfill is needed |
 | `domain_versions` | Per-version JSONB document; mirrors what `V{N}.json` used to hold |
+| `domain_documents` | Knowledge Store parsed documents (`filename`, `version`, `status`, `parsed_text`, `source_hash`); stores parsed text only — no original binary. FK-cascades on domain delete; version copy carries the parsed text |
 | `domain_permissions` | Per-domain ACL (replaces `.domain_permissions.json`) |
 | `domain_edit_locks` | Advisory per-domain edit locks for collaborative editing |
 | `schedules` | Active scheduled-build configuration |
@@ -784,9 +786,10 @@ tier since 2026-03-12); Provisioned instances are not supported. The
 connection layer retries on `SQLSTATE 57P03` to absorb scale-from-zero
 cold-starts.
 
-Binary artefacts (`documents/` uploads and registry export bundles)
-continue to live on the Unity Catalog Volume above, managed by
-`VolumeFileService`.
+Ad-hoc registry export bundles continue to live on the Unity Catalog Volume
+above, managed by `VolumeFileService`. Uploaded Knowledge Store documents are
+not written to the Volume — they are parsed on upload and stored as text in
+`domain_documents`.
 
 ### Export Format (Versioned)
 
@@ -841,7 +844,7 @@ For security and regeneration reasons, these are excluded from exports:
 
 1. **First Save**: Creates `domains/{name}/V1/V1.json`
 2. **Update Save**: Overwrites `domains/{name}/V{ver}/V{ver}.json`
-3. **Create Version**: Increments the version number, copies documents from the previous version directory
+3. **Create Version**: Increments the version number, copying the previous version's parsed Knowledge Store documents (`domain_documents` rows) forward
 4. **Load Version**: Loads the requested version from `V{ver}/V{ver}.json`, regenerates R2RML and OWL
 
 ### Auto-Save Flow (Design View)
@@ -1769,7 +1772,7 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 #### 1. OWL Generator Agent (`agent_owl_generator`)
 
-**Purpose**: Autonomously generate a complete OWL ontology (Turtle format) from domain metadata and uploaded documents.
+**Purpose**: Autonomously generate a complete OWL ontology (Turtle format) from domain metadata and the parsed documents in the Lakebase Knowledge Store (`domain_documents`).
 
 | Parameter | Value |
 |-----------|-------|
@@ -1781,7 +1784,7 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 **Workflow**:
 1. Receives a user prompt describing the desired ontology
 2. Calls `get_metadata` and `get_table_detail` to understand the data schema
-3. Calls `list_documents` and `read_document` to ingest uploaded reference material
+3. Calls `list_documents` and `read_document` to ingest parsed reference material from the Lakebase Knowledge Store
 4. Generates OWL/Turtle output based on gathered context
 
 **Tools used**: `get_metadata`, `get_table_detail`, `list_documents`, `read_document`
@@ -1887,8 +1890,8 @@ All tools live in `src/agents/tools/` and follow a consistent pattern:
 |------|--------|-------------|---------|
 | `get_metadata` | `metadata.py` | Returns domain table schemas (names, columns, types) | All agents |
 | `get_table_detail` | `metadata.py` | Returns detailed schema for a specific table | OWL Generator |
-| `list_documents` | `documents.py` | Lists uploaded domain documents from Unity Catalog | OWL Generator |
-| `read_document` | `documents.py` | Reads content of a specific document | OWL Generator |
+| `list_documents` | `documents.py` | Lists Knowledge Store documents from the Lakebase `domain_documents` table | OWL Generator |
+| `read_document` | `documents.py` | Reads the parsed text of a specific Knowledge Store document from Lakebase | OWL Generator |
 | `get_ontology` | `ontology.py` | Returns current ontology (entities, relationships, attributes) | Auto-Mapping, Icon Mapping, Ontology Assistant |
 | `execute_sql` | `sql.py` | Executes a SQL query via Databricks SQL Warehouse | Auto-Mapping |
 | `submit_entity_mapping` | `mapping.py` | Saves a validated entity → SQL mapping | Auto-Mapping |
