@@ -88,7 +88,7 @@
                         },
                         {
                             "id": "documents",
-                            "label": "Documents",
+                            "label": "Knowledge Store",
                             "icon": "bi-file-earmark-text",
                             "default": false,
                             "requires": "domain_saved"

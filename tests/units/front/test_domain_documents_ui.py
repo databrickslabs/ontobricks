@@ -1,5 +1,6 @@
-"""UI contracts for durable document parse status and retry."""
+"""UI contracts for the Knowledge Store (parse status, retry, purge, view)."""
 
+import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -8,6 +9,55 @@ DOCUMENTS_HTML = (
     REPO_ROOT / "src/front/templates/partials/domain/_domain_documents.html"
 )
 WIZARD_JS = REPO_ROOT / "src/front/static/ontology/js/ontology-wizard.js"
+MENU_CONFIG = REPO_ROOT / "src/front/config/menu_config.json"
+UTILS_JS = REPO_ROOT / "src/front/static/global/js/utils.js"
+
+
+def test_feature_is_named_knowledge_store():
+    html = DOCUMENTS_HTML.read_text(encoding="utf-8")
+    assert "Knowledge Store" in html
+    assert "Document Management" not in html
+    menu = MENU_CONFIG.read_text(encoding="utf-8")
+    ids = json.loads(menu)
+    # The menu id stays 'documents'; only the label renames.
+    assert '"label": "Knowledge Store"' in menu
+    assert '"id": "documents"' in menu
+    assert ids is not None
+
+
+def test_no_volume_location_banner():
+    html = DOCUMENTS_HTML.read_text(encoding="utf-8")
+    assert "docLocationBanner" not in html
+    assert "/Volumes" not in html
+    assert "Unity Catalog volume" not in html
+    js = DOCUMENTS_JS.read_text(encoding="utf-8")
+    assert "loadVolumeLocation" not in js
+
+
+def test_upload_enforces_10mb_client_guard():
+    js = DOCUMENTS_JS.read_text(encoding="utf-8")
+    assert "MAX_UPLOAD_BYTES = 10 * 1024 * 1024" in js
+    assert "f.size > MAX_UPLOAD_BYTES" in js
+    html = DOCUMENTS_HTML.read_text(encoding="utf-8")
+    assert "10" in html and "MB" in html
+
+
+def test_multi_select_purge_control_present():
+    html = DOCUMENTS_HTML.read_text(encoding="utf-8")
+    assert 'id="docPurgeSelectedBtn"' in html
+    assert "Purge selected" in html
+    js = DOCUMENTS_JS.read_text(encoding="utf-8")
+    assert "purgeSelected()" in js
+    assert "toggleSelectAll(" in js
+    assert "JSON.stringify({ filenames })" in js
+
+
+def test_preview_serves_parsed_text_only():
+    js = UTILS_JS.read_text(encoding="utf-8")
+    # No binary streaming branches remain — parsed text/markdown only.
+    assert "doc-preview-iframe" not in js
+    assert "doc-preview-image" not in js
+    assert "documents/preview/" in js
 
 
 def test_documents_ui_renders_all_parse_states():

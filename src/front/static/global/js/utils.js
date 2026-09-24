@@ -593,23 +593,10 @@ const DocumentPreview = {
         return el;
     },
 
-    _extOf(filename) {
-        return (filename.includes('.') ? filename.split('.').pop() : '').toLowerCase();
-    },
-
-    _isBinary(ext) {
-        return ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
-    },
-
-    _isImage(ext) {
-        return ['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext);
-    },
-
     open(filename) {
         const modalEl = this._ensureModal();
         const title = document.getElementById('docPreviewTitle');
         const body = document.getElementById('docPreviewBody');
-        const ext = this._extOf(filename);
 
         title.innerHTML = `<i class="bi bi-eye me-2"></i>${escapeHtml(filename)}`;
         body.innerHTML = `<div class="d-flex justify-content-center align-items-center" style="min-height:300px;">
@@ -619,31 +606,21 @@ const DocumentPreview = {
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         modal.show();
 
+        // The original binary is never retained — preview always serves the
+        // parsed text extracted from the Knowledge Store.
         const url = `/domain/documents/preview/${encodeURIComponent(filename)}`;
-
-        if (ext === 'pdf') {
-            body.innerHTML = `<iframe class="doc-preview-iframe" src="${url}"></iframe>`;
-            return;
-        }
-
-        if (this._isImage(ext)) {
-            body.innerHTML = `<div class="text-center p-3">
-                <img src="${url}" class="doc-preview-image" alt="${escapeHtml(filename)}">
-            </div>`;
-            return;
-        }
-
         fetch(url, { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
                 if (!data.success) {
                     body.innerHTML = `<div class="p-4 text-center text-muted">
                         <i class="bi bi-file-earmark-x fs-1 d-block mb-2"></i>
-                        ${escapeHtml(data.message || 'Preview not available')}
+                        ${escapeHtml(data.error || data.message || 'Parsed content not available yet')}
                     </div>`;
                     return;
                 }
-                if (ext === 'md') {
+                const looksMarkdown = /^\s*#{1,6}\s|\*\*|^- /m.test(data.content || '');
+                if (looksMarkdown) {
                     body.innerHTML = `<div class="doc-preview-md p-4">${this._renderMarkdown(data.content)}</div>`;
                 } else {
                     body.innerHTML = `<pre class="doc-preview-text p-3 m-0">${escapeHtml(data.content)}</pre>`;
@@ -652,7 +629,7 @@ const DocumentPreview = {
             .catch(err => {
                 body.innerHTML = `<div class="p-4 text-center text-danger">
                     <i class="bi bi-exclamation-triangle fs-1 d-block mb-2"></i>
-                    Error loading preview: ${escapeHtml(err.message)}
+                    Error loading parsed content: ${escapeHtml(err.message)}
                 </div>`;
             });
     },

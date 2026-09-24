@@ -4,8 +4,8 @@
 <div class="content-section">
 <div class="section-header d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h4 class="mb-1"><i class="bi bi-file-earmark-text me-2"></i>Document Management</h4>
-        <p class="text-muted mb-0 small">Upload and manage domain documents stored in the Unity Catalog volume</p>
+        <h4 class="mb-1"><i class="bi bi-file-earmark-text me-2"></i>Knowledge Store</h4>
+        <p class="text-muted mb-0 small">Upload documents, parse them once, and consult the retrieved text</p>
     </div>
     <button type="button" class="btn btn-sm btn-outline-primary onto-discuss-btn"
             title="Open the domain discussion" onclick="openDomainDiscussion()">
@@ -14,17 +14,6 @@
 </div>
 
 <div class="domain-documents-stack">
-<!-- Volume Location Banner -->
-<div class="alert alert-light border mb-4" id="docLocationBanner">
-    <div class="d-flex align-items-center">
-        <i class="bi bi-database me-2 text-primary"></i>
-        <span class="small">
-            <strong>Volume:</strong>
-            <span id="docVolumePath" class="text-muted">Not configured</span>
-        </span>
-    </div>
-</div>
-
 <!-- Upload Card -->
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -32,12 +21,12 @@
     </div>
     <div class="card-body">
         <p class="text-muted mb-3">
-            Upload files to the domain volume's documents directory.
-            The domain must be saved to Unity Catalog first.
+            Upload files to the domain's Knowledge Store.
+            The domain must be saved to the registry first.
         </p>
         <div class="alert alert-info d-flex align-items-start py-2" role="note">
             <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
-            <span class="small">Files are parsed once after upload. Generate and Mapping use the same ready document text.</span>
+            <span class="small">Files are parsed once after upload (max 10&nbsp;MB per file); only the retrieved text is kept. Generate and Mapping use that same ready document text.</span>
         </div>
 
         <!-- Drop Zone -->
@@ -67,18 +56,24 @@
     </div>
 </div>
 
-<!-- Uploaded Files Card -->
+<!-- Parsed Documents Card -->
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-file-earmark-text"></i> Uploaded Documents</span>
-        <button class="btn btn-sm btn-outline-secondary" id="docRefreshBtn" title="Refresh file list">
-            <i class="bi bi-arrow-clockwise"></i>
-        </button>
+        <span><i class="bi bi-file-earmark-text"></i> Parsed Documents</span>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-danger d-none" id="docPurgeSelectedBtn"
+                    title="Purge the selected documents">
+                <i class="bi bi-trash me-1"></i>Purge selected (<span id="docSelectedCount">0</span>)
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="docRefreshBtn" title="Refresh file list">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
     </div>
     <div class="card-body">
         <div id="docFileList" aria-live="polite">
             <div class="text-muted small fst-italic">
-                <i class="bi bi-info-circle"></i> Save the domain to Unity Catalog to enable document management.
+                <i class="bi bi-info-circle"></i> Save the domain to the registry to enable the Knowledge Store.
             </div>
         </div>
     </div>

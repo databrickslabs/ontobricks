@@ -1,10 +1,13 @@
 // =====================================================
-// PROJECT DOCUMENTS — Upload & list files in UC volume
+// KNOWLEDGE STORE — Upload, parse, view & purge documents
 // =====================================================
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // Keep in sync with DocumentParseService.MAX_UPLOAD_BYTES
 
 const DocManager = {
     queuedFiles: [],
     parsePollTimer: null,
+    selected: new Set(),
 
     init() {
         const dropZone = document.getElementById('docDropZone');
@@ -12,6 +15,7 @@ const DocManager = {
         const uploadBtn = document.getElementById('docUploadBtn');
         const clearBtn = document.getElementById('docClearQueueBtn');
         const refreshBtn = document.getElementById('docRefreshBtn');
+        const purgeBtn = document.getElementById('docPurgeSelectedBtn');
 
         if (!dropZone) return;
 
@@ -31,32 +35,18 @@ const DocManager = {
         uploadBtn.addEventListener('click', () => this.uploadAll());
         clearBtn.addEventListener('click', () => this.clearQueue());
         refreshBtn.addEventListener('click', () => this.refreshList());
+        if (purgeBtn) purgeBtn.addEventListener('click', () => this.purgeSelected());
 
-        this.loadVolumeLocation();
         this.refreshList();
-    },
-
-    async loadVolumeLocation() {
-        const el = document.getElementById('docVolumePath');
-        if (!el) return;
-        try {
-            const data = await fetchOnce('/domain/version-status');
-            const folder = data.domain_folder || data.project_folder;
-            if (data.success && data.registry && data.registry.catalog && folder) {
-                const r = data.registry;
-                const version = data.version || '1';
-                el.innerHTML = `/Volumes/<strong>${r.catalog}/${r.schema}/${r.volume}</strong>/domains/<strong>${folder}</strong>/V${version}/documents`;
-            } else {
-                el.textContent = 'Domain not saved to the registry yet';
-            }
-        } catch {
-            el.textContent = 'Unable to load location';
-        }
     },
 
     addFiles(fileList) {
         if (window.isActiveVersion === false) return;
         for (const f of fileList) {
+            if (f.size > MAX_UPLOAD_BYTES) {
+                showNotification(`${f.name} exceeds the 10 MB upload limit and was skipped`, 'error');
+                continue;
+            }
             if (!this.queuedFiles.some(q => q.name === f.name && q.size === f.size)) {
                 this.queuedFiles.push(f);
             }
@@ -158,16 +148,29 @@ const DocManager = {
             const files = (result.files || []).filter(f => !f.is_directory);
             this.scheduleParseRefresh(files);
 
+            // Drop selections for files that no longer exist.
+            const present = new Set(files.map(f => f.name));
+            this.selected.forEach(name => { if (!present.has(name)) this.selected.delete(name); });
+
             if (files.length === 0) {
                 container.innerHTML = '<div class="text-muted small fst-italic"><i class="bi bi-folder2-open"></i> No documents uploaded yet.</div>';
+                this.updateSelectionUI();
                 return;
             }
 
+            const allChecked = files.every(f => this.selected.has(f.name));
             container.innerHTML = `
                 <div class="list-group list-group-flush">
+                    <label class="list-group-item d-flex align-items-center px-2 py-1 text-muted small">
+                        <input type="checkbox" class="form-check-input mt-0 me-2" id="docSelectAll"
+                               ${allChecked ? 'checked' : ''}
+                               onchange="DocManager.toggleSelectAll(this.checked)">
+                        Select all
+                    </label>
                     ${files.map(f => {
                         const encodedName = encodeURIComponent(f.name);
                         const safeName = escapeDocHtml(f.name);
+                        const isChecked = this.selected.has(f.name) ? 'checked' : '';
                         const retryButton = f.parse_status === 'failed' && f.parser !== 'unsupported'
                             ? `<button class="btn btn-sm btn-outline-secondary py-0 px-2"
                                       onclick="DocManager.retryParse(decodeURIComponent('${encodedName}'))"
@@ -177,9 +180,12 @@ const DocManager = {
                             : '';
                         return `
                         <div class="list-group-item d-flex align-items-center justify-content-between px-2 py-2">
-                            <span class="small text-truncate me-2 doc-preview-link" role="button"
+                            <input type="checkbox" class="form-check-input mt-0 me-2" ${isChecked}
+                                   aria-label="Select ${safeName}"
+                                   onchange="DocManager.toggleSelect(decodeURIComponent('${encodedName}'), this.checked)">
+                            <span class="small text-truncate me-2 doc-preview-link flex-grow-1" role="button"
                                   tabindex="0"
-                                  title="Click to preview ${safeName}"
+                                  title="View parsed content of ${safeName}"
                                   onclick="DocumentPreview.open(decodeURIComponent('${encodedName}'))"
                                   onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); DocumentPreview.open(decodeURIComponent('${encodedName}')); }">
                                 <i class="bi ${fileIcon(f.name)} me-1"></i>${safeName}
@@ -189,11 +195,11 @@ const DocManager = {
                                 ${parseStatusBadge(f)}
                                 ${retryButton}
                                 <button class="btn btn-sm btn-outline-primary py-0 px-1"
-                                        onclick="DocumentPreview.open(decodeURIComponent('${encodedName}'))" title="Preview">
+                                        onclick="DocumentPreview.open(decodeURIComponent('${encodedName}'))" title="View parsed content">
                                     <i class="bi bi-eye"></i>
                                 </button>
                                 <button class="btn btn-sm btn-outline-secondary py-0 px-1"
-                                        onclick="DocManager.deleteFile(decodeURIComponent('${encodedName}'))" title="Delete">
+                                        onclick="DocManager.deleteFile(decodeURIComponent('${encodedName}'))" title="Purge">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </div>
@@ -201,9 +207,65 @@ const DocManager = {
                     `;}).join('')}
                 </div>
             `;
+            this.updateSelectionUI();
         } catch (err) {
             this.scheduleParseRefresh([]);
             container.innerHTML = `<div class="text-muted small"><i class="bi bi-exclamation-triangle text-warning"></i> ${err.message}</div>`;
+        }
+    },
+
+    toggleSelect(filename, checked) {
+        if (checked) this.selected.add(filename); else this.selected.delete(filename);
+        this.updateSelectionUI();
+    },
+
+    toggleSelectAll(checked) {
+        document.querySelectorAll('#docFileList .list-group-item input[type="checkbox"]').forEach(cb => {
+            if (cb.id === 'docSelectAll') return;
+            const label = cb.getAttribute('aria-label') || '';
+            const name = label.replace(/^Select /, '');
+            if (!name) return;
+            cb.checked = checked;
+            if (checked) this.selected.add(name); else this.selected.delete(name);
+        });
+        this.updateSelectionUI();
+    },
+
+    updateSelectionUI() {
+        const btn = document.getElementById('docPurgeSelectedBtn');
+        const count = document.getElementById('docSelectedCount');
+        if (count) count.textContent = String(this.selected.size);
+        if (btn) btn.classList.toggle('d-none', this.selected.size === 0);
+    },
+
+    async purgeSelected() {
+        if (window.isActiveVersion === false) return;
+        const filenames = Array.from(this.selected);
+        if (filenames.length === 0) return;
+
+        const label = filenames.length === 1
+            ? filenames[0]
+            : `${filenames.length} documents`;
+        const confirmed = await showDeleteConfirm(label, 'document');
+        if (!confirmed) return;
+
+        try {
+            const resp = await fetch('/domain/documents/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filenames }),
+                credentials: 'same-origin',
+            });
+            const result = await resp.json();
+            if (result.success) {
+                showNotification(result.message || `Purged ${filenames.length} document(s)`, 'success');
+                this.selected.clear();
+                this.refreshList();
+            } else {
+                showNotification('Purge failed: ' + result.message, 'error');
+            }
+        } catch (err) {
+            showNotification('Purge error: ' + err.message, 'error');
         }
     },
 
@@ -246,13 +308,14 @@ const DocManager = {
             const resp = await fetch('/domain/documents/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename }),
+                body: JSON.stringify({ filenames: [filename] }),
                 credentials: 'same-origin',
             });
             const result = await resp.json();
 
             if (result.success) {
                 showNotification(`Deleted ${filename}`, 'success');
+                this.selected.delete(filename);
                 this.refreshList();
             } else {
                 showNotification('Delete failed: ' + result.message, 'error');
