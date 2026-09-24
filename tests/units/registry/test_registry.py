@@ -365,26 +365,6 @@ class TestPathBuilders:
     def test_version_path(self):
         assert self._svc().version_path("p", "3") == "/Volumes/cat/sch/vol/domains/p/V3"
 
-    def test_version_file_path(self):
-        assert (
-            self._svc().version_file_path("p", "3")
-            == "/Volumes/cat/sch/vol/domains/p/V3/V3.json"
-        )
-
-    def test_marker_path(self):
-        assert self._svc().marker_path() == "/Volumes/cat/sch/vol/.registry"
-
-    def test_config_file_path(self):
-        assert (
-            self._svc().config_file_path() == "/Volumes/cat/sch/vol/.global_config.json"
-        )
-
-    def test_history_file_path(self):
-        assert (
-            self._svc().history_file_path("p")
-            == "/Volumes/cat/sch/vol/domains/p/.schedule_history.json"
-        )
-
 
 class TestResolveDomainsFolderFallback:
     """Backward-compatible folder resolution (domains/ vs legacy projects/)

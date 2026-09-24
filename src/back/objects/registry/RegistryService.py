@@ -54,7 +54,6 @@ logger = get_logger(__name__)
 
 _SCHEME_RE = re.compile(r"^https?:/[^/]")
 _DEFAULT_VOLUME = "OntoBricksRegistry"
-_REGISTRY_MARKER = ".registry"
 _DOMAINS_FOLDER = "domains"
 _LEGACY_DOMAINS_FOLDER = "projects"
 
@@ -447,18 +446,6 @@ class RegistryService:
     def version_path(self, folder: str, version: str) -> str:
         """Return the version directory: ``.../domains/{folder}/V{version}``."""
         return f"{self.domain_path(folder)}/V{version}"
-
-    def version_file_path(self, folder: str, version: str) -> str:
-        return f"{self.version_path(folder, version)}/V{version}.json"
-
-    def marker_path(self) -> str:
-        return f"{self.volume_root()}/{_REGISTRY_MARKER}"
-
-    def config_file_path(self) -> str:
-        return f"{self.volume_root()}/.global_config.json"
-
-    def history_file_path(self, folder: str) -> str:
-        return f"{self.domain_path(folder)}/.schedule_history.json"
 
     # -- registry lifecycle ------------------------------------------
 
@@ -860,13 +847,25 @@ class RegistryService:
         return ok, msg
 
     def delete_version(self, folder: str, version: str) -> Tuple[bool, str]:
-        """Delete a version (rows + binary directory)."""
+        """Delete a version (rows + Knowledge Store documents + binary dir)."""
         ok, msg = self._store.delete_version(folder, version)
         if not ok:
             return False, msg
-        # Also remove the binary version dir on the Volume (documents/
-        # uploads). Errors are non-fatal — the JSON side is the source
-        # of truth.
+        # Purge the version's Knowledge Store documents (Lakebase). Rows are
+        # keyed by (domain_id, version) with no version FK, so an explicit
+        # purge is needed — the domain-level FK cascade only fires on a full
+        # domain delete.
+        try:
+            doc_rows = self._store.list_documents(folder, version)
+            filenames = [r.get("filename") for r in doc_rows if r.get("filename")]
+            if filenames:
+                self._store.delete_documents(folder, version, filenames)
+        except Exception as exc:  # noqa: BLE001 — best-effort corpus cleanup
+            logger.warning(
+                "Knowledge Store cleanup raised for %s/V%s: %s", folder, version, exc
+            )
+        # Also remove any legacy binary version dir on the Volume. Errors are
+        # non-fatal — Lakebase is the source of truth.
         try:
             errors = self.recursive_delete(self.version_path(folder, version))
             if errors:
@@ -1238,62 +1237,20 @@ class RegistryService:
         src_version: str,
         dst_version: str,
     ) -> Tuple[int, List[str]]:
-        """Copy all documents from one version directory to another.
+        """Carry the Knowledge Store corpus forward to a new version.
 
+        Copies the parsed document rows (text, not the transient bytes) from
+        ``src_version`` to ``dst_version`` in Lakebase — no UC Volume I/O.
         Returns ``(copied_count, error_messages)``.
         """
-        src_docs = f"{self.version_path(folder, src_version)}/documents"
-        dst_docs = f"{self.version_path(folder, dst_version)}/documents"
-        ok, items, msg = self._uc.list_directory(src_docs)
+        before = self._store.count_documents(folder, dst_version)
+        ok, msg = self._store.copy_documents_to_version(
+            folder, src_version, dst_version
+        )
         if not ok:
-            if "not found" in msg.lower():
-                return 0, []
-            return 0, [msg]
-        errors: List[str] = []
-        copied = 0
-        for item in items:
-            if item.get("is_directory"):
-                continue
-            name = item["name"]
-            src_file = f"{src_docs}/{name}"
-            dst_file = f"{dst_docs}/{name}"
-            r_ok, content, r_msg = self._uc.read_binary_file(src_file)
-            if not r_ok:
-                errors.append(f"Read {name}: {r_msg}")
-                continue
-            w_ok, w_msg = self._uc.write_binary_file(dst_file, content)
-            if not w_ok:
-                errors.append(f"Write {name}: {w_msg}")
-                continue
-            copied += 1
-
-        src_parsed = f"{src_docs}/_parsed"
-        dst_parsed = f"{dst_docs}/_parsed"
-        parsed_ok, parsed_items, parsed_msg = self._uc.list_directory(src_parsed)
-        if not parsed_ok:
-            if "not found" not in parsed_msg.lower():
-                errors.append(f"List _parsed: {parsed_msg}")
-            return copied, errors
-
-        dir_ok, dir_msg = self._uc.create_directory(dst_parsed)
-        if not dir_ok:
-            errors.append(f"Create _parsed: {dir_msg}")
-            return copied, errors
-
-        for item in parsed_items:
-            if item.get("is_directory"):
-                continue
-            name = item["name"]
-            src_file = f"{src_parsed}/{name}"
-            dst_file = f"{dst_parsed}/{name}"
-            r_ok, content, r_msg = self._uc.read_binary_file(src_file)
-            if not r_ok:
-                errors.append(f"Read _parsed/{name}: {r_msg}")
-                continue
-            w_ok, w_msg = self._uc.write_binary_file(dst_file, content)
-            if not w_ok:
-                errors.append(f"Write _parsed/{name}: {w_msg}")
-        return copied, errors
+            return 0, [msg or "Document copy failed"]
+        after = self._store.count_documents(folder, dst_version)
+        return max(after - before, 0), []
 
     # -- bridge aggregation ---------------------------------------------
 
@@ -1360,91 +1317,3 @@ class RegistryService:
 
         return True, result, ""
 
-    # -- one-time layout migration -------------------------------------
-
-    def migrate_domain_layout(self, folder: str) -> Tuple[bool, str]:
-        """Migrate a single domain from the flat layout to the versioned layout.
-
-        Flat layout (old)::
-
-            domains/{folder}/v1.json
-            domains/{folder}/v2.json
-            domains/{folder}/documents/
-
-        Versioned layout (new)::
-
-            domains/{folder}/V1/V1.json
-            domains/{folder}/V1/documents/
-            domains/{folder}/V2/V2.json
-            domains/{folder}/V2/documents/
-
-        Returns ``(ok, message)``.
-        """
-        base = self.domain_path(folder)
-
-        ok, items, msg = self._uc.list_directory(base)
-        if not ok:
-            return False, f"Cannot list {base}: {msg}"
-
-        flat_versions: List[str] = []
-        has_documents = False
-
-        for item in items:
-            name = item["name"]
-            if name.startswith("v") and name.endswith(".json"):
-                flat_versions.append(name[1:-5])  # "v1.json" -> "1"
-            elif name == "documents" and item.get("is_directory"):
-                has_documents = True
-
-        if not flat_versions:
-            return True, "No flat version files found — nothing to migrate"
-
-        flat_versions.sort(
-            key=lambda v: [int(x) for x in v.split(".")],
-            reverse=True,
-        )
-        latest_version = flat_versions[0]
-        errors: List[str] = []
-
-        for ver in flat_versions:
-            old_file = f"{base}/v{ver}.json"
-            new_file = self.version_file_path(folder, ver)
-            r_ok, content, r_msg = self._uc.read_file(old_file)
-            if not r_ok:
-                errors.append(f"Read v{ver}.json: {r_msg}")
-                continue
-            w_ok, w_msg = self._uc.write_file(new_file, content)
-            if not w_ok:
-                errors.append(f"Write V{ver}/V{ver}.json: {w_msg}")
-                continue
-            d_ok, d_msg = self._uc.delete_file(old_file)
-            if not d_ok:
-                errors.append(f"Delete old v{ver}.json: {d_msg}")
-
-        if has_documents:
-            src_docs = f"{base}/documents"
-            dst_docs = f"{self.version_path(folder, latest_version)}/documents"
-            doc_ok, doc_items, doc_msg = self._uc.list_directory(src_docs)
-            if doc_ok:
-                for item in doc_items:
-                    if item.get("is_directory"):
-                        continue
-                    name = item["name"]
-                    r_ok, content, r_msg = self._uc.read_binary_file(
-                        f"{src_docs}/{name}"
-                    )
-                    if not r_ok:
-                        errors.append(f"Read doc {name}: {r_msg}")
-                        continue
-                    w_ok, w_msg = self._uc.write_binary_file(
-                        f"{dst_docs}/{name}", content
-                    )
-                    if not w_ok:
-                        errors.append(f"Write doc {name}: {w_msg}")
-                        continue
-                    self._uc.delete_file(f"{src_docs}/{name}")
-                self._uc.delete_directory(src_docs)
-
-        if errors:
-            return False, f"Migration completed with errors: {'; '.join(errors)}"
-        return True, f"Migrated {len(flat_versions)} version(s) to versioned layout"

@@ -1,72 +1,55 @@
-"""Version-copy contracts for parsed document sidecars."""
+"""Version-copy contracts for the Lakebase Knowledge Store corpus."""
 
 from unittest.mock import MagicMock
 
 from back.objects.registry.RegistryService import RegistryCfg, RegistryService
+from tests.fixtures.factories.registry import FakeDocumentStore
 
 
-def _service(uc):
-    service = RegistryService(
-        RegistryCfg("cat", "sch", "vol"), uc, store=MagicMock()
-    )
+def _service(store):
+    service = RegistryService(RegistryCfg("cat", "sch", "vol"), MagicMock(), store=store)
     service._resolved_domains_folder = "domains"
     return service
 
 
-def test_copy_version_documents_copies_sources_and_parsed_sidecars():
-    uc = MagicMock()
-    uc.list_directory.side_effect = [
-        (
-            True,
-            [
-                {"name": "spec.pdf", "is_directory": False},
-                {"name": "_parsed", "is_directory": True},
-            ],
-            "listed",
-        ),
-        (
-            True,
-            [
-                {"name": "spec.pdf.md", "is_directory": False},
-                {"name": "spec.pdf.json", "is_directory": False},
-            ],
-            "listed",
-        ),
-    ]
-    uc.read_binary_file.side_effect = [
-        (True, b"%PDF", "read"),
-        (True, b"markdown", "read"),
-        (True, b"{}", "read"),
-    ]
-    uc.write_binary_file.return_value = (True, "written")
-    uc.create_directory.return_value = (True, "created")
-    service = _service(uc)
+def _seed_ready(store, folder, version, filename):
+    store.upsert_document(
+        folder,
+        version,
+        filename=filename,
+        source_hash="h",
+        parser="ai_parse_document",
+        status="pending",
+        size_bytes=10,
+        source_bytes=b"%PDF",
+    )
+    store.set_document_ready(folder, version, filename, parsed_text="# Parsed")
+
+
+def test_copy_version_documents_carries_parsed_rows_forward():
+    store = FakeDocumentStore()
+    _seed_ready(store, "sales", "1", "spec.pdf")
+    _seed_ready(store, "sales", "1", "notes.md")
+    service = _service(store)
 
     copied, errors = service.copy_version_documents("sales", "1", "2")
 
-    assert copied == 1
+    assert copied == 2
     assert errors == []
-    written = [call.args[0] for call in uc.write_binary_file.call_args_list]
-    assert written == [
-        "/Volumes/cat/sch/vol/domains/sales/V1/documents/spec.pdf".replace(
-            "/V1/", "/V2/"
-        ),
-        "/Volumes/cat/sch/vol/domains/sales/V2/documents/_parsed/spec.pdf.md",
-        "/Volumes/cat/sch/vol/domains/sales/V2/documents/_parsed/spec.pdf.json",
-    ]
+    # Parsed text carried forward; transient bytes never copied.
+    assert store.read_document_text("sales", "2", "spec.pdf") == (
+        "# Parsed",
+        "ai_parse_document",
+        "ready",
+    )
+    assert store.read_document_bytes("sales", "2", "spec.pdf") is None
 
 
-def test_copy_version_documents_keeps_legacy_missing_parsed_directory_successful():
-    uc = MagicMock()
-    uc.list_directory.side_effect = [
-        (True, [{"name": "notes.txt", "is_directory": False}], "listed"),
-        (False, [], "Directory not found"),
-    ]
-    uc.read_binary_file.return_value = (True, b"notes", "read")
-    uc.write_binary_file.return_value = (True, "written")
-    service = _service(uc)
+def test_copy_version_documents_empty_source_is_successful_noop():
+    store = FakeDocumentStore()
+    service = _service(store)
 
     copied, errors = service.copy_version_documents("sales", "1", "2")
 
-    assert copied == 1
+    assert copied == 0
     assert errors == []
