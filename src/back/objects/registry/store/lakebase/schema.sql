@@ -398,3 +398,39 @@ CREATE TABLE IF NOT EXISTS domain_edit_locks (
     heartbeat_at   timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (domain_id, version)
 );
+
+-- ----------------------------------------------------------------
+-- Knowledge Store documents (parse-only corpus; no UC Volume).
+--
+-- One row per uploaded domain document, scoped by (domain_id, version).
+-- ``parsed_text`` holds the extracted markdown/plaintext consumed by
+-- Generate / Mapping / the OWL-generator agent. ``source_bytes`` is the
+-- TRANSIENT original upload, retained only while a binary is pending /
+-- failed so the async parse task (and manual retry) can run; it is set
+-- to NULL the moment the document reaches ``ready`` — the original is
+-- never kept durably. ``source_hash`` (sha256 of the uploaded bytes) is
+-- the fingerprint key the Generate staleness check reads.
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS domain_documents (
+    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id     uuid NOT NULL
+                  REFERENCES domains(id) ON DELETE CASCADE,
+    version       text NOT NULL,
+    filename      text NOT NULL,
+    source_hash   text NOT NULL,
+    parser        text NOT NULL,                 -- 'ai_parse_document' | 'plaintext' | 'unsupported'
+    status        text NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending', 'ready', 'failed')),
+    parsed_text   text NOT NULL DEFAULT '',
+    source_bytes  bytea,
+    size_bytes    bigint NOT NULL DEFAULT 0,
+    output_schema text NOT NULL DEFAULT '',       -- '2.0' for binaries, '' otherwise
+    error         text NOT NULL DEFAULT '',
+    parsed_at     timestamptz,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    updated_at    timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (domain_id, version, filename)
+);
+
+CREATE INDEX IF NOT EXISTS idx_domain_documents_lookup
+    ON domain_documents(domain_id, version);

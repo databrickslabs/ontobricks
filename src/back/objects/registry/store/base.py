@@ -266,6 +266,24 @@ class DomainTask(TypedDict, total=False):
     updated_at: str          # ISO timestamp
 
 
+class DocumentRow(TypedDict, total=False):
+    """One row of the Knowledge Store ``domain_documents`` table.
+
+    Metadata-only projection returned by :meth:`RegistryStore.list_documents`
+    / :meth:`RegistryStore.get_document` — the heavy ``parsed_text`` and the
+    transient ``source_bytes`` are never included in a listing.
+    """
+
+    filename: str
+    source_hash: str         # sha256 hex of the uploaded bytes (Generate key)
+    parser: str              # 'ai_parse_document' | 'plaintext' | 'unsupported'
+    status: str              # 'pending' | 'ready' | 'failed'
+    size_bytes: int
+    output_schema: str       # '2.0' for parsed binaries, '' otherwise
+    error: str
+    parsed_at: str           # ISO timestamp ('' until terminal)
+
+
 class RegistryStore(ABC):
     """Single seam in front of all registry-shaped JSON storage."""
 
@@ -761,6 +779,92 @@ class RegistryStore(ABC):
     @abstractmethod
     def save_global_config(self, updates: Dict[str, Any]) -> Tuple[bool, str]:
         """Merge *updates* into the persisted blob (last-write-wins)."""
+
+    # ------------------------------------------------------------------
+    # Knowledge Store documents (parse-only corpus; no UC Volume)
+    #
+    # One row per uploaded domain document, keyed by (folder, version,
+    # filename). ``parsed_text`` is the extracted corpus consumed by
+    # Generate / Mapping / the OWL-generator agent; ``source_bytes`` is
+    # the transient original, retained only while pending/failed and
+    # NULLed on ``ready``. Default implementations degrade gracefully so
+    # stores without the table (or test fakes) never break; the Lakebase
+    # store overrides them all.
+    # ------------------------------------------------------------------
+
+    def upsert_document(
+        self,
+        folder: str,
+        version: str,
+        *,
+        filename: str,
+        source_hash: str,
+        parser: str,
+        status: str,
+        size_bytes: int,
+        output_schema: str = "",
+        source_bytes: Optional[bytes] = None,
+        parsed_text: str = "",
+        error: str = "",
+    ) -> Tuple[bool, str]:
+        """Insert/replace one document row. Default: unsupported."""
+        return False, "document store not supported"
+
+    def list_documents(self, folder: str, version: str) -> List[DocumentRow]:
+        """Metadata rows (no text/bytes). Default: empty."""
+        return []
+
+    def get_document(
+        self, folder: str, version: str, filename: str
+    ) -> Optional[DocumentRow]:
+        """Single metadata row, or ``None``. Default: ``None``."""
+        return None
+
+    def read_document_text(
+        self, folder: str, version: str, filename: str
+    ) -> Optional[Tuple[str, str, str]]:
+        """``(parsed_text, parser, status)`` or ``None``. Default: ``None``."""
+        return None
+
+    def read_document_bytes(
+        self, folder: str, version: str, filename: str
+    ) -> Optional[bytes]:
+        """Transient original bytes, or ``None``. Default: ``None``."""
+        return None
+
+    def set_document_ready(
+        self, folder: str, version: str, filename: str, *, parsed_text: str
+    ) -> Tuple[bool, str]:
+        """Mark ready + persist text + NULL bytes. Default: unsupported."""
+        return False, "document store not supported"
+
+    def set_document_failed(
+        self, folder: str, version: str, filename: str, *, error: str
+    ) -> Tuple[bool, str]:
+        """Mark failed (bytes retained). Default: unsupported."""
+        return False, "document store not supported"
+
+    def set_document_pending(
+        self, folder: str, version: str, filename: str
+    ) -> Tuple[bool, str]:
+        """Return a row to pending for retry. Default: unsupported."""
+        return False, "document store not supported"
+
+    def delete_documents(
+        self, folder: str, version: str, filenames: List[str]
+    ) -> List[str]:
+        """Delete 1..N rows; return error messages. Default: no-op."""
+        return []
+
+    def copy_documents_to_version(
+        self, folder: str, from_version: str, to_version: str
+    ) -> Tuple[bool, str]:
+        """Copy parsed docs forward (text, not bytes). Default: no-op."""
+        return True, ""
+
+    def count_documents(self, folder: str, version: str) -> int:
+        """Number of document rows. Default: ``0``."""
+        return 0
 
     # ------------------------------------------------------------------
     # Optional helpers
