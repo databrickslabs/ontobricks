@@ -780,20 +780,18 @@ class TestSchedulerResolveCredsLakebase:
         assert cfg["lakebase_schema"] == "ontobricks_registry"
         assert cfg["lakebase_database"] == "ontobricks_other"
 
-    def test_registry_volume_path_overrides_static_env_triplet(self):
-        """Scheduler boot must not use ``REGISTRY_VOLUME`` alone when the
-        Apps runtime injects ``REGISTRY_VOLUME_PATH``."""
+    def test_registry_volume_is_sentinel_default(self):
+        """The registry UC Volume was removed in v0.9.0 — the scheduler
+        always emits the sentinel volume name (documents live in Lakebase)."""
         from back.objects.registry.scheduler import BuildScheduler
 
         settings = _make_settings(
             registry_catalog="env_c",
             registry_schema="env_s",
-            registry_volume="OntoBricksRegistry",
-            registry_volume_path="/Volumes/acme/prod/custom_registry_vol",
         )
         _h, _t, cfg = BuildScheduler._resolve_creds(settings)
-        assert cfg["catalog"] == "acme"
-        assert cfg["schema"] == "prod"
-        assert cfg["volume"] == "custom_registry_vol"
+        assert cfg["catalog"] == "env_c"
+        assert cfg["schema"] == "env_s"
+        assert cfg["volume"] == "OntoBricksRegistry"
 
 

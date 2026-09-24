@@ -30,14 +30,12 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
     base = _http._base_url(mode)
     logger.info("Creating MCP server — mode=%s, base_url=%s", mode, base)
     logger.info(
-        "Env snapshot — REGISTRY_VOLUME_PATH=%r REGISTRY_CATALOG=%r "
-        "REGISTRY_SCHEMA=%r REGISTRY_VOLUME=%r DATABRICKS_HOST=%r "
+        "Env snapshot — REGISTRY_CATALOG=%r "
+        "REGISTRY_SCHEMA=%r DATABRICKS_HOST=%r "
         "DATABRICKS_CLIENT_ID=%s DATABRICKS_CLIENT_SECRET=%s "
         "DATABRICKS_SQL_WAREHOUSE_ID=%r",
-        os.getenv("REGISTRY_VOLUME_PATH", ""),
         os.getenv("REGISTRY_CATALOG", ""),
         os.getenv("REGISTRY_SCHEMA", ""),
-        os.getenv("REGISTRY_VOLUME", ""),
         os.getenv("DATABRICKS_HOST", ""),
         "set" if os.getenv("DATABRICKS_CLIENT_ID") else "unset",
         "set" if os.getenv("DATABRICKS_CLIENT_SECRET") else "unset",
@@ -123,18 +121,11 @@ def create_databricks_app():
 
     @app.get("/", include_in_schema=False)
     async def health():
-        vol_path = os.getenv("REGISTRY_VOLUME_PATH", "")
-        if vol_path:
-            registry_display = vol_path
-        else:
-            reg_cat = os.getenv("REGISTRY_CATALOG", "")
-            reg_sch = os.getenv("REGISTRY_SCHEMA", "")
-            reg_vol = os.getenv("REGISTRY_VOLUME", "OntoBricksRegistry")
-            registry_display = (
-                f"{reg_cat}.{reg_sch}.{reg_vol}"
-                if reg_cat and reg_sch
-                else "auto-discover"
-            )
+        reg_cat = os.getenv("REGISTRY_CATALOG", "")
+        reg_sch = os.getenv("REGISTRY_SCHEMA", "")
+        registry_display = (
+            f"{reg_cat}.{reg_sch}" if reg_cat and reg_sch else "auto-discover"
+        )
         return {
             "status": "healthy",
             "service": "mcp-ontobricks",

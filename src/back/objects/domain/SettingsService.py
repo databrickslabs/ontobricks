@@ -82,17 +82,12 @@ class SettingsService:
     def is_registry_locked(settings: Settings) -> bool:
         """True when registry params are injected by Apps (not editable via .env).
 
-        Covers two binding styles:
-        - Volume backend: Apps injects REGISTRY_VOLUME_PATH.
-        - Lakebase backend: Apps injects PGHOST from the database resource.
+        Lakebase backend: Apps injects PGHOST from the database resource.
         """
         if not is_databricks_app():
             return False
         import os
-        return bool(
-            getattr(settings, "registry_volume_path", "")
-            or os.environ.get("PGHOST", "")
-        )
+        return bool(os.environ.get("PGHOST", ""))
 
     @staticmethod
     def _resolve_context(session_mgr: SessionManager, settings: Settings):
@@ -651,7 +646,7 @@ class SettingsService:
         rcfg = RegistryCfg.from_session(session_mgr, settings)
         if not rcfg.is_configured:
             raise ValidationError(
-                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA / REGISTRY_VOLUME"
+                "Registry not configured — set REGISTRY_CATALOG / REGISTRY_SCHEMA"
             )
 
         client = get_databricks_client(get_domain(session_mgr), settings)

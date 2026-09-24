@@ -162,14 +162,12 @@ _dab_var_overrides=(
     "--var=warehouse_id=${WAREHOUSE_ID}"
     "--var=registry_catalog=${REGISTRY_CATALOG}"
     "--var=registry_schema=${REGISTRY_SCHEMA}"
-    "--var=registry_volume=${REGISTRY_VOLUME}"
     "--var=lakebase_project=${LAKEBASE_PROJECT}"
     "--var=lakebase_branch=${LAKEBASE_BRANCH}"
     "--var=lakebase_database_resource_segment=${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
     "--var=lakebase_registry_schema=${LAKEBASE_SCHEMA}"
 )
 
-EXPECTED_VOLUME_FQN="${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${REGISTRY_VOLUME}"
 EXPECTED_PG_BRANCH_PATH="projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}"
 EXPECTED_PG_DATABASE_PATH="${EXPECTED_PG_BRANCH_PATH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
 
@@ -180,7 +178,7 @@ echo "Instance: ${INSTANCE_ID:-?}"
 echo "Target  : $TARGET"
 echo "App     : $APP_NAME ($APP_RESOURCE_KEY)"
 echo "MCP app : $MCP_APP_NAME ($MCP_APP_RESOURCE_KEY)"
-echo "Registry: ${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${REGISTRY_VOLUME}"
+echo "Registry: ${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}"
 if $IS_LAKEBASE; then
     echo "Lakebase: projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}/databases/${LAKEBASE_DATABASE_RESOURCE_SEGMENT}"
 fi
@@ -263,7 +261,7 @@ require_var APP_NAME; require_var MCP_APP_NAME
 require_var APP_RESOURCE_KEY; require_var MCP_APP_RESOURCE_KEY
 require_var TARGET
 require_var WAREHOUSE_ID
-require_var REGISTRY_CATALOG; require_var REGISTRY_SCHEMA; require_var REGISTRY_VOLUME
+require_var REGISTRY_CATALOG; require_var REGISTRY_SCHEMA
 if $IS_LAKEBASE; then
     require_var LAKEBASE_PROJECT; require_var LAKEBASE_BRANCH
     require_var LAKEBASE_SCHEMA; require_var LAKEBASE_DATABASE
@@ -441,9 +439,6 @@ check_resource() {
 
 check_resource "SQL warehouse '${WAREHOUSE_ID}'" \
     databricks warehouses get "$WAREHOUSE_ID"
-
-check_resource "Volume '${EXPECTED_VOLUME_FQN}'" \
-    databricks volumes read "$EXPECTED_VOLUME_FQN"
 
 if $IS_LAKEBASE; then
     # The Lakebase Postgres database must already exist (created by
@@ -651,7 +646,6 @@ verify_app_resources() {
 
     if APP_JSON="$app_json" \
         EXPECT_WAREHOUSE="$WAREHOUSE_ID" \
-        EXPECT_VOLUME="$EXPECTED_VOLUME_FQN" \
         EXPECT_PG_BRANCH="$EXPECTED_PG_BRANCH_PATH" \
         EXPECT_PG_DATABASE="$EXPECTED_PG_DATABASE_PATH" \
         EXPECT_LAKEBASE="$expect_lakebase" \
@@ -666,16 +660,6 @@ sqlw = ((resources.get("sql-warehouse") or {}).get("sql_warehouse") or {}).get("
 if sqlw != os.environ["EXPECT_WAREHOUSE"]:
     errors.append(
         f"sql-warehouse.id mismatch: got={sqlw!r} expected={os.environ['EXPECT_WAREHOUSE']!r}"
-    )
-
-volume = (
-    (resources.get("volume") or {})
-    .get("uc_securable", {})
-    .get("securable_full_name")
-)
-if volume != os.environ["EXPECT_VOLUME"]:
-    errors.append(
-        f"volume.securable_full_name mismatch: got={volume!r} expected={os.environ['EXPECT_VOLUME']!r}"
     )
 
 expect_lakebase = os.environ["EXPECT_LAKEBASE"] == "true"

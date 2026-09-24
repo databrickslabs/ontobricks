@@ -59,17 +59,14 @@ env:
   # Used as fallback when no domain session is active (e.g. MCP API calls).
   - name: DATABRICKS_TRIPLESTORE_TABLE
     value: "${APP_TRIPLESTORE_TABLE}"
-  # Domain Registry — injected from the configured Volume resource.
-  # The path looks like /Volumes/<catalog>/<schema>/<volume>.
-  - name: REGISTRY_VOLUME_PATH
-    valueFrom: volume
-  # Static fallbacks used for local dev / MCP when no resource is bound.
+  # Domain Registry — Unity Catalog catalog/schema for the Delta objects
+  # materialised during Knowledge Graph builds. Structured registry data
+  # and parsed documents (the Knowledge Store) live in Lakebase, so no UC
+  # Volume resource is bound anymore.
   - name: REGISTRY_CATALOG
     value: "${APP_REGISTRY_CATALOG}"
   - name: REGISTRY_SCHEMA
     value: "${APP_REGISTRY_SCHEMA}"
-  - name: REGISTRY_VOLUME
-    value: "${APP_REGISTRY_VOLUME}"
   # App name for permission management — auto-detected at runtime from
   # the Databricks Apps platform (the runtime injects DATABRICKS_APP_NAME
   # as the deployed app's name, e.g. "ontobricks" for prod and
@@ -92,7 +89,7 @@ env:
   # by `LakebaseAuth` (see src/back/core/databricks/LakebaseAuth.py).
   # Without that resource binding the env vars stay unset and the
   # admin UI keeps the Lakebase backend disabled — the app continues
-  # to run normally on the Unity Catalog Volume backend.
+  # to run normally on the Unity Catalog catalog/schema backend.
   #
   # LAKEBASE_SCHEMA must always be set explicitly (it is NOT injected
   # by the Apps platform).  LAKEBASE_PROJECT, LAKEBASE_DATABASE and LAKEBASE_BRANCH are
@@ -108,7 +105,7 @@ env:
   - name: LAKEBASE_BRANCH
     value: "${APP_LAKEBASE_BRANCH}"
   # Lakebase managed-synced: UC catalog for the Lakeflow synced-table
-  # registration.  Defaults (when empty) to the registry Volume catalog,
+  # registration.  Defaults (when empty) to the registry catalog,
   # which is the personal catalog of the deploying user and may not be
   # accessible by the app service principal.  Set this to a shared/workspace
   # catalog (e.g. "main") when the SP does not have CREATE SCHEMA on the
@@ -189,7 +186,3 @@ resources:
     description: "SQL Warehouse for executing queries and metadata operations"
     sql_warehouse:
       permission: CAN_USE
-  - name: volume
-    description: "Unity Catalog Volume for the OntoBricks domain registry"
-    volume:
-      permission: CAN_READ_WRITE

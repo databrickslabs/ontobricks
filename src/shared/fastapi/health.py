@@ -258,69 +258,16 @@ def _resolve_registry_cfg(settings: Settings):
 
 def _check_registry_cfg(settings: Settings) -> Tuple[str, str]:
     cfg = _resolve_registry_cfg(settings)
-    if not (cfg.catalog and cfg.schema and cfg.volume):
+    if not (cfg.catalog and cfg.schema):
         return (
             _WARNING,
-            "Registry catalog/schema/volume not fully resolved — set REGISTRY_VOLUME_PATH "
-            "or bind a Volume resource to the Databricks App",
+            "Registry catalog/schema not fully resolved — set REGISTRY_CATALOG / "
+            "REGISTRY_SCHEMA or bind them in app.yaml",
         )
     return (
         _OK,
-        f"catalog={cfg.catalog} schema={cfg.schema} volume={cfg.volume} "
+        f"catalog={cfg.catalog} schema={cfg.schema} "
         f"lakebase_schema={cfg.lakebase_schema}",
-    )
-
-
-def _check_registry_volume_read(settings: Settings) -> Tuple[str, str]:
-    cfg = _resolve_registry_cfg(settings)
-    if not (cfg.catalog and cfg.schema and cfg.volume):
-        return _WARNING, "Registry volume not configured — skipped"
-
-    from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.uc import VolumeFileService
-
-    svc = VolumeFileService(auth=DatabricksAuth())
-    if not svc.is_configured():
-        return _ERROR, "Databricks credentials not available for Files API"
-    vol_path = f"/Volumes/{cfg.catalog}/{cfg.schema}/{cfg.volume}"
-    ok, items, msg = svc.list_directory(vol_path)
-    if ok:
-        return _OK, f"Listed {vol_path} — {len(items)} entries"
-    return _ERROR, f"Cannot list {vol_path}: {msg}"
-
-
-def _check_registry_volume_write(settings: Settings) -> Tuple[str, str]:
-    """End-to-end write probe — write a tiny sentinel and delete it.
-
-    Far stronger than ``SHOW GRANTS`` because it actually exercises the
-    same Files API code path that the registry uses to persist
-    ``.global_config.json`` and binary archives.
-    """
-    cfg = _resolve_registry_cfg(settings)
-    if not (cfg.catalog and cfg.schema and cfg.volume):
-        return _WARNING, "Registry volume not configured — skipped"
-
-    from back.core.databricks.DatabricksAuth import DatabricksAuth
-    from back.core.databricks.uc import VolumeFileService
-
-    svc = VolumeFileService(auth=DatabricksAuth())
-    if not svc.is_configured():
-        return _ERROR, "Databricks credentials not available for Files API"
-
-    sentinel = (
-        f"/Volumes/{cfg.catalog}/{cfg.schema}/{cfg.volume}"
-        f"/.health_check_{uuid.uuid4().hex[:8]}.txt"
-    )
-    ok, msg = svc.write_file(sentinel, "ok")
-    if not ok:
-        return _ERROR, f"Volume write failed ({sentinel}): {msg}"
-    # Best-effort cleanup; a leftover file is harmless but noisy.
-    deleted, _del_msg = svc.delete_file(sentinel)
-    if deleted:
-        return _OK, f"Wrote+deleted sentinel at {sentinel}"
-    return (
-        _WARNING,
-        f"Wrote sentinel but cleanup failed (please remove manually): {sentinel}",
     )
 
 
@@ -665,8 +612,8 @@ def _check_uc_catalog_privileges(settings: Settings) -> Tuple[str, str]:
     if not cfg.catalog:
         return (
             _WARNING,
-            "Registry catalog not configured — set REGISTRY_VOLUME_PATH or bind a UC Volume "
-            "resource in app.yaml",
+            "Registry catalog not configured — set REGISTRY_CATALOG or bind it "
+            "in app.yaml",
         )
     client = _build_health_client(settings)
     if client is None:
@@ -1396,16 +1343,6 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
             "CREATE TABLE in schema (Delta build probe)",
             lambda: _check_uc_create_table_privilege(settings),
         ),
-        _safely_run(
-            "uc.volume_read",
-            "UC Volume — list (READ VOLUME)",
-            lambda: _check_registry_volume_read(settings),
-        ),
-        _safely_run(
-            "uc.volume_write",
-            "UC Volume — write sentinel (WRITE VOLUME)",
-            lambda: _check_registry_volume_write(settings),
-        ),
     ]
     groups.append(
         {
@@ -1417,10 +1354,8 @@ def run_diagnostics_checks(settings: Optional[Settings] = None) -> Dict[str, Any
                 "Required grants: USE CATALOG (to navigate the catalog), "
                 "USE SCHEMA (to list objects in the registry schema), "
                 "CREATE (to materialise R2RML VIEWs and Delta tables during Knowledge Graph builds — "
-                "tested separately for VIEWs and TABLEs since a grant may allow one but not the other), "
-                "READ VOLUME + WRITE VOLUME (to store .obx exports, document uploads, "
-                "and the global config blob on the UC Volume). "
-                "Missing any of these grants will cause builds or registry saves to fail."
+                "tested separately for VIEWs and TABLEs since a grant may allow one but not the other). "
+                "Missing any of these grants will cause builds to fail."
             ),
             "checks": uc_checks,
         }
@@ -1656,20 +1591,6 @@ def run_readiness_checks(settings: Optional[Settings] = None) -> Dict[str, Any]:
             "registry.cfg",
             "Registry configuration resolved",
             lambda: _check_registry_cfg(settings),
-        )
-    )
-    checks.append(
-        _safely_run(
-            "registry.volume_read",
-            "Registry UC volume — list",
-            lambda: _check_registry_volume_read(settings),
-        )
-    )
-    checks.append(
-        _safely_run(
-            "registry.volume_write",
-            "Registry UC volume — write",
-            lambda: _check_registry_volume_write(settings),
         )
     )
     checks.append(

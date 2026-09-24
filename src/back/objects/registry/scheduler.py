@@ -497,20 +497,10 @@ class BuildScheduler:
         )
         lakebase_database = getattr(settings, "lakebase_database", "") or ""
 
-        vol_path = (getattr(settings, "registry_volume_path", "") or "").strip()
-        if vol_path:
-            parsed = RegistryCfg.from_volume_path(
-                vol_path,
-                lakebase_schema=lakebase_schema,
-                lakebase_database=lakebase_database,
-            )
-            if parsed.catalog and parsed.schema and parsed.volume:
-                return host, token, parsed.as_dict()
-
         cfg = RegistryCfg(
             catalog=settings.registry_catalog,
             schema=settings.registry_schema,
-            volume=settings.registry_volume or "OntoBricksRegistry",
+            volume="OntoBricksRegistry",
             lakebase_schema=lakebase_schema,
             lakebase_database=lakebase_database,
         )

@@ -90,14 +90,15 @@ class TestSettings:
     def test_defaults(self, monkeypatch):
         monkeypatch.delenv("DATABRICKS_APP_PORT", raising=False)
         monkeypatch.delenv("SECRET_KEY", raising=False)
-        monkeypatch.delenv("REGISTRY_VOLUME", raising=False)
         monkeypatch.delenv("REGISTRY_CATALOG", raising=False)
         monkeypatch.delenv("REGISTRY_SCHEMA", raising=False)
         from shared.config.settings import Settings
 
         s = Settings(_env_file=None)
         assert s.secret_key == "dev-secret-key-change-in-prod"
-        assert s.registry_volume == "OntoBricksRegistry"
+        # The registry UC Volume was removed in v0.9.0 — documents live in Lakebase.
+        assert not hasattr(s, "registry_volume")
+        assert not hasattr(s, "registry_volume_path")
         assert s.session_max_age == 86400
 
     def test_env_override(self, monkeypatch):

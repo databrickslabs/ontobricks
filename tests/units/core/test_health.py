@@ -18,7 +18,6 @@ from back.core.databricks.DatabricksAuth import DatabricksAuth
 from shared.fastapi import health
 
 # These imports work around __init__.py re-exports that shadow module paths.
-_VFS_PKG = importlib.import_module("back.core.databricks.uc")
 _LBA_MOD = importlib.import_module("back.core.databricks.lakebase")
 
 
@@ -213,65 +212,6 @@ class TestCheckRegistryCfg:
         ):
             status, detail = health._check_registry_cfg(MagicMock())
         assert status == "warning"
-
-
-class TestCheckRegistryVolumeReadWrite:
-    def _patch_svc(self, svc):
-        return patch.object(_VFS_PKG, "VolumeFileService", return_value=svc)
-
-    def test_read_ok(self):
-        svc = MagicMock()
-        svc.is_configured.return_value = True
-        svc.list_directory.return_value = (True, [{"name": "f"}], "ok")
-        with patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
-             self._patch_svc(svc):
-            status, detail = health._check_registry_volume_read(MagicMock())
-        assert status == "ok"
-        assert "1 entries" in detail
-
-    def test_read_skipped_when_unconfigured(self):
-        with patch.object(
-            health,
-            "_resolve_registry_cfg",
-            return_value=_fake_cfg(catalog="", schema="", volume=""),
-        ):
-            status, detail = health._check_registry_volume_read(MagicMock())
-        assert status == "warning"
-
-    def test_write_ok_with_cleanup(self):
-        svc = MagicMock()
-        svc.is_configured.return_value = True
-        svc.write_file.return_value = (True, "saved")
-        svc.delete_file.return_value = (True, "deleted")
-        with patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
-             self._patch_svc(svc):
-            status, detail = health._check_registry_volume_write(MagicMock())
-        assert status == "ok"
-        assert "Wrote+deleted" in detail
-        # Sentinel path includes the volume root.
-        write_args = svc.write_file.call_args[0]
-        assert write_args[0].startswith("/Volumes/main/bronze/reg/")
-
-    def test_write_failure_surfaces(self):
-        svc = MagicMock()
-        svc.is_configured.return_value = True
-        svc.write_file.return_value = (False, "403 Forbidden")
-        with patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
-             self._patch_svc(svc):
-            status, detail = health._check_registry_volume_write(MagicMock())
-        assert status == "error"
-        assert "403" in detail
-
-    def test_write_ok_but_cleanup_failed_is_warning(self):
-        svc = MagicMock()
-        svc.is_configured.return_value = True
-        svc.write_file.return_value = (True, "saved")
-        svc.delete_file.return_value = (False, "kaboom")
-        with patch.object(health, "_resolve_registry_cfg", return_value=_fake_cfg()), \
-             self._patch_svc(svc):
-            status, detail = health._check_registry_volume_write(MagicMock())
-        assert status == "warning"
-        assert "cleanup failed" in detail
 
 
 class TestCheckRegistryUcSchemaDdl:
@@ -469,8 +409,6 @@ class TestRunReadinessChecks:
         assert {
             "filesystem.tmp",
             "registry.cfg",
-            "registry.volume_read",
-            "registry.volume_write",
             "registry.uc_schema_ddl",
             "lakebase",
             "lakebase.permissions",

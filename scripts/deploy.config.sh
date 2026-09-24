@@ -56,9 +56,8 @@ DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
 
 # Unity Catalog
 DEFAULT_REGISTRY_CATALOG="benoit_cayla"
-# UC schema for the Volume registry
+# UC schema for the registry Delta objects (Knowledge Graph builds)
 DEFAULT_REGISTRY_SCHEMA="ontobricks_demo_09_repository"
-DEFAULT_REGISTRY_VOLUME="registry"
 
 # Lakebase Autoscaling project + branch
 DEFAULT_LAKEBASE_PROJECT="ontobricks-demo-09-registry"
@@ -116,13 +115,12 @@ export DAB_TARGET="${DAB_TARGET:-$DEFAULT_DAB_TARGET}"
 # ── 3. DAB variable overrides (databricks.yml > variables:) ─────────
 export WAREHOUSE_ID="${WAREHOUSE_ID:-$DEFAULT_WAREHOUSE_ID}"
 
-# Unity Catalog Volume securable.
+# Unity Catalog registry catalog/schema (Delta objects for KG builds).
 export REGISTRY_CATALOG="${REGISTRY_CATALOG:-$DEFAULT_REGISTRY_CATALOG}"
 # Env-overridable so `scripts/update-deployed-app.sh` can pin the schema it
 # read back from a live app. `make deploy` `unset`s REGISTRY_SCHEMA first, so
 # the routine deploy still always uses DEFAULT_REGISTRY_SCHEMA.
 export REGISTRY_SCHEMA="${REGISTRY_SCHEMA:-$DEFAULT_REGISTRY_SCHEMA}"
-export REGISTRY_VOLUME="${REGISTRY_VOLUME:-$DEFAULT_REGISTRY_VOLUME}"
 
 # Lakebase project / branch.
 export LAKEBASE_PROJECT="${LAKEBASE_PROJECT:-$DEFAULT_LAKEBASE_PROJECT}"
@@ -149,10 +147,9 @@ export APP_SQL_WAREHOUSE_FALLBACK="${APP_SQL_WAREHOUSE_FALLBACK:-$WAREHOUSE_ID}"
 # Default triplestore table.
 export APP_TRIPLESTORE_TABLE="${APP_TRIPLESTORE_TABLE:-${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${DEFAULT_APP_TRIPLESTORE_TABLE_NAME}}"
 
-# Registry Volume runtime fallbacks (local dev / MCP without bound resource).
+# Registry catalog/schema runtime fallbacks (local dev / MCP without bound resource).
 export APP_REGISTRY_CATALOG="${APP_REGISTRY_CATALOG:-$REGISTRY_CATALOG}"
 export APP_REGISTRY_SCHEMA="${APP_REGISTRY_SCHEMA:-$REGISTRY_SCHEMA}"
-export APP_REGISTRY_VOLUME="${APP_REGISTRY_VOLUME:-$REGISTRY_VOLUME}"
 
 # Lakebase runtime values rendered into app.yaml — always from file.
 export APP_LAKEBASE_SCHEMA="${LAKEBASE_SCHEMA}"

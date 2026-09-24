@@ -97,7 +97,6 @@ require_var MCP_APP_NAME
 require_var WAREHOUSE_ID
 require_var REGISTRY_CATALOG
 require_var REGISTRY_SCHEMA
-require_var REGISTRY_VOLUME
 if $IS_LAKEBASE; then
     require_var LAKEBASE_PROJECT
     require_var LAKEBASE_BRANCH
@@ -147,12 +146,6 @@ except Exception:
         _preflight_ok "SQL warehouse ${WAREHOUSE_ID}"
     else
         _preflight_fail "SQL warehouse '${WAREHOUSE_ID}' not found or not accessible"
-    fi
-    _vol_fqn="${REGISTRY_CATALOG}.${REGISTRY_SCHEMA}.${REGISTRY_VOLUME}"
-    if databricks volumes read "$_vol_fqn" >/dev/null 2>&1; then
-        _preflight_ok "Volume ${_vol_fqn}"
-    else
-        _preflight_fail "Volume '${_vol_fqn}' not found or not accessible"
     fi
     _branch_path="projects/${LAKEBASE_PROJECT}/branches/${LAKEBASE_BRANCH}"
     if _pg_dbs="$(databricks postgres list-databases "$_branch_path" -o json 2>/dev/null)"; then
