@@ -1,4 +1,4 @@
-"""Route contracts for parsed document upload and status."""
+"""Route contracts for the Knowledge Store document endpoints (Lakebase)."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from api.routers.internal import domain as routes
-from back.core.databricks import ParseManifest, ParseStatus, ParseSubmission
+from back.core.databricks import DocumentParseService, ParseStatus, ParseSubmission
 
-DOCS = "/Volumes/main/ob/docs/domains/sales/V1/documents"
+FOLDER, VERSION = "sales", "1"
 
 
 class _Upload:
@@ -41,94 +41,68 @@ class _Request:
         return self._json
 
 
-class _Volume:
-    def __init__(self, items=None) -> None:
-        self.items = items or []
-        self.deleted = []
+class _FakeService:
+    """Store-backed DocumentParseService stand-in keyed by (folder, version)."""
 
-    def is_configured(self):
-        return True
-
-    def create_directory(self, _path):
-        return True, "created"
-
-    def list_directory(self, _path):
-        return True, self.items, "listed"
-
-    def delete_file(self, path):
-        self.deleted.append(path)
-        return True, "deleted"
-
-
-class _ParseService:
-    def __init__(self, submission=None, manifests=None) -> None:
+    def __init__(self, submission=None, rows=None, doc=None) -> None:
         self.submission = submission
-        self.manifests = manifests or {}
+        self.rows = rows or []
+        self.doc = doc
         self.prepared = []
         self.retried = []
         self.deleted = []
+        self.parsed = []
 
-    def prepare_upload(self, base_path, filename, content):
-        self.prepared.append((base_path, filename, content))
+    def prepare_upload(self, folder, version, filename, content):
+        self.prepared.append((folder, version, filename, content))
         return self.submission
 
-    def status(self, _base_path, filename):
-        return self.manifests.get(filename)
+    def parse_pending(self, folder, version, filename):
+        self.parsed.append((folder, version, filename))
+        return {"status": ParseStatus.READY.value, "filename": filename}
 
-    def retry(self, base_path, filename):
-        self.retried.append((base_path, filename))
+    def retry(self, folder, version, filename):
+        self.retried.append((folder, version, filename))
         return self.submission
 
-    def delete_artifacts(self, base_path, filename):
-        self.deleted.append((base_path, filename))
+    def list_documents(self, folder, version):
+        return list(self.rows)
+
+    def delete_documents(self, folder, version, filenames):
+        self.deleted.append((folder, version, list(filenames)))
         return []
 
-
-def _manifest(filename: str, status: ParseStatus) -> ParseManifest:
-    return ParseManifest(
-        schema_version=1,
-        filename=filename,
-        source_hash="abc",
-        parser="ai_parse_document",
-        output_schema="2.0",
-        status=status,
-        parsed_at=None,
-        error="Document parsing failed" if status is ParseStatus.FAILED else None,
-        sidecar_path=f"_parsed/{filename}.md",
-    )
+    def read_document(self, folder, version, filename, max_chars=None):
+        return self.doc
 
 
 @pytest.fixture
 def route_context(monkeypatch):
-    domain = SimpleNamespace()
-    volume = _Volume()
+    domain = SimpleNamespace(
+        uc_domain_folder=FOLDER, domain_folder=FOLDER, current_version=VERSION
+    )
     monkeypatch.setattr(routes, "get_domain", lambda _manager: domain)
-    monkeypatch.setattr(
-        routes,
-        "Domain",
-        lambda _domain: SimpleNamespace(get_documents_volume_path=lambda: DOCS),
-    )
-    monkeypatch.setattr(
-        routes, "make_volume_file_service", lambda _domain, _settings: volume
-    )
     return SimpleNamespace(
         domain=domain,
-        volume=volume,
         session=SimpleNamespace(),
         settings=SimpleNamespace(),
     )
 
 
+def _use_service(monkeypatch, service):
+    monkeypatch.setattr(
+        routes, "_make_document_parse_service", lambda *_a, **_k: service
+    )
+
+
 @pytest.mark.asyncio
 async def test_binary_upload_returns_pending_task(monkeypatch, route_context):
-    service = _ParseService(
+    service = _FakeService(
         ParseSubmission("spec.pdf", True, False, True, ParseStatus.PENDING)
     )
     task_manager = MagicMock()
     task_manager.run_background_task.return_value = SimpleNamespace(id="parse-1")
-    monkeypatch.setattr(
-        routes, "_make_document_parse_service", lambda *_args, **_kwargs: service
-    )
+    _use_service(monkeypatch, service)
     monkeypatch.setattr(routes, "get_task_manager", lambda: task_manager)
 
     result = await routes.upload_documents(
@@ -138,29 +112,44 @@ async def test_binary_upload_returns_pending_task(monkeypatch, route_context):
     )
 
     item = result["results"][0]
-    assert item == {
-        "filename": "spec.pdf",
-        "success": True,
-        "uploaded": True,
-        "no_op": False,
-        "parse_status": "pending",
-        "task_id": "parse-1",
-        "message": "Uploaded; parsing started",
-    }
+    assert item["parse_status"] == "pending"
+    assert item["task_id"] == "parse-1"
+    assert service.prepared == [(FOLDER, VERSION, "spec.pdf", b"%PDF")]
     task_manager.run_background_task.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_upload_over_10mb_is_rejected_without_task(monkeypatch, route_context):
+    service = _FakeService()
+    task_manager = MagicMock()
+    _use_service(monkeypatch, service)
+    monkeypatch.setattr(routes, "get_task_manager", lambda: task_manager)
+
+    oversize = b"x" * (DocumentParseService.MAX_UPLOAD_BYTES + 1)
+    result = await routes.upload_documents(
+        _Request(uploads=[_Upload("big.pdf", oversize)]),
+        route_context.session,
+        route_context.settings,
+    )
+
+    item = result["results"][0]
+    assert item["success"] is False
+    assert item["parse_status"] == "failed"
+    assert "10 MB" in item["message"]
+    # Neither the service nor a background task was invoked for the oversize file.
+    assert service.prepared == []
+    task_manager.run_background_task.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_identical_ready_upload_returns_noop_without_task(
     monkeypatch, route_context
 ):
-    service = _ParseService(
+    service = _FakeService(
         ParseSubmission("spec.pdf", False, True, False, ParseStatus.READY)
     )
     task_manager = MagicMock()
-    monkeypatch.setattr(
-        routes, "_make_document_parse_service", lambda *_args, **_kwargs: service
-    )
+    _use_service(monkeypatch, service)
     monkeypatch.setattr(routes, "get_task_manager", lambda: task_manager)
 
     result = await routes.upload_documents(
@@ -170,7 +159,6 @@ async def test_identical_ready_upload_returns_noop_without_task(
     )
 
     item = result["results"][0]
-    assert item["uploaded"] is False
     assert item["no_op"] is True
     assert item["parse_status"] == "ready"
     assert "task_id" not in item
@@ -178,39 +166,40 @@ async def test_identical_ready_upload_returns_noop_without_task(
 
 
 @pytest.mark.asyncio
-async def test_list_hides_internal_directory_and_adds_parse_status(
-    monkeypatch, route_context
-):
-    route_context.volume.items = [
-        {"name": "spec.pdf", "is_directory": False, "size": 12},
-        {"name": "_parsed", "is_directory": True, "size": 0},
-    ]
-    service = _ParseService(
-        manifests={"spec.pdf": _manifest("spec.pdf", ParseStatus.READY)}
+async def test_list_returns_rows_without_text(monkeypatch, route_context):
+    service = _FakeService(
+        rows=[
+            {
+                "filename": "spec.pdf",
+                "status": "ready",
+                "parse_status": "ready",
+                "parser": "ai_parse_document",
+                "size_bytes": 12,
+                "error": "",
+            }
+        ]
     )
-    monkeypatch.setattr(
-        routes, "_make_document_parse_service", lambda *_args, **_kwargs: service
-    )
+    _use_service(monkeypatch, service)
 
     result = await routes.list_documents(
         route_context.session, route_context.settings
     )
 
-    assert len(result["files"]) == 1
-    assert result["files"][0]["name"] == "spec.pdf"
-    assert result["files"][0]["parse_status"] == "ready"
+    assert result["success"] is True
+    row = result["files"][0]
+    assert row["filename"] == "spec.pdf"
+    assert row["parse_status"] == "ready"
+    assert "parsed_text" not in row
 
 
 @pytest.mark.asyncio
 async def test_retry_failed_binary_schedules_task(monkeypatch, route_context):
-    service = _ParseService(
+    service = _FakeService(
         ParseSubmission("spec.pdf", False, False, True, ParseStatus.PENDING)
     )
     task_manager = MagicMock()
     task_manager.run_background_task.return_value = SimpleNamespace(id="parse-2")
-    monkeypatch.setattr(
-        routes, "_make_document_parse_service", lambda *_args, **_kwargs: service
-    )
+    _use_service(monkeypatch, service)
     monkeypatch.setattr(routes, "get_task_manager", lambda: task_manager)
 
     result = await routes.retry_document_parse(
@@ -219,17 +208,30 @@ async def test_retry_failed_binary_schedules_task(monkeypatch, route_context):
         route_context.settings,
     )
 
-    assert result["success"] is True
     assert result["parse_status"] == "pending"
     assert result["task_id"] == "parse-2"
+    assert service.retried == [(FOLDER, VERSION, "spec.pdf")]
 
 
 @pytest.mark.asyncio
-async def test_delete_source_also_deletes_sidecars(monkeypatch, route_context):
-    service = _ParseService()
-    monkeypatch.setattr(
-        routes, "_make_document_parse_service", lambda *_args, **_kwargs: service
+async def test_delete_accepts_multiple_filenames(monkeypatch, route_context):
+    service = _FakeService()
+    _use_service(monkeypatch, service)
+
+    result = await routes.delete_document(
+        _Request(json_body={"filenames": ["a.pdf", "b.pdf"]}),
+        route_context.session,
+        route_context.settings,
     )
+
+    assert result["success"] is True
+    assert service.deleted == [(FOLDER, VERSION, ["a.pdf", "b.pdf"])]
+
+
+@pytest.mark.asyncio
+async def test_delete_accepts_legacy_single_filename(monkeypatch, route_context):
+    service = _FakeService()
+    _use_service(monkeypatch, service)
 
     result = await routes.delete_document(
         _Request(json_body={"filename": "spec.pdf"}),
@@ -238,5 +240,25 @@ async def test_delete_source_also_deletes_sidecars(monkeypatch, route_context):
     )
 
     assert result["success"] is True
-    assert route_context.volume.deleted == [f"{DOCS}/spec.pdf"]
-    assert service.deleted == [(DOCS, "spec.pdf")]
+    assert service.deleted == [(FOLDER, VERSION, ["spec.pdf"])]
+
+
+@pytest.mark.asyncio
+async def test_preview_returns_parsed_text_json(monkeypatch, route_context):
+    service = _FakeService(
+        doc={
+            "filename": "spec.pdf",
+            "content": "# Parsed",
+            "parsed_with": "ai_parse_document",
+            "parse_status": "ready",
+        }
+    )
+    _use_service(monkeypatch, service)
+
+    result = await routes.preview_document(
+        "spec.pdf", route_context.session, route_context.settings
+    )
+
+    assert result["success"] is True
+    assert result["content"] == "# Parsed"
+    assert result["parser"] == "ai_parse_document"
