@@ -536,6 +536,33 @@ def test_affected_sidebar_components_use_scoped_internal_scroll_chains():
             WIZARD_CSS,
             (
                 (
+                    ".wizard-stage-pane",
+                    {
+                        "flex": "1",
+                        "min-height": "0",
+                    },
+                ),
+                (
+                    "#wizardConfigurePane",
+                    {"overflow": "hidden"},
+                ),
+                (
+                    "#wizardConfigurePane .card.h-100",
+                    {
+                        "flex": "1",
+                        "min-height": "0",
+                        "overflow": "hidden",
+                    },
+                ),
+                (
+                    "#wizardConfigurePane .card-body.ob-tabs-wrap",
+                    {
+                        "flex": "1",
+                        "min-height": "0",
+                        "overflow": "hidden",
+                    },
+                ),
+                (
                     "#wizardTabContent",
                     {"flex": "1", "min-height": "0", "overflow-y": "auto"},
                 ),

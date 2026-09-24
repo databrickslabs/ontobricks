@@ -104,18 +104,43 @@
 /* Stage panes                                                          */
 /* -------------------------------------------------------------------- */
 
+/* Fill remaining height like Ontology Import's direct-child
+   `.content-section > .card { flex: 1 }` chain. The stepper sits above the
+   pane, so the card is not a direct child of `.content-section` and needs
+   this extra link. */
 .wizard-stage-pane {
-    display: block;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
 }
 
-/* `components.css`'s shared `.ob-hidden { display: none; }` loads *before*
-   this file's <link> (see base.html vs. ontology.html extra_css block), so
-   on the equal-specificity tie above, this file's later `display: block`
-   used to win and a "hidden" stage pane silently rendered anyway. The
-   combined selector below has strictly higher specificity than either
-   rule alone, so it always wins regardless of link/source order; the
-   `!important` also guards against any future higher-specificity or
-   flex/grid override added to `.wizard-stage-pane` itself. */
+#wizardConfigurePane {
+    overflow: hidden;
+}
+
+#wizardReviewPane,
+#wizardCompletePane {
+    overflow-y: auto;
+}
+
+#wizardConfigurePane .card.h-100 {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#wizardConfigurePane .card-body.ob-tabs-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Shared `.ob-hidden { display: none; }` in components.css loads before
+   this file. Combined with `!important`, this guard stays hidden even if
+   `.wizard-stage-pane { display: flex }` would otherwise win. */
 .wizard-stage-pane.ob-hidden {
     display: none !important;
 }
@@ -360,6 +385,9 @@
         white-space: normal;
     }
 
+    #wizardConfigurePane,
+    #wizardReviewPane,
+    #wizardCompletePane,
     #wizardConfigurePane .card.h-100,
     #wizardConfigurePane .card-body.ob-tabs-wrap,
     #wizardTabContent {

@@ -1,74 +1,69 @@
-"""Mapping preloads ready documents from the durable parsed corpus."""
+"""Mapping preloads ready documents from the Lakebase Knowledge Store."""
 
 from __future__ import annotations
 
 import importlib
+from types import SimpleNamespace
 
 from back.objects.mapping import Mapping
+from tests.fixtures.factories.registry import FakeDocumentStore
 
 
-class _Volume:
-    def list_directory(self, _path):
-        return (
-            True,
-            [
-                {"name": "spec.pdf", "is_directory": False},
-                {"name": "manual.pdf", "is_directory": False},
-                {"name": "_parsed", "is_directory": True},
-            ],
-            "listed",
-        )
+def _seed_store():
+    store = FakeDocumentStore()
+    store.upsert_document(
+        "sales",
+        "1",
+        filename="spec.pdf",
+        source_hash="h1",
+        parser="ai_parse_document",
+        status="pending",
+        size_bytes=10,
+        source_bytes=b"%PDF",
+    )
+    store.set_document_ready(
+        "sales", "1", "spec.pdf", parsed_text="Customer maps to crm.customer."
+    )
+    store.upsert_document(
+        "sales",
+        "1",
+        filename="manual.pdf",
+        source_hash="h2",
+        parser="ai_parse_document",
+        status="pending",
+        size_bytes=10,
+        source_bytes=b"%PDF",
+    )
+    return store
 
 
-class _ParseService:
-    def __init__(self, _volume):
-        self.calls = []
-
-    def read_document(self, base_path, filename, max_chars=None):
-        self.calls.append((base_path, filename, max_chars))
-        if filename == "spec.pdf":
-            return {
-                "filename": filename,
-                "content": "Customer maps to crm.customer.",
-                "size": 30,
-                "truncated": False,
-                "parsed_with": "ai_parse_document",
-                "parse_status": "ready",
-            }
-        return {
-            "filename": filename,
-            "parse_status": "pending",
-            "error": "Document parsing is not ready",
-        }
-
-
-def test_fetch_documents_for_agent_uses_ready_sidecar_and_reports_pending(
-    monkeypatch,
-):
+def test_fetch_documents_for_agent_uses_ready_text_and_reports_pending(monkeypatch):
     module = importlib.import_module("back.objects.mapping.Mapping")
-    helpers = importlib.import_module("back.core.helpers")
-    monkeypatch.setattr(
-        helpers,
-        "effective_uc_version_path",
-        lambda _domain: "/Volumes/main/ob/docs/domains/sales/V1",
-    )
-    monkeypatch.setattr(module, "VolumeFileService", lambda **_kwargs: _Volume())
-    monkeypatch.setattr(module, "DocumentParseService", _ParseService, raising=False)
+    registry_module = importlib.import_module("back.objects.registry")
 
-    documents = Mapping.fetch_documents_for_agent(
-        object(), "https://workspace", "token"
+    svc = SimpleNamespace(store=_seed_store())
+    monkeypatch.setattr(
+        registry_module.RegistryService,
+        "from_context",
+        classmethod(lambda cls, _domain, _settings: svc),
     )
+    monkeypatch.setattr(module, "get_settings", lambda: SimpleNamespace())
+
+    domain = SimpleNamespace(
+        uc_domain_folder="sales", domain_folder="sales", current_version="1"
+    )
+    documents = Mapping.fetch_documents_for_agent(domain, "https://workspace", "token")
 
     assert documents == [
-        {
-            "name": "spec.pdf",
-            "content": "Customer maps to crm.customer.",
-            "parse_status": "ready",
-        },
         {
             "name": "manual.pdf",
             "content": "",
             "parse_status": "pending",
             "error": "Document parsing is not ready",
+        },
+        {
+            "name": "spec.pdf",
+            "content": "Customer maps to crm.customer.",
+            "parse_status": "ready",
         },
     ]

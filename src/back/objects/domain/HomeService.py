@@ -273,7 +273,7 @@ class HomeService:
             # cache to avoid replaying a stale failure ("table not found")
             # across page loads.
             dt.get_or_fetch_dt_existence(settings, force_refresh=True),
-            run_blocking(Domain(domain).count_documents_in_volume, settings),
+            run_blocking(Domain(domain).count_documents, settings),
         )
 
         all_classes = domain.get_classes()

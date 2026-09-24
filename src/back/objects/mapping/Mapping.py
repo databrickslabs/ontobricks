@@ -18,7 +18,7 @@ from shared.config.constants import (
     DEFAULT_BASE_URI,
     HTTP_USER_AGENT,
 )
-from back.core.databricks import DocumentParseService, VolumeFileService
+from back.core.databricks import DocumentParseService
 from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.errors import InfrastructureError, ValidationError
@@ -1096,40 +1096,45 @@ class Mapping:
 
     @staticmethod
     def fetch_documents_for_agent(
-        domain: Any, host: str, token: str
+        domain: Any, host: str = "", token: str = ""
     ) -> List[Dict[str, Any]]:
-        from back.core.helpers import effective_uc_version_path
+        """Preload the domain's ready parsed corpus from the Knowledge Store.
 
-        base_path = effective_uc_version_path(domain)
-        if not base_path:
+        Reads document metadata + ready text from the Lakebase document store
+        (no UC Volume). ``host``/``token`` are accepted for signature parity
+        but unused — the corpus never re-parses here.
+        """
+        folder = (
+            getattr(domain, "uc_domain_folder", "")
+            or getattr(domain, "domain_folder", "")
+            or ""
+        ).strip()
+        if not folder:
             logger.debug(
-                "fetch_documents_for_agent: no registry path — skipping documents"
+                "fetch_documents_for_agent: no registry folder — skipping documents"
             )
             return []
-        base_path = f"{base_path}/documents"
-        uc_service = VolumeFileService(host=host, token=token)
-        success, entries, message = uc_service.list_directory(base_path)
-        if not success:
-            if "not found" in message.lower():
-                logger.info("fetch_documents_for_agent: documents dir not found")
-            else:
-                logger.warning(
-                    "fetch_documents_for_agent: list failed — %s", message
-                )
+        version = str(getattr(domain, "current_version", "") or "1")
+
+        try:
+            from back.objects.registry import RegistryService
+
+            store = RegistryService.from_context(domain, get_settings()).store
+            service = DocumentParseService(store)
+            rows = service.list_documents(folder, version)
+        except Exception as exc:  # noqa: BLE001 — best-effort preload
+            logger.warning("fetch_documents_for_agent: store unavailable — %s", exc)
             return []
-        parse_service = DocumentParseService(uc_service)
+
         result: List[Dict[str, Any]] = []
-        for entry in entries[:20]:
-            if entry.get("is_directory"):
-                continue
-            name = entry.get("name", "").rstrip("/")
+        for row in rows[:20]:
+            name = (row.get("filename") or "").rstrip("/")
             if not name:
                 continue
-            payload = parse_service.read_document(
-                base_path, name, max_chars=_MAX_DOC_CHARS
-            )
-            status = payload.get("parse_status", "failed")
-            if status == "ready":
+            if row.get("parse_status") == "ready":
+                payload = service.read_document(
+                    folder, version, name, max_chars=_MAX_DOC_CHARS
+                )
                 result.append(
                     {
                         "name": name,
@@ -1142,8 +1147,8 @@ class Mapping:
                     {
                         "name": name,
                         "content": "",
-                        "parse_status": status,
-                        "error": payload.get("error")
+                        "parse_status": row.get("parse_status") or "failed",
+                        "error": row.get("error")
                         or "Document parsing is not ready",
                     }
                 )

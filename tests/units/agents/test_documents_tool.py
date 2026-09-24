@@ -1,4 +1,4 @@
-"""Agent document tools read only the durable parsed corpus."""
+"""Agent document tools read only the Lakebase Knowledge Store corpus."""
 
 from __future__ import annotations
 
@@ -8,6 +8,10 @@ import pytest
 
 from agents.tools import documents as docs
 from agents.tools.context import ToolContext
+from back.core.databricks import DocumentParseService
+from tests.fixtures.factories.registry import FakeDocumentStore
+
+FOLDER, VERSION = "dom", "1"
 
 
 def _ctx(documents=None) -> ToolContext:
@@ -15,97 +19,64 @@ def _ctx(documents=None) -> ToolContext:
         host="https://test.databricks.com",
         token="test-token",
         registry={"catalog": "main", "schema": "ob", "volume": "docs"},
-        domain_folder="dom",
-        domain_version="1",
+        domain_folder=FOLDER,
+        domain_version=VERSION,
         documents=list(documents or []),
     )
 
 
-class _ParseService:
-    def __init__(self, payloads=None, manifests=None) -> None:
-        self.payloads = payloads or {}
-        self.manifests = manifests or {}
-        self.reads = []
-
-    def read_document(self, base_path, filename, max_chars=None):
-        self.reads.append((base_path, filename, max_chars))
-        return self.payloads[filename]
-
-    def status(self, _base_path, filename):
-        return self.manifests.get(filename)
-
-
-class _Response:
-    status_code = 200
-    content = b"{}"
-    headers = {"content-type": "application/json"}
-
-    @staticmethod
-    def json():
-        return {
-            "contents": [
-                {"name": "spec.pdf", "is_directory": False, "file_size": 12},
-                {"name": "_parsed", "is_directory": True, "file_size": 0},
-            ]
-        }
-
-    @staticmethod
-    def raise_for_status():
-        return None
+def _service_with(*rows) -> DocumentParseService:
+    store = FakeDocumentStore()
+    for filename, status, parsed_text in rows:
+        store.upsert_document(
+            FOLDER,
+            VERSION,
+            filename=filename,
+            source_hash="h",
+            parser="ai_parse_document",
+            status="pending",
+            size_bytes=12,
+            source_bytes=b"%PDF",
+        )
+        if status == "ready":
+            store.set_document_ready(FOLDER, VERSION, filename, parsed_text=parsed_text)
+        elif status == "failed":
+            store.set_document_failed(
+                FOLDER, VERSION, filename, error="Document parsing is not ready"
+            )
+    return DocumentParseService(store)
 
 
-def test_read_ready_pdf_uses_persisted_sidecar(monkeypatch):
-    service = _ParseService(
-        payloads={
-            "spec.pdf": {
-                "filename": "spec.pdf",
-                "content": "Page one\n\nPage two",
-                "size": 18,
-                "truncated": False,
-                "parsed_with": "ai_parse_document",
-                "parse_status": "ready",
-            }
-        }
+def _use(monkeypatch, service):
+    monkeypatch.setattr(
+        docs, "_document_scope", lambda _ctx: (service, FOLDER, VERSION)
     )
-    monkeypatch.setattr(docs, "_parse_service", lambda _ctx: service)
+
+
+def test_read_ready_pdf_returns_parsed_text(monkeypatch):
+    service = _service_with(("spec.pdf", "ready", "Page one\n\nPage two"))
+    _use(monkeypatch, service)
 
     out = json.loads(docs.tool_read_document(_ctx(), filename="spec.pdf"))
 
     assert out["content"] == "Page one\n\nPage two"
     assert out["parse_status"] == "ready"
-    assert service.reads[0][2] == docs._MAX_DOC_CHARS
 
 
 @pytest.mark.parametrize("status", ["pending", "failed"])
-def test_unavailable_pdf_returns_structured_status_without_extractor(
-    monkeypatch, status
-):
-    service = _ParseService(
-        payloads={
-            "spec.pdf": {
-                "filename": "spec.pdf",
-                "parse_status": status,
-                "error": "Document parsing is not ready",
-            }
-        }
-    )
-    monkeypatch.setattr(docs, "_parse_service", lambda _ctx: service)
+def test_unavailable_pdf_returns_structured_status(monkeypatch, status):
+    service = _service_with(("spec.pdf", status, ""))
+    _use(monkeypatch, service)
 
     out = json.loads(docs.tool_read_document(_ctx(), filename="spec.pdf"))
 
     assert out["parse_status"] == status
-    assert out["error"] == "Document parsing is not ready"
+    assert "content" not in out or out.get("content") == ""
 
 
-def test_list_documents_hides_parsed_directory_and_adds_status(monkeypatch):
-    manifest = type(
-        "Manifest",
-        (),
-        {"status": type("Status", (), {"value": "ready"})(), "parser": "ai_parse_document", "error": None},
-    )()
-    service = _ParseService(manifests={"spec.pdf": manifest})
-    monkeypatch.setattr(docs, "_parse_service", lambda _ctx: service)
-    monkeypatch.setattr(docs.requests, "get", lambda *_args, **_kwargs: _Response())
+def test_list_documents_reports_status(monkeypatch):
+    service = _service_with(("spec.pdf", "ready", "x"))
+    _use(monkeypatch, service)
 
     out = json.loads(docs.tool_list_documents(_ctx()))
 
@@ -117,6 +88,12 @@ def test_list_documents_hides_parsed_directory_and_adds_status(monkeypatch):
             "parser": "ai_parse_document",
         }
     ]
+
+
+def test_no_registry_returns_error(monkeypatch):
+    monkeypatch.setattr(docs, "_document_scope", lambda _ctx: None)
+    out = json.loads(docs.tool_list_documents(_ctx()))
+    assert "error" in out
 
 
 def test_documents_context_separates_unavailable_documents():

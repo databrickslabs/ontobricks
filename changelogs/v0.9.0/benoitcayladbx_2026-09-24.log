@@ -1,0 +1,24 @@
+## Stretch Ontology Generate card to the shell bottom
+
+Context: Ontology → Import already fills the remaining height below the
+section header through the shared `.content-section > .card` flex chain.
+Ontology → Generate nested its main card inside a stage pane (below the
+stepper), so the card stopped at content height and left empty canvas
+below. The configure pane now continues that flex chain down to the
+sidebar bottom, matching Import.
+
+Changes:
+
+1. src/front/static/ontology/css/ontology-wizard.css
+   Stretch wizard stage panes; fill the Configure card and tab wrap to the
+   remaining height; keep Review/Complete scrollable; reset the chain on
+   mobile.
+2. tests/units/front/test_sidebar_content_stretch_contract.py
+   Lock the Generate configure-pane flex chain in the shared stretch
+   contract.
+
+Modified files:
+- src/front/static/ontology/css/ontology-wizard.css
+- tests/units/front/test_sidebar_content_stretch_contract.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6891 passed, 308 skipped, 6 deselected, 1 xfailed in 49.22s

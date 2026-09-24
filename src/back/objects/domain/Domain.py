@@ -31,7 +31,6 @@ from shared.llm_target import normalize_llm_endpoint_kind
 from back.core.databricks import (
     DatabricksClient,
     MetadataService,
-    VolumeFileService,
     build_metadata_dict,
     extract_catalog_schema_from_full_name,
     get_catalog_schema_from_metadata,
@@ -2304,32 +2303,21 @@ class Domain:
     # Project documents (volume path helper for routes)
     # -------------------------------------------------------------------
 
-    def get_documents_volume_path(self) -> Optional[str]:
-        """Return /Volumes/.../domains/<folder>/V<ver>/documents base path, or None if UC is not configured."""
-        path = self._s.uc_version_path
-        if not path:
-            return None
-        return f"{path}/documents"
+    def count_documents(self, settings: Settings) -> Optional[int]:
+        """Count the domain's Knowledge Store documents (Lakebase corpus).
 
-    def count_documents_in_volume(self, settings: Settings) -> Optional[int]:
-        """Count files under the project documents volume path.
-
-        Returns ``0`` when there is no UC project path or the folder is missing.
-        Returns ``None`` when credentials are missing or listing fails.
+        Returns ``0`` when the domain is not saved to a registry yet, and
+        ``None`` when the store is unreachable.
         """
-        base_path = self.get_documents_volume_path()
-        if not base_path:
+        folder = (self._s.uc_domain_folder or self._s.domain_folder or "").strip()
+        if not folder:
             return 0
-        host, token = get_databricks_host_and_token(self._s, settings)
-        if not host or not token:
+        version = str(self._s.current_version or "1")
+        try:
+            from back.objects.registry import RegistryService
+
+            store = RegistryService.from_context(self._s, settings).store
+            return store.count_documents(folder, version)
+        except Exception as exc:  # noqa: BLE001 — cockpit best-effort
+            logger.warning("count_documents: store unavailable: %s", exc)
             return None
-        uc = VolumeFileService(host=host, token=token)
-        success, items, message = uc.list_directory(base_path)
-        if not success and "not found" in message.lower():
-            return 0
-        if not success:
-            logger.warning(
-                "count_documents_in_volume: list failed for %s: %s", base_path, message
-            )
-            return None
-        return sum(1 for item in items if not item.get("is_directory"))

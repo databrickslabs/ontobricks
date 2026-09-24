@@ -92,52 +92,46 @@ _SUBSTAGE_REF_EXTRACTORS: Dict[str, Callable[[Dict[str, Any]], Set[str]]] = {
 
 def list_ready_document_manifests(domain, settings) -> List[Dict[str, str]]:
     """Identity manifest (``filename`` + ``source_hash``) for every READY
-    document in the domain's durable parsed corpus.
+    document in the domain's Knowledge Store (Lakebase corpus).
 
-    Read-only: only ever calls ``DocumentParseService.status()`` (a manifest
-    read), never ``parse_pending``/the extractor. A domain with no Unity
-    Catalog registry configured yet returns ``[]`` rather than raising —
-    Stage 1 detection is still possible from selected metadata alone.
+    Read-only: reads document metadata rows only — never triggers parsing or
+    the extractor. A domain with no registry configured yet returns ``[]``
+    rather than raising — Stage 1 detection is still possible from selected
+    metadata alone.
     """
-    from back.core.databricks import DocumentParseService, ParseStatus
-    from back.core.helpers import make_volume_file_service
-    from back.objects.domain import Domain
-
-    base_path = Domain(domain).get_documents_volume_path()
-    if not base_path:
+    folder = _document_folder(domain)
+    if not folder:
         return []
+    version = str(getattr(domain, "current_version", "") or "1")
 
     try:
-        volume = make_volume_file_service(domain, settings)
-        ok, items, _message = volume.list_directory(base_path)
+        from back.objects.registry import RegistryService
+
+        store = RegistryService.from_context(domain, settings).store
+        rows = store.list_documents(folder, version)
     except Exception:  # noqa: BLE001 — best-effort; detection still proceeds
         logger.warning("list_ready_document_manifests: listing failed", exc_info=True)
         return []
-    if not ok:
-        return []
 
-    parse_service = DocumentParseService(volume)
     manifests: List[Dict[str, str]] = []
-    for item in items:
-        if item.get("is_directory"):
-            continue
-        filename = item.get("name") or ""
-        if not filename:
-            continue
-        manifest = parse_service.status(base_path, filename)
-        if manifest is not None:
-            if manifest.status is ParseStatus.READY:
-                manifests.append(
-                    {"filename": filename, "source_hash": manifest.source_hash}
-                )
-            continue
-        extension = filename.rpartition(".")[2].lower()
-        if extension in DocumentParseService.TEXT_EXTENSIONS:
-            # Legacy plaintext with no manifest sidecar yet: ready by
-            # convention (mirrors `tool_list_documents`'s fallback), no
-            # durable hash available yet.
-            manifests.append({"filename": filename, "source_hash": ""})
+    for row in rows:
+        if row.get("status") == "ready":
+            manifests.append(
+                {
+                    "filename": row.get("filename") or "",
+                    "source_hash": row.get("source_hash") or "",
+                }
+            )
     return manifests
+
+
+def _document_folder(domain) -> str:
+    """Registry folder for the domain's Knowledge Store, or '' when unsaved."""
+    return (
+        getattr(domain, "uc_domain_folder", "")
+        or getattr(domain, "domain_folder", "")
+        or ""
+    ).strip()
 
 
 def compute_current_fingerprint(
