@@ -1,0 +1,36 @@
+# MCP per-connection session isolation (fix shared-domain bleed)
+
+Context: the MCP server binds ONE `MCPServerSession` to the FastMCP app for the
+whole process. `selected_domain_name` and the label/class-Action caches lived on
+that shared instance, so two clients hitting the one process clobbered each
+other's selected domain — reproduced live on a deployed server: a
+`mercuriamarkets` session returned `mercuriatrading` counts. This isolates that
+state per MCP connection.
+
+Changes:
+1. `src/mcp-server/server/session_scope.py` (new): `CURRENT_SESSION_ID`
+   context variable + `SessionScopeMiddleware.on_call_tool`, which binds each
+   tool call to its `ctx.session_id` (guarded — `session_id` raises off-request)
+   and resets it after. Imports nothing from `server.session` → no cycle.
+2. `src/mcp-server/server/session.py`: moved `selected_domain_name`,
+   `ontology_labels`, `class_actions` into a private `_DomainState`, held in an
+   LRU-bounded `OrderedDict` keyed by session id (`_MAX_TRACKED_SESSIONS=512`).
+   Exposed the three via properties resolving the current session's state, so
+   every caller and existing test keeps the same API. `domain_policy`,
+   `domain_has_graph`, `registry` and the pooled HTTP client stay server-wide.
+3. `src/mcp-server/server/factory.py`:
+   `mcp.add_middleware(SessionScopeMiddleware())`.
+4. `tests/units/mcp/test_session_isolation.py` (new): regression guards —
+   selected domain / caches do not leak between sessions, shared policy stays
+   shared, store is LRU-bounded.
+
+Modified files:
+- src/mcp-server/server/session_scope.py (new)
+- src/mcp-server/server/session.py
+- src/mcp-server/server/factory.py
+- tests/units/mcp/test_session_isolation.py (new)
+
+Tests: `uv run --frozen pytest -q tests/units/mcp tests/mcp -m "not scenario"`
+→ 107 passed (incl. 3 new isolation cases). Verified live on a deployed server:
+concurrent trading + markets sessions each returned their own domain
+(Position 1,536 vs 11,127), no cross-domain bleed.
