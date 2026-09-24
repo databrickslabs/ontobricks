@@ -16,6 +16,7 @@ Output schema is pinned to v2.0 (verified live): text lives in
 ``document.pages[]`` only holds ``id``/``image_uri``.
 """
 
+import base64
 import json
 from typing import Any, Dict, Optional
 
@@ -118,7 +119,59 @@ class DocumentExtractor:
             cache[file_path] = text
         return text
 
+    def extract_from_bytes(self, content: bytes) -> Optional[str]:
+        """Parse in-memory document *content* to text — no UC Volume involved.
+
+        The bytes are base64-encoded and inlined into the SQL statement, then
+        decoded warehouse-side with ``unbase64`` and fed straight to
+        ``ai_parse_document``. This is the Volume-free path used by the
+        Knowledge Store (callers must enforce the upload size cap so the
+        statement text stays within the Statement Execution API limit).
+
+        Returns the extracted text, or ``None`` when no SQL warehouse is
+        configured or parsing fails / yields nothing.
+        """
+        if not self.is_available():
+            logger.info("DocumentExtractor: no SQL warehouse — cannot parse bytes")
+            return None
+        if not content:
+            return None
+
+        raw = self._run_query_bytes(content)
+        if not raw:
+            return None
+        return self._text_from_raw(raw)
+
     # -- internals ---------------------------------------------------
+
+    def _text_from_raw(self, raw: Any) -> Optional[str]:
+        """Turn an ``ai_parse_document`` JSON payload into text (or ``None``)."""
+        try:
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+        except (ValueError, TypeError) as exc:
+            logger.warning("DocumentExtractor: bad parsed JSON: %s", exc)
+            return None
+        text = self.extract_text_from_parsed(parsed) if isinstance(parsed, dict) else ""
+        if not text:
+            logger.info("DocumentExtractor: no text extracted from parsed payload")
+            return None
+        return text
+
+    def _run_query_bytes(self, content: bytes) -> Optional[str]:
+        b64 = base64.b64encode(content).decode("ascii")
+        query = (
+            "SELECT to_json(ai_parse_document(unbase64('"
+            f"{b64}'), map('version', '{self.OUTPUT_SCHEMA_VERSION}'))) AS parsed"
+        )
+        try:
+            rows = self._client.execute_query(query)
+        except Exception as exc:
+            logger.warning("DocumentExtractor: warehouse parse failed: %s", exc)
+            return None
+        if not rows:
+            logger.info("DocumentExtractor: no rows returned for inline parse")
+            return None
+        return rows[0].get("parsed")
 
     def _run_query(self, file_path: str) -> Optional[str]:
         safe_path = file_path.replace("'", "''")
