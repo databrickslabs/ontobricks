@@ -220,7 +220,7 @@ def test_disabled_action_reasons_have_one_keyboard_reachable_wrapper():
     )
 
 
-def test_registry_uses_server_delete_capability_and_refreshes_after_conflict():
+def test_registry_uses_server_delete_capability():
     js = REGISTRY_JS.read_text(encoding="utf-8")
     assert "v.delete_control_visible" in js
     assert "v.can_delete" in js
@@ -230,14 +230,6 @@ def test_registry_uses_server_delete_capability_and_refreshes_after_conflict():
         js.index("document.addEventListener")
     ]
     assert "isLoaded" not in delete_section
-
-    delete_request = js[
-        js.index("async function deleteRegistryVersion") :
-        js.index("async function loadRegistryDomainVersion")
-    ]
-    assert "resp.status === 409" in delete_request
-    assert "showNotification(data.message" in delete_request
-    assert "loadRegistryDomains(true)" in delete_request
 
 
 def test_registry_delete_control_keeps_untrusted_values_in_dom_properties():
@@ -258,6 +250,98 @@ def test_registry_delete_control_keeps_untrusted_values_in_dom_properties():
         assert.equal(button.dataset.domain, domain);
         assert.equal(button.dataset.version, version);
         assert.equal(wrapper.title, reason);
+        """,
+        REGISTRY_JS,
+    )
+
+
+def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
+    _run_renderer_assertions(
+        r"""
+        (async () => {
+            const domain = 'acme"><script data-owned="domain"></script>';
+            const version = '1"><img data-owned="version" src=x>';
+            const control = context.createRegistryVersionDeleteControl({
+                version,
+                delete_control_visible: true,
+                can_delete: true,
+                delete_block_reason: ''
+            }, domain);
+            const button = allElements(control).find((item) => item.tagName === 'BUTTON');
+            let confirmation;
+            context.escapeHtml = (value) => String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+            context.showConfirmDialog = async (options) => {
+                confirmation = options;
+                return false;
+            };
+
+            await context.deleteRegistryVersion(
+                button.dataset.domain,
+                button.dataset.version
+            );
+
+            assert.equal(confirmation.title, 'Delete Version');
+            assert.equal(confirmation.message.includes('<script'), false);
+            assert.equal(confirmation.message.includes('<img'), false);
+            assert.equal(confirmation.message.includes('&lt;script'), true);
+            assert.equal(confirmation.message.includes('&lt;img'), true);
+            assert.equal(confirmation.message.includes(domain), false);
+            assert.equal(confirmation.message.includes(version), false);
+        })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+        });
+        """,
+        REGISTRY_JS,
+    )
+
+
+def test_registry_delete_conflict_shows_server_message_and_refreshes():
+    _run_renderer_assertions(
+        r"""
+        (async () => {
+            const calls = {notifications: [], refreshes: [], invalidations: 0};
+            context.escapeHtml = (value) => String(value);
+            context.showConfirmDialog = async () => true;
+            context.showNotification = (...args) => calls.notifications.push(args);
+            context.fetch = async (url, options) => {
+                calls.request = {url, options};
+                return {
+                    status: 409,
+                    json: async () => ({
+                        success: false,
+                        message: 'Deletion blocked by current server state'
+                    })
+                };
+            };
+
+            await context.deleteRegistryVersion(
+                'domain/name',
+                '1',
+                (force) => calls.refreshes.push(force),
+                () => { calls.invalidations += 1; }
+            );
+
+            assert.equal(
+                calls.request.url,
+                '/settings/registry/domains/domain%2Fname/versions/1'
+            );
+            assert.equal(calls.request.options.method, 'DELETE');
+            assert.deepEqual(
+                calls.notifications,
+                [['Deletion blocked by current server state', 'error']]
+            );
+            assert.deepEqual(calls.refreshes, [true]);
+            assert.equal(calls.invalidations, 0);
+        })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+        });
         """,
         REGISTRY_JS,
     )

@@ -36,6 +36,45 @@ function createRegistryVersionDeleteControl(v, domainName) {
     return wrapper;
 }
 
+async function deleteRegistryVersion(
+    domainName,
+    version,
+    refreshDomains = () => {},
+    invalidateBridges = () => {}
+) {
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Version',
+        message: 'Delete version v' + escapeHtml(String(version)) +
+            ' from domain "' + escapeHtml(String(domainName)) +
+            '"? This cannot be undone.',
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger',
+        icon: 'trash'
+    });
+    if (!confirmed) return;
+
+    try {
+        const resp = await fetch(
+            '/settings/registry/domains/' + encodeURIComponent(domainName) +
+                '/versions/' + encodeURIComponent(version),
+            { method: 'DELETE', credentials: 'same-origin' }
+        );
+        const data = await resp.json();
+        if (resp.status === 409) {
+            showNotification(data.message || 'Version deletion is no longer allowed', 'error');
+            refreshDomains(true);
+        } else if (data.success) {
+            showNotification(data.message, 'success');
+            invalidateBridges();
+            refreshDomains(true);
+        } else {
+            showNotification('Error: ' + data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('Error deleting version: ' + e.message, 'error');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
 
     let registryConfigured = false;
@@ -489,7 +528,12 @@ document.addEventListener('DOMContentLoaded', function () {
             listDiv.querySelectorAll('.registry-delete-version-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    deleteRegistryVersion(btn.dataset.domain, btn.dataset.version);
+                    deleteRegistryVersion(
+                        btn.dataset.domain,
+                        btn.dataset.version,
+                        loadRegistryDomains,
+                        () => { invalidateRegistryBridges(); }
+                    );
                 });
             });
 
@@ -544,37 +588,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (e) {
             showNotification('Error deleting domain: ' + e.message, 'error');
-        }
-    }
-
-    async function deleteRegistryVersion(domainName, version) {
-        const confirmed = await showConfirmDialog({
-            title: 'Delete Version',
-            message: 'Delete version v' + version + ' from domain "' + domainName + '"? This cannot be undone.',
-            confirmText: 'Delete',
-            confirmClass: 'btn-danger',
-            icon: 'trash'
-        });
-        if (!confirmed) return;
-
-        try {
-            const resp = await fetch(
-                '/settings/registry/domains/' + encodeURIComponent(domainName) + '/versions/' + encodeURIComponent(version),
-                { method: 'DELETE', credentials: 'same-origin' }
-            );
-            const data = await resp.json();
-            if (resp.status === 409) {
-                showNotification(data.message || 'Version deletion is no longer allowed', 'error');
-                loadRegistryDomains(true);
-            } else if (data.success) {
-                showNotification(data.message, 'success');
-                invalidateRegistryBridges();
-                loadRegistryDomains(true);
-            } else {
-                showNotification('Error: ' + data.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error deleting version: ' + e.message, 'error');
         }
     }
 

@@ -89,16 +89,68 @@ Result:
 - Endpoint guard: the Settings DELETE URL and method are unchanged.
 - Conflict handling: status 409 displays `data.message` when provided and
   forces a domain reload even though deletion failed.
-- Injection resistance: malicious quote/markup payloads remain exact DOM
-  property values and cannot create `img`, `script`, or `svg` elements.
+- Renderer injection resistance: malicious quote/markup payloads remain exact
+  DOM property values and cannot create `img`, `script`, or `svg` elements in
+  the delete control. Confirmation-message safety is covered separately below.
 - Focus behavior: blocked wrappers have `tabIndex = 0`, blocked buttons have
   `tabIndex = -1`, and enabled wrappers stay at `-1` while enabled buttons have
   `tabIndex = 0`.
 - Scope: no application files outside the Task 5 Registry JavaScript and
   shared frontend contract test were changed.
 
+## Blocker Fix: Escape Enabled-Delete Confirmation Values
+
+Follow-up review found that the initial implementation safely rendered the
+delete control but passed its untrusted dataset values into
+`showConfirmDialog` without escaping. Because that shared dialog intentionally
+accepts formatted HTML, an enabled Registry delete action could inject stored
+markup into the confirmation modal.
+
+The fix:
+
+- Escapes `domainName` and `version` for the dialog's HTML text-node context
+  while preserving the confirmation's normal formatting.
+- Exercises the enabled delete control through the real
+  `deleteRegistryVersion` confirmation call path with malicious tag payloads.
+- Replaces the source-only HTTP 409 assertion with executable behavior coverage
+  for the DELETE request, server notification, forced refresh, and absence of
+  bridge invalidation.
+
+### Follow-up RED
+
+`uv run --frozen pytest -q tests/units/front/test_domain_versions_cards.py`
+
+`2 failed, 10 passed, 1 warning in 0.77s`
+
+Both failures showed that the deletion function was not executable in the test
+harness; this prevented behavioral verification of both confirmation escaping
+and conflict refresh.
+
+### Follow-up GREEN
+
+`uv run --frozen pytest -q tests/units/front/test_domain_versions_cards.py`
+
+`12 passed, 1 warning in 0.67s`
+
+### Follow-up Registry Regression
+
+The focused contract plus relevant Registry frontend tests passed together:
+
+`38 passed, 1 warning in 0.74s`
+
+`node --check src/front/static/registry/js/registry.js` and
+`git diff --check` also passed.
+
+### Follow-up Full Suite
+
+`uv run --frozen pytest -q -m "not scenario"`
+
+`6938 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.98s`
+
 ## Concerns
 
-No Task 5 blocker found. The broader Registry renderer still contains older
-string-built attributes for non-delete controls; this task does not expand that
-pre-existing surface, and the new delete control does not reuse it.
+The initial self-review overstated end-to-end injection resistance by covering
+only renderer output and missing the HTML-accepting confirmation boundary. That
+gap is now covered behaviorally. The broader Registry renderer still contains
+older string-built attributes for non-delete controls; this fix does not expand
+that pre-existing surface.

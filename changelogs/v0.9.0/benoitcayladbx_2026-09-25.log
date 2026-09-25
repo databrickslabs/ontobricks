@@ -193,3 +193,28 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6936 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.04s
+
+## Escape Registry version deletion confirmations
+
+Context: The Registry delete control safely stored untrusted values in DOM
+properties, but the enabled action later passed those values unescaped to an
+HTML-capable confirmation dialog. Confirmation text now escapes Registry domain
+and version values, closing the stored-XSS path without removing supported
+dialog formatting.
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   Escaped untrusted deletion identifiers before confirmation rendering and made the deletion workflow behaviorally testable without changing its guarded endpoint.
+2. tests/units/front/test_domain_versions_cards.py
+   Added executable enabled-action confirmation injection coverage and behavioral HTTP 409 notification/refresh coverage.
+3. .superpowers/sdd/task-5-report.md
+   Corrected the initial safety assessment and appended follow-up RED/GREEN, regression, and full-suite evidence.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_domain_versions_cards.py
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6938 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.98s
