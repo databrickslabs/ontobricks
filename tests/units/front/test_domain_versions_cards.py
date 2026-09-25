@@ -220,6 +220,38 @@ def test_disabled_action_reasons_have_one_keyboard_reachable_wrapper():
     )
 
 
+def test_cancelled_domain_delete_restores_focus_to_trigger():
+    _run_renderer_assertions(
+        r"""
+        (async () => {
+            let fetchCalled = false;
+            const trigger = {
+                disabled: false,
+                isConnected: true,
+                focusCalls: 0,
+                focus() {
+                    this.focusCalls += 1;
+                }
+            };
+            context.escapeHtml = (value) => String(value);
+            context.showConfirmDialog = async () => false;
+            context.fetch = async () => {
+                fetchCalled = true;
+                throw new Error('Delete must not run after cancellation');
+            };
+
+            await context.deleteVersionFromList('11', trigger);
+
+            assert.equal(trigger.focusCalls, 1);
+            assert.equal(fetchCalled, false);
+        })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+        });
+        """
+    )
+
+
 def test_registry_uses_server_delete_capability():
     js = REGISTRY_JS.read_text(encoding="utf-8")
     assert "v.delete_control_visible" in js

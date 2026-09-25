@@ -246,7 +246,7 @@ async function transitionVersion(domainFolder, version, targetStatus) {
     await loadVersionsList(true);
 }
 
-async function deleteVersionFromList(version) {
+async function deleteVersionFromList(version, triggerButton = null) {
     const confirmed = await showConfirmDialog({
         title: 'Delete Version',
         message: 'Permanently delete version v' + escapeHtml(version)
@@ -255,7 +255,15 @@ async function deleteVersionFromList(version) {
         confirmClass: 'btn-danger',
         icon: 'trash'
     });
-    if (!confirmed) return;
+    if (!confirmed) {
+        if (triggerButton
+            && triggerButton.isConnected
+            && !triggerButton.disabled
+            && typeof triggerButton.focus === 'function') {
+            triggerButton.focus();
+        }
+        return;
+    }
 
     const response = await fetch(
         '/domain/versions/' + encodeURIComponent(version),
@@ -377,7 +385,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         actionButton.dataset.targetStatus
                     );
                 } else if (actionButton.dataset.action === 'delete') {
-                    await deleteVersionFromList(actionButton.dataset.version);
+                    await deleteVersionFromList(
+                        actionButton.dataset.version,
+                        actionButton
+                    );
                 }
             } catch (err) {
                 showNotification(err.message || 'Version action failed', 'error');

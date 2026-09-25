@@ -244,13 +244,13 @@ Changes:
 7. src/front/static/domain/css/domain-versions.css
    Provides full-height desktop behavior and natural-flow mobile behavior.
 8. src/front/static/domain/js/domain-versions.js
-   Renders cards and performs lifecycle, load, refresh, and guarded delete actions.
+   Renders cards, performs guarded actions, and restores Delete-button focus after real-modal cancellation.
 9. src/front/static/registry/js/registry.js
    Consumes server deletion capabilities and safely handles guarded deletion.
 10. tests/units/
-    Covers lifecycle policy, deletion services and routes, card capabilities, and frontend rendering.
+    Covers lifecycle policy, deletion services and routes, card capabilities, frontend rendering, and cancellation focus restoration.
 11. tests/e2e/domain/test_domain_versions_cards.py
-    Adds deterministic mocked Chromium contracts at 1600x1000 and 390x844, including action requests, refreshes, focus, overflow, and console errors.
+    Adds deterministic mocked Chromium contracts at 1600x1000 and 390x844, including forced refresh requests, demonstrated internal scrolling, real-modal focus restoration, responsive overflow, and console errors.
 12. docs/user-guide.md and docs/features.md
     Document cards, inline lifecycle, deletion restrictions, and the separate API/MCP Active selection.
 13. .superpowers/sdd/task-6-report.md
@@ -279,4 +279,4 @@ Modified files:
 - .superpowers/sdd/task-6-report.md
 - changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
 
-Tests: uv run --frozen pytest -q -m "not scenario" → 6938 passed, 313 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.98s
+Tests: uv run --frozen pytest -q -m "not scenario" → 6939 passed, 313 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.93s

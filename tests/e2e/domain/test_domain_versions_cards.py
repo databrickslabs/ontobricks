@@ -12,7 +12,7 @@ VERSIONS = {
     "domain_folder": "acme",
     "versions": [
         {
-            "version": "3",
+            "version": "12",
             "description": "Current version",
             "status": "DRAFT",
             "author": "alice@example.com",
@@ -26,7 +26,7 @@ VERSIONS = {
             "delete_block_reason": "The latest version cannot be deleted.",
         },
         {
-            "version": "1",
+            "version": "11",
             "description": "Old draft",
             "status": "DRAFT",
             "author": "alice@example.com",
@@ -46,6 +46,23 @@ VERSIONS = {
             "can_delete": True,
             "delete_block_reason": "",
         },
+    ]
+    + [
+        {
+            "version": str(version),
+            "description": f"Published version {version}",
+            "status": "PUBLISHED",
+            "author": "alice@example.com",
+            "last_update": f"2026-09-{version:02d}T10:00:00Z",
+            "last_build": f"2026-09-{version:02d}T11:00:00Z",
+            "is_current": False,
+            "is_active": False,
+            "transitions": [],
+            "delete_control_visible": True,
+            "can_delete": False,
+            "delete_block_reason": "Published versions cannot be deleted.",
+        }
+        for version in range(10, 0, -1)
     ],
 }
 
@@ -104,9 +121,9 @@ def test_desktop_cards_order_actions_and_full_height(page, live_server):
     _open(page, live_server, DESKTOP)
 
     cards = page.locator(".dm-version-card")
-    expect(cards).to_have_count(2)
-    expect(cards.nth(0).locator("h5")).to_have_text("v3")
-    expect(cards.nth(1).locator("h5")).to_have_text("v1")
+    expect(cards).to_have_count(12)
+    expect(cards.nth(0).locator("h5")).to_have_text("v12")
+    expect(cards.nth(1).locator("h5")).to_have_text("v11")
     expect(cards.nth(1).get_by_role("button", name="Submit for Review")).to_be_visible()
     expect(cards.nth(1).get_by_role("button", name="Delete")).to_be_enabled()
 
@@ -119,6 +136,8 @@ def test_desktop_cards_order_actions_and_full_height(page, live_server):
                 sidebarBottom: sidebar.getBoundingClientRect().bottom,
                 workspaceBottom: workspace.getBoundingClientRect().bottom,
                 listOverflowY: getComputedStyle(list).overflowY,
+                listClientHeight: list.clientHeight,
+                listScrollHeight: list.scrollHeight,
                 horizontalOverflow:
                     document.documentElement.scrollWidth - window.innerWidth,
             };
@@ -126,6 +145,7 @@ def test_desktop_cards_order_actions_and_full_height(page, live_server):
     )
     assert abs(geometry["sidebarBottom"] - geometry["workspaceBottom"]) <= 1
     assert geometry["listOverflowY"] == "auto"
+    assert geometry["listScrollHeight"] > geometry["listClientHeight"]
     assert geometry["horizontalOverflow"] <= 1
     _assert_no_console_errors(console_errors)
 
@@ -173,27 +193,29 @@ def test_transition_posts_target_status_and_refreshes(page, live_server):
     page.evaluate("window.showConfirmDialog = () => Promise.resolve(true)")
 
     with page.expect_request("**/domain/set-version-status") as request_info:
-        page.get_by_role("button", name="Submit for Review").click()
+        with page.expect_request("**/domain/versions-list?refresh=true") as refresh_info:
+            page.get_by_role("button", name="Submit for Review").click()
     page.wait_for_function("window.__versionsRefreshComplete === 1")
 
     assert request_info.value.post_data_json == {
         "domain_name": "acme",
-        "version": "1",
+        "version": "11",
         "status": "IN-REVIEW",
     }
     assert request_info.value.method == "POST"
+    assert refresh_info.value.url.endswith("/domain/versions-list?refresh=true")
     _assert_no_console_errors(console_errors)
 
 
 def test_delete_calls_loaded_domain_endpoint_and_refreshes(page, live_server):
     console_errors = _watch_console_errors(page)
     page.route(
-        "**/domain/versions/1",
+        "**/domain/versions/11",
         lambda route: route.fulfill(
             status=200,
             content_type="application/json",
             body=json.dumps(
-                {"success": True, "message": 'Version 1 deleted from "acme"'}
+                {"success": True, "message": 'Version 11 deleted from "acme"'}
             ),
         ),
     )
@@ -204,25 +226,29 @@ def test_delete_calls_loaded_domain_endpoint_and_refreshes(page, live_server):
     delete_button = page.locator(".dm-version-card").nth(1).get_by_role(
         "button", name="Delete"
     )
-    with page.expect_request("**/domain/versions/1") as request_info:
-        delete_button.click()
+    with page.expect_request("**/domain/versions/11") as request_info:
+        with page.expect_request("**/domain/versions-list?refresh=true") as refresh_info:
+            delete_button.click()
     page.wait_for_function("window.__versionsRefreshComplete === 1")
 
     assert request_info.value.method == "DELETE"
-    assert request_info.value.url.endswith("/domain/versions/1")
+    assert request_info.value.url.endswith("/domain/versions/11")
+    assert refresh_info.value.url.endswith("/domain/versions-list?refresh=true")
     _assert_no_console_errors(console_errors)
 
 
 def test_cancelled_delete_returns_focus_to_action(page, live_server):
     console_errors = _watch_console_errors(page)
     _open(page, live_server, DESKTOP)
-    page.evaluate("window.showConfirmDialog = () => Promise.resolve(false)")
 
     delete_button = page.locator(".dm-version-card").nth(1).get_by_role(
         "button", name="Delete"
     )
-    delete_button.focus()
     delete_button.click()
 
+    modal = page.locator(".modal.show").filter(has_text="Permanently delete")
+    modal.wait_for(state="visible")
+    modal.get_by_role("button", name="Cancel").click()
+    modal.wait_for(state="hidden")
     expect(delete_button).to_be_focused()
     _assert_no_console_errors(console_errors)

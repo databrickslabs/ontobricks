@@ -1436,7 +1436,7 @@ Use the tab's **Refresh** button whenever an immediate server refresh is needed.
 
 ### Version status (loaded vs latest vs MCP-active)
 
-Three related ideas:
+Four related ideas:
 
 | Concept | Meaning |
 |---------|---------|
