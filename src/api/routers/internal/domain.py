@@ -601,7 +601,11 @@ async def delete_domain_version(
     settings: Settings = Depends(get_settings),
 ):
     domain = get_domain(session_mgr)
-    folder = domain.uc_domain_folder
+    # Deletion is session-scoped: only a domain identity persisted by an
+    # actual registry load/save may select the target. ``uc_domain_folder``
+    # falls back to the editable display name and can therefore alias an
+    # unrelated saved domain from an unsaved same-name session.
+    folder = (domain.domain_folder or "").strip()
     if not folder:
         raise ValidationError("Domain not saved to the registry")
     return SettingsService.delete_registry_version_result(

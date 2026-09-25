@@ -7,9 +7,11 @@ only), domain/version CRUD wiring, and the scheduler's bootstrap-time
 """
 
 import json
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
+import pytest
+
+from back.core.errors import ConflictError
 from back.objects.registry.RegistryService import (
     RegistryCfg,
     RegistryService,
@@ -655,6 +657,19 @@ class TestVersionDelegation:
         ok, _ = svc.delete_version("proj", "3")
         assert ok is True
         store.delete_version.assert_called_once_with("proj", "3")
+
+    def test_guard_conflict_does_not_purge_knowledge_store(self):
+        store = MagicMock()
+        store.delete_version.side_effect = ConflictError(
+            "Version 3 is no longer Draft"
+        )
+        svc = _make_svc(store=store)
+
+        with pytest.raises(ConflictError):
+            svc.delete_version("proj", "3")
+
+        store.list_documents.assert_not_called()
+        store.delete_documents.assert_not_called()
 
 
 # ==================================================================

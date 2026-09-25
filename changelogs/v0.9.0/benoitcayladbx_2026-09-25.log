@@ -280,3 +280,67 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6939 passed, 313 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.93s
+
+## Close final Domain version review blockers
+
+Context: Final whole-branch review found an unsafe session identity fallback,
+a lifecycle transition race in version deletion, stale global UI state after
+inline transitions, incomplete destructive confirmation copy, and missing
+focus restoration. The fixes preserve the established lifecycle and deletion
+policy while making the destructive Lakebase mutation authoritative.
+
+Changes:
+
+1. src/api/routers/internal/domain.py
+   Restricted loaded-domain deletion to the persisted `domain_folder` identity.
+2. src/back/objects/registry/store/lakebase/store.py
+   Guarded the destructive PostgreSQL statement with Draft status and converted zero-row conflicts to HTTP 409 before Knowledge Store cleanup.
+3. src/front/static/domain/js/domain-versions.js
+   Synchronized global lifecycle state, restored confirmation focus, improved permanent-deletion copy, linked card accessible names, and removed the unused refresh query.
+4. src/front/static/global/js/permissions.js
+   Added role-tooltip annotation reset for live transitions back to editable state.
+5. src/front/static/global/js/version-check.js
+   Added an authoritative lifecycle refresh entry point and coherent read-only body-state toggling.
+6. src/front/static/registry/js/registry.js
+   Added escaped permanent Knowledge Store removal warnings to version and domain confirmations.
+7. tests/units/api/test_delete_version_endpoints.py
+   Added the unsaved same-name deletion isolation regression.
+8. tests/units/registry/test_lakebase_guarded_version_delete.py
+   Added deterministic SQL predicate and zero-row conflict coverage.
+9. tests/units/registry/test_registry.py
+   Proved a guarded conflict cannot purge Knowledge Store rows.
+10. tests/units/settings/test_settings_version_deletion.py
+    Proved structured deletion conflicts remain HTTP 409 errors without cache mutation.
+11. tests/units/front/test_domain_versions_cards.py
+    Added executable accessibility, confirmation, focus, escaping, and global-refresh contracts.
+12. tests/e2e/domain/test_domain_versions_cards.py
+    Added real-modal cancellation focus and loaded-version read-only synchronization browser coverage.
+13. README.md
+    Summarized safe version deletion in the lifecycle overview.
+14. docs/features.md
+    Documented atomic Draft guarding and global UI synchronization.
+15. docs/user-guide.md
+    Documented authoritative deletion behavior, confirmation semantics, and lifecycle-driven editability.
+16. .superpowers/sdd/final-fix-report.md
+    Recorded finding-by-finding verification, RED/GREEN evidence, commands, deferred cleanup, and self-review.
+
+Modified files:
+- README.md
+- docs/features.md
+- docs/user-guide.md
+- src/api/routers/internal/domain.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/global/js/permissions.js
+- src/front/static/global/js/version-check.js
+- src/front/static/registry/js/registry.js
+- tests/e2e/domain/test_domain_versions_cards.py
+- tests/units/api/test_delete_version_endpoints.py
+- tests/units/front/test_domain_versions_cards.py
+- tests/units/registry/test_lakebase_guarded_version_delete.py
+- tests/units/registry/test_registry.py
+- tests/units/settings/test_settings_version_deletion.py
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6950 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.18s

@@ -44,9 +44,10 @@ async function deleteRegistryVersion(
 ) {
     const confirmed = await showConfirmDialog({
         title: 'Delete Version',
-        message: 'Delete version v' + escapeHtml(String(version)) +
+        message: 'Permanently delete version v' + escapeHtml(String(version)) +
             ' from domain "' + escapeHtml(String(domainName)) +
-            '"? This cannot be undone.',
+            '"? This permanently removes its Knowledge Store content '
+            + 'and cannot be undone.',
         confirmText: 'Delete',
         confirmClass: 'btn-danger',
         icon: 'trash'
@@ -566,7 +567,9 @@ document.addEventListener('DOMContentLoaded', function () {
     async function deleteRegistryDomain(domainName) {
         const confirmed = await showConfirmDialog({
             title: 'Delete Domain',
-            message: 'Delete domain "' + domainName + '" and all its versions from the registry? This cannot be undone.',
+            message: 'Permanently delete domain "' + escapeHtml(domainName)
+                + '" and all its versions from the registry? This permanently '
+                + 'removes all Knowledge Store content and cannot be undone.',
             confirmText: 'Delete',
             confirmClass: 'btn-danger',
             icon: 'trash'

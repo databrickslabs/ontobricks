@@ -169,6 +169,23 @@ def test_renderer_keeps_malicious_values_as_text_and_dom_properties():
     )
 
 
+def test_card_accessible_name_references_visible_heading():
+    _run_renderer_assertions(
+        r"""
+        const card = context.renderVersionCard({
+            version: '11',
+            status: 'DRAFT',
+            transitions: [],
+            delete_control_visible: false
+        }, 'acme');
+        const heading = allElements(card).find((item) => item.tagName === 'H5');
+        assert.equal(card.attributes['aria-label'], undefined);
+        assert.equal(card.attributes['aria-labelledby'], heading.id);
+        assert.ok(heading.id);
+        """
+    )
+
+
 def test_disabled_action_reasons_have_one_keyboard_reachable_wrapper():
     _run_renderer_assertions(
         r"""
@@ -240,10 +257,108 @@ def test_cancelled_domain_delete_restores_focus_to_trigger():
                 throw new Error('Delete must not run after cancellation');
             };
 
-            await context.deleteVersionFromList('11', trigger);
+            await context.deleteVersionFromList('acme', '11', trigger);
 
             assert.equal(trigger.focusCalls, 1);
             assert.equal(fetchCalled, false);
+        })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+        });
+        """
+    )
+
+
+def test_domain_delete_confirmation_names_domain_version_and_knowledge_store():
+    _run_renderer_assertions(
+        r"""
+        (async () => {
+            let confirmation;
+            const domain = 'acme"><script data-owned="domain"></script>';
+            const version = '1"><img data-owned="version" src=x>';
+            context.escapeHtml = (value) => String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+            context.showConfirmDialog = async (options) => {
+                confirmation = options;
+                return false;
+            };
+
+            await context.deleteVersionFromList(domain, version);
+
+            assert.equal(confirmation.message.includes('<script'), false);
+            assert.equal(confirmation.message.includes('<img'), false);
+            assert.equal(confirmation.message.includes('&lt;script'), true);
+            assert.equal(confirmation.message.includes('&lt;img'), true);
+            assert.equal(confirmation.message.includes('Knowledge Store'), true);
+            assert.equal(confirmation.message.includes('permanently'), true);
+        })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+        });
+        """
+    )
+
+
+@pytest.mark.parametrize(
+    ("function_name", "args"),
+    [
+        ("transitionVersion", "'acme', '11', 'IN-REVIEW'"),
+        ("loadVersionFromList", "'11'"),
+    ],
+)
+def test_cancelled_version_confirmations_restore_focus(function_name, args):
+    _run_renderer_assertions(
+        rf"""
+        (async () => {{
+            let fetchCalled = false;
+            const trigger = {{
+                disabled: false,
+                isConnected: true,
+                focusCalls: 0,
+                focus() {{ this.focusCalls += 1; }}
+            }};
+            context.escapeHtml = (value) => String(value);
+            context.showConfirmDialog = async () => false;
+            context.fetch = async () => {{
+                fetchCalled = true;
+                throw new Error('Fetch must not run after cancellation');
+            }};
+
+            await context.{function_name}({args}, trigger);
+
+            assert.equal(trigger.focusCalls, 1);
+            assert.equal(fetchCalled, false);
+        }})().catch((error) => {{
+            console.error(error);
+            process.exitCode = 1;
+        }});
+        """
+    )
+
+
+def test_loaded_transition_refreshes_global_lifecycle_state():
+    _run_renderer_assertions(
+        r"""
+        (async () => {
+            const calls = [];
+            context.escapeHtml = (value) => String(value);
+            context.showConfirmDialog = async () => true;
+            context.showNotification = () => {};
+            context.fetch = async () => ({
+                ok: true,
+                json: async () => ({success: true, status: 'IN-REVIEW'})
+            });
+            context.loadVersionsList = async () => { calls.push('cards'); };
+            context.refreshNavbarIndicators = async () => { calls.push('navbar'); };
+            context.refreshVersionStatusState = async () => { calls.push('version'); };
+
+            await context.transitionVersion('acme', '11', 'IN-REVIEW', null, true);
+
+            assert.deepEqual(calls, ['cards', 'navbar', 'version']);
         })().catch((error) => {
             console.error(error);
             process.exitCode = 1;
@@ -324,6 +439,8 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
             assert.equal(confirmation.message.includes('&lt;img'), true);
             assert.equal(confirmation.message.includes(domain), false);
             assert.equal(confirmation.message.includes(version), false);
+            assert.equal(confirmation.message.includes('Knowledge Store'), true);
+            assert.equal(confirmation.message.includes('permanently'), true);
         })().catch((error) => {
             console.error(error);
             process.exitCode = 1;
@@ -331,6 +448,16 @@ def test_registry_enabled_delete_confirmation_escapes_untrusted_values():
         """,
         REGISTRY_JS,
     )
+
+
+def test_registry_domain_delete_confirmation_escapes_name_and_names_knowledge_store():
+    js = REGISTRY_JS.read_text(encoding="utf-8")
+    delete_domain = js[
+        js.index("async function deleteRegistryDomain") :
+        js.index("async function loadRegistryDomainVersion")
+    ]
+    assert "escapeHtml(domainName)" in delete_domain
+    assert "Knowledge Store" in delete_domain
 
 
 def test_registry_delete_conflict_shows_server_message_and_refreshes():

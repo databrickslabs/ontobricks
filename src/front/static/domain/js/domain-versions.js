@@ -37,7 +37,7 @@ function setVersionsState(visibleState) {
     });
 }
 
-async function loadVersionsList(forceRefresh = false) {
+async function loadVersionsList() {
     const list = document.getElementById('versionsCardList');
     const errorMessage = document.getElementById('versionsErrorMessage');
     if (!list || !errorMessage) return;
@@ -45,8 +45,7 @@ async function loadVersionsList(forceRefresh = false) {
     setVersionsState('loading');
 
     try {
-        const endpoint = '/domain/versions-list' + (forceRefresh ? '?refresh=true' : '');
-        const response = await fetch(endpoint, { credentials: 'same-origin' });
+        const response = await fetch('/domain/versions-list', { credentials: 'same-origin' });
         const data = await response.json();
 
         if (!response.ok || !data.success) {
@@ -114,6 +113,8 @@ function wrapDisabledVersionAction(button, reason) {
     return wrapper;
 }
 
+let versionHeadingSequence = 0;
+
 function renderVersionCard(version, domainFolder) {
     const status = VERSION_STATUS_MAP[String(version.status || 'DRAFT').toUpperCase()]
         || VERSION_STATUS_MAP.DRAFT;
@@ -123,11 +124,12 @@ function renderVersionCard(version, domainFolder) {
         'card dm-version-card' + (version.is_current ? ' is-loaded' : '')
     );
     article.setAttribute('role', 'listitem');
-    article.setAttribute('aria-label', 'Version ' + versionValue);
 
     const body = createVersionElement('div', 'card-body');
     const header = createVersionElement('div', 'dm-version-card-header');
     const heading = createVersionElement('h5', 'mb-0', 'v' + versionValue);
+    heading.id = 'dmVersionHeading' + (++versionHeadingSequence);
+    article.setAttribute('aria-labelledby', heading.id);
     const statusBadge = createVersionElement(
         'span',
         'badge border ' + status.cls,
@@ -195,6 +197,7 @@ function renderVersionCard(version, domainFolder) {
         const deleteButton = createVersionActionButton({
             action: 'delete',
             version: versionValue,
+            domain: domainFolder,
             label: 'Delete',
             icon: 'trash',
             buttonClass: 'btn-outline-danger',
@@ -217,7 +220,22 @@ function renderVersionCard(version, domainFolder) {
     return article;
 }
 
-async function transitionVersion(domainFolder, version, targetStatus) {
+function restoreVersionActionFocus(triggerButton) {
+    if (triggerButton
+        && triggerButton.isConnected
+        && !triggerButton.disabled
+        && typeof triggerButton.focus === 'function') {
+        triggerButton.focus();
+    }
+}
+
+async function transitionVersion(
+    domainFolder,
+    version,
+    targetStatus,
+    triggerButton = null,
+    isLoaded = false
+) {
     const confirmed = await showConfirmDialog({
         title: 'Update Lifecycle Status',
         message: 'Change version v' + escapeHtml(version) + ' to '
@@ -226,7 +244,10 @@ async function transitionVersion(domainFolder, version, targetStatus) {
         confirmClass: 'btn-primary',
         icon: 'arrow-repeat'
     });
-    if (!confirmed) return;
+    if (!confirmed) {
+        restoreVersionActionFocus(triggerButton);
+        return;
+    }
 
     const response = await fetch('/domain/set-version-status', {
         method: 'POST',
@@ -243,25 +264,28 @@ async function transitionVersion(domainFolder, version, targetStatus) {
         throw new Error(data.message || 'Version status update failed');
     }
     showNotification(data.message || 'Version status updated', 'success');
-    await loadVersionsList(true);
+    await loadVersionsList();
+    if (typeof refreshNavbarIndicators === 'function') {
+        await refreshNavbarIndicators();
+    }
+    if (isLoaded && typeof refreshVersionStatusState === 'function') {
+        await refreshVersionStatusState();
+    }
 }
 
-async function deleteVersionFromList(version, triggerButton = null) {
+async function deleteVersionFromList(domainFolder, version, triggerButton = null) {
     const confirmed = await showConfirmDialog({
         title: 'Delete Version',
         message: 'Permanently delete version v' + escapeHtml(version)
-            + ' and its Knowledge Store content? This cannot be undone.',
+            + ' from domain "' + escapeHtml(domainFolder)
+            + '"? This permanently removes its Knowledge Store content '
+            + 'and cannot be undone.',
         confirmText: 'Delete Version',
         confirmClass: 'btn-danger',
         icon: 'trash'
     });
     if (!confirmed) {
-        if (triggerButton
-            && triggerButton.isConnected
-            && !triggerButton.disabled
-            && typeof triggerButton.focus === 'function') {
-            triggerButton.focus();
-        }
+        restoreVersionActionFocus(triggerButton);
         return;
     }
 
@@ -271,14 +295,14 @@ async function deleteVersionFromList(version, triggerButton = null) {
     );
     const data = await response.json();
     if (!response.ok || !data.success) {
-        if (response.status === 409) await loadVersionsList(true);
+        if (response.status === 409) await loadVersionsList();
         throw new Error(data.message || 'Version deletion failed');
     }
     showNotification(data.message, 'success');
-    await loadVersionsList(true);
+    await loadVersionsList();
 }
 
-async function loadVersionFromList(version) {
+async function loadVersionFromList(version, triggerButton = null) {
     const confirmed = await showConfirmDialog({
         title: 'Load Version',
         message: 'Load version ' + version + '? Unsaved changes will be lost.',
@@ -286,7 +310,10 @@ async function loadVersionFromList(version) {
         confirmClass: 'btn-primary',
         icon: 'box-arrow-in-down'
     });
-    if (!confirmed) return;
+    if (!confirmed) {
+        restoreVersionActionFocus(triggerButton);
+        return;
+    }
 
     try {
         showNotification('Loading version ' + version + '…', 'info', 3000);
@@ -377,15 +404,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
             try {
                 if (actionButton.dataset.action === 'load') {
-                    await loadVersionFromList(actionButton.dataset.version);
+                    await loadVersionFromList(
+                        actionButton.dataset.version,
+                        actionButton
+                    );
                 } else if (actionButton.dataset.action === 'transition') {
                     await transitionVersion(
                         actionButton.dataset.domain,
                         actionButton.dataset.version,
-                        actionButton.dataset.targetStatus
+                        actionButton.dataset.targetStatus,
+                        actionButton,
+                        Boolean(actionButton.closest('.dm-version-card.is-loaded'))
                     );
                 } else if (actionButton.dataset.action === 'delete') {
                     await deleteVersionFromList(
+                        actionButton.dataset.domain,
                         actionButton.dataset.version,
                         actionButton
                     );
@@ -399,7 +432,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (addButton) addButton.addEventListener('click', addNewVersionFromList);
     if (retryButton) {
         retryButton.addEventListener('click', function () {
-            loadVersionsList(true);
+            loadVersionsList();
         });
     }
 });

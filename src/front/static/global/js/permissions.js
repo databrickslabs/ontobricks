@@ -310,6 +310,10 @@
         setBadgeTooltip(badge, combined);
     }
 
+    function clearRoleNavBadgeAnnotation() {
+        showRoleNavBadge(effectiveRole());
+    }
+
     /*
      * (Re-)bind a Bootstrap tooltip on the role pill. Tooltips are
      * rendered as HTML so we can break the role description and the
@@ -387,6 +391,7 @@
     window.OB.installReadOnlyContextMenuBlocker = installReadOnlyContextMenuBlocker;
     window.OB.showRoleNavBadge = showRoleNavBadge;
     window.OB.annotateRoleNavBadge = annotateRoleNavBadge;
+    window.OB.clearRoleNavBadgeAnnotation = clearRoleNavBadgeAnnotation;
     window.OB.updateLlmAvailability = updateLlmAvailability;
 
     // ``base.html`` loads this with ``defer`` so <body> is fully parsed

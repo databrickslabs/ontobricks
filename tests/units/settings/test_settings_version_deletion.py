@@ -127,3 +127,20 @@ def test_physical_delete_failure_is_infrastructure_error_without_cache_clear():
     assert exc_info.value.detail == "delete failed"
     svc.delete_version.assert_called_once_with("acme", "1")
     clear_status.assert_not_called()
+
+
+def test_guarded_delete_conflict_stays_conflict_and_keeps_caches():
+    svc = MagicMock()
+    svc.cfg.is_configured = True
+    svc.list_versions.return_value = (True, ["1", "2", "3"], "")
+    svc.read_version.return_value = (True, {"info": {"status": "DRAFT"}}, "")
+    svc.delete_version.side_effect = ConflictError(
+        "Version 1 is no longer Draft; refresh and try again"
+    )
+    clear_status = MagicMock()
+
+    with pytest.raises(ConflictError, match="no longer Draft"):
+        _run(svc=svc, clear_status=clear_status)
+
+    svc.delete_version.assert_called_once_with("acme", "1")
+    clear_status.assert_not_called()

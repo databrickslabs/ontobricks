@@ -61,7 +61,7 @@ from back.core.databricks import get_lakebase_auth
 from back.core.databricks.lakebase import get_lakebase_pool
 from back.core.databricks.lakebase import require_psycopg as _shared_require_psycopg
 from back.core.databricks.lakebase.constants import APPLICATION_NAME_REGISTRY
-from back.core.errors import InfrastructureError
+from back.core.errors import ConflictError, InfrastructureError
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
 from back.objects.registry.registry_cache import invalidate_registry_cache
@@ -1126,20 +1126,29 @@ class LakebaseRegistryStore(RegistryStore):
 
     def delete_version(self, folder: str, version: str) -> Tuple[bool, str]:
         try:
+            self._ensure_domain_versions_status_column()
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    DELETE FROM {self._q(self._schema)}.domain_versions
-                    WHERE version = %s
-                      AND domain_id IN (
-                          SELECT id FROM {self._q(self._schema)}.domains
-                          WHERE registry_id = %s AND folder = %s
-                      )
+                    DELETE FROM {self._q(self._schema)}.domain_versions AS v
+                    USING {self._q(self._schema)}.domains AS d
+                    WHERE v.domain_id = d.id
+                      AND d.registry_id = %s
+                      AND d.folder = %s
+                      AND v.version = %s
+                      AND v.status = %s
                     """,
-                    (version, self._registry(), folder),
+                    (self._registry(), folder, version, "DRAFT"),
                 )
+                if cur.rowcount == 0:
+                    raise ConflictError(
+                        f"Version {version} is no longer Draft or no longer exists; "
+                        "refresh and try again"
+                    )
             invalidate_registry_cache(self.cache_key)
             return True, ""
+        except ConflictError:
+            raise
         except Exception as exc:  # noqa: BLE001
             return False, str(exc)
 
