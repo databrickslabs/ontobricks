@@ -563,8 +563,11 @@ Content-Type: application/json
             <div class="card-body px-3 py-2 d-none">
                 <p class="small mb-2">
                     Search for entities by type and/or label text, then traverse their relationships
-                    up to N levels deep (BFS graph walk). Returns all triples discovered during traversal,
-                    similar to the Graph Viewer's Find &amp; Filter feature.
+                    up to N levels deep (BFS graph walk). Triples are paged in deterministic
+                    <code>(subject, predicate, object)</code> order and return exact <code>total</code>,
+                    additive <code>has_more</code>, and alias-expanded <code>entity_count</code>.
+                    For broad type scans, start with <code>depth=1</code> and page with
+                    <code>limit</code>/<code>offset</code>.
                 </p>
                 <h6 class="small fw-semibold mb-1">Query Parameters</h6>
                 <table class="table table-sm table-borderless small mb-2">
@@ -592,6 +595,7 @@ Content-Type: application/json
   ],
   "count": 3,
   "total": 3,
+  "has_more": false,
   "limit": 1000,
   "offset": 0,
   "entity_count": 2

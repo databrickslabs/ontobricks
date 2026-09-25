@@ -800,7 +800,13 @@ BFS-based entity search with depth control.
 - `project_name` (query, optional): Domain name in the registry
 - `search` (query): Search text
 - `entity_type` (query, optional): Filter by type
-- `depth` (query, optional): BFS depth (default: 2)
+- `depth` (query, optional): BFS depth (default: 1)
+
+**Behavior notes:**
+- Page ordering is deterministic: `(subject, predicate, object)`.
+- `total` is exact for the current query; `entity_count` includes URI-alias expansion.
+- `has_more` is additive and indicates whether another page exists beyond the current `limit`/`offset`.
+- For broad type scans, start with `depth=1`, then deepen only when needed.
 
 #### `GET /api/v1/digitaltwin/nodes/context`
 
@@ -2687,9 +2693,13 @@ GET /api/v1/digitaltwin/triples/find
 - `project_name` (optional): Domain name in the registry
 - `search` (required): Search text
 - `entity_type` (optional): Filter by type
-- `depth` (optional): BFS depth (default: 2)
+- `depth` (optional): BFS depth (default: 1)
 
 BFS-based entity search with depth control.
+
+Response pages are emitted in deterministic `(subject, predicate, object)` order
+and include exact `total`, alias-expanded `entity_count`, and additive
+`has_more`. Prefer `depth=1` for large type-wide scans before increasing depth.
 
 ---
 

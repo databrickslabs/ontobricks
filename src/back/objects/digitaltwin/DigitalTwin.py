@@ -3033,23 +3033,21 @@ class DigitalTwin:
                 "limit": limit,
                 "offset": offset,
                 "entity_count": 0,
+                "has_more": False,
             }
 
         all_entities = {r["entity"] for r in bfs_rows}
         seed_count = sum(1 for r in bfs_rows if int(r.get("min_lvl", 0)) == 0)
         all_entities = DigitalTwin.expand_uri_aliases(store, table, all_entities)
-
-        all_rows = store.get_triples_for_subjects(table, list(all_entities))
-        seen: Set = set()
-        all_triples: List = []
-        for r in all_rows:
-            key = (r["subject"], r["predicate"], r["object"])
-            if key not in seen:
-                seen.add(key)
-                all_triples.append(r)
-
-        total = len(all_triples)
-        page = all_triples[offset : offset + limit]
+        page_result = store.get_triples_page_for_subjects(
+            table,
+            list(all_entities),
+            limit=limit,
+            offset=offset,
+        )
+        page = page_result.get("rows", [])
+        total = int(page_result.get("total", 0))
+        has_more = offset + len(page) < total
         return {
             "seed_count": seed_count,
             "depth": depth,
@@ -3059,6 +3057,7 @@ class DigitalTwin:
             "limit": limit,
             "offset": offset,
             "entity_count": len(all_entities),
+            "has_more": has_more,
         }
 
     @staticmethod

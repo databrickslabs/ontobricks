@@ -217,3 +217,66 @@ class TestRoundTripParity:
         assert RDF_TYPE in preds
         assert RDFS_LABEL in preds
         assert f"{NS}city" in preds
+
+
+def test_get_triples_page_for_subjects_is_distinct_sorted_and_exact_total():
+    from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+
+    r = Neo4jReadOps(FakeGraph())
+    r.get_triples_for_subjects = lambda _table, _subjects: [  # type: ignore[method-assign]
+        {"subject": "s2", "predicate": "p1", "object": "o1"},
+        {"subject": "s1", "predicate": "p2", "object": "o1"},
+        {"subject": "s1", "predicate": "p1", "object": "o2"},
+        {"subject": "s1", "predicate": "p1", "object": "o2"},  # duplicate
+        {"subject": "s1", "predicate": "p1", "object": "o1"},
+        {"subject": "s2", "predicate": "p1", "object": "o1"},  # duplicate
+    ]
+
+    got = r.get_triples_page_for_subjects(
+        "InsurBricks_V1",
+        ["s1", "s2"],
+        limit=2,
+        offset=1,
+    )
+
+    assert got["total"] == 4
+    assert got["rows"] == [
+        {"subject": "s1", "predicate": "p1", "object": "o2"},
+        {"subject": "s1", "predicate": "p2", "object": "o1"},
+    ]
+    assert len(got["rows"]) <= 2
+
+
+def test_neo4j_store_delegates_get_triples_page_for_subjects():
+    from back.core.graphdb.neo4j.Neo4jStore import Neo4jStore
+
+    class _Reads:
+        def __init__(self) -> None:
+            self.args = None
+
+        def get_triples_page_for_subjects(self, table_name, subjects, *, limit, offset):
+            self.args = (table_name, subjects, limit, offset)
+            return {"rows": [{"subject": "s", "predicate": "p", "object": "o"}], "total": 1}
+
+    store = object.__new__(Neo4jStore)
+    store._reads = _Reads()  # type: ignore[attr-defined]
+
+    got = store.get_triples_page_for_subjects("g", ["s"], limit=10, offset=3)
+
+    assert got == {"rows": [{"subject": "s", "predicate": "p", "object": "o"}], "total": 1}
+    assert store._reads.args == ("g", ["s"], 10, 3)
+
+
+def test_get_triples_page_for_subjects_empty_subjects_short_circuits():
+    from back.core.graphdb.neo4j.Neo4jReadOps import Neo4jReadOps
+
+    r = Neo4jReadOps(FakeGraph())
+
+    def _must_not_fetch(_table, _subjects):
+        raise AssertionError("get_triples_for_subjects must not be called for empty subjects")
+
+    r.get_triples_for_subjects = _must_not_fetch  # type: ignore[method-assign]
+
+    got = r.get_triples_page_for_subjects("InsurBricks_V1", [], limit=10, offset=0)
+
+    assert got == {"rows": [], "total": 0}

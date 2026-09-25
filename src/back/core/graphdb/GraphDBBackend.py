@@ -23,7 +23,7 @@ from back.core.logging import get_logger
 from back.core.helpers import sql_escape as _shared_sql_escape
 from back.core.graphdb.adjacency import expand_entity_neighbors_sql, seeded_bfs_sql
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
-from back.core.graphdb.props import execute_expand_with_props_fallback
+from back.core.graphdb.props import execute_expand_with_props_fallback, props_page_sql
 from back.core.graphdb.entity_search import (
     entity_search_seed_sql,
     entity_search_uri_search_sql,
@@ -735,6 +735,62 @@ class GraphDBBackend(ABC):
             props_table=props,
             fallback_sql=fallback_sql,
         )
+
+    def get_triples_page_for_subjects(
+        self,
+        table_name: str,
+        subjects: List[str],
+        *,
+        limit: int,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Return a paged triple list plus exact total for the subject set."""
+        if not subjects:
+            return {"rows": [], "total": 0}
+
+        fallback_sql = props_page_sql(
+            payload_relation=self._sql_relation(table_name),
+            uris=subjects,
+            limit=limit,
+            offset=offset,
+            escape=self._sql_escape,
+        )
+
+        props = self.props_table_id(table_name) if self.supports_props else ""
+        if props:
+            sql = props_page_sql(
+                payload_relation=self._sql_relation(props),
+                uris=subjects,
+                limit=limit,
+                offset=offset,
+                escape=self._sql_escape,
+            )
+            rows = execute_expand_with_props_fallback(
+                execute_query=self.execute_query,
+                sql=sql,
+                props_table=props,
+                fallback_sql=fallback_sql,
+            )
+        else:
+            rows = self.execute_query(fallback_sql) or []
+
+        total = int(rows[0].get("_ob_total") or 0) if rows else 0
+        triples: List[Dict[str, str]] = []
+        for row in rows:
+            if (
+                row.get("subject") is None
+                and row.get("predicate") is None
+                and row.get("object") is None
+            ):
+                continue
+            triples.append(
+                {
+                    "subject": row.get("subject") or "",
+                    "predicate": row.get("predicate") or "",
+                    "object": row.get("object") or "",
+                }
+            )
+        return {"rows": triples, "total": total}
 
     def get_predicates_for_type(self, table_name: str, type_uri: str) -> List[str]:
         """Return distinct predicates used by instances of *type_uri*."""

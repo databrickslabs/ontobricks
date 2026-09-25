@@ -245,6 +245,92 @@ class TestExpandUriAliases:
         assert result == uris
 
 
+class TestFindTriplesBfsContract:
+    def test_find_triples_bfs_returns_has_more_with_paged_fetch(self):
+        store = MagicMock()
+        store.bfs_traversal.return_value = [
+            {"entity": "http://ex.org/Customer/CUST001", "min_lvl": 0},
+            {"entity": "http://ex.org/Order/ORD001", "min_lvl": 1},
+        ]
+        store.find_subjects_by_patterns.return_value = {"http://ex.org/CUST001"}
+        store.get_triples_page_for_subjects.return_value = {
+            "rows": [{"subject": "s1", "predicate": "p1", "object": "o1"}],
+            "total": 5,
+        }
+
+        result = DigitalTwin.find_triples_bfs(
+            store,
+            "cat.sch.graph",
+            search="cust",
+            depth=2,
+            limit=1,
+            offset=0,
+        )
+
+        assert result["has_more"] is True
+        store.get_triples_page_for_subjects.assert_called_once()
+
+    @pytest.mark.parametrize(
+        ("offset", "rows", "total", "expected_has_more"),
+        [
+            (
+                2,
+                [
+                    {"subject": "s3", "predicate": "p3", "object": "o3"},
+                    {"subject": "s4", "predicate": "p4", "object": "o4"},
+                ],
+                5,
+                True,
+            ),
+            (
+                3,
+                [
+                    {"subject": "s4", "predicate": "p4", "object": "o4"},
+                    {"subject": "s5", "predicate": "p5", "object": "o5"},
+                ],
+                5,
+                False,
+            ),
+        ],
+    )
+    def test_find_triples_bfs_offset_has_more_and_paged_call_args(
+        self, offset, rows, total, expected_has_more
+    ):
+        store = MagicMock()
+        store.bfs_traversal.return_value = [
+            {"entity": "http://ex.org/Customer/CUST001", "min_lvl": 0},
+            {"entity": "http://ex.org/Order/ORD001", "min_lvl": 1},
+        ]
+        store.find_subjects_by_patterns.return_value = {"http://ex.org/CUST001"}
+        store.get_triples_page_for_subjects.return_value = {
+            "rows": rows,
+            "total": total,
+        }
+
+        result = DigitalTwin.find_triples_bfs(
+            store,
+            "cat.sch.graph",
+            search="cust",
+            depth=2,
+            limit=2,
+            offset=offset,
+        )
+
+        assert result["has_more"] is expected_has_more
+        assert result["count"] == len(rows)
+        assert result["total"] == total
+        store.get_triples_page_for_subjects.assert_called_once()
+        paged_call = store.get_triples_page_for_subjects.call_args
+        assert paged_call.args[0] == "cat.sch.graph"
+        assert set(paged_call.args[1]) == {
+            "http://ex.org/Customer/CUST001",
+            "http://ex.org/Order/ORD001",
+            "http://ex.org/CUST001",
+        }
+        assert paged_call.kwargs["limit"] == 2
+        assert paged_call.kwargs["offset"] == offset
+
+
 # ---------------------------------------------------------------------------
 # _sql_escape
 # ---------------------------------------------------------------------------
@@ -363,6 +449,7 @@ class TestPydanticModels:
         r = FindResponse(success=True)
         assert r.seed_count == 0
         assert r.triples == []
+        assert r.has_more is False
 
     def test_triples_response(self):
         from api.routers.digitaltwin import TriplesResponse, TripleRow
@@ -555,3 +642,75 @@ class TestDtTriplesBackendSelection:
         await dt_triples(backend="view", session_mgr=MagicMock(), settings=MagicMock())
 
         assert store.paginated_count.call_args[0][0] == "c.s.view_V1"
+
+
+class TestTriplesFindHasMorePropagation:
+    @patch("api.routers.digitaltwin.run_blocking")
+    @patch("api.routers.digitaltwin.effective_graph_query_table", return_value="c.s.graph_V1")
+    @patch("api.routers.digitaltwin.get_graphdb")
+    @patch("api.routers.digitaltwin.DigitalTwin.find_triples_bfs")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    async def test_external_route_exposes_has_more(
+        self,
+        mock_resolve,
+        mock_find,
+        mock_store,
+        _query,
+        mock_run_blocking,
+    ):
+        from api.routers.digitaltwin import dt_triples_find
+
+        mock_resolve.return_value = MagicMock()
+        mock_store.return_value = MagicMock()
+        mock_find.return_value = {
+            "seed_count": 1,
+            "triples": [{"subject": "s", "predicate": "p", "object": "o"}],
+            "count": 1,
+            "total": 5,
+            "has_more": 1,
+            "entity_count": 1,
+        }
+        mock_run_blocking.side_effect = lambda fn: fn()
+
+        result = await dt_triples_find(
+            search="cust",
+            limit=1,
+            offset=0,
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+
+        assert result.has_more is True
+        assert result.total == 5
+        mock_find.assert_called_once()
+
+    @patch("api.routers.internal.dtwin.run_blocking")
+    @patch("api.routers.internal.dtwin._graph_query_table", return_value="c.s.graph_V1")
+    @patch("api.routers.internal.dtwin._require_graph_store")
+    @patch("api.routers.internal.dtwin.get_domain")
+    async def test_internal_route_exposes_has_more(
+        self, mock_get_domain, mock_require_store, _query, mock_run_blocking
+    ):
+        from api.routers.internal.dtwin import dtwin_triples_find
+
+        mock_get_domain.return_value = MagicMock()
+        mock_require_store.return_value = MagicMock()
+        mock_run_blocking.return_value = {
+            "seed_count": 1,
+            "triples": [{"subject": "s", "predicate": "p", "object": "o"}],
+            "count": 1,
+            "total": 2,
+            "has_more": True,
+            "entity_count": 1,
+        }
+
+        result = await dtwin_triples_find(
+            search="cust",
+            limit=1,
+            offset=0,
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+
+        assert result["has_more"] is True
+        assert result["total"] == 2

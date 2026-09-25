@@ -17,6 +17,7 @@ __all__ = [
     "forget_missing_props",
     "is_missing_props_error",
     "known_missing_props",
+    "props_page_sql",
     "props_select",
     "remember_missing_props",
     "reset_missing_props_cache",
@@ -91,4 +92,38 @@ def props_select(spo: str) -> str:
         f"SELECT DISTINCT subject FROM {spo} "
         f"WHERE predicate = '{RDF_TYPE}'"
         f") typed ON typed.subject = t.subject"
+    )
+
+
+def props_page_sql(
+    *,
+    payload_relation: str,
+    uris: list[str],
+    limit: int,
+    offset: int,
+    escape: Callable[[str], str],
+) -> str:
+    """Return deterministic page SQL with exact count metadata."""
+    if not uris:
+        raise ValueError("At least one URI is required")
+    subject_literals = ", ".join(
+        f"'{escape(uri)}'" for uri in dict.fromkeys(uris)
+    )
+    page_limit = int(limit)
+    page_offset = int(offset)
+    return (
+        "WITH base AS ("
+        " SELECT DISTINCT subject, predicate, object "
+        f"FROM {payload_relation} "
+        f"WHERE subject IN ({subject_literals})"
+        "), stats AS ("
+        " SELECT COUNT(*) AS _ob_total FROM base"
+        "), page AS ("
+        " SELECT subject, predicate, object FROM base "
+        "ORDER BY subject, predicate, object "
+        f"LIMIT {page_limit} OFFSET {page_offset}"
+        ") "
+        "SELECT page.subject, page.predicate, page.object, stats._ob_total "
+        "FROM stats LEFT JOIN page ON TRUE "
+        "ORDER BY page.subject, page.predicate, page.object"
     )

@@ -1,3 +1,148 @@
+## Task 1 — Page BFS payloads server-side
+
+Context:
+Implemented the Task 1 forward-port for folded `describe_entity` performance by
+introducing paged payload SQL and backend paging primitives with `_props` + SPO
+fallback behavior, then validating via focused graphdb tests.
+
+Changes:
+
+1. `src/back/core/graphdb/props.py`
+   Added `props_page_sql(...)` to emit paged payload SQL with exact total metadata.
+2. `src/back/core/graphdb/GraphDBBackend.py`
+   Added `get_triples_page_for_subjects(...)` with companion-aware fallback behavior.
+3. `tests/units/graphdb/test_adjacency_sql.py`
+   Added SQL contract coverage for `props_page_sql`.
+4. `tests/units/graphdb/test_graphdb_adjacency_contract.py`
+   Added paging/fallback/backend contract coverage.
+5. `tests/units/core/test_lakebase_flat_store.py`
+   Added Lakebase paging and empty-subject short-circuit coverage.
+
+Modified files:
+- `src/back/core/graphdb/props.py`
+- `src/back/core/graphdb/GraphDBBackend.py`
+- `tests/units/graphdb/test_adjacency_sql.py`
+- `tests/units/graphdb/test_graphdb_adjacency_contract.py`
+- `tests/units/core/test_lakebase_flat_store.py`
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/graphdb/test_adjacency_sql.py -k props_page` (missing symbol/import failure)
+- RED: `uv run --frozen pytest -q tests/units/graphdb/test_graphdb_adjacency_contract.py tests/units/core/test_lakebase_flat_store.py -k triples_page` (missing method failures)
+- GREEN: `uv run --frozen pytest -q tests/units/graphdb/test_adjacency_sql.py tests/units/graphdb/test_graphdb_adjacency_contract.py tests/units/core/test_lakebase_flat_store.py` → `99 passed, 1 warning in 1.14s`
+
+## Task 2 — Use paged DigitalTwin fetch
+
+Context:
+Implemented Task 2 by switching `DigitalTwin.find_triples_bfs` from full triple
+materialization to paged backend retrieval while preserving BFS traversal and
+URI-alias expansion semantics.
+
+Changes:
+
+1. `src/back/objects/digitaltwin/DigitalTwin.py`
+   Replaced full fetch + Python slicing with paged backend retrieval and additive `has_more`.
+2. `tests/back/core/digitaltwin/test_digitaltwin_units.py`
+   Added coverage for paged fetch behavior and no-more final page semantics.
+3. `tests/units/dtwin/test_digitaltwin_api.py`
+   Added API-level coverage for paged result semantics and offset-aware `has_more`.
+
+Modified files:
+- `src/back/objects/digitaltwin/DigitalTwin.py`
+- `tests/back/core/digitaltwin/test_digitaltwin_units.py`
+- `tests/units/dtwin/test_digitaltwin_api.py`
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/back/core/digitaltwin/test_digitaltwin_units.py tests/units/dtwin/test_digitaltwin_api.py -k "find_triples_bfs or alias"` (legacy full-fetch path failures)
+- GREEN: `uv run --frozen pytest -q tests/back/core/digitaltwin/test_digitaltwin_units.py tests/units/dtwin/test_digitaltwin_api.py` → `80 passed, 1 warning in 0.92s`
+
+## Task 3 — Neo4j paging parity
+
+Context:
+Implemented Task 3 by adding Neo4j-native paging parity so Neo4j reads do not
+fall back to SQL paging helpers and still return deterministic exact totals.
+
+Changes:
+
+1. `src/back/core/graphdb/neo4j/Neo4jReadOps.py`
+   Added native `get_triples_page_for_subjects(...)` with deterministic order and exact total.
+2. `src/back/core/graphdb/neo4j/Neo4jStore.py`
+   Added store delegation to read-ops paging override.
+3. `tests/units/graphdb/test_neo4j_roundtrip.py`
+   Added parity + delegation tests (including empty-subject short-circuit follow-up).
+
+Modified files:
+- `src/back/core/graphdb/neo4j/Neo4jReadOps.py`
+- `src/back/core/graphdb/neo4j/Neo4jStore.py`
+- `tests/units/graphdb/test_neo4j_roundtrip.py`
+
+Tests:
+- RED: `uv run --frozen pytest -q tests/units/graphdb/test_neo4j_roundtrip.py -k triples_page` (missing method/fallback failures)
+- GREEN: `uv run --frozen pytest -q tests/units/graphdb/test_neo4j_roundtrip.py -k triples_page` → `2 passed`
+- GREEN: `uv run --frozen pytest -q tests/units/graphdb/test_neo4j_roundtrip.py` → `6 passed`
+
+## Thread `has_more` through find responses
+
+Context:
+Task 4 required the local implementation of additive pagination metadata for
+`/triples/find`, plus formatter behavior and docs updates. The response
+contract now exposes explicit `has_more` from the backend instead of inferring
+truncation from `total > page_size`, while preserving exact totals and
+existing traversal output.
+
+Changes:
+
+1. `src/api/routers/digitaltwin.py`
+   Added `FindResponse.has_more` (default `False`) and mapped route output from domain result payload.
+2. `src/api/routers/internal/dtwin.py`
+   Propagated additive `has_more` in the internal `/dtwin/triples/find` payload.
+3. `src/agents/tools/graph_formatting.py`
+   Switched truncation hint rendering to explicit `has_more` while keeping exact `total` in the header.
+4. `src/mcp-server/server/formatting.py`
+   Mirrored the formatter behavior change: pagination hint now depends on `has_more`.
+5. `src/mcp-server/server/tools.py`
+   Updated `describe_entity` MCP guidance to explain `has_more` hint semantics and recommend `depth=1` first for broad scans.
+6. `src/front/templates/partials/dtwin/_query_api.html`
+   Updated UI API card docs for `/triples/find` with deterministic ordering, exact `total`, additive `has_more`, alias-expanded `entity_count`, and `depth=1` guidance.
+7. `docs/api.md`
+   Documented deterministic page ordering, exact `total`, alias-expanded `entity_count`, additive `has_more`, and scan-depth guidance in both API reference sections.
+8. `docs/optimizations.md`
+   Added explicit note that `/triples/find` pagination is deterministic and truncation hints must follow additive `has_more`.
+9. `docs/mcp.md`
+   Updated MCP `describe_entity` guidance/sample output to include explicit pagination-hint semantics and `depth=1` recommendation.
+10. `tests/units/dtwin/test_digitaltwin_api.py`
+    Added RED/GREEN coverage for `FindResponse.has_more` default and both external/internal route propagation.
+11. `tests/units/agents/test_graph_formatting_context.py`
+    Added formatter contract test proving truncation hint depends on `has_more` and keeps exact `total`.
+12. `tests/units/mcp/test_find_formatting.py`
+    Added MCP formatter contract test for explicit `has_more`-driven pagination hint behavior.
+13. `tests/units/front/test_settings_api_contract.py`
+    Added UI contract coverage asserting `/triples/find` depth default is `1` in both the table row and input value.
+14. `docs/api.md`
+    Corrected both `/triples/find` reference sections to reflect the actual public/internal default depth (`1`).
+15. `docs/mcp.md`
+    Corrected the `describe_entity` parameter table to reflect the actual default depth (`1`).
+
+Modified files:
+- `src/api/routers/digitaltwin.py`
+- `src/api/routers/internal/dtwin.py`
+- `src/agents/tools/graph_formatting.py`
+- `src/mcp-server/server/formatting.py`
+- `src/mcp-server/server/tools.py`
+- `src/front/templates/partials/dtwin/_query_api.html`
+- `docs/api.md`
+- `docs/optimizations.md`
+- `docs/mcp.md`
+- `tests/units/dtwin/test_digitaltwin_api.py`
+- `tests/units/agents/test_graph_formatting_context.py`
+- `tests/units/mcp/test_find_formatting.py`
+- `tests/units/front/test_settings_api_contract.py`
+- `changelogs/v0.9.0/benoitcayladbx_2026-09-25.log`
+
+Tests:
+- `uv run --frozen pytest -q tests/units/dtwin/test_digitaltwin_api.py tests/units/agents/test_agent_dtwin_chat.py tests/mcp` → `122 passed, 1 warning in 2.42s`
+- Post-review follow-up focused run: `uv run --frozen pytest -q tests/units/mcp/test_find_formatting.py tests/units/dtwin/test_digitaltwin_api.py tests/units/agents/test_graph_formatting_context.py -k "find_pagination_hint_uses_explicit_has_more or external_route_exposes_has_more or internal_route_exposes_has_more or test_find_response_defaults"` → `5 passed, 53 deselected, 1 warning in 1.50s`
+- `uv run --frozen pytest -q -m "not scenario"` → `= 6903 passed, 320 skipped, 6 deselected, 1 xfailed, 32 warnings in 2558.83s (0:42:38) =`
+
 ## Define guarded version deletion policy
 
 Context: Domain-version cards need pure capability data for lifecycle actions
@@ -466,3 +611,25 @@ Tests: `uv run --frozen pytest -q -m "not scenario"` → 6,899 passed,
 308 skipped, 6 deselected, 1 xfailed, 0 failed in 50.33s. Targeted MCP suite:
 `uv run --frozen pytest -q tests/units/mcp tests/mcp -m "not scenario"` →
 109 passed, 0 failed in 2.44s.
+
+## Verify the combined BFS and MCP changes
+
+Context: PR #184 was updated with the current 0.9.0 branch after the MCP
+session-isolation forward-port merged. The changelog conflict was resolved by
+retaining both contributions, and the combined branch was revalidated.
+
+Changes:
+
+1. changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+   Retained the BFS paging and MCP session-isolation records after merging the
+   current 0.9.0 branch.
+2. docs/mcp.md
+   Preserved both the BFS pagination guidance and concurrent-session behavior.
+
+Modified files:
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+- docs/mcp.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6,909 passed,
+320 skipped, 6 deselected, 1 xfailed, 0 failed in 42m 37s. Focused BFS/MCP
+regression suite → 205 passed, 0 failed in 2.53s.

@@ -429,6 +429,7 @@ def _format_find_response(
     triples = data.get("triples", [])
     depth = data.get("depth", 1)
     total = data.get("total", len(triples))
+    has_more = bool(data.get("has_more", False))
 
     by_subject: dict[str, list[dict]] = {}
     for t in triples:
@@ -483,7 +484,7 @@ def _format_find_response(
             parts.append(_format_entity_block(uri, by_subject.get(uri, []), label_or_local))
             parts.append("")
 
-    if total > len(triples):
+    if has_more:
         parts.append(
             f"(Showing {len(triples)} of {total} triples — "
             f"increase limit or use pagination for more)"
