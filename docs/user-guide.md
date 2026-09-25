@@ -1419,7 +1419,9 @@ the API/MCP **Active** selection managed in **Registry → Browse**.
   are protected. The confirmation names the domain and version and warns that
   Knowledge Store content is permanently removed. The registry row deletion
   atomically checks that the version is still Draft before Knowledge Store
-  cleanup begins.
+  cleanup begins. These operations use separate storage APIs and cannot share
+  one transaction: if cleanup fails after metadata deletion, OntoBricks
+  reports a 5xx partial-deletion error instead of claiming success.
 - **New Version:** branches the current state into the next Draft version.
 - **Reload Saved:** discards local edits and reloads the loaded version.
 

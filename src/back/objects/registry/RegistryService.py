@@ -36,6 +36,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from back.core.errors import InfrastructureError
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
 from back.core.databricks import VolumeFileService
@@ -859,11 +860,24 @@ class RegistryService:
             doc_rows = self._store.list_documents(folder, version)
             filenames = [r.get("filename") for r in doc_rows if r.get("filename")]
             if filenames:
-                self._store.delete_documents(folder, version, filenames)
-        except Exception as exc:  # noqa: BLE001 — best-effort corpus cleanup
-            logger.warning(
-                "Knowledge Store cleanup raised for %s/V%s: %s", folder, version, exc
+                errors = self._store.delete_documents(folder, version, filenames)
+                if errors:
+                    raise InfrastructureError(
+                        "Registry version metadata was deleted, but Knowledge "
+                        "Store cleanup failed",
+                        detail="; ".join(errors),
+                    )
+        except InfrastructureError:
+            raise
+        except Exception as exc:
+            logger.exception(
+                "Knowledge Store cleanup raised for %s/V%s", folder, version
             )
+            raise InfrastructureError(
+                "Registry version metadata was deleted, but Knowledge Store "
+                "cleanup failed",
+                detail=str(exc),
+            ) from exc
         # Also remove any legacy binary version dir on the Volume. Errors are
         # non-fatal — Lakebase is the source of truth.
         try:

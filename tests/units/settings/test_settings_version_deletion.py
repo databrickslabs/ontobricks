@@ -144,3 +144,20 @@ def test_guarded_delete_conflict_stays_conflict_and_keeps_caches():
 
     svc.delete_version.assert_called_once_with("acme", "1")
     clear_status.assert_not_called()
+
+
+def test_partial_cleanup_failure_is_not_reported_as_success():
+    svc = MagicMock()
+    svc.cfg.is_configured = True
+    svc.list_versions.return_value = (True, ["1", "2", "3"], "")
+    svc.read_version.return_value = (True, {"info": {"status": "DRAFT"}}, "")
+    svc.delete_version.side_effect = InfrastructureError(
+        "Registry version metadata was deleted, but Knowledge Store cleanup failed",
+        detail="lakebase unavailable",
+    )
+    clear_status = MagicMock()
+
+    with pytest.raises(InfrastructureError, match="Knowledge Store cleanup failed"):
+        _run(svc=svc, clear_status=clear_status)
+
+    clear_status.assert_called_once()

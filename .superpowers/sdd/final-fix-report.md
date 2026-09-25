@@ -73,3 +73,47 @@ status predicate is authoritative because lifecycle transitions update the
 same denormalized `domain_versions.status` column. Knowledge Store cleanup
 remains after, and conditional on, successful row deletion. No user changes
 were overwritten, and `.superpowers/sdd/progress.md` was not edited.
+
+## Follow-up — remaining Important findings
+
+### Persistent context-menu blocker
+
+Confirmed: the capture listener was installed once and permanently prevented
+context menus even after `read-only-version` was removed. The listener remains
+deduplicated, but now checks the current `read-only-version` or `role-viewer`
+body class for every event. Inline Draft → In Review blocks context menus;
+inline In Review → Draft restores context menus and `canEditOntology()` without
+a reload.
+
+### Knowledge Store cleanup failures
+
+Confirmed: returned `delete_documents()` errors and raised exceptions were
+logged and swallowed. Cleanup now raises `InfrastructureError` with the
+truthful message that registry metadata was deleted but Knowledge Store cleanup
+failed. Both Domain and Settings routes propagate the shared 5xx error. The
+atomic Draft-guarded registry-row deletion still runs first; cleanup was not
+moved before it. Since the registry and cleanup APIs do not support one shared
+transaction, this can be a partial deletion. Version-status caches are cleared
+on this partial-failure path so the removed registry row is not presented as
+live.
+
+### Follow-up RED/GREEN and verification
+
+- RED backend: 3 expected failures proved returned cleanup errors, raised
+  cleanup exceptions, and missing partial-failure cache invalidation.
+- RED browser: In Review → Draft left a synthetic OntoViz context menu blocked.
+- GREEN targeted backend/API/frontend: 135 passed, 1 warning.
+- GREEN mocked Chromium: 8 passed, 1 warning, including both lifecycle
+  directions through the real inline confirmation flow.
+- Node syntax checks: passed.
+- Ruff correctness checks and IDE diagnostics: passed for changed code. A
+  broader touched-module `F,E9` run surfaced three pre-existing findings in
+  `SettingsService.py` and `RegistryService.py`; none is in a changed hunk.
+- `git diff --check`: passed.
+- Full `uv run --frozen pytest -q -m "not scenario"`: 6955 passed,
+  316 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.64s.
+
+Follow-up commit: reported in the final handoff; a commit cannot contain its
+own immutable SHA. Remaining concern: cross-store rollback remains unsupported,
+so cleanup failure is explicitly reported as partial deletion rather than
+atomic success.

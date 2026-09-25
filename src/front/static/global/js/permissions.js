@@ -184,6 +184,10 @@
         if (window._readOnlyContextMenuBlockerInstalled) return;
         window._readOnlyContextMenuBlockerInstalled = true;
         document.addEventListener('contextmenu', function (event) {
+            const readOnlyNow = document.body.classList.contains('read-only-version')
+                || document.body.classList.contains('role-viewer');
+            if (!readOnlyNow) return;
+
             const target = event.target;
             if (target && target.closest
                 && target.closest(READ_ONLY_DESIGN_SURFACE_SELECTOR)) {

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.core.errors import ValidationError
+from back.core.errors import InfrastructureError, ValidationError
 
 domain_router = importlib.import_module("api.routers.internal.domain")
 settings_router = importlib.import_module("api.routers.internal.settings")
@@ -79,3 +79,46 @@ async def test_settings_delete_forwards_target_and_role():
     assert result["success"] is True
     assert delete.call_args.args[:2] == ("acme", "1")
     assert delete.call_args.kwargs["user_role"] == "admin"
+
+
+async def test_domain_route_propagates_partial_cleanup_failure():
+    domain = SimpleNamespace(domain_folder="acme")
+    cleanup_error = InfrastructureError(
+        "Registry version metadata was deleted, but Knowledge Store cleanup failed"
+    )
+    with (
+        patch.object(domain_router, "get_domain", return_value=domain),
+        patch.object(
+            domain_router.SettingsService,
+            "delete_registry_version_result",
+            side_effect=cleanup_error,
+        ),
+        pytest.raises(InfrastructureError, match="Knowledge Store cleanup failed"),
+    ):
+        await domain_router.delete_domain_version(
+            "1",
+            _request(),
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+
+
+async def test_settings_route_propagates_partial_cleanup_failure():
+    cleanup_error = InfrastructureError(
+        "Registry version metadata was deleted, but Knowledge Store cleanup failed"
+    )
+    with (
+        patch.object(
+            settings_router.config_service,
+            "delete_registry_version_result",
+            side_effect=cleanup_error,
+        ),
+        pytest.raises(InfrastructureError, match="Knowledge Store cleanup failed"),
+    ):
+        await settings_router.delete_registry_version(
+            "acme",
+            "1",
+            _request(),
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )

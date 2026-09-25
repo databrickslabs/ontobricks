@@ -1198,7 +1198,14 @@ class SettingsService:
                 version_count=len(versions),
             )
 
-            deleted, delete_message = svc.delete_version(domain_name, version)
+            try:
+                deleted, delete_message = svc.delete_version(domain_name, version)
+            except InfrastructureError:
+                # The registry row may already be gone when post-delete
+                # Knowledge Store cleanup fails. Do not leave version-status
+                # caches claiming that the deleted row still exists.
+                clear_version_status_cache()
+                raise
             if not deleted:
                 raise InfrastructureError(
                     "Failed to delete registry version", detail=delete_message

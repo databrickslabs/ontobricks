@@ -344,3 +344,55 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6950 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.18s
+
+## Report dynamic read-only and cleanup failures correctly
+
+Context: Final follow-up review found that the installed context-menu capture
+listener survived a transition back to Draft, and that Knowledge Store cleanup
+errors were swallowed after registry metadata deletion. The follow-up restores
+editable behavior dynamically and reports unavoidable partial deletion as a
+5xx failure without weakening the atomic Draft guard.
+
+Changes:
+
+1. src/front/static/global/js/permissions.js
+   Made the deduplicated context-menu listener evaluate the current lifecycle and viewer body classes for every event.
+2. src/back/objects/registry/RegistryService.py
+   Converted returned and raised Knowledge Store cleanup failures into truthful structured infrastructure errors after guarded row deletion.
+3. src/back/objects/domain/SettingsService.py
+   Cleared version-status caches when post-delete cleanup fails while preserving the propagated 5xx error.
+4. tests/e2e/domain/test_domain_versions_cards.py
+   Added real inline-flow browser coverage for Draft → In Review blocking and In Review → Draft editing/context-menu restoration.
+5. tests/units/registry/test_registry.py
+   Added returned-error and raised-exception cleanup regressions and proved legacy cleanup does not continue.
+6. tests/units/settings/test_settings_version_deletion.py
+   Added partial-cleanup error and cache invalidation coverage.
+7. tests/units/api/test_delete_version_endpoints.py
+   Verified both Domain and Settings routes propagate the shared cleanup failure.
+8. README.md
+   Clarified that permanent cleanup is attempted after the atomic Draft guard and failures are reported.
+9. docs/features.md
+   Documented the cross-store transaction boundary and truthful partial-deletion response.
+10. docs/user-guide.md
+    Documented the 5xx partial-deletion behavior for cleanup failures.
+11. docs/superpowers/specs/2026-09-25-domain-versions-cards-and-safe-deletion-design.md
+    Corrected the cleanup semantics to match the supported storage APIs.
+12. .superpowers/sdd/final-fix-report.md
+    Added follow-up finding verification, RED/GREEN evidence, exact commands, and remaining concern.
+
+Modified files:
+- src/front/static/global/js/permissions.js
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/domain/SettingsService.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- tests/units/registry/test_registry.py
+- tests/units/settings/test_settings_version_deletion.py
+- tests/units/api/test_delete_version_endpoints.py
+- README.md
+- docs/features.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-25-domain-versions-cards-and-safe-deletion-design.md
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6955 passed, 316 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.64s

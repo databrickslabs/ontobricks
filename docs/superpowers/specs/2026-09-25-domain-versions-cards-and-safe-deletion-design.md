@@ -277,7 +277,10 @@ After policy validation, retain the existing
 4. invalidate registry and version-status caches.
 
 Policy rejection performs no cleanup. Partial cleanup continues to use the
-existing infrastructure-error reporting and logging behavior.
+existing infrastructure-error reporting and logging behavior. Registry-row
+deletion and Knowledge Store cleanup use separate storage APIs, so they cannot
+share one transaction: returned cleanup errors and raised cleanup exceptions
+must produce a truthful 5xx partial-deletion response, never success.
 
 ## Error Handling
 

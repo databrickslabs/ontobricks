@@ -116,6 +116,23 @@ def _track_refresh_completion(page):
     )
 
 
+def _context_menu_is_blocked(page):
+    return page.evaluate(
+        """() => {
+            const surface = document.createElement('div');
+            surface.className = 'ovz-canvas';
+            document.body.appendChild(surface);
+            const event = new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true
+            });
+            surface.dispatchEvent(event);
+            surface.remove();
+            return event.defaultPrevented;
+        }"""
+    )
+
+
 def test_desktop_cards_order_actions_and_full_height(page, live_server):
     console_errors = _watch_console_errors(page)
     _open(page, live_server, DESKTOP)
@@ -342,6 +359,7 @@ def test_loaded_transition_updates_global_read_only_state(page, live_server):
     page.route("**/navbar/state*", navbar_state)
     _open(page, live_server, DESKTOP, versions)
 
+    assert _context_menu_is_blocked(page) is False
     button = page.get_by_role("button", name="Submit Loaded for Review")
     button.click()
     modal = page.locator(".modal.show").filter(has_text="Update Lifecycle Status")
@@ -358,4 +376,99 @@ def test_loaded_transition_updates_global_read_only_state(page, live_server):
     expect(page.locator("body")).to_have_class(
         __import__("re").compile(r"\bread-only-version\b")
     )
+    assert _context_menu_is_blocked(page) is True
+    _assert_no_console_errors(console_errors)
+
+
+def test_loaded_transition_back_to_draft_restores_editing(page, live_server):
+    console_errors = _watch_console_errors(page)
+    versions = json.loads(json.dumps(VERSIONS))
+    versions["versions"][0]["status"] = "IN-REVIEW"
+    versions["versions"][0]["transitions"] = [
+        {
+            "target_status": "DRAFT",
+            "label": "Return Loaded to Draft",
+            "enabled": True,
+            "blocked_reason": "",
+        }
+    ]
+    lifecycle = {"status": "IN-REVIEW"}
+
+    def transition(route):
+        lifecycle["status"] = "DRAFT"
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"success": True, "status": "DRAFT"}),
+        )
+
+    def version_status(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "success": True,
+                    "version": "12",
+                    "status": lifecycle["status"],
+                    "is_latest": True,
+                    "has_registry": True,
+                }
+            ),
+        )
+
+    def navbar_state(route):
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "domain": {
+                        "info": {
+                            "name": "Acme",
+                            "version": "12",
+                            "status": lifecycle["status"],
+                        },
+                        "stats": {},
+                        "domain_folder": "acme",
+                    },
+                    "warehouse": {},
+                    "branding": {},
+                }
+            ),
+        )
+
+    page.route("**/domain/set-version-status", transition)
+    page.route("**/domain/version-status*", version_status)
+    page.route("**/navbar/state*", navbar_state)
+    _open(page, live_server, DESKTOP, versions)
+    page.wait_for_function(
+        "() => document.body.classList.contains('read-only-version')"
+        " && window.versionStatus === 'IN-REVIEW'"
+    )
+
+    assert _context_menu_is_blocked(page) is True
+    assert page.evaluate(
+        "() => window.isActiveVersion === false"
+        " && window.OB.canEditOntology() === false"
+    ) is True
+
+    button = page.get_by_role("button", name="Return Loaded to Draft")
+    button.click()
+    modal = page.locator(".modal.show").filter(has_text="Update Lifecycle Status")
+    modal.wait_for(state="visible")
+    modal.get_by_role("button", name="Update Status").click()
+
+    page.wait_for_function(
+        "() => !document.body.classList.contains('read-only-version')"
+        " && window.versionStatus === 'DRAFT'"
+    )
+    expect(page.locator("#currentDomainName").locator("xpath=..").locator(
+        ".domain-status-badge"
+    )).to_have_text("Draft")
+    assert page.evaluate(
+        "() => window.isActiveVersion === true"
+        " && window.OB.canEditOntology() === true"
+    ) is True
+    assert _context_menu_is_blocked(page) is False
     _assert_no_console_errors(console_errors)
