@@ -12,6 +12,7 @@ from back.core.graphdb.adjacency import (
     typed_out_select,
 )
 from back.core.graphdb.constants import RDF_TYPE, RDFS_LABEL
+from back.core.graphdb.props import props_page_sql
 
 
 def test_typed_out_select_excludes_type_and_label():
@@ -219,3 +220,19 @@ def test_seeded_bfs_sql_unions_every_level_with_its_number() -> None:
     )
     for level in range(4):
         assert f"SELECT entity, {level} AS lvl FROM level_{level}" in sql
+
+
+def test_props_page_sql_builds_ordered_page_with_total() -> None:
+    sql = props_page_sql(
+        payload_relation="g_props",
+        uris=["http://ex/a", "http://ex/O'Brien"],
+        limit=2,
+        offset=3,
+        escape=lambda value: value.replace("'", "''"),
+    )
+
+    assert "SELECT DISTINCT subject, predicate, object" in sql
+    assert "COUNT(*) AS _ob_total" in sql
+    assert "ORDER BY page.subject, page.predicate, page.object" in sql
+    assert "LIMIT 2 OFFSET 3" in sql
+    assert "O''Brien" in sql

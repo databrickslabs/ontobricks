@@ -9,7 +9,11 @@ import pytest
 
 from back.core.graphdb.GraphDBBackend import GraphDBBackend
 from back.core.graphdb.constants import RDF_TYPE
-from back.core.graphdb.props import reset_missing_props_cache
+from back.core.graphdb.props import (
+    known_missing_props,
+    remember_missing_props,
+    reset_missing_props_cache,
+)
 
 
 def setup_function() -> None:
@@ -308,6 +312,104 @@ def test_get_triples_for_subjects_falls_back_when_props_table_missing():
 def test_get_triples_for_subjects_returns_empty_list_for_no_subjects():
     store = FakeStore()
     assert store.get_triples_for_subjects("g", []) == []
+    assert store.queries == []
+
+
+def test_get_triples_page_for_subjects_uses_props_when_supported():
+    store = FakeStore()
+    store.supports_props = True
+    with patch.object(
+        store,
+        "execute_query",
+        return_value=[
+            {
+                "subject": "s",
+                "predicate": "p",
+                "object": "o",
+                "_ob_total": 7,
+            }
+        ],
+    ) as execute:
+        got = store.get_triples_page_for_subjects(
+            "g",
+            ["http://ex/1"],
+            limit=10,
+            offset=0,
+        )
+    assert got == {
+        "rows": [{"subject": "s", "predicate": "p", "object": "o"}],
+        "total": 7,
+    }
+    assert execute.call_count == 1
+    assert "g_props" in execute.call_args.args[0]
+
+
+def test_get_triples_page_for_subjects_falls_back_when_props_known_missing():
+    store = FakeStore()
+    store.supports_props = True
+    remember_missing_props("g_props")
+    with patch.object(
+        store,
+        "execute_query",
+        return_value=[{"subject": "s", "predicate": "p", "object": "o", "_ob_total": 1}],
+    ) as execute:
+        got = store.get_triples_page_for_subjects(
+            "g",
+            ["http://ex/1"],
+            limit=10,
+            offset=0,
+        )
+    assert got["total"] == 1
+    assert execute.call_count == 1
+    assert "FROM g " in execute.call_args.args[0] or "FROM g\n" in execute.call_args.args[0]
+    assert "g_props" not in execute.call_args.args[0]
+
+
+def test_get_triples_page_for_subjects_marks_props_missing_on_exception():
+    store = FakeStore()
+    store.supports_props = True
+    with patch.object(
+        store,
+        "execute_query",
+        side_effect=[
+            RuntimeError("TABLE_OR_VIEW_NOT_FOUND: g_props"),
+            [{"subject": "s", "predicate": "p", "object": "o", "_ob_total": 3}],
+        ],
+    ) as execute:
+        got = store.get_triples_page_for_subjects(
+            "g",
+            ["http://ex/1"],
+            limit=10,
+            offset=0,
+        )
+    assert got["total"] == 3
+    assert execute.call_count == 2
+    assert "g_props" in execute.call_args_list[0].args[0]
+    assert "g_props" not in execute.call_args_list[1].args[0]
+    assert known_missing_props("g_props") is True
+
+
+def test_get_triples_page_for_subjects_ignores_placeholder_row():
+    store = FakeStore()
+    store.supports_props = True
+    with patch.object(
+        store,
+        "execute_query",
+        return_value=[
+            {"subject": None, "predicate": None, "object": None, "_ob_total": 9},
+        ],
+    ):
+        got = store.get_triples_page_for_subjects("g", ["http://ex/1"], limit=10, offset=5)
+    assert got == {"rows": [], "total": 9}
+
+
+def test_get_triples_page_for_subjects_empty_subjects_short_circuits():
+    store = FakeStore()
+    store.supports_props = True
+    with patch("back.core.graphdb.GraphDBBackend.props_page_sql") as sql_builder:
+        got = store.get_triples_page_for_subjects("g", [], limit=10, offset=0)
+    assert got == {"rows": [], "total": 0}
+    sql_builder.assert_not_called()
     assert store.queries == []
 
 

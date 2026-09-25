@@ -881,3 +881,42 @@ def test_find_subjects_by_patterns_escapes_quotes(auth):
         store.find_subjects_by_patterns("MyGraph_V1", ["%/O'Brien"])
     sql = mock_eq.call_args[0][0]
     assert "O''Brien" in sql
+
+
+def test_get_triples_page_for_subjects_uses_props_table(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(
+        store,
+        "execute_query",
+        return_value=[
+            {
+                "subject": "s",
+                "predicate": "p",
+                "object": "o",
+                "_ob_total": 4,
+            }
+        ],
+    ) as execute:
+        got = store.get_triples_page_for_subjects(
+            "G_V1",
+            ["http://ex/1"],
+            limit=2,
+            offset=1,
+        )
+    assert got == {"rows": [{"subject": "s", "predicate": "p", "object": "o"}], "total": 4}
+    sql = execute.call_args.args[0]
+    assert "g_v1_props" in sql
+    assert "COUNT(*) AS _ob_total" in sql
+
+
+def test_get_triples_page_for_subjects_empty_subjects_skips_query(auth):
+    store = LakebaseFlatStore(auth, schema="ontobricks_graph")
+    with patch.object(store, "execute_query") as execute:
+        got = store.get_triples_page_for_subjects(
+            "G_V1",
+            [],
+            limit=2,
+            offset=1,
+        )
+    assert got == {"rows": [], "total": 0}
+    execute.assert_not_called()
