@@ -1403,11 +1403,21 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
 
 ### Version Management (Domain → Versions)
 
-1. Open **Domain** in the sidebar and go to the **Versions** section.
-2. The table lists every saved version with description, author, and actions.
-3. **MCP / API** column: read-only — a green **Active** badge marks the single version currently exposed through the REST catalogue and MCP tools. To **change** which version is Active, go to **Registry → Browse**, expand the domain, and click **Set as Active** on the desired version (Domain → Versions no longer includes a toggle).
-4. **Load** loads another version from the registry (confirms; unsaved work is lost).
-5. **New Version** copies the current state to the next version number; **Reload Saved** discards local edits and reloads the current version from the registry.
+Domain → Versions presents saved versions as newest-first cards. Each card
+shows lifecycle status, description, author, last update, last build, and
+whether the version is Loaded or Latest. Lifecycle status is independent from
+the API/MCP **Active** selection managed in **Registry → Browse**.
+
+- **Lifecycle:** permitted Submit for Review, Return to Draft, Publish, and
+  Reopen actions appear directly on the card. Disabled actions explain their
+  unmet precondition.
+- **Load:** loads another version after confirming that unsaved changes will
+  be discarded.
+- **Delete:** app administrators may permanently delete only an older,
+  unloaded Draft version. Loaded, latest, In Review, and Published versions
+  are protected. Deletion also removes that version's Knowledge Store content.
+- **New Version:** branches the current state into the next Draft version.
+- **Reload Saved:** discards local edits and reloads the loaded version.
 
 #### Creating a New Version
 
@@ -1432,7 +1442,8 @@ Three related ideas:
 |---------|---------|
 | **Loaded version** | The `v{n}` document currently in your browser session. |
 | **Latest on disk** | Highest version number in the registry folder. When your loaded version is **not** the latest, the UI treats many writes as read-only. |
-| **Active (API/MCP)** | The one version flagged for external tools and MCP — shown on the Cockpit **Active Version** tile and as a badge on **Domain → Versions**; changed only from **Registry → Browse**. |
+| **Lifecycle status** | The version's Draft, In Review, or Published review state. Card actions change this state; it does not select the API/MCP version. |
+| **Active (API/MCP)** | The one version flagged for external tools and MCP — shown on the Cockpit **Active Version** tile and changed only from **Registry → Browse**. |
 
 ### Domain Save/Load
 

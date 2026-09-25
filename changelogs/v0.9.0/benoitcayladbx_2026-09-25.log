@@ -218,3 +218,65 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6938 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.98s
+
+## Consolidate Domain version cards and guarded deletion
+
+Context: This final section consolidates the Domain version-card and safe
+deletion work recorded incrementally above. It adds browser-level verification
+and user documentation without restating earlier implementation steps as new
+changes. Lifecycle state remains distinct from the Registry-managed API/MCP
+Active selection.
+
+Changes:
+
+1. src/back/objects/registry/version_lifecycle.py
+   Provides server-authoritative lifecycle capabilities and conservative deletion policy.
+2. src/back/objects/domain/SettingsService.py
+   Routes Domain and Registry deletion through shared guarded orchestration.
+3. src/back/objects/domain/Domain.py
+   Returns newest-first card metadata and permitted actions for every version.
+4. src/api/routers/internal/domain.py
+   Exposes loaded-domain deletion and role-aware card capabilities.
+5. src/api/routers/internal/settings.py
+   Applies shared deletion capabilities to Registry Browse.
+6. src/front/templates/domain.html and src/front/templates/partials/domain/_domain_versions.html
+   Provide the accessible version-card workspace and its versioned stylesheet.
+7. src/front/static/domain/css/domain-versions.css
+   Provides full-height desktop behavior and natural-flow mobile behavior.
+8. src/front/static/domain/js/domain-versions.js
+   Renders cards and performs lifecycle, load, refresh, and guarded delete actions.
+9. src/front/static/registry/js/registry.js
+   Consumes server deletion capabilities and safely handles guarded deletion.
+10. tests/units/
+    Covers lifecycle policy, deletion services and routes, card capabilities, and frontend rendering.
+11. tests/e2e/domain/test_domain_versions_cards.py
+    Adds deterministic mocked Chromium contracts at 1600x1000 and 390x844, including action requests, refreshes, focus, overflow, and console errors.
+12. docs/user-guide.md and docs/features.md
+    Document cards, inline lifecycle, deletion restrictions, and the separate API/MCP Active selection.
+13. .superpowers/sdd/task-6-report.md
+    Records exact browser, focused, full-suite, diagnostics, viewport, and self-review evidence.
+
+Modified files:
+- src/back/objects/registry/version_lifecycle.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/Domain.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- src/front/templates/domain.html
+- src/front/templates/partials/domain/_domain_versions.html
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/registry/js/registry.js
+- tests/units/registry/test_version_lifecycle.py
+- tests/units/settings/test_settings_version_deletion.py
+- tests/units/domain/test_version_capabilities.py
+- tests/units/api/test_delete_version_endpoints.py
+- tests/units/front/test_domain_versions_cards.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- docs/user-guide.md
+- docs/features.md
+- .superpowers/sdd/task-5-report.md
+- .superpowers/sdd/task-6-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6938 passed, 313 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.98s

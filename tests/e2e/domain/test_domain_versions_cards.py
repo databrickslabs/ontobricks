@@ -1,0 +1,228 @@
+"""Mocked browser contracts for Domain version cards and actions."""
+
+import json
+
+from playwright.sync_api import expect
+
+DESKTOP = {"width": 1600, "height": 1000}
+MOBILE = {"width": 390, "height": 844}
+
+VERSIONS = {
+    "success": True,
+    "domain_folder": "acme",
+    "versions": [
+        {
+            "version": "3",
+            "description": "Current version",
+            "status": "DRAFT",
+            "author": "alice@example.com",
+            "last_update": "2026-09-25T10:00:00Z",
+            "last_build": "",
+            "is_current": True,
+            "is_active": True,
+            "transitions": [],
+            "delete_control_visible": True,
+            "can_delete": False,
+            "delete_block_reason": "The latest version cannot be deleted.",
+        },
+        {
+            "version": "1",
+            "description": "Old draft",
+            "status": "DRAFT",
+            "author": "alice@example.com",
+            "last_update": "2026-09-20T10:00:00Z",
+            "last_build": "2026-09-20T11:00:00Z",
+            "is_current": False,
+            "is_active": False,
+            "transitions": [
+                {
+                    "target_status": "IN-REVIEW",
+                    "label": "Submit for Review",
+                    "enabled": True,
+                    "blocked_reason": "",
+                }
+            ],
+            "delete_control_visible": True,
+            "can_delete": True,
+            "delete_block_reason": "",
+        },
+    ],
+}
+
+
+def _watch_console_errors(page):
+    errors = []
+
+    def capture(message):
+        if message.type == "error":
+            errors.append(message.text)
+
+    page.on("console", capture)
+    return errors
+
+
+def _assert_no_console_errors(errors):
+    assert errors == [], f"Unexpected browser console errors: {errors}"
+
+
+def _open(page, live_server, viewport):
+    page.set_viewport_size(viewport)
+    page.route(
+        "**/domain/versions-list*",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(VERSIONS),
+        ),
+    )
+    page.goto(f"{live_server}/domain")
+    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_function(
+        "() => typeof SidebarNav !== 'undefined'"
+        " && typeof loadVersionsList === 'function'"
+    )
+    page.evaluate("SidebarNav.switchTo('versions')")
+    page.locator(".dm-version-card").first.wait_for(state="visible")
+
+
+def _track_refresh_completion(page):
+    page.evaluate(
+        """() => {
+            const originalLoadVersionsList = window.loadVersionsList;
+            window.__versionsRefreshComplete = 0;
+            window.loadVersionsList = async (...args) => {
+                const result = await originalLoadVersionsList(...args);
+                window.__versionsRefreshComplete += 1;
+                return result;
+            };
+        }"""
+    )
+
+
+def test_desktop_cards_order_actions_and_full_height(page, live_server):
+    console_errors = _watch_console_errors(page)
+    _open(page, live_server, DESKTOP)
+
+    cards = page.locator(".dm-version-card")
+    expect(cards).to_have_count(2)
+    expect(cards.nth(0).locator("h5")).to_have_text("v3")
+    expect(cards.nth(1).locator("h5")).to_have_text("v1")
+    expect(cards.nth(1).get_by_role("button", name="Submit for Review")).to_be_visible()
+    expect(cards.nth(1).get_by_role("button", name="Delete")).to_be_enabled()
+
+    geometry = page.evaluate(
+        """() => {
+            const sidebar = document.querySelector('.sidebar-nav');
+            const workspace = document.querySelector('.dm-versions-workspace');
+            const list = document.querySelector('#versionsCardList');
+            return {
+                sidebarBottom: sidebar.getBoundingClientRect().bottom,
+                workspaceBottom: workspace.getBoundingClientRect().bottom,
+                listOverflowY: getComputedStyle(list).overflowY,
+                horizontalOverflow:
+                    document.documentElement.scrollWidth - window.innerWidth,
+            };
+        }"""
+    )
+    assert abs(geometry["sidebarBottom"] - geometry["workspaceBottom"]) <= 1
+    assert geometry["listOverflowY"] == "auto"
+    assert geometry["horizontalOverflow"] <= 1
+    _assert_no_console_errors(console_errors)
+
+
+def test_mobile_cards_use_natural_page_flow(page, live_server):
+    console_errors = _watch_console_errors(page)
+    _open(page, live_server, MOBILE)
+
+    flow = page.evaluate(
+        """() => {
+            const section = document.querySelector('#versions-section .content-section');
+            const workspace = document.querySelector('.dm-versions-workspace');
+            const list = document.querySelector('#versionsCardList');
+            const content = document.querySelector('.sidebar-content');
+            return {
+                sectionOverflowY: getComputedStyle(section).overflowY,
+                workspaceOverflowY: getComputedStyle(workspace).overflowY,
+                listOverflowY: getComputedStyle(list).overflowY,
+                contentOverflowY: getComputedStyle(content).overflowY,
+                horizontalOverflow:
+                    document.documentElement.scrollWidth - window.innerWidth,
+            };
+        }"""
+    )
+    assert flow["sectionOverflowY"] == "visible"
+    assert flow["workspaceOverflowY"] == "visible"
+    assert flow["listOverflowY"] == "visible"
+    assert flow["contentOverflowY"] == "visible"
+    assert flow["horizontalOverflow"] <= 1
+    _assert_no_console_errors(console_errors)
+
+
+def test_transition_posts_target_status_and_refreshes(page, live_server):
+    console_errors = _watch_console_errors(page)
+    page.route(
+        "**/domain/set-version-status",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({"success": True, "status": "IN-REVIEW"}),
+        ),
+    )
+    _open(page, live_server, DESKTOP)
+    _track_refresh_completion(page)
+    page.evaluate("window.showConfirmDialog = () => Promise.resolve(true)")
+
+    with page.expect_request("**/domain/set-version-status") as request_info:
+        page.get_by_role("button", name="Submit for Review").click()
+    page.wait_for_function("window.__versionsRefreshComplete === 1")
+
+    assert request_info.value.post_data_json == {
+        "domain_name": "acme",
+        "version": "1",
+        "status": "IN-REVIEW",
+    }
+    assert request_info.value.method == "POST"
+    _assert_no_console_errors(console_errors)
+
+
+def test_delete_calls_loaded_domain_endpoint_and_refreshes(page, live_server):
+    console_errors = _watch_console_errors(page)
+    page.route(
+        "**/domain/versions/1",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {"success": True, "message": 'Version 1 deleted from "acme"'}
+            ),
+        ),
+    )
+    _open(page, live_server, DESKTOP)
+    _track_refresh_completion(page)
+    page.evaluate("window.showConfirmDialog = () => Promise.resolve(true)")
+
+    delete_button = page.locator(".dm-version-card").nth(1).get_by_role(
+        "button", name="Delete"
+    )
+    with page.expect_request("**/domain/versions/1") as request_info:
+        delete_button.click()
+    page.wait_for_function("window.__versionsRefreshComplete === 1")
+
+    assert request_info.value.method == "DELETE"
+    assert request_info.value.url.endswith("/domain/versions/1")
+    _assert_no_console_errors(console_errors)
+
+
+def test_cancelled_delete_returns_focus_to_action(page, live_server):
+    console_errors = _watch_console_errors(page)
+    _open(page, live_server, DESKTOP)
+    page.evaluate("window.showConfirmDialog = () => Promise.resolve(false)")
+
+    delete_button = page.locator(".dm-version-card").nth(1).get_by_role(
+        "button", name="Delete"
+    )
+    delete_button.focus()
+    delete_button.click()
+
+    expect(delete_button).to_be_focused()
+    _assert_no_console_errors(console_errors)
