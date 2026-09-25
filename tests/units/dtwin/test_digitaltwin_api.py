@@ -270,6 +270,66 @@ class TestFindTriplesBfsContract:
         assert result["has_more"] is True
         store.get_triples_page_for_subjects.assert_called_once()
 
+    @pytest.mark.parametrize(
+        ("offset", "rows", "total", "expected_has_more"),
+        [
+            (
+                2,
+                [
+                    {"subject": "s3", "predicate": "p3", "object": "o3"},
+                    {"subject": "s4", "predicate": "p4", "object": "o4"},
+                ],
+                5,
+                True,
+            ),
+            (
+                3,
+                [
+                    {"subject": "s4", "predicate": "p4", "object": "o4"},
+                    {"subject": "s5", "predicate": "p5", "object": "o5"},
+                ],
+                5,
+                False,
+            ),
+        ],
+    )
+    def test_find_triples_bfs_offset_has_more_and_paged_call_args(
+        self, offset, rows, total, expected_has_more
+    ):
+        store = MagicMock()
+        store.bfs_traversal.return_value = [
+            {"entity": "http://ex.org/Customer/CUST001", "min_lvl": 0},
+            {"entity": "http://ex.org/Order/ORD001", "min_lvl": 1},
+        ]
+        store.find_subjects_by_patterns.return_value = {"http://ex.org/CUST001"}
+        store.get_triples_page_for_subjects.return_value = {
+            "rows": rows,
+            "total": total,
+        }
+
+        result = DigitalTwin.find_triples_bfs(
+            store,
+            "cat.sch.graph",
+            search="cust",
+            depth=2,
+            limit=2,
+            offset=offset,
+        )
+
+        assert result["has_more"] is expected_has_more
+        assert result["count"] == len(rows)
+        assert result["total"] == total
+        store.get_triples_page_for_subjects.assert_called_once()
+        paged_call = store.get_triples_page_for_subjects.call_args
+        assert paged_call.args[0] == "cat.sch.graph"
+        assert set(paged_call.args[1]) == {
+            "http://ex.org/Customer/CUST001",
+            "http://ex.org/Order/ORD001",
+            "http://ex.org/CUST001",
+        }
+        assert paged_call.kwargs["limit"] == 2
+        assert paged_call.kwargs["offset"] == offset
+
 
 # ---------------------------------------------------------------------------
 # _sql_escape
