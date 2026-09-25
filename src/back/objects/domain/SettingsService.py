@@ -52,6 +52,7 @@ from back.objects.registry.version_lifecycle import (
     STATUS_DRAFT,
     STATUS_IN_REVIEW,
     STATUS_PUBLISHED,
+    version_deletion_capability,
 )
 from back.objects.domain.version_status import clear_version_status_cache
 from back.objects.session import (
@@ -1053,7 +1054,10 @@ class SettingsService:
 
     @staticmethod
     def list_registry_domains_result(
-        session_mgr: SessionManager, settings: Settings
+        session_mgr: SessionManager,
+        settings: Settings,
+        *,
+        user_role: str = "",
     ) -> Dict[str, Any]:
         try:
             domain = get_domain(session_mgr)
@@ -1064,6 +1068,30 @@ class SettingsService:
             ok, result, msg = svc.list_domain_details_cached()
             if not ok:
                 raise InfrastructureError("Failed to list registry domains", detail=msg)
+            result = copy.deepcopy(result)
+            loaded_folder = str(domain.domain_folder or "")
+            loaded_version = str(domain.current_version or "")
+            for item in result:
+                versions = item.get("versions", []) or []
+                latest = str(versions[0].get("version", "")) if versions else ""
+                for version_data in versions:
+                    version = str(version_data.get("version", ""))
+                    is_latest = version == latest
+                    deletion = version_deletion_capability(
+                        user_role=user_role,
+                        status=version_data.get("status", "DRAFT"),
+                        is_loaded=(
+                            loaded_folder == item.get("name")
+                            and loaded_version == version
+                        ),
+                        is_latest=is_latest,
+                        version_count=len(versions),
+                    )
+                    if is_latest and deletion["delete_control_visible"]:
+                        deletion["delete_block_reason"] = (
+                            "The latest version cannot be deleted."
+                        )
+                    version_data.update(deletion)
             return {"success": True, "domains": result}
         except OntoBricksError:
             raise

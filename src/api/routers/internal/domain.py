@@ -579,13 +579,18 @@ async def get_version_status(
 
 @router.get("/versions-list")
 async def list_version_details(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List all versions with per-version description, mcp_enabled flag, and status."""
+    """List all versions with card metadata and allowed actions."""
     domain = get_domain(session_mgr)
     p = Domain(domain, settings)
-    return p.list_version_details(p.build_registry_service())
+    return p.list_version_details(
+        p.build_registry_service(),
+        user_role=getattr(request.state, "user_role", "") or "",
+        user_domain_role=getattr(request.state, "user_domain_role", "") or "",
+    )
 
 
 @router.delete("/versions/{version}")

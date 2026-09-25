@@ -355,7 +355,11 @@ async def list_registry_domains(
 
     Non-admin users only see domains they have a role on; admins see all.
     """
-    result = config_service.list_registry_domains_result(session_mgr, settings)
+    result = config_service.list_registry_domains_result(
+        session_mgr,
+        settings,
+        user_role=getattr(request.state, "user_role", "") or "",
+    )
     result["domains"] = filter_visible_domains(
         request, session_mgr, settings, result.get("domains", [])
     )

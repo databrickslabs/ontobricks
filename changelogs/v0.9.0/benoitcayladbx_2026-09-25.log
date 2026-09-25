@@ -64,3 +64,32 @@ Modified files:
 - tests/units/settings/test_settings_version_deletion.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6920 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.01s
+
+## Expose server-computed version card capabilities
+
+Context: Domain and Registry version cards need authoritative action metadata
+from the server. Listings now expose role-aware lifecycle transitions and safe
+deletion capabilities without mutating cached registry objects, while unreadable
+versions remain visible with unsafe actions blocked.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   Added card metadata, transition capabilities, deletion capabilities, and fail-safe unreadable-version rows.
+2. src/back/objects/domain/SettingsService.py
+   Decorated a deep copy of cached Registry versions with role-aware deletion capabilities.
+3. src/api/routers/internal/domain.py
+   Forwarded request application and domain roles to the Domain version listing.
+4. src/api/routers/internal/settings.py
+   Forwarded the request application role to the Registry domain listing.
+5. tests/units/domain/test_version_capabilities.py
+   Added coverage for metadata, transitions, deletion guards, unreadable rows, and cache immutability.
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- tests/units/domain/test_version_capabilities.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6924 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.97s
