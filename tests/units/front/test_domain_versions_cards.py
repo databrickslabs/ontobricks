@@ -11,9 +11,10 @@ HTML = ROOT / "src/front/templates/partials/domain/_domain_versions.html"
 PAGE = ROOT / "src/front/templates/domain.html"
 CSS = ROOT / "src/front/static/domain/css/domain-versions.css"
 JS = ROOT / "src/front/static/domain/js/domain-versions.js"
+REGISTRY_JS = ROOT / "src/front/static/registry/js/registry.js"
 
 
-def _run_renderer_assertions(assertions: str) -> None:
+def _run_renderer_assertions(assertions: str, script: Path = JS) -> None:
     runner = """
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -70,7 +71,7 @@ function allElements(root) {
 
 """ + textwrap.dedent(assertions)
     result = subprocess.run(
-        ["node", "-e", runner, str(JS)],
+        ["node", "-e", runner, str(script)],
         check=False,
         capture_output=True,
         text=True,
@@ -216,4 +217,79 @@ def test_disabled_action_reasons_have_one_keyboard_reachable_wrapper():
         assert.equal(disabledDelete.parentElement.tabIndex, 0);
         assert.equal(disabledDelete.parentElement.title, 'Latest version');
         """
+    )
+
+
+def test_registry_uses_server_delete_capability_and_refreshes_after_conflict():
+    js = REGISTRY_JS.read_text(encoding="utf-8")
+    assert "v.delete_control_visible" in js
+    assert "v.can_delete" in js
+    assert "v.delete_block_reason" in js
+    delete_section = js[
+        js.index("function createRegistryVersionDeleteControl") :
+        js.index("document.addEventListener")
+    ]
+    assert "isLoaded" not in delete_section
+
+    delete_request = js[
+        js.index("async function deleteRegistryVersion") :
+        js.index("async function loadRegistryDomainVersion")
+    ]
+    assert "resp.status === 409" in delete_request
+    assert "showNotification(data.message" in delete_request
+    assert "loadRegistryDomains(true)" in delete_request
+
+
+def test_registry_delete_control_keeps_untrusted_values_in_dom_properties():
+    _run_renderer_assertions(
+        r"""
+        const domain = 'acme" data-owned="yes"><script>alert(1)</script>';
+        const version = '1"><img src=x onerror=alert(2)>';
+        const reason = 'blocked"><svg onload=alert(3)>';
+        const wrapper = context.createRegistryVersionDeleteControl({
+            version,
+            delete_control_visible: true,
+            can_delete: false,
+            delete_block_reason: reason
+        }, domain);
+        const elements = allElements(wrapper);
+        assert.equal(elements.some((item) => ['IMG', 'SCRIPT', 'SVG'].includes(item.tagName)), false);
+        const button = elements.find((item) => item.tagName === 'BUTTON');
+        assert.equal(button.dataset.domain, domain);
+        assert.equal(button.dataset.version, version);
+        assert.equal(wrapper.title, reason);
+        """,
+        REGISTRY_JS,
+    )
+
+
+def test_registry_delete_control_has_exactly_one_reachable_tab_stop():
+    _run_renderer_assertions(
+        r"""
+        function render(canDelete) {
+            return context.createRegistryVersionDeleteControl({
+                version: '2',
+                delete_control_visible: true,
+                can_delete: canDelete,
+                delete_block_reason: canDelete ? '' : 'Latest version'
+            }, 'acme');
+        }
+
+        const enabledWrapper = render(true);
+        const enabledButton = allElements(enabledWrapper).find(
+            (item) => item.tagName === 'BUTTON'
+        );
+        assert.equal(enabledWrapper.tabIndex, -1);
+        assert.equal(enabledButton.disabled, false);
+        assert.equal(enabledButton.tabIndex, 0);
+
+        const disabledWrapper = render(false);
+        const disabledButton = allElements(disabledWrapper).find(
+            (item) => item.tagName === 'BUTTON'
+        );
+        assert.equal(disabledWrapper.tabIndex, 0);
+        assert.equal(disabledWrapper.title, 'Latest version');
+        assert.equal(disabledButton.disabled, true);
+        """,
+        REGISTRY_JS,
     )

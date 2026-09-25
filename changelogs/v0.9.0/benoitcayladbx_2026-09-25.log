@@ -168,3 +168,28 @@ Modified files:
 - tests/units/front/test_domain_versions_cards.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6933 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.89s
+
+## Honor guarded Registry version deletion capabilities
+
+Context: Registry Browse previously inferred version-delete visibility from the
+locally loaded version and interpolated escaped values into HTML attributes.
+Deletion controls now honor authoritative server capabilities, safely retain
+untrusted values in DOM properties, and refresh those capabilities after a
+guarded deletion conflict.
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   Added DOM-based, server-authoritative version delete controls with accessible blocked reasons and HTTP 409 capability refresh.
+2. tests/units/front/test_domain_versions_cards.py
+   Added Registry capability, conflict refresh, malicious-value, and keyboard tab-stop regression contracts.
+3. .superpowers/sdd/task-5-report.md
+   Recorded RED/GREEN evidence, focused and full-suite results, and self-review findings.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_domain_versions_cards.py
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6936 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.04s
