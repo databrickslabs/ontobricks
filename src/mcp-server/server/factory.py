@@ -16,6 +16,7 @@ from fastmcp import FastMCP
 from server import http_client as _http
 from server.resources import register_resources
 from server.session import MCPServerSession
+from server.session_scope import SessionScopeMiddleware
 from server.tools import register_tools
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,11 @@ def create_mcp_server(mode: str = "standalone") -> FastMCP:
             "If the user's question maps clearly to one domain, select it automatically."
         ),
     )
+
+    # Isolate per-connection state (selected domain, label/action caches) by
+    # MCP session id, so concurrent clients sharing this one process cannot
+    # clobber each other's selected domain.
+    mcp.add_middleware(SessionScopeMiddleware())
 
     register_tools(mcp, session)
     register_resources(mcp, session)

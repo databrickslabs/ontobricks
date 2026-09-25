@@ -389,15 +389,13 @@ session-scoped component visibility, and the client receives a
 domain resets the previous domain's rules first, so a tool hidden by domain A
 comes back in domain B.
 
-> **Concurrency limitation.** Visibility rules are per-session, but the
-> *selected domain* is not: `create_mcp_server()` runs once per process and
-> holds the selection in a module-level closure shared by every connection. If
-> two clients select different domains at the same time, the last
-> `select_domain` wins for both — and the call-time policy check follows that
-> same selection. This predates the policy and affects query results
-> identically, so it is not new, but it does mean the policy is only reliable
-> for one concurrent client per process. Single-client use (Playground,
-> Cursor, Claude Desktop) is unaffected.
+> **Concurrent sessions.** The selected domain and its label/action caches are
+> isolated by MCP session ID for every request, including tool calls and
+> resource reads. Two clients connected to one server process can therefore
+> select and query different domains without changing each other's state.
+> The in-process session store retains at most 512 recently used sessions; an
+> evicted client must call `select_domain` again. This state is process-local,
+> so a future multi-worker deployment will require a shared session store.
 
 Clients that ignore the notification (or replay a cached list) can still emit
 a call for a hidden tool. Every domain-scoped tool therefore re-checks the
