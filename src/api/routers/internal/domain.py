@@ -588,6 +588,26 @@ async def list_version_details(
     return p.list_version_details(p.build_registry_service())
 
 
+@router.delete("/versions/{version}")
+async def delete_domain_version(
+    version: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = get_domain(session_mgr)
+    folder = domain.uc_domain_folder
+    if not folder:
+        raise ValidationError("Domain not saved to the registry")
+    return SettingsService.delete_registry_version_result(
+        folder,
+        version,
+        user_role=getattr(request.state, "user_role", "") or "",
+        session_mgr=session_mgr,
+        settings=settings,
+    )
+
+
 @router.get("/build-runs")
 async def list_build_runs(
     version: Optional[str] = Query(default=None),

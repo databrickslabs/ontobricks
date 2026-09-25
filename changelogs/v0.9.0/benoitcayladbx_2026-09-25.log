@@ -16,3 +16,31 @@ Modified files:
 - tests/units/registry/test_version_lifecycle.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6909 passed, 308 skipped, 6 deselected, 1 xfailed in 47.95s
+
+## Guard domain-version deletion endpoints
+
+Context: Domain-version deletion now uses the shared lifecycle policy at the
+service boundary. Both loaded-domain and Settings routes forward the caller's
+application role so builders cannot bypass the administrator-only guard.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Added guarded deletion orchestration with existence, status, loaded-version, latest-version, and minimum-version checks.
+2. src/api/routers/internal/domain.py
+   Added the loaded-domain version deletion endpoint and derived its registry folder from the active domain.
+3. src/api/routers/internal/settings.py
+   Preserved the Settings deletion endpoint while forwarding the caller role to the shared service policy.
+4. tests/units/settings/test_settings_version_deletion.py
+   Added service coverage for successful deletion and every guarded conflict.
+5. tests/units/api/test_delete_version_endpoints.py
+   Added route coverage for target and caller-role forwarding.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- tests/units/settings/test_settings_version_deletion.py
+- tests/units/api/test_delete_version_endpoints.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6917 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.82s

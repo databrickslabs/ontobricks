@@ -47,6 +47,7 @@ from back.objects.registry import (
     obx_format,
 )
 from back.objects.registry.version_lifecycle import (
+    check_version_deletion,
     check_status_transition,
     STATUS_DRAFT,
     STATUS_IN_REVIEW,
@@ -1132,6 +1133,8 @@ class SettingsService:
     def delete_registry_version_result(
         domain_name: str,
         version: str,
+        *,
+        user_role: str,
         session_mgr: SessionManager,
         settings: Settings,
     ) -> Dict[str, Any]:
@@ -1141,23 +1144,45 @@ class SettingsService:
             if not svc.cfg.is_configured:
                 raise ValidationError("Registry not configured")
 
-            d_ok, d_msg = svc.delete_version(domain_name, version)
-            if not d_ok:
-                raise InfrastructureError(
-                    "Failed to delete registry version", detail=d_msg
+            versions = svc.list_versions_sorted(domain_name)
+            if version not in versions:
+                raise NotFoundError(
+                    f'Version {version} not found in "{domain_name}"'
                 )
+            ok, data, message = svc.read_version(domain_name, version)
+            if not ok:
+                raise InfrastructureError(
+                    "Failed to read registry version", detail=message
+                )
+            status = (data.get("info", {}).get("status") or "DRAFT").upper()
+            check_version_deletion(
+                user_role=user_role,
+                status=status,
+                is_loaded=(
+                    domain.domain_folder == domain_name
+                    and domain.current_version == version
+                ),
+                is_latest=version == versions[0],
+                version_count=len(versions),
+            )
 
+            deleted, delete_message = svc.delete_version(domain_name, version)
+            if not deleted:
+                raise InfrastructureError(
+                    "Failed to delete registry version", detail=delete_message
+                )
+            clear_version_status_cache()
             return {
                 "success": True,
                 "message": f'Version {version} deleted from "{domain_name}"',
             }
         except OntoBricksError:
             raise
-        except Exception as e:
-            logger.exception("Delete registry version failed: %s", e)
+        except Exception as exc:
+            logger.exception("Delete registry version failed: %s", exc)
             raise InfrastructureError(
-                "Delete registry version failed", detail=str(e)
-            ) from e
+                "Delete registry version failed", detail=str(exc)
+            ) from exc
 
     @staticmethod
     def resolve_domain_role(
