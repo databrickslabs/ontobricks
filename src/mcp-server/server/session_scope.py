@@ -9,9 +9,9 @@ answers.
 
 :data:`CURRENT_SESSION_ID` is a context variable holding the MCP session id of
 the call in flight; :class:`SessionScopeMiddleware` sets it from
-``ctx.session_id`` around every tool call, so the session's per-connection state
-(keyed by this id in :class:`MCPServerSession`) is naturally isolated. Nothing
-here imports :mod:`server.session`, so the session module can import
+``ctx.session_id`` around every MCP request, so tools and resources resolve the
+same per-connection state (keyed by this id in :class:`MCPServerSession`).
+Nothing here imports :mod:`server.session`, so the session module can import
 ``CURRENT_SESSION_ID`` from here without a cycle.
 """
 
@@ -36,17 +36,19 @@ CURRENT_SESSION_ID: contextvars.ContextVar[str] = contextvars.ContextVar(
 
 
 class SessionScopeMiddleware(Middleware):
-    """Bind each tool call to its MCP session id for the duration of the call.
+    """Bind each MCP request to its session id for the request duration.
 
     ``ctx.session_id`` is stable across tool calls within one client session
     (the StreamableHTTP ``mcp-session-id``), so keying per-connection state by
     it isolates concurrent clients that share the one server process.
     """
 
-    async def on_call_tool(
+    def __init__(self) -> None:
+        self._missing_session_warned = False
+
+    async def on_request(
         self, context: MiddlewareContext, call_next: Any
     ) -> Any:
-        token = None
         fmcp = getattr(context, "fastmcp_context", None)
         # ``session_id`` is a property that RAISES outside a request context
         # (e.g. in-process calls / tests), not a missing attribute — so guard
@@ -55,14 +57,16 @@ class SessionScopeMiddleware(Middleware):
         if fmcp is not None:
             try:
                 sid = fmcp.session_id
-            except Exception:  # noqa: BLE001 - absence is expected off-request
+            except RuntimeError:
                 sid = None
-        if sid:
-            token = CURRENT_SESSION_ID.set(sid)
-        else:
-            logger.debug("on_call_tool: no session id in context; using default scope")
+        if not sid and not self._missing_session_warned:
+            logger.warning(
+                "MCP request has no session id; using shared default scope"
+            )
+            self._missing_session_warned = True
+
+        token = CURRENT_SESSION_ID.set(sid or DEFAULT_SESSION_ID)
         try:
             return await call_next(context)
         finally:
-            if token is not None:
-                CURRENT_SESSION_ID.reset(token)
+            CURRENT_SESSION_ID.reset(token)
