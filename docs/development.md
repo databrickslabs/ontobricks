@@ -2,6 +2,8 @@
 
 Notes for contributors: dependencies, testing, and permission / SDK notes.
 
+**Workflow** (setup, PRs, changelog, AI eval gate): [contributing.md](contributing.md). This file is the deep dive on packages, the test campaign, and permissions.
+
 ## OntoBricks Dependencies
 
 This document describes all external dependencies used by OntoBricks, including Python packages, UI frameworks, and JavaScript libraries.

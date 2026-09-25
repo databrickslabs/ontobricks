@@ -18,6 +18,7 @@ OntoBricks is a **Graph Viewer Builder** for the Databricks platform. It lets yo
 | **API** | [api.md](api.md) | External (stateless) REST & GraphQL, plus internal REST reference |
 | **Data Access** | [data-access.md](data-access.md) | Engine map — which wrapper (REST / GraphQL / SPARQL / Spark SQL / Cypher) every UI / MCP / Chat feature actually uses |
 | **MCP** | [mcp.md](mcp.md) | MCP server, Databricks Playground integration, client configuration |
+| **Contributing** | [contributing.md](contributing.md) | Contributor guide — setup, style, tests, PRs, changelog, AI eval gate |
 | **Development** | [development.md](development.md) | Dependencies, test suite, permission / SDK notes |
 | **Code Map** | [code_organization.md](code_organization.md) | UI routes & templates, API surfaces, agents, MCP wiring |
 | **Lakebase GraphDB** | [lakebase-graphdb.md](lakebase-graphdb.md) | Lakebase setup, write modes, Postgres schema layout, permissions bootstrap, troubleshooting |
@@ -47,4 +48,5 @@ OntoBricks is a **Graph Viewer Builder** for the Databricks platform. It lets yo
 ## Quick Links
 
 - [Main README](../README.md) — project overview
+- [Contributor Guide](contributing.md) — setup, tests, PRs
 - [Swagger UI](http://localhost:8000/docs) — interactive API docs (when running locally)

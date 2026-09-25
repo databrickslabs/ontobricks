@@ -1,5 +1,7 @@
 # OntoBricks code organization (for contributors)
 
+Contributor workflow (setup, tests, PRs): [contributing.md](contributing.md).
+
 This document maps how the **main OntoBricks application** is wired: the browser UI, programmatic REST/GraphQL APIs, LLM **agents**, and the separate **MCP** server. It also covers **coding conventions**, **error handling**, **logging**, **project structure**, and **contributor workflows**.
 
 The FastAPI entrypoint is `src/shared/fastapi/main.py` (`create_app`, `app = create_app()`). Application source is split across five top-level packages under `src/`: **`back`** (domain, core infra, GraphQL, services), **`front`** (HTML routes, Jinja2, menu config, templates, static assets), **`shared`** (app factory, middleware, health, settings/constants), **`api`** (external REST and internal JSON routers), and **`agents`** (LLM engines).

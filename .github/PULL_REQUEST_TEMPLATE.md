@@ -1,6 +1,7 @@
 <!--
 PR Template — Cursor-Native Superpowers (CNS) methodology
-See docs/PR_REVIEW_CHECKLIST.md for the reviewer's pass.
+Contributor guide: docs/contributing.md
+Reviewer pass: docs/PR_REVIEW_CHECKLIST.md
 -->
 
 ## Summary

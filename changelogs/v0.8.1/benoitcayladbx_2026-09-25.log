@@ -101,3 +101,33 @@ Tests: `uv run --frozen pytest -q -m "not scenario"` → 5,939 passed,
 304 skipped, 6 deselected, 0 failed in 37.28s. Targeted MCP suite:
 `uv run --frozen pytest -q tests/units/mcp tests/mcp -m "not scenario"` →
 110 passed, 0 failed in 1.91s.
+
+## Point CONTRIBUTING.md at a single contributor guide
+
+Context: GitHub's repo-root CONTRIBUTING.md had drifted into a long copy of
+setup, commit, and test instructions. Those belong in Help Center docs so
+README, development, and code-organization can share one source.
+
+Changes:
+
+1. docs/contributing.md
+   Added the canonical contributor workflow (setup, layout, style, tests,
+   AI eval gate, changelog, Conventional Commits, PRs, Sphinx, releases).
+2. CONTRIBUTING.md
+   Reduced to a pointer plus a short local-run snippet.
+3. README.md, docs/README.md, docs/development.md, docs/code_organization.md
+   Linked the new guide.
+4. .github/PULL_REQUEST_TEMPLATE.md
+   Pointed authors at docs/contributing.md.
+
+Modified files:
+- docs/contributing.md
+- CONTRIBUTING.md
+- README.md
+- docs/README.md
+- docs/development.md
+- docs/code_organization.md
+- .github/PULL_REQUEST_TEMPLATE.md
+- changelogs/v0.8.1/benoitcayladbx_2026-09-25.log
+
+Tests: documentation only; production code unchanged.
