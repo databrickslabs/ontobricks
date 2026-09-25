@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from back.objects.domain.Domain import Domain
 from back.objects.domain.SettingsService import SettingsService
 from back.objects.registry.PermissionService import ROLE_ADMIN, ROLE_BUILDER
+from back.objects.registry.version_lifecycle import version_deletion_capability
 
 settings_module = importlib.import_module("back.objects.domain.SettingsService")
 
@@ -56,9 +57,34 @@ def test_latest_version_delete_is_blocked_in_payload():
     result = domain.list_version_details(service, user_role=ROLE_ADMIN)
 
     latest = result["versions"][0]
+    expected = version_deletion_capability(
+        user_role=ROLE_ADMIN,
+        status="DRAFT",
+        is_loaded=True,
+        is_latest=True,
+        version_count=3,
+    )
     assert latest["is_active"] is True
     assert latest["can_delete"] is False
-    assert "latest" in latest["delete_block_reason"]
+    assert latest["delete_block_reason"] == expected["delete_block_reason"]
+
+
+def test_sole_loaded_latest_domain_reason_matches_shared_policy():
+    domain, service = _domain_service()
+    service.list_versions_sorted.return_value = ["3"]
+
+    result = domain.list_version_details(service, user_role=ROLE_ADMIN)
+
+    expected = version_deletion_capability(
+        user_role=ROLE_ADMIN,
+        status="DRAFT",
+        is_loaded=True,
+        is_latest=True,
+        version_count=1,
+    )
+    assert result["versions"][0]["delete_block_reason"] == expected[
+        "delete_block_reason"
+    ]
 
 
 def test_unreadable_version_remains_visible_with_actions_blocked():
@@ -111,6 +137,57 @@ def test_registry_listing_gets_same_delete_capability_without_mutating_cache():
         )
 
     versions = result["domains"][0]["versions"]
+    expected = version_deletion_capability(
+        user_role=ROLE_ADMIN,
+        status="DRAFT",
+        is_loaded=True,
+        is_latest=True,
+        version_count=2,
+    )
     assert versions[0]["can_delete"] is False
+    assert versions[0]["delete_block_reason"] == expected["delete_block_reason"]
     assert versions[1]["can_delete"] is True
     assert "can_delete" not in cached[0]["versions"][0]
+
+
+def test_sole_loaded_latest_registry_reason_matches_shared_policy():
+    domain = MagicMock()
+    domain.domain_folder = "acme"
+    domain.current_version = "3"
+    service = MagicMock()
+    service.cfg.is_configured = True
+    service.list_domain_details_cached.return_value = (
+        True,
+        [
+            {
+                "name": "acme",
+                "versions": [{"version": "3", "status": "DRAFT"}],
+            }
+        ],
+        "",
+    )
+
+    with (
+        patch.object(settings_module, "get_domain", return_value=domain),
+        patch.object(
+            settings_module.RegistryService,
+            "from_context",
+            return_value=service,
+        ),
+    ):
+        result = SettingsService.list_registry_domains_result(
+            MagicMock(),
+            MagicMock(),
+            user_role=ROLE_ADMIN,
+        )
+
+    expected = version_deletion_capability(
+        user_role=ROLE_ADMIN,
+        status="DRAFT",
+        is_loaded=True,
+        is_latest=True,
+        version_count=1,
+    )
+    assert result["domains"][0]["versions"][0]["delete_block_reason"] == expected[
+        "delete_block_reason"
+    ]

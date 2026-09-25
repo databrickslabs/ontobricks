@@ -93,3 +93,26 @@ Modified files:
 - tests/units/domain/test_version_capabilities.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6924 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.97s
+
+## Preserve shared deletion-reason precedence
+
+Context: Version-card listing code locally replaced deletion block reasons for
+latest versions, diverging from the authoritative shared policy when deletion
+constraints overlap. Listings now preserve the helper's minimum-version,
+loaded-version, latest-version, and lifecycle-status precedence.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   Removed the local latest-version reason override from Domain card capabilities.
+2. src/back/objects/domain/SettingsService.py
+   Removed the local latest-version reason override from Registry card decoration.
+3. tests/units/domain/test_version_capabilities.py
+   Added shared-policy parity coverage for loaded/latest and sole/loaded/latest overlapping states.
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/SettingsService.py
+- tests/units/domain/test_version_capabilities.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6926 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.63s

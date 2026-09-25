@@ -1076,7 +1076,6 @@ class SettingsService:
                 latest = str(versions[0].get("version", "")) if versions else ""
                 for version_data in versions:
                     version = str(version_data.get("version", ""))
-                    is_latest = version == latest
                     deletion = version_deletion_capability(
                         user_role=user_role,
                         status=version_data.get("status", "DRAFT"),
@@ -1084,13 +1083,9 @@ class SettingsService:
                             loaded_folder == item.get("name")
                             and loaded_version == version
                         ),
-                        is_latest=is_latest,
+                        is_latest=version == latest,
                         version_count=len(versions),
                     )
-                    if is_latest and deletion["delete_control_visible"]:
-                        deletion["delete_block_reason"] = (
-                            "The latest version cannot be deleted."
-                        )
                     version_data.update(deletion)
             return {"success": True, "domains": result}
         except OntoBricksError:

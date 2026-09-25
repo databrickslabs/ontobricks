@@ -1002,10 +1002,6 @@ class Domain:
                     is_latest=is_active,
                     version_count=len(sorted_versions),
                 )
-                if is_active and deletion["delete_control_visible"]:
-                    deletion["delete_block_reason"] = (
-                        "The latest version cannot be deleted."
-                    )
                 detail.update(deletion)
                 details.append(detail)
 
