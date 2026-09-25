@@ -131,3 +131,22 @@ Modified files:
 - changelogs/v0.8.1/benoitcayladbx_2026-09-25.log
 
 Tests: documentation only; production code unchanged.
+
+## Refresh V0.8.1 release notes
+
+Context: The patch notes still described only SPARQL, admin-only creation,
+SWRL, DQ, and license work. Changelogs after that added folded BFS paging,
+MCP session isolation, and the contributor guide.
+
+Changes:
+
+1. releases/ReleaseNotes_V0.8.1.md
+   Added highlights and sections for `/triples/find` folded BFS, MCP
+   per-connection session state, contributor docs, upgrade notes, and the
+   matching bug fixes. Recorded the latest non-scenario suite (5939 passed).
+
+Modified files:
+- releases/ReleaseNotes_V0.8.1.md
+- changelogs/v0.8.1/benoitcayladbx_2026-09-25.log
+
+Tests: documentation only; production code unchanged.
