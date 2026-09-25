@@ -857,7 +857,7 @@ class RegistryService:
         # purge is needed — the domain-level FK cascade only fires on a full
         # domain delete.
         try:
-            doc_rows = self._store.list_documents(folder, version)
+            doc_rows = self._store.list_documents(folder, version, strict=True)
             filenames = [r.get("filename") for r in doc_rows if r.get("filename")]
             if filenames:
                 errors = self._store.delete_documents(folder, version, filenames)

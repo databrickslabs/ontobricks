@@ -117,3 +117,54 @@ Follow-up commit: reported in the final handoff; a commit cannot contain its
 own immutable SHA. Remaining concern: cross-store rollback remains unsupported,
 so cleanup failure is explicitly reported as partial deletion rather than
 atomic success.
+
+## Concrete-store cleanup follow-up
+
+### Verified gap and implementation contract
+
+Confirmed: `LakebaseRegistryStore.list_documents()` returned `[]` when the
+document table could not be ensured or its query failed. The destructive
+workflow therefore could not distinguish infrastructure failure from a
+genuinely empty corpus.
+
+`RegistryStore.list_documents()` now accepts the opt-in keyword
+`strict=False`. Existing API listing, parsing, generation, mapping, and agent
+tool callers retain tolerant behavior. `RegistryService.delete_version()` is
+the only strict caller. In strict mode, an unavailable document table or query
+failure raises `StoreError`; a successful query with no rows still returns
+`[]`. The service converts the raised failure into the existing truthful 5xx
+partial-deletion `InfrastructureError`.
+
+The ordering is unchanged: the atomic Draft-guarded registry-row deletion
+still completes before strict Knowledge Store inspection. No unsupported
+cross-store transaction or rollback was introduced.
+
+### TDD and verification evidence
+
+- RED: the new focused run produced 5 expected failures and 1 pass. Lakebase
+  rejected the `strict` keyword, and the service still called tolerant
+  listing.
+- GREEN strict contract: 6 passed, 1 warning.
+- Focused store/service/Domain API/Settings API run: 77 passed, 1 warning.
+- New-test default Ruff run: passed.
+- Touched-file Ruff `F,E9`: one pre-existing unused import remains in
+  `RegistryService.py`; no changed hunk introduced it. IDE diagnostics found
+  no errors.
+- `git diff --check`: passed.
+- Full `uv run --frozen pytest -q -m "not scenario"`: 6959 passed,
+  316 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.29s.
+
+Concrete-store follow-up commit: reported in the final handoff because the
+commit cannot contain its own immutable SHA.
+
+### Self-review and remaining concern
+
+The concrete tests execute the Lakebase implementation against controlled
+table-availability and cursor outcomes, including a genuine zero-row query.
+All non-destructive callers keep the legacy tolerant contract. Existing docs
+already describe the correct partial-deletion boundary and were not
+strengthened.
+
+The unavoidable concern remains: metadata is already deleted when strict
+listing or Knowledge Store cleanup fails. The shared 5xx response reports that
+partial deletion truthfully, but cross-store rollback is unavailable.

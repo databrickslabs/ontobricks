@@ -653,10 +653,13 @@ class TestVersionDelegation:
     def test_delete_version_delegates(self):
         store = MagicMock()
         store.delete_version.return_value = (True, "ok")
+        store.list_documents.return_value = []
         svc = _make_svc(store=store)
         ok, _ = svc.delete_version("proj", "3")
         assert ok is True
         store.delete_version.assert_called_once_with("proj", "3")
+        store.list_documents.assert_called_once_with("proj", "3", strict=True)
+        store.delete_documents.assert_not_called()
 
     def test_guard_conflict_does_not_purge_knowledge_store(self):
         store = MagicMock()
@@ -687,6 +690,7 @@ class TestVersionDelegation:
 
         assert "guide.pdf: delete failed" in (exc_info.value.detail or "")
         store.delete_version.assert_called_once_with("proj", "3")
+        store.list_documents.assert_called_once_with("proj", "3", strict=True)
         store.delete_documents.assert_called_once_with(
             "proj", "3", ["guide.pdf"]
         )
@@ -706,6 +710,7 @@ class TestVersionDelegation:
             svc.delete_version("proj", "3")
 
         assert exc_info.value.detail == "lakebase unavailable"
+        store.list_documents.assert_called_once_with("proj", "3", strict=True)
         store.delete_documents.assert_not_called()
         svc.recursive_delete.assert_not_called()
 

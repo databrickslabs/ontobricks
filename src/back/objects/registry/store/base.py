@@ -810,8 +810,17 @@ class RegistryStore(ABC):
         """Insert/replace one document row. Default: unsupported."""
         return False, "document store not supported"
 
-    def list_documents(self, folder: str, version: str) -> List[DocumentRow]:
-        """Metadata rows (no text/bytes). Default: empty."""
+    def list_documents(
+        self, folder: str, version: str, *, strict: bool = False
+    ) -> List[DocumentRow]:
+        """Metadata rows (no text/bytes).
+
+        Unsupported stores remain tolerant by default.  Destructive callers
+        can request ``strict`` handling so absence of a document store is not
+        mistaken for an empty corpus.
+        """
+        if strict:
+            raise StoreError("document store not supported")
         return []
 
     def get_document(

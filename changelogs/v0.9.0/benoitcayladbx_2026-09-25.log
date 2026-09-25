@@ -396,3 +396,35 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6955 passed, 316 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.64s
+
+## Distinguish Knowledge Store listing failures during deletion
+
+Context: A final concrete-store review found that Lakebase document-listing
+failures degraded to an empty list, allowing version deletion to report
+success after metadata removal without proving Knowledge Store cleanup.
+
+Changes:
+
+1. src/back/objects/registry/store/base.py
+   Added an opt-in strict document-listing contract while preserving tolerant defaults for existing read-only callers.
+2. src/back/objects/registry/store/lakebase/store.py
+   Made strict listing raise StoreError for unavailable document tables and query failures while preserving genuine empty results.
+3. src/back/objects/registry/RegistryService.py
+   Opted destructive version cleanup into strict listing after the atomic Draft-guarded metadata deletion.
+4. tests/units/registry/test_lakebase_strict_document_listing.py
+   Added concrete Lakebase regressions for unavailable tables, query failures, genuine empty results, and tolerant default behavior.
+5. tests/units/registry/test_registry.py
+   Verified cleanup requests strict listing, propagates failures, and treats a genuine empty corpus as successful.
+6. .superpowers/sdd/final-fix-report.md
+   Recorded the strict-listing contract, RED/GREEN evidence, caller impact, verification, and remaining cross-store limitation.
+
+Modified files:
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/RegistryService.py
+- tests/units/registry/test_lakebase_strict_document_listing.py
+- tests/units/registry/test_registry.py
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6959 passed, 316 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.29s

@@ -4251,9 +4251,18 @@ class LakebaseRegistryStore(RegistryStore):
             logger.warning("upsert_document(%s/%s) failed: %s", folder, filename, exc)
             return False, str(exc)
 
-    def list_documents(self, folder: str, version: str) -> List[Dict[str, Any]]:
-        """Metadata rows for ``(folder, version)`` — never text/bytes."""
+    def list_documents(
+        self, folder: str, version: str, *, strict: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Metadata rows for ``(folder, version)`` — never text/bytes.
+
+        ``strict`` distinguishes infrastructure failures from a genuinely
+        empty result for destructive cleanup.  Read-only callers retain the
+        historical tolerant behavior.
+        """
         if not self._ensure_domain_documents_table():
+            if strict:
+                raise StoreError("Knowledge Store document table unavailable")
             return []
         try:
             _psycopg, dict_row = _require_psycopg()
@@ -4272,6 +4281,10 @@ class LakebaseRegistryStore(RegistryStore):
                 )
                 return [self._document_row(r) for r in cur.fetchall()]
         except Exception as exc:  # noqa: BLE001
+            if strict:
+                raise StoreError(
+                    f"Knowledge Store document listing failed: {exc}"
+                ) from exc
             logger.debug("list_documents(%s/%s) failed: %s", folder, version, exc)
             return []
 
