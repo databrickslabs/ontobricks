@@ -59,9 +59,10 @@ async function loadVersionsList(forceRefresh = false) {
             return;
         }
 
-        list.innerHTML = data.versions.map(function (version) {
+        const cards = data.versions.map(function (version) {
             return renderVersionCard(version, data.domain_folder || '');
-        }).join('');
+        });
+        list.replaceChildren(...cards);
         setVersionsState('list');
     } catch (err) {
         errorMessage.textContent = err.message || 'Failed to load versions';
@@ -70,63 +71,150 @@ async function loadVersionsList(forceRefresh = false) {
     }
 }
 
+function createVersionElement(tagName, className = '', text = null) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    if (text !== null) element.textContent = String(text);
+    return element;
+}
+
+function prependVersionIcon(element, iconName) {
+    const icon = createVersionElement('i', 'bi bi-' + iconName + ' me-1');
+    icon.setAttribute('aria-hidden', 'true');
+    element.prepend(icon);
+}
+
+function createVersionActionButton(options) {
+    const button = createVersionElement(
+        'button',
+        'btn btn-sm ' + options.buttonClass,
+        options.label
+    );
+    button.type = 'button';
+    button.dataset.action = options.action;
+    button.dataset.version = String(options.version);
+    if (options.domain !== undefined) {
+        button.dataset.domain = String(options.domain);
+    }
+    if (options.targetStatus !== undefined) {
+        button.dataset.targetStatus = String(options.targetStatus);
+    }
+    button.disabled = Boolean(options.disabled);
+    if (options.icon) prependVersionIcon(button, options.icon);
+    return button;
+}
+
+function wrapDisabledVersionAction(button, reason) {
+    if (!button.disabled) return button;
+
+    const wrapper = createVersionElement('span', 'dm-version-action-blocked');
+    wrapper.setAttribute('tabindex', '0');
+    wrapper.setAttribute('title', String(reason || 'This action is unavailable.'));
+    wrapper.append(button);
+    return wrapper;
+}
+
 function renderVersionCard(version, domainFolder) {
     const status = VERSION_STATUS_MAP[String(version.status || 'DRAFT').toUpperCase()]
         || VERSION_STATUS_MAP.DRAFT;
-    const transitions = (version.transitions || []).map(function (transition) {
-        const disabled = transition.enabled ? '' : ' disabled';
-        const reason = transition.blocked_reason
-            ? ' title="' + escapeHtml(transition.blocked_reason) + '"'
-            : '';
-        return '<button type="button" class="btn btn-sm btn-outline-primary"'
-            + ' data-action="transition"'
-            + ' data-version="' + escapeHtml(version.version) + '"'
-            + ' data-domain="' + escapeHtml(domainFolder) + '"'
-            + ' data-target-status="' + escapeHtml(transition.target_status) + '"'
-            + disabled + reason + '>'
-            + escapeHtml(transition.label) + '</button>';
-    }).join('');
-    const load = version.is_current ? '' :
-        '<button type="button" class="btn btn-sm btn-outline-primary"'
-        + ' data-action="load" data-version="' + escapeHtml(version.version) + '">'
-        + '<i class="bi bi-box-arrow-in-down me-1"></i>Load</button>';
-    let deletion = '';
+    const versionValue = String(version.version || '');
+    const article = createVersionElement(
+        'article',
+        'card dm-version-card' + (version.is_current ? ' is-loaded' : '')
+    );
+    article.setAttribute('role', 'listitem');
+    article.setAttribute('aria-label', 'Version ' + versionValue);
+
+    const body = createVersionElement('div', 'card-body');
+    const header = createVersionElement('div', 'dm-version-card-header');
+    const heading = createVersionElement('h5', 'mb-0', 'v' + versionValue);
+    const statusBadge = createVersionElement(
+        'span',
+        'badge border ' + status.cls,
+        status.label
+    );
+    prependVersionIcon(statusBadge, status.icon);
+    header.append(heading, statusBadge);
+    if (version.is_current) {
+        header.append(createVersionElement('span', 'badge bg-primary', 'Loaded'));
+    }
+    if (version.is_active) {
+        header.append(createVersionElement('span', 'badge bg-secondary', 'Latest'));
+    }
+
+    const description = createVersionElement(
+        'p',
+        'dm-version-card-description mt-2 mb-2',
+        version.description || 'No description'
+    );
+    const metadata = createVersionElement('div', 'dm-version-card-meta mb-3');
+    [
+        ['person', version.author || 'Unknown author'],
+        ['clock', version.last_update || 'No update date'],
+        ['hammer', version.last_build || 'Not built']
+    ].forEach(function (item) {
+        const value = createVersionElement('span', '', item[1]);
+        prependVersionIcon(value, item[0]);
+        metadata.append(value);
+    });
+
+    const actions = createVersionElement('div', 'dm-version-card-actions');
+    const transitionGroup = createVersionElement('div', 'dm-version-action-group');
+    (version.transitions || []).forEach(function (transition) {
+        const button = createVersionActionButton({
+            action: 'transition',
+            version: versionValue,
+            domain: domainFolder,
+            targetStatus: transition.target_status,
+            label: transition.label,
+            buttonClass: 'btn-outline-primary',
+            disabled: !transition.enabled
+        });
+        transitionGroup.append(
+            wrapDisabledVersionAction(button, transition.blocked_reason)
+        );
+    });
+
+    const directActions = createVersionElement('div', 'dm-version-action-group');
+    if (!version.is_current) {
+        directActions.append(createVersionActionButton({
+            action: 'load',
+            version: versionValue,
+            label: 'Load',
+            icon: 'box-arrow-in-down',
+            buttonClass: 'btn-outline-primary',
+            disabled: false
+        }));
+    }
+
     if (version.delete_control_visible) {
-        const disabled = version.can_delete ? '' : ' disabled';
-        const title = escapeHtml(
+        const title = String(
             version.delete_block_reason || ('Delete version v' + version.version)
         );
-        deletion = '<span tabindex="0" title="' + title + '">'
-            + '<button type="button" class="btn btn-sm btn-outline-danger"'
-            + ' data-action="delete" data-version="' + escapeHtml(version.version) + '"'
-            + disabled + '><i class="bi bi-trash me-1"></i>Delete</button></span>';
+        const deleteWrapper = createVersionElement('span');
+        const deleteButton = createVersionActionButton({
+            action: 'delete',
+            version: versionValue,
+            label: 'Delete',
+            icon: 'trash',
+            buttonClass: 'btn-outline-danger',
+            disabled: !version.can_delete
+        });
+        if (deleteButton.disabled) {
+            deleteWrapper.className = 'dm-version-action-blocked';
+            deleteWrapper.setAttribute('tabindex', '0');
+            deleteWrapper.setAttribute('title', title);
+        } else {
+            deleteButton.setAttribute('title', title);
+        }
+        deleteWrapper.append(deleteButton);
+        directActions.append(deleteWrapper);
     }
-    return '<article class="card dm-version-card'
-        + (version.is_current ? ' is-loaded' : '') + '" role="listitem"'
-        + ' aria-labelledby="version-title-' + escapeHtml(version.version) + '">'
-        + '<div class="card-body">'
-        + '<div class="dm-version-card-header">'
-        + '<h5 class="mb-0" id="version-title-' + escapeHtml(version.version) + '">'
-        + 'v' + escapeHtml(version.version) + '</h5>'
-        + '<span class="badge border ' + status.cls + '"><i class="bi bi-'
-        + status.icon + ' me-1"></i>' + status.label + '</span>'
-        + (version.is_current ? '<span class="badge bg-primary">Loaded</span>' : '')
-        + (version.is_active ? '<span class="badge bg-secondary">Latest</span>' : '')
-        + '</div>'
-        + '<p class="dm-version-card-description mt-2 mb-2">'
-        + escapeHtml(version.description || 'No description') + '</p>'
-        + '<div class="dm-version-card-meta mb-3">'
-        + '<span><i class="bi bi-person me-1"></i>'
-        + escapeHtml(version.author || 'Unknown author') + '</span>'
-        + '<span><i class="bi bi-clock me-1"></i>'
-        + escapeHtml(version.last_update || 'No update date') + '</span>'
-        + '<span><i class="bi bi-hammer me-1"></i>'
-        + escapeHtml(version.last_build || 'Not built') + '</span>'
-        + '</div>'
-        + '<div class="dm-version-card-actions">'
-        + '<div class="dm-version-action-group">' + transitions + '</div>'
-        + '<div class="dm-version-action-group">' + load + deletion + '</div>'
-        + '</div></div></article>';
+
+    actions.append(transitionGroup, directActions);
+    body.append(header, description, metadata, actions);
+    article.append(body);
+    return article;
 }
 
 async function transitionVersion(domainFolder, version, targetStatus) {
@@ -266,12 +354,6 @@ async function reloadLastSavedVersion() {
     } catch (err) {
         showNotification('Error: ' + err.message, 'error');
     }
-}
-
-function escapeHtml(text) {
-    var div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 document.addEventListener('DOMContentLoaded', function () {

@@ -64,6 +64,16 @@
     flex-wrap: wrap;
 }
 
+.dm-version-action-blocked {
+    display: inline-flex;
+    border-radius: var(--db-radius-control);
+}
+
+.dm-version-action-blocked:focus-visible {
+    outline: 2px solid transparent;
+    box-shadow: var(--db-focus-ring);
+}
+
 @media (max-width: 768px) {
     #versions-section .content-section,
     #versions-section .dm-versions-workspace,

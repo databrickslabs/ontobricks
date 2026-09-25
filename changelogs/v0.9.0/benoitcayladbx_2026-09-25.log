@@ -145,3 +145,26 @@ Modified files:
 - tests/units/front/test_domain_versions_cards.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6930 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 58.97s
+
+## Harden Domain Version card actions
+
+Context: Review identified that version-card values were escaped for text but
+then interpolated into HTML attributes, and disabled action reasons were not
+consistently keyboard reachable. Card rendering now uses DOM APIs exclusively
+and gives blocked actions one focusable, visibly focused reason wrapper.
+
+Changes:
+
+1. src/front/static/domain/js/domain-versions.js
+   Replaced string-based card rendering with `createElement`, `textContent`, `dataset`, and `setAttribute`, and corrected enabled/disabled transition and deletion tab stops.
+2. src/front/static/domain/css/domain-versions.css
+   Added token-based visible focus styling for blocked-action wrappers.
+3. tests/units/front/test_domain_versions_cards.py
+   Added executable Node renderer regressions for malicious values and enabled/disabled action focus behavior.
+
+Modified files:
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/css/domain-versions.css
+- tests/units/front/test_domain_versions_cards.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6933 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.89s

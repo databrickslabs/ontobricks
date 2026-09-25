@@ -1,3 +1,5 @@
+import subprocess
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,71 @@ HTML = ROOT / "src/front/templates/partials/domain/_domain_versions.html"
 PAGE = ROOT / "src/front/templates/domain.html"
 CSS = ROOT / "src/front/static/domain/css/domain-versions.css"
 JS = ROOT / "src/front/static/domain/js/domain-versions.js"
+
+
+def _run_renderer_assertions(assertions: str) -> None:
+    runner = """
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+class TestElement {
+    constructor(tagName) {
+        this.tagName = tagName.toUpperCase();
+        this.children = [];
+        this.parentElement = null;
+        this.attributes = {};
+        this.dataset = {};
+        this.className = '';
+        this.textContent = '';
+        this.disabled = false;
+        this.tabIndex = -1;
+        this.title = '';
+    }
+
+    append(...children) {
+        children.forEach((child) => this.appendChild(child));
+    }
+
+    prepend(child) {
+        child.parentElement = this;
+        this.children.unshift(child);
+    }
+
+    appendChild(child) {
+        child.parentElement = this;
+        this.children.push(child);
+        return child;
+    }
+
+    setAttribute(name, value) {
+        const text = String(value);
+        this.attributes[name] = text;
+        if (name === 'tabindex') this.tabIndex = Number(text);
+        if (name === 'title') this.title = text;
+    }
+}
+
+const document = {
+    createElement: (tagName) => new TestElement(tagName),
+    addEventListener: () => {},
+    getElementById: () => null
+};
+const context = vm.createContext({document, window: {}, console});
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+
+function allElements(root) {
+    return [root].concat(root.children.flatMap(allElements));
+}
+
+""" + textwrap.dedent(assertions)
+    result = subprocess.run(
+        ["node", "-e", runner, str(JS)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_versions_use_semantic_card_list_not_table():
@@ -36,6 +103,12 @@ def test_card_css_owns_full_height_scroll_and_mobile_reset():
     assert "height: auto" in mobile
 
 
+def test_disabled_action_wrapper_has_visible_keyboard_focus():
+    css = CSS.read_text(encoding="utf-8")
+    assert ".dm-version-action-blocked:focus-visible" in css
+    assert "var(--db-focus-ring)" in css
+
+
 def test_js_renders_server_capabilities_and_new_endpoints():
     js = JS.read_text(encoding="utf-8")
     assert "version.transitions" in js
@@ -46,3 +119,101 @@ def test_js_renders_server_capabilities_and_new_endpoints():
     assert "STATUS_MAP" in js
     assert "is_latest" not in js
     assert "status === 'DRAFT'" not in js
+
+
+def test_renderer_keeps_malicious_values_as_text_and_dom_properties():
+    _run_renderer_assertions(
+        r"""
+        const attack = '1"><img src=x onerror=alert(1)>';
+        const domain = 'acme" data-owned="yes"><script>alert(2)</script>';
+        const reason = 'blocked"><img src=x onerror=alert(3)>';
+        const version = {
+            version: attack,
+            status: 'DRAFT',
+            description: '<img src=x onerror=alert(4)>',
+            author: '"><script>alert(5)</script>',
+            last_update: '" onmouseover="alert(6)',
+            last_build: '<svg onload=alert(7)>',
+            is_current: false,
+            is_active: false,
+            transitions: [{
+                enabled: false,
+                blocked_reason: reason,
+                target_status: 'IN-REVIEW" data-owned="yes',
+                label: '<img src=x onerror=alert(8)>'
+            }],
+            delete_control_visible: true,
+            can_delete: false,
+            delete_block_reason: reason
+        };
+        const card = context.renderVersionCard(version, domain);
+        const elements = allElements(card);
+        assert.equal(elements.some((item) => ['IMG', 'SCRIPT', 'SVG'].includes(item.tagName)), false);
+        assert.equal(elements.find((item) => item.tagName === 'H5').textContent, 'v' + attack);
+        assert.equal(
+            elements.find(
+                (item) => item.className.includes('dm-version-card-description')
+            ).textContent,
+            version.description
+        );
+        const transition = elements.find(
+            (item) => item.tagName === 'BUTTON' && item.dataset.action === 'transition'
+        );
+        assert.equal(transition.dataset.version, attack);
+        assert.equal(transition.dataset.domain, domain);
+        assert.equal(transition.dataset.targetStatus, version.transitions[0].target_status);
+        assert.equal(transition.textContent, version.transitions[0].label);
+        assert.equal(transition.parentElement.title, reason);
+        """
+    )
+
+
+def test_disabled_action_reasons_have_one_keyboard_reachable_wrapper():
+    _run_renderer_assertions(
+        r"""
+        function render(canDelete) {
+            return context.renderVersionCard({
+                version: '2',
+                status: 'DRAFT',
+                transitions: [
+                    {enabled: true, target_status: 'IN-REVIEW', label: 'Submit'},
+                    {
+                        enabled: false,
+                        blocked_reason: 'Build required',
+                        target_status: 'PUBLISHED',
+                        label: 'Publish'
+                    }
+                ],
+                delete_control_visible: true,
+                can_delete: canDelete,
+                delete_block_reason: canDelete ? '' : 'Latest version'
+            }, 'acme');
+        }
+
+        const enabledDeleteCard = render(true);
+        const enabledElements = allElements(enabledDeleteCard);
+        const transitions = enabledElements.filter(
+            (item) => item.tagName === 'BUTTON' && item.dataset.action === 'transition'
+        );
+        assert.equal(transitions[0].disabled, false);
+        assert.equal(transitions[0].parentElement.tagName, 'DIV');
+        assert.equal(transitions[1].disabled, true);
+        assert.equal(transitions[1].parentElement.tagName, 'SPAN');
+        assert.equal(transitions[1].parentElement.tabIndex, 0);
+        assert.equal(transitions[1].parentElement.title, 'Build required');
+
+        const enabledDelete = enabledElements.find(
+            (item) => item.tagName === 'BUTTON' && item.dataset.action === 'delete'
+        );
+        assert.equal(enabledDelete.disabled, false);
+        assert.equal(enabledDelete.parentElement.tabIndex, -1);
+
+        const disabledElements = allElements(render(false));
+        const disabledDelete = disabledElements.find(
+            (item) => item.tagName === 'BUTTON' && item.dataset.action === 'delete'
+        );
+        assert.equal(disabledDelete.disabled, true);
+        assert.equal(disabledDelete.parentElement.tabIndex, 0);
+        assert.equal(disabledDelete.parentElement.title, 'Latest version');
+        """
+    )
