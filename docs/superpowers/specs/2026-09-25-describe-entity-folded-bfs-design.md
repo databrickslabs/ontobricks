@@ -49,18 +49,19 @@ waiver under `.cursor/12-ai-feature-lifecycle.mdc`.
 Do not copy the `0.8.1` SQL path unchanged. `0.9.0` has materialized
 `_entity_search`, `_adj_out`, `_adj_in`, and `_props` companions.
 
-The folded page operation should:
+Keep the existing companion-aware `bfs_traversal` and URI-alias expansion.
+They already seed from `_entity_search`, walk `_adj_out`/`_adj_in`, and fall
+back to SPO if companions disappear. Replacing that path would duplicate its
+fallback logic and make alias expansion non-sargable.
 
-1. Seed from `_entity_search` and walk `_adj_out`/`_adj_in` when the companions
-   are ready.
-2. Fetch payload triples from `_props` where supported.
-3. Fall back to a folded SPO query if companions are absent or disappear
-   during execution.
-4. Preserve alias behavior and the backward-compatible response fields in both
-   paths.
+Fold the remaining bottleneck only: fetch, de-duplicate, exactly count, order,
+and paginate payload triples in `_props` where supported, with the existing SPO
+missing-table fallback. This leaves only entity URIs—not the complete triple
+neighborhood—materialized in Python and preserves exact `total`,
+`entity_count`, and URI-alias behavior.
 
-Tests cover the companion path, SPO fallback, missing-companion fallback,
-pagination metadata, URI aliases, and Neo4j parity.
+Tests cover companion traversal reuse, `_props` paging, SPO and missing-table
+fallbacks, pagination metadata, URI aliases, and Neo4j parity.
 
 ## Validation
 
