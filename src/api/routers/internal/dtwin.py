@@ -2899,6 +2899,7 @@ async def dtwin_triples_find(
             ],
             "count": result["count"],
             "total": result["total"],
+            "has_more": bool(result.get("has_more", False)),
             "limit": limit,
             "offset": offset,
             "entity_count": result["entity_count"],

@@ -329,6 +329,11 @@ Explorer's own adjacency restriction; a companion-missing graph (pre-build,
 pre-refresh) or a missing-table error mid-query falls back to the exact
 `WITH RECURSIVE` SQL used before this change.
 
+`/triples/find` response pagination is deterministic on `(subject, predicate,
+object)` and reports exact `total` plus additive `has_more` for downstream
+formatters/clients; truncation hints should follow `has_more` rather than
+deriving from `total > page_size`.
+
 `entity_type` keeps two matching modes that already existed before this
 change and are preserved exactly: GraphQL/Preview take a full class URI
 (`type_uri` equality); MCP's `describe_entity`/`/triples/find` take a bare

@@ -62,3 +62,13 @@ def test_domain_capabilities_control_graph_actions():
     assert "document.querySelectorAll('[data-requires-graph]')" in script
     assert "control.disabled = hasSelection && !hasGraph" in script
     assert "clearApiResponses();" in script
+
+
+def test_triples_find_depth_default_matches_public_contract():
+    template = _read(TEMPLATE)
+    assert (
+        "<tr><td><code>depth</code></td><td>integer</td><td>1</td>"
+        "<td>Traversal depth (1 = direct neighbors, max 10)</td></tr>"
+    ) in template
+    assert 'id="apiFindDepth" value="1"' in template
+    assert "For broad type scans, start with <code>depth=1</code>" in template

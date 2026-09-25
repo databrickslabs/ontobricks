@@ -173,6 +173,9 @@ class FindResponse(BaseModel):
     triples: List[TripleRow] = []
     count: int = Field(0, description="Triples returned in this page")
     total: int = Field(0, description="Total triples found across all pages")
+    has_more: bool = Field(
+        False, description="Whether more triples exist beyond this page"
+    )
     limit: int = Field(1000, description="Page size used")
     offset: int = Field(0, description="Offset used")
     entity_count: int = 0
@@ -771,6 +774,7 @@ async def dt_triples_find(
             ],
             count=result["count"],
             total=result["total"],
+            has_more=bool(result.get("has_more", False)),
             limit=limit,
             offset=offset,
             entity_count=result["entity_count"],

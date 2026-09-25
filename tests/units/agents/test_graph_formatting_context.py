@@ -80,3 +80,28 @@ def test_node_context_and_action_formatters():
     )
     assert "main.ops.recompute_risk" in act
     assert "result: 1" in act
+
+
+def test_format_find_pagination_hint_uses_explicit_has_more():
+    base = {
+        "success": True,
+        "seed_count": 1,
+        "depth": 1,
+        "total": 12,
+        "triples": [
+            {
+                "subject": "https://ex/Customer/CUST1",
+                "predicate": "http://www.w3.org/2000/01/rdf-schema#label",
+                "object": "Cust One",
+            }
+        ],
+    }
+    no_more = dict(base, has_more=False)
+    with_more = dict(base, has_more=True)
+
+    text_no_more = format_find_response(no_more)
+    text_with_more = format_find_response(with_more)
+
+    assert "12 triples across" in text_no_more
+    assert "Showing 1 of 12 triples" not in text_no_more
+    assert "Showing 1 of 12 triples" in text_with_more

@@ -509,6 +509,9 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
         Returns:
             A full-text description of the matching entities, their
             attributes, and their relationships, organized hop by hop.
+            When the output ends with "Showing X of Y triples", the backend
+            reported ``has_more=true`` for this page; narrow the query and/or
+            keep ``depth=1`` for broad type scans before deepening traversal.
         """
         blocked = session.require_domain("describe_entity")
         if blocked:

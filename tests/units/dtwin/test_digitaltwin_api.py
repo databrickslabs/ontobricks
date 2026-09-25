@@ -449,6 +449,7 @@ class TestPydanticModels:
         r = FindResponse(success=True)
         assert r.seed_count == 0
         assert r.triples == []
+        assert r.has_more is False
 
     def test_triples_response(self):
         from api.routers.digitaltwin import TriplesResponse, TripleRow
@@ -641,3 +642,75 @@ class TestDtTriplesBackendSelection:
         await dt_triples(backend="view", session_mgr=MagicMock(), settings=MagicMock())
 
         assert store.paginated_count.call_args[0][0] == "c.s.view_V1"
+
+
+class TestTriplesFindHasMorePropagation:
+    @patch("api.routers.digitaltwin.run_blocking")
+    @patch("api.routers.digitaltwin.effective_graph_query_table", return_value="c.s.graph_V1")
+    @patch("api.routers.digitaltwin.get_graphdb")
+    @patch("api.routers.digitaltwin.DigitalTwin.find_triples_bfs")
+    @patch("api.routers.digitaltwin.DigitalTwin.resolve_domain")
+    async def test_external_route_exposes_has_more(
+        self,
+        mock_resolve,
+        mock_find,
+        mock_store,
+        _query,
+        mock_run_blocking,
+    ):
+        from api.routers.digitaltwin import dt_triples_find
+
+        mock_resolve.return_value = MagicMock()
+        mock_store.return_value = MagicMock()
+        mock_find.return_value = {
+            "seed_count": 1,
+            "triples": [{"subject": "s", "predicate": "p", "object": "o"}],
+            "count": 1,
+            "total": 5,
+            "has_more": 1,
+            "entity_count": 1,
+        }
+        mock_run_blocking.side_effect = lambda fn: fn()
+
+        result = await dt_triples_find(
+            search="cust",
+            limit=1,
+            offset=0,
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+
+        assert result.has_more is True
+        assert result.total == 5
+        mock_find.assert_called_once()
+
+    @patch("api.routers.internal.dtwin.run_blocking")
+    @patch("api.routers.internal.dtwin._graph_query_table", return_value="c.s.graph_V1")
+    @patch("api.routers.internal.dtwin._require_graph_store")
+    @patch("api.routers.internal.dtwin.get_domain")
+    async def test_internal_route_exposes_has_more(
+        self, mock_get_domain, mock_require_store, _query, mock_run_blocking
+    ):
+        from api.routers.internal.dtwin import dtwin_triples_find
+
+        mock_get_domain.return_value = MagicMock()
+        mock_require_store.return_value = MagicMock()
+        mock_run_blocking.return_value = {
+            "seed_count": 1,
+            "triples": [{"subject": "s", "predicate": "p", "object": "o"}],
+            "count": 1,
+            "total": 2,
+            "has_more": True,
+            "entity_count": 1,
+        }
+
+        result = await dtwin_triples_find(
+            search="cust",
+            limit=1,
+            offset=0,
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
+
+        assert result["has_more"] is True
+        assert result["total"] == 2

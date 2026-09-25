@@ -150,7 +150,7 @@ Predicates (attributes & relationships)
 |-----------|------|---------|-------------|
 | `search` | string | — | Text to search in entity names/labels/URIs (e.g. `"Jacob Martinez"`) |
 | `entity_type` | string | — | Filter by type local name (e.g. `"Customer"`) |
-| `depth` | int | 2 | BFS traversal depth (1–10) |
+| `depth` | int | 1 | BFS traversal depth (1–10). Use `depth=1` first for broad type-wide scans. |
 
 Requires a domain to be selected first.
 At least one of `search` or `entity_type` is required.
@@ -189,6 +189,8 @@ Found 1 matching entity (33 triples across 3 entities, depth=2)
     → finance / Contract  "Owns contracts"
       Target domain: Finance ontology with contracts and payments
     → to query the target domain, call select_domain(<target_domain>) then re-run describe_entity or GraphQL there. get_entity_context(follow_bridges=True) only peeks — it does NOT switch the session.
+
+(Showing 100 of 420 triples — increase limit or use pagination for more)
 ```
 
 Key features of the text output:
@@ -196,6 +198,7 @@ Key features of the text output:
 - **Predicate prettifying** — URIs like `ontologylastname` become `lastname`, camelCase is split
 - **Hop-by-hop structure** — matching entities first, then related entities (neighbors)
 - **Bridges expose target domain descriptions** so the agent can decide to hop with `select_domain(<target>)` — bridges to non-MCP-visible domains are hidden
+- **Pagination hint fidelity** — truncation text appears only when backend `has_more=true`; `total` remains exact
 
 #### `get_status`
 
