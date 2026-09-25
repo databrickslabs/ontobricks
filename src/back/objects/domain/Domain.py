@@ -54,7 +54,11 @@ from back.core.mcp_tools import (
 )
 from back.objects.registry import RegistryService
 from back.objects.registry.registry_cache import invalidate_registry_cache
-from back.objects.registry.version_lifecycle import is_editable
+from back.objects.registry.version_lifecycle import (
+    is_editable,
+    transition_capabilities,
+    version_deletion_capability,
+)
 from back.objects.session import is_valid_domain_name, sanitize_domain_folder
 from back.core.task_manager import get_task_manager
 from back.objects.domain._metadata_tasks import (
@@ -907,8 +911,14 @@ class Domain:
                 "Failed to list domain versions", detail=str(e)
             ) from e
 
-    def list_version_details(self, svc: RegistryService) -> Dict[str, Any]:
-        """List all versions with their description and mcp_enabled flag.
+    def list_version_details(
+        self,
+        svc: RegistryService,
+        *,
+        user_role: str = "",
+        user_domain_role: str = "",
+    ) -> Dict[str, Any]:
+        """List all versions with card metadata and allowed actions.
 
         Reads each version JSON from the registry to extract per-version metadata.
         """
@@ -933,33 +943,67 @@ class Domain:
 
             for ver in sorted_versions:
                 ok, data, _msg = svc.read_version(folder, ver)
+                is_active = ver == latest
+                is_current = ver == self._s.current_version
                 if not ok:
-                    details.append(
-                        {
-                            "version": ver,
-                            "description": "",
-                            "mcp_enabled": False,
-                            "status": "DRAFT",
-                            "is_active": ver == latest,
-                            "is_current": ver == self._s.current_version,
-                            "error": _msg,
-                        }
+                    detail = {
+                        "version": ver,
+                        "description": "",
+                        "mcp_enabled": False,
+                        "status": "DRAFT",
+                        "author": "",
+                        "last_update": "",
+                        "last_build": "",
+                        "is_active": is_active,
+                        "is_current": is_current,
+                        "transitions": [],
+                        "error": _msg,
+                    }
+                    detail.update(
+                        version_deletion_capability(
+                            user_role=user_role,
+                            status="DRAFT",
+                            is_loaded=is_current,
+                            is_latest=is_active,
+                            version_count=len(sorted_versions),
+                        )
                     )
+                    detail["can_delete"] = False
+                    detail["delete_block_reason"] = (
+                        "Version metadata could not be read."
+                    )
+                    details.append(detail)
                     continue
 
                 info = data.get("info", {})
-                details.append(
-                    {
-                        "version": ver,
-                        "description": info.get("description", ""),
-                        "mcp_enabled": info.get("mcp_enabled", False),
-                        "status": info.get("status", "DRAFT"),
-                        "author": info.get("author", ""),
-                        "last_update": info.get("last_update", ""),
-                        "is_active": ver == latest,
-                        "is_current": ver == self._s.current_version,
-                    }
+                status = (info.get("status") or "DRAFT").upper()
+                detail = {
+                    "version": ver,
+                    "description": info.get("description", ""),
+                    "mcp_enabled": info.get("mcp_enabled", False),
+                    "status": status,
+                    "author": info.get("author", ""),
+                    "last_update": info.get("last_update", ""),
+                    "last_build": info.get("last_build", ""),
+                    "is_active": is_active,
+                    "is_current": is_current,
+                    "transitions": transition_capabilities(
+                        status,
+                        user_role=user_role,
+                        user_domain_role=user_domain_role,
+                        last_build=info.get("last_build", "") or "",
+                        has_ontology=svc.version_document_has_ontology(data, ver),
+                    ),
+                }
+                deletion = version_deletion_capability(
+                    user_role=user_role,
+                    status=status,
+                    is_loaded=is_current,
+                    is_latest=is_active,
+                    version_count=len(sorted_versions),
                 )
+                detail.update(deletion)
+                details.append(detail)
 
             return {
                 "success": True,

@@ -130,7 +130,11 @@ that expose a single `describe_ontology` tool. See
 Every domain version carries a **DRAFT / IN-REVIEW / PUBLISHED** status enforced
 server-side. A **single editor** holds a DRAFT at a time (auto-releasing leases,
 admin take-over), a business-friendly **review workflow** collects sign-offs
-with a configurable quorum, and every decision is persisted append-only. Move
+with a configurable quorum, and every decision is persisted append-only.
+Administrators can safely delete only older, unloaded Draft versions; deletion
+atomically rechecks Draft status before attempting permanent removal of that
+version's Knowledge Store content. Cleanup failures are reported as errors
+rather than false success. Move
 domains between environments with the **OBX** export/import (UI or
 [CLI](docs/import-export.md)).
 

@@ -7,9 +7,11 @@ only), domain/version CRUD wiring, and the scheduler's bootstrap-time
 """
 
 import json
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
+import pytest
+
+from back.core.errors import ConflictError, InfrastructureError
 from back.objects.registry.RegistryService import (
     RegistryCfg,
     RegistryService,
@@ -651,10 +653,66 @@ class TestVersionDelegation:
     def test_delete_version_delegates(self):
         store = MagicMock()
         store.delete_version.return_value = (True, "ok")
+        store.list_documents.return_value = []
         svc = _make_svc(store=store)
         ok, _ = svc.delete_version("proj", "3")
         assert ok is True
         store.delete_version.assert_called_once_with("proj", "3")
+        store.list_documents.assert_called_once_with("proj", "3", strict=True)
+        store.delete_documents.assert_not_called()
+
+    def test_guard_conflict_does_not_purge_knowledge_store(self):
+        store = MagicMock()
+        store.delete_version.side_effect = ConflictError(
+            "Version 3 is no longer Draft"
+        )
+        svc = _make_svc(store=store)
+
+        with pytest.raises(ConflictError):
+            svc.delete_version("proj", "3")
+
+        store.list_documents.assert_not_called()
+        store.delete_documents.assert_not_called()
+
+    def test_returned_knowledge_store_cleanup_errors_fail_deletion(self):
+        store = MagicMock()
+        store.delete_version.return_value = (True, "")
+        store.list_documents.return_value = [{"filename": "guide.pdf"}]
+        store.delete_documents.return_value = ["guide.pdf: delete failed"]
+        svc = _make_svc(store=store)
+        svc.recursive_delete = MagicMock()
+
+        with pytest.raises(
+            InfrastructureError,
+            match="Knowledge Store cleanup failed",
+        ) as exc_info:
+            svc.delete_version("proj", "3")
+
+        assert "guide.pdf: delete failed" in (exc_info.value.detail or "")
+        store.delete_version.assert_called_once_with("proj", "3")
+        store.list_documents.assert_called_once_with("proj", "3", strict=True)
+        store.delete_documents.assert_called_once_with(
+            "proj", "3", ["guide.pdf"]
+        )
+        svc.recursive_delete.assert_not_called()
+
+    def test_raised_knowledge_store_cleanup_error_fails_deletion(self):
+        store = MagicMock()
+        store.delete_version.return_value = (True, "")
+        store.list_documents.side_effect = RuntimeError("lakebase unavailable")
+        svc = _make_svc(store=store)
+        svc.recursive_delete = MagicMock()
+
+        with pytest.raises(
+            InfrastructureError,
+            match="Knowledge Store cleanup failed",
+        ) as exc_info:
+            svc.delete_version("proj", "3")
+
+        assert exc_info.value.detail == "lakebase unavailable"
+        store.list_documents.assert_called_once_with("proj", "3", strict=True)
+        store.delete_documents.assert_not_called()
+        svc.recursive_delete.assert_not_called()
 
 
 # ==================================================================

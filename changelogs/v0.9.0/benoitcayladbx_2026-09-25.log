@@ -143,6 +143,437 @@ Tests:
 - Post-review follow-up focused run: `uv run --frozen pytest -q tests/units/mcp/test_find_formatting.py tests/units/dtwin/test_digitaltwin_api.py tests/units/agents/test_graph_formatting_context.py -k "find_pagination_hint_uses_explicit_has_more or external_route_exposes_has_more or internal_route_exposes_has_more or test_find_response_defaults"` → `5 passed, 53 deselected, 1 warning in 1.50s`
 - `uv run --frozen pytest -q -m "not scenario"` → `= 6903 passed, 320 skipped, 6 deselected, 1 xfailed, 32 warnings in 2558.83s (0:42:38) =`
 
+## Define guarded version deletion policy
+
+Context: Domain-version cards need pure capability data for lifecycle actions
+and safe deletion. The policy now centralizes role, readiness, loaded-version,
+latest-version, and minimum-version safeguards for later UI and service use.
+
+Changes:
+
+1. src/back/objects/registry/version_lifecycle.py
+   Added transition capability metadata and guarded version-deletion policy helpers.
+2. tests/units/registry/test_version_lifecycle.py
+   Added lifecycle capability and safe-deletion policy coverage.
+
+Modified files:
+- src/back/objects/registry/version_lifecycle.py
+- tests/units/registry/test_version_lifecycle.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6909 passed, 308 skipped, 6 deselected, 1 xfailed in 47.95s
+
+## Guard domain-version deletion endpoints
+
+Context: Domain-version deletion now uses the shared lifecycle policy at the
+service boundary. Both loaded-domain and Settings routes forward the caller's
+application role so builders cannot bypass the administrator-only guard.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Added guarded deletion orchestration with existence, status, loaded-version, latest-version, and minimum-version checks.
+2. src/api/routers/internal/domain.py
+   Added the loaded-domain version deletion endpoint and derived its registry folder from the active domain.
+3. src/api/routers/internal/settings.py
+   Preserved the Settings deletion endpoint while forwarding the caller role to the shared service policy.
+4. tests/units/settings/test_settings_version_deletion.py
+   Added service coverage for successful deletion and every guarded conflict.
+5. tests/units/api/test_delete_version_endpoints.py
+   Added route coverage for target and caller-role forwarding.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- tests/units/settings/test_settings_version_deletion.py
+- tests/units/api/test_delete_version_endpoints.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6917 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.82s
+
+## Preserve registry listing failures during version deletion
+
+Context: Guarded version deletion previously used a convenience listing that
+returned an empty list for both a valid empty result and a backend failure.
+Deletion now preserves the backend failure detail and stops before reading or
+deleting a version.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Replaced the fail-soft version listing with the result-bearing API and retained numeric descending version ordering.
+2. tests/units/settings/test_settings_version_deletion.py
+   Added regression coverage for listing, reading, and physical deletion failures, including later-call suppression.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_settings_version_deletion.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6920 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.01s
+
+## Expose server-computed version card capabilities
+
+Context: Domain and Registry version cards need authoritative action metadata
+from the server. Listings now expose role-aware lifecycle transitions and safe
+deletion capabilities without mutating cached registry objects, while unreadable
+versions remain visible with unsafe actions blocked.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   Added card metadata, transition capabilities, deletion capabilities, and fail-safe unreadable-version rows.
+2. src/back/objects/domain/SettingsService.py
+   Decorated a deep copy of cached Registry versions with role-aware deletion capabilities.
+3. src/api/routers/internal/domain.py
+   Forwarded request application and domain roles to the Domain version listing.
+4. src/api/routers/internal/settings.py
+   Forwarded the request application role to the Registry domain listing.
+5. tests/units/domain/test_version_capabilities.py
+   Added coverage for metadata, transitions, deletion guards, unreadable rows, and cache immutability.
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/SettingsService.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- tests/units/domain/test_version_capabilities.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6924 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.97s
+
+## Preserve shared deletion-reason precedence
+
+Context: Version-card listing code locally replaced deletion block reasons for
+latest versions, diverging from the authoritative shared policy when deletion
+constraints overlap. Listings now preserve the helper's minimum-version,
+loaded-version, latest-version, and lifecycle-status precedence.
+
+Changes:
+
+1. src/back/objects/domain/Domain.py
+   Removed the local latest-version reason override from Domain card capabilities.
+2. src/back/objects/domain/SettingsService.py
+   Removed the local latest-version reason override from Registry card decoration.
+3. tests/units/domain/test_version_capabilities.py
+   Added shared-policy parity coverage for loaded/latest and sole/loaded/latest overlapping states.
+
+Modified files:
+- src/back/objects/domain/Domain.py
+- src/back/objects/domain/SettingsService.py
+- tests/units/domain/test_version_capabilities.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6926 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.63s
+
+## Redesign Domain Versions as an action-card workspace
+
+Context: Domain → Versions now presents version history as a full-height,
+responsive card workspace. Each card renders server-provided lifecycle and
+deletion capabilities directly, with inline load, transition, and guarded
+delete actions.
+
+Changes:
+
+1. src/front/templates/partials/domain/_domain_versions.html
+   Replaced the version table and inline handlers with semantic list states, accessible cards, and delegated action controls.
+2. src/front/static/domain/css/domain-versions.css
+   Added token-based full-height internal scrolling with specificity-safe mobile natural-flow resets.
+3. src/front/static/domain/js/domain-versions.js
+   Added capability-driven card rendering, lifecycle transitions, guarded deletion, state handling, retry support, and delegated events while preserving the shared New Version action.
+4. src/front/templates/domain.html
+   Wired the cache-busted Domain Versions stylesheet after the Domain Review styles.
+5. tests/units/front/test_domain_versions_cards.py
+   Added structural, responsive, capability-rendering, and endpoint contracts for the card workspace.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_versions.html
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/domain/js/domain-versions.js
+- src/front/templates/domain.html
+- tests/units/front/test_domain_versions_cards.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6930 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 58.97s
+
+## Harden Domain Version card actions
+
+Context: Review identified that version-card values were escaped for text but
+then interpolated into HTML attributes, and disabled action reasons were not
+consistently keyboard reachable. Card rendering now uses DOM APIs exclusively
+and gives blocked actions one focusable, visibly focused reason wrapper.
+
+Changes:
+
+1. src/front/static/domain/js/domain-versions.js
+   Replaced string-based card rendering with `createElement`, `textContent`, `dataset`, and `setAttribute`, and corrected enabled/disabled transition and deletion tab stops.
+2. src/front/static/domain/css/domain-versions.css
+   Added token-based visible focus styling for blocked-action wrappers.
+3. tests/units/front/test_domain_versions_cards.py
+   Added executable Node renderer regressions for malicious values and enabled/disabled action focus behavior.
+
+Modified files:
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/domain/css/domain-versions.css
+- tests/units/front/test_domain_versions_cards.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6933 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.89s
+
+## Honor guarded Registry version deletion capabilities
+
+Context: Registry Browse previously inferred version-delete visibility from the
+locally loaded version and interpolated escaped values into HTML attributes.
+Deletion controls now honor authoritative server capabilities, safely retain
+untrusted values in DOM properties, and refresh those capabilities after a
+guarded deletion conflict.
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   Added DOM-based, server-authoritative version delete controls with accessible blocked reasons and HTTP 409 capability refresh.
+2. tests/units/front/test_domain_versions_cards.py
+   Added Registry capability, conflict refresh, malicious-value, and keyboard tab-stop regression contracts.
+3. .superpowers/sdd/task-5-report.md
+   Recorded RED/GREEN evidence, focused and full-suite results, and self-review findings.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_domain_versions_cards.py
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6936 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.04s
+
+## Escape Registry version deletion confirmations
+
+Context: The Registry delete control safely stored untrusted values in DOM
+properties, but the enabled action later passed those values unescaped to an
+HTML-capable confirmation dialog. Confirmation text now escapes Registry domain
+and version values, closing the stored-XSS path without removing supported
+dialog formatting.
+
+Changes:
+
+1. src/front/static/registry/js/registry.js
+   Escaped untrusted deletion identifiers before confirmation rendering and made the deletion workflow behaviorally testable without changing its guarded endpoint.
+2. tests/units/front/test_domain_versions_cards.py
+   Added executable enabled-action confirmation injection coverage and behavioral HTTP 409 notification/refresh coverage.
+3. .superpowers/sdd/task-5-report.md
+   Corrected the initial safety assessment and appended follow-up RED/GREEN, regression, and full-suite evidence.
+
+Modified files:
+- src/front/static/registry/js/registry.js
+- tests/units/front/test_domain_versions_cards.py
+- .superpowers/sdd/task-5-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6938 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.98s
+
+## Consolidate Domain version cards and guarded deletion
+
+Context: This final section consolidates the Domain version-card and safe
+deletion work recorded incrementally above. It adds browser-level verification
+and user documentation without restating earlier implementation steps as new
+changes. Lifecycle state remains distinct from the Registry-managed API/MCP
+Active selection.
+
+Changes:
+
+1. src/back/objects/registry/version_lifecycle.py
+   Provides server-authoritative lifecycle capabilities and conservative deletion policy.
+2. src/back/objects/domain/SettingsService.py
+   Routes Domain and Registry deletion through shared guarded orchestration.
+3. src/back/objects/domain/Domain.py
+   Returns newest-first card metadata and permitted actions for every version.
+4. src/api/routers/internal/domain.py
+   Exposes loaded-domain deletion and role-aware card capabilities.
+5. src/api/routers/internal/settings.py
+   Applies shared deletion capabilities to Registry Browse.
+6. src/front/templates/domain.html and src/front/templates/partials/domain/_domain_versions.html
+   Provide the accessible version-card workspace and its versioned stylesheet.
+7. src/front/static/domain/css/domain-versions.css
+   Provides full-height desktop behavior and natural-flow mobile behavior.
+8. src/front/static/domain/js/domain-versions.js
+   Renders cards, performs guarded actions, and restores Delete-button focus after real-modal cancellation.
+9. src/front/static/registry/js/registry.js
+   Consumes server deletion capabilities and safely handles guarded deletion.
+10. tests/units/
+    Covers lifecycle policy, deletion services and routes, card capabilities, frontend rendering, and cancellation focus restoration.
+11. tests/e2e/domain/test_domain_versions_cards.py
+    Adds deterministic mocked Chromium contracts at 1600x1000 and 390x844, including forced refresh requests, demonstrated internal scrolling, real-modal focus restoration, responsive overflow, and console errors.
+12. docs/user-guide.md and docs/features.md
+    Document cards, inline lifecycle, deletion restrictions, and the separate API/MCP Active selection.
+13. .superpowers/sdd/task-6-report.md
+    Records exact browser, focused, full-suite, diagnostics, viewport, and self-review evidence.
+
+Modified files:
+- src/back/objects/registry/version_lifecycle.py
+- src/back/objects/domain/SettingsService.py
+- src/back/objects/domain/Domain.py
+- src/api/routers/internal/domain.py
+- src/api/routers/internal/settings.py
+- src/front/templates/domain.html
+- src/front/templates/partials/domain/_domain_versions.html
+- src/front/static/domain/css/domain-versions.css
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/registry/js/registry.js
+- tests/units/registry/test_version_lifecycle.py
+- tests/units/settings/test_settings_version_deletion.py
+- tests/units/domain/test_version_capabilities.py
+- tests/units/api/test_delete_version_endpoints.py
+- tests/units/front/test_domain_versions_cards.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- docs/user-guide.md
+- docs/features.md
+- .superpowers/sdd/task-5-report.md
+- .superpowers/sdd/task-6-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6939 passed, 313 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.93s
+
+## Close final Domain version review blockers
+
+Context: Final whole-branch review found an unsafe session identity fallback,
+a lifecycle transition race in version deletion, stale global UI state after
+inline transitions, incomplete destructive confirmation copy, and missing
+focus restoration. The fixes preserve the established lifecycle and deletion
+policy while making the destructive Lakebase mutation authoritative.
+
+Changes:
+
+1. src/api/routers/internal/domain.py
+   Restricted loaded-domain deletion to the persisted `domain_folder` identity.
+2. src/back/objects/registry/store/lakebase/store.py
+   Guarded the destructive PostgreSQL statement with Draft status and converted zero-row conflicts to HTTP 409 before Knowledge Store cleanup.
+3. src/front/static/domain/js/domain-versions.js
+   Synchronized global lifecycle state, restored confirmation focus, improved permanent-deletion copy, linked card accessible names, and removed the unused refresh query.
+4. src/front/static/global/js/permissions.js
+   Added role-tooltip annotation reset for live transitions back to editable state.
+5. src/front/static/global/js/version-check.js
+   Added an authoritative lifecycle refresh entry point and coherent read-only body-state toggling.
+6. src/front/static/registry/js/registry.js
+   Added escaped permanent Knowledge Store removal warnings to version and domain confirmations.
+7. tests/units/api/test_delete_version_endpoints.py
+   Added the unsaved same-name deletion isolation regression.
+8. tests/units/registry/test_lakebase_guarded_version_delete.py
+   Added deterministic SQL predicate and zero-row conflict coverage.
+9. tests/units/registry/test_registry.py
+   Proved a guarded conflict cannot purge Knowledge Store rows.
+10. tests/units/settings/test_settings_version_deletion.py
+    Proved structured deletion conflicts remain HTTP 409 errors without cache mutation.
+11. tests/units/front/test_domain_versions_cards.py
+    Added executable accessibility, confirmation, focus, escaping, and global-refresh contracts.
+12. tests/e2e/domain/test_domain_versions_cards.py
+    Added real-modal cancellation focus and loaded-version read-only synchronization browser coverage.
+13. README.md
+    Summarized safe version deletion in the lifecycle overview.
+14. docs/features.md
+    Documented atomic Draft guarding and global UI synchronization.
+15. docs/user-guide.md
+    Documented authoritative deletion behavior, confirmation semantics, and lifecycle-driven editability.
+16. .superpowers/sdd/final-fix-report.md
+    Recorded finding-by-finding verification, RED/GREEN evidence, commands, deferred cleanup, and self-review.
+
+Modified files:
+- README.md
+- docs/features.md
+- docs/user-guide.md
+- src/api/routers/internal/domain.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/front/static/domain/js/domain-versions.js
+- src/front/static/global/js/permissions.js
+- src/front/static/global/js/version-check.js
+- src/front/static/registry/js/registry.js
+- tests/e2e/domain/test_domain_versions_cards.py
+- tests/units/api/test_delete_version_endpoints.py
+- tests/units/front/test_domain_versions_cards.py
+- tests/units/registry/test_lakebase_guarded_version_delete.py
+- tests/units/registry/test_registry.py
+- tests/units/settings/test_settings_version_deletion.py
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6950 passed, 315 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.18s
+
+## Report dynamic read-only and cleanup failures correctly
+
+Context: Final follow-up review found that the installed context-menu capture
+listener survived a transition back to Draft, and that Knowledge Store cleanup
+errors were swallowed after registry metadata deletion. The follow-up restores
+editable behavior dynamically and reports unavoidable partial deletion as a
+5xx failure without weakening the atomic Draft guard.
+
+Changes:
+
+1. src/front/static/global/js/permissions.js
+   Made the deduplicated context-menu listener evaluate the current lifecycle and viewer body classes for every event.
+2. src/back/objects/registry/RegistryService.py
+   Converted returned and raised Knowledge Store cleanup failures into truthful structured infrastructure errors after guarded row deletion.
+3. src/back/objects/domain/SettingsService.py
+   Cleared version-status caches when post-delete cleanup fails while preserving the propagated 5xx error.
+4. tests/e2e/domain/test_domain_versions_cards.py
+   Added real inline-flow browser coverage for Draft → In Review blocking and In Review → Draft editing/context-menu restoration.
+5. tests/units/registry/test_registry.py
+   Added returned-error and raised-exception cleanup regressions and proved legacy cleanup does not continue.
+6. tests/units/settings/test_settings_version_deletion.py
+   Added partial-cleanup error and cache invalidation coverage.
+7. tests/units/api/test_delete_version_endpoints.py
+   Verified both Domain and Settings routes propagate the shared cleanup failure.
+8. README.md
+   Clarified that permanent cleanup is attempted after the atomic Draft guard and failures are reported.
+9. docs/features.md
+   Documented the cross-store transaction boundary and truthful partial-deletion response.
+10. docs/user-guide.md
+    Documented the 5xx partial-deletion behavior for cleanup failures.
+11. docs/superpowers/specs/2026-09-25-domain-versions-cards-and-safe-deletion-design.md
+    Corrected the cleanup semantics to match the supported storage APIs.
+12. .superpowers/sdd/final-fix-report.md
+    Added follow-up finding verification, RED/GREEN evidence, exact commands, and remaining concern.
+
+Modified files:
+- src/front/static/global/js/permissions.js
+- src/back/objects/registry/RegistryService.py
+- src/back/objects/domain/SettingsService.py
+- tests/e2e/domain/test_domain_versions_cards.py
+- tests/units/registry/test_registry.py
+- tests/units/settings/test_settings_version_deletion.py
+- tests/units/api/test_delete_version_endpoints.py
+- README.md
+- docs/features.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-09-25-domain-versions-cards-and-safe-deletion-design.md
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6955 passed, 316 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.64s
+
+## Distinguish Knowledge Store listing failures during deletion
+
+Context: A final concrete-store review found that Lakebase document-listing
+failures degraded to an empty list, allowing version deletion to report
+success after metadata removal without proving Knowledge Store cleanup.
+
+Changes:
+
+1. src/back/objects/registry/store/base.py
+   Added an opt-in strict document-listing contract while preserving tolerant defaults for existing read-only callers.
+2. src/back/objects/registry/store/lakebase/store.py
+   Made strict listing raise StoreError for unavailable document tables and query failures while preserving genuine empty results.
+3. src/back/objects/registry/RegistryService.py
+   Opted destructive version cleanup into strict listing after the atomic Draft-guarded metadata deletion.
+4. tests/units/registry/test_lakebase_strict_document_listing.py
+   Added concrete Lakebase regressions for unavailable tables, query failures, genuine empty results, and tolerant default behavior.
+5. tests/units/registry/test_registry.py
+   Verified cleanup requests strict listing, propagates failures, and treats a genuine empty corpus as successful.
+6. .superpowers/sdd/final-fix-report.md
+   Recorded the strict-listing contract, RED/GREEN evidence, caller impact, verification, and remaining cross-store limitation.
+
+Modified files:
+- src/back/objects/registry/store/base.py
+- src/back/objects/registry/store/lakebase/store.py
+- src/back/objects/registry/RegistryService.py
+- tests/units/registry/test_lakebase_strict_document_listing.py
+- tests/units/registry/test_registry.py
+- .superpowers/sdd/final-fix-report.md
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6959 passed, 316 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.29s
+
 ## Forward-port MCP session isolation
 
 Context: The MCP per-connection isolation fix from PR #183 is prepared for the

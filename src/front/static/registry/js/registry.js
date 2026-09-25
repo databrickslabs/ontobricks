@@ -3,6 +3,79 @@
  * Registry page JavaScript – domain browsing and registry configuration
  */
 
+function createRegistryVersionDeleteControl(v, domainName) {
+    if (!v.delete_control_visible) return null;
+
+    const version = String(v.version ?? '');
+    const reason = v.delete_block_reason || ('Delete version v' + version);
+    const wrapper = document.createElement('span');
+    wrapper.className = 'registry-version-delete-control';
+    wrapper.title = reason;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm btn-outline-danger border-0 registry-delete-version-btn';
+    button.dataset.domain = String(domainName ?? '');
+    button.dataset.version = version;
+    button.setAttribute('data-requires-app', 'admin');
+    button.setAttribute('aria-label', 'Delete version v' + version);
+
+    if (v.can_delete) {
+        button.tabIndex = 0;
+    } else {
+        wrapper.tabIndex = 0;
+        button.disabled = true;
+        button.tabIndex = -1;
+    }
+
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-trash';
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+    wrapper.appendChild(button);
+    return wrapper;
+}
+
+async function deleteRegistryVersion(
+    domainName,
+    version,
+    refreshDomains = () => {},
+    invalidateBridges = () => {}
+) {
+    const confirmed = await showConfirmDialog({
+        title: 'Delete Version',
+        message: 'Permanently delete version v' + escapeHtml(String(version)) +
+            ' from domain "' + escapeHtml(String(domainName)) +
+            '"? This permanently removes its Knowledge Store content '
+            + 'and cannot be undone.',
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger',
+        icon: 'trash'
+    });
+    if (!confirmed) return;
+
+    try {
+        const resp = await fetch(
+            '/settings/registry/domains/' + encodeURIComponent(domainName) +
+                '/versions/' + encodeURIComponent(version),
+            { method: 'DELETE', credentials: 'same-origin' }
+        );
+        const data = await resp.json();
+        if (resp.status === 409) {
+            showNotification(data.message || 'Version deletion is no longer allowed', 'error');
+            refreshDomains(true);
+        } else if (data.success) {
+            showNotification(data.message, 'success');
+            invalidateBridges();
+            refreshDomains(true);
+        } else {
+            showNotification('Error: ' + data.message, 'error');
+        }
+    } catch (e) {
+        showNotification('Error deleting version: ' + e.message, 'error');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
 
     let registryConfigured = false;
@@ -324,6 +397,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 databricks: 'ob-icon-lakehouse',
                 neo4j: 'ob-icon-neo4j',
             };
+            const versionDeleteControls = [];
             let html = '<div class="table-responsive registry-domain-table-wrapper">' +
                 '<table class="table table-sm table-hover align-middle mb-0 registry-domain-table">' +
                 '<thead><tr>' +
@@ -406,12 +480,12 @@ document.addEventListener('DOMContentLoaded', function () {
                             : '<button type="button" class="btn btn-sm btn-outline-primary registry-load-version-btn" ' +
                                   'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" title="Load this version">' +
                                   '<i class="bi bi-box-arrow-in-down me-1"></i>Load</button>';
-                        const deleteBtn = isLoaded
-                            ? ''
-                            : '<button type="button" class="btn btn-sm btn-outline-danger border-0 registry-delete-version-btn" data-requires-app="admin" ' +
-                                  'data-domain="' + escapeHtml(d.name) + '" data-version="' + escapeHtml(ver) + '" ' +
-                                  'title="Delete version v' + escapeHtml(ver) + '">' +
-                                  '<i class="bi bi-trash"></i></button>';
+                        let deleteBtn = '';
+                        if (typeof v === 'object' && v.delete_control_visible) {
+                            const slotId = 'registry-version-delete-' + versionDeleteControls.length;
+                            versionDeleteControls.push({ slotId, version: v, domainName: d.name });
+                            deleteBtn = '<span id="' + slotId + '"></span>';
+                        }
                         html += '<div class="registry-version-row d-flex align-items-center gap-2 px-4 py-2' + (isLoaded ? ' registry-version-loaded' : '') + '">' +
                             '<span class="badge ' + (isLoaded ? 'bg-primary' : 'bg-secondary') + ' registry-version-num">v' + escapeHtml(ver) + '</span>' +
                             '<div class="d-flex align-items-center gap-2">' + statusLabel + loadedLabel + '</div>' +
@@ -426,6 +500,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
             html += '</tbody></table></div>';
             listDiv.innerHTML = html;
+
+            versionDeleteControls.forEach(({ slotId, version, domainName }) => {
+                const slot = document.getElementById(slotId);
+                const control = createRegistryVersionDeleteControl(version, domainName);
+                if (slot && control) slot.replaceWith(control);
+            });
 
             listDiv.querySelectorAll('.registry-domain-row').forEach(row => {
                 row.addEventListener('click', (e) => {
@@ -449,7 +529,12 @@ document.addEventListener('DOMContentLoaded', function () {
             listDiv.querySelectorAll('.registry-delete-version-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    deleteRegistryVersion(btn.dataset.domain, btn.dataset.version);
+                    deleteRegistryVersion(
+                        btn.dataset.domain,
+                        btn.dataset.version,
+                        loadRegistryDomains,
+                        () => { invalidateRegistryBridges(); }
+                    );
                 });
             });
 
@@ -482,7 +567,9 @@ document.addEventListener('DOMContentLoaded', function () {
     async function deleteRegistryDomain(domainName) {
         const confirmed = await showConfirmDialog({
             title: 'Delete Domain',
-            message: 'Delete domain "' + domainName + '" and all its versions from the registry? This cannot be undone.',
+            message: 'Permanently delete domain "' + escapeHtml(domainName)
+                + '" and all its versions from the registry? This permanently '
+                + 'removes all Knowledge Store content and cannot be undone.',
             confirmText: 'Delete',
             confirmClass: 'btn-danger',
             icon: 'trash'
@@ -504,34 +591,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (e) {
             showNotification('Error deleting domain: ' + e.message, 'error');
-        }
-    }
-
-    async function deleteRegistryVersion(domainName, version) {
-        const confirmed = await showConfirmDialog({
-            title: 'Delete Version',
-            message: 'Delete version v' + version + ' from domain "' + domainName + '"? This cannot be undone.',
-            confirmText: 'Delete',
-            confirmClass: 'btn-danger',
-            icon: 'trash'
-        });
-        if (!confirmed) return;
-
-        try {
-            const resp = await fetch(
-                '/settings/registry/domains/' + encodeURIComponent(domainName) + '/versions/' + encodeURIComponent(version),
-                { method: 'DELETE', credentials: 'same-origin' }
-            );
-            const data = await resp.json();
-            if (data.success) {
-                showNotification(data.message, 'success');
-                invalidateRegistryBridges();
-                loadRegistryDomains(true);
-            } else {
-                showNotification('Error: ' + data.message, 'error');
-            }
-        } catch (e) {
-            showNotification('Error deleting version: ' + e.message, 'error');
         }
     }
 

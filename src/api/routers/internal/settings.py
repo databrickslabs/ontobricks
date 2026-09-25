@@ -355,7 +355,11 @@ async def list_registry_domains(
 
     Non-admin users only see domains they have a role on; admins see all.
     """
-    result = config_service.list_registry_domains_result(session_mgr, settings)
+    result = config_service.list_registry_domains_result(
+        session_mgr,
+        settings,
+        user_role=getattr(request.state, "user_role", "") or "",
+    )
     result["domains"] = filter_visible_domains(
         request, session_mgr, settings, result.get("domains", [])
     )
@@ -387,6 +391,7 @@ async def delete_registry_domain(
 async def delete_registry_version(
     domain_name: str,
     version: str,
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -394,8 +399,9 @@ async def delete_registry_version(
     return config_service.delete_registry_version_result(
         domain_name,
         version,
-        session_mgr,
-        settings,
+        user_role=getattr(request.state, "user_role", "") or "",
+        session_mgr=session_mgr,
+        settings=settings,
     )
 
 

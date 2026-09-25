@@ -579,13 +579,42 @@ async def get_version_status(
 
 @router.get("/versions-list")
 async def list_version_details(
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
-    """List all versions with per-version description, mcp_enabled flag, and status."""
+    """List all versions with card metadata and allowed actions."""
     domain = get_domain(session_mgr)
     p = Domain(domain, settings)
-    return p.list_version_details(p.build_registry_service())
+    return p.list_version_details(
+        p.build_registry_service(),
+        user_role=getattr(request.state, "user_role", "") or "",
+        user_domain_role=getattr(request.state, "user_domain_role", "") or "",
+    )
+
+
+@router.delete("/versions/{version}")
+async def delete_domain_version(
+    version: str,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = get_domain(session_mgr)
+    # Deletion is session-scoped: only a domain identity persisted by an
+    # actual registry load/save may select the target. ``uc_domain_folder``
+    # falls back to the editable display name and can therefore alias an
+    # unrelated saved domain from an unsaved same-name session.
+    folder = (domain.domain_folder or "").strip()
+    if not folder:
+        raise ValidationError("Domain not saved to the registry")
+    return SettingsService.delete_registry_version_result(
+        folder,
+        version,
+        user_role=getattr(request.state, "user_role", "") or "",
+        session_mgr=session_mgr,
+        settings=settings,
+    )
 
 
 @router.get("/build-runs")

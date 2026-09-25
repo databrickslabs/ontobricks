@@ -1403,11 +1403,27 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
 
 ### Version Management (Domain → Versions)
 
-1. Open **Domain** in the sidebar and go to the **Versions** section.
-2. The table lists every saved version with description, author, and actions.
-3. **MCP / API** column: read-only — a green **Active** badge marks the single version currently exposed through the REST catalogue and MCP tools. To **change** which version is Active, go to **Registry → Browse**, expand the domain, and click **Set as Active** on the desired version (Domain → Versions no longer includes a toggle).
-4. **Load** loads another version from the registry (confirms; unsaved work is lost).
-5. **New Version** copies the current state to the next version number; **Reload Saved** discards local edits and reloads the current version from the registry.
+Domain → Versions presents saved versions as newest-first cards. Each card
+shows lifecycle status, description, author, last update, last build, and
+whether the version is Loaded or Latest. Lifecycle status is independent from
+the API/MCP **Active** selection managed in **Registry → Browse**.
+
+- **Lifecycle:** permitted Submit for Review, Return to Draft, Publish, and
+  Reopen actions appear directly on the card. Disabled actions explain their
+  unmet precondition. A successful transition immediately refreshes the
+  cards, navbar status, lifecycle badges, and read-only page state.
+- **Load:** loads another version after confirming that unsaved changes will
+  be discarded.
+- **Delete:** app administrators may permanently delete only an older,
+  unloaded Draft version. Loaded, latest, In Review, and Published versions
+  are protected. The confirmation names the domain and version and warns that
+  Knowledge Store content is permanently removed. The registry row deletion
+  atomically checks that the version is still Draft before Knowledge Store
+  cleanup begins. These operations use separate storage APIs and cannot share
+  one transaction: if cleanup fails after metadata deletion, OntoBricks
+  reports a 5xx partial-deletion error instead of claiming success.
+- **New Version:** branches the current state into the next Draft version.
+- **Reload Saved:** discards local edits and reloads the loaded version.
 
 #### Creating a New Version
 
@@ -1417,7 +1433,9 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
 #### Loading a Domain from Registry
 
 1. Use **Load Domain** in the top navbar (or **Registry → Browse** → **Load** on a version row).
-2. Pick domain and version in the dialog. Loading an **older** than latest version enables read-only mode for edits that require the tip version — create a new version or switch back to the latest to edit freely.
+2. Pick a domain and version in the dialog. Editability follows lifecycle
+   status: Draft versions are editable, while In Review and Published versions
+   are read-only, whether or not they are the latest.
 
 When the Registry popup opens, OntoBricks briefly reuses a recently loaded
 Browse list and starts loading Bridges in the background. This avoids duplicate
@@ -1426,13 +1444,14 @@ Use the tab's **Refresh** button whenever an immediate server refresh is needed.
 
 ### Version status (loaded vs latest vs MCP-active)
 
-Three related ideas:
+Four related ideas:
 
 | Concept | Meaning |
 |---------|---------|
 | **Loaded version** | The `v{n}` document currently in your browser session. |
 | **Latest on disk** | Highest version number in the registry folder. When your loaded version is **not** the latest, the UI treats many writes as read-only. |
-| **Active (API/MCP)** | The one version flagged for external tools and MCP — shown on the Cockpit **Active Version** tile and as a badge on **Domain → Versions**; changed only from **Registry → Browse**. |
+| **Lifecycle status** | The version's Draft, In Review, or Published review state. Card actions change this state; it does not select the API/MCP version. |
+| **Active (API/MCP)** | The one version flagged for external tools and MCP — shown on the Cockpit **Active Version** tile and changed only from **Registry → Browse**. |
 
 ### Domain Save/Load
 
