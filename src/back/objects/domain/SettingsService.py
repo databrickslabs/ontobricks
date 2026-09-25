@@ -1144,7 +1144,16 @@ class SettingsService:
             if not svc.cfg.is_configured:
                 raise ValidationError("Registry not configured")
 
-            versions = svc.list_versions_sorted(domain_name)
+            listed, versions, list_message = svc.list_versions(domain_name)
+            if not listed:
+                raise InfrastructureError(
+                    "Failed to list registry versions", detail=list_message
+                )
+            versions = sorted(
+                versions,
+                key=RegistryService._version_sort_key,
+                reverse=True,
+            )
             if version not in versions:
                 raise NotFoundError(
                     f'Version {version} not found in "{domain_name}"'

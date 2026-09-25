@@ -3,7 +3,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from back.core.errors import AuthorizationError, ConflictError, NotFoundError
+from back.core.errors import (
+    AuthorizationError,
+    ConflictError,
+    InfrastructureError,
+    NotFoundError,
+)
 from back.objects.domain.SettingsService import SettingsService
 from back.objects.registry.PermissionService import ROLE_ADMIN, ROLE_BUILDER
 
@@ -18,19 +23,23 @@ def _run(
     status="DRAFT",
     loaded_folder="acme",
     loaded_version="3",
+    svc=None,
+    clear_status=None,
 ):
     domain = MagicMock()
     domain.domain_folder = loaded_folder
     domain.current_version = loaded_version
-    svc = MagicMock()
-    svc.cfg.is_configured = True
-    svc.list_versions_sorted.return_value = list(reversed(versions))
-    svc.read_version.return_value = (True, {"info": {"status": status}}, "")
-    svc.delete_version.return_value = (True, "")
+    if svc is None:
+        svc = MagicMock()
+        svc.cfg.is_configured = True
+        svc.list_versions.return_value = (True, list(versions), "")
+        svc.read_version.return_value = (True, {"info": {"status": status}}, "")
+        svc.delete_version.return_value = (True, "")
+    clear_status = clear_status or MagicMock()
     with (
         patch.object(module, "get_domain", return_value=domain),
         patch.object(module.RegistryService, "from_context", return_value=svc),
-        patch.object(module, "clear_version_status_cache") as clear_status,
+        patch.object(module, "clear_version_status_cache", new=clear_status),
     ):
         result = SettingsService.delete_registry_version_result(
             "acme",
@@ -72,3 +81,49 @@ def test_non_draft_version_cannot_delete():
 def test_missing_version_is_not_found():
     with pytest.raises(NotFoundError):
         _run(target="99")
+
+
+def test_list_failure_is_infrastructure_error_and_stops():
+    svc = MagicMock()
+    svc.cfg.is_configured = True
+    svc.list_versions.return_value = (False, [], "registry unavailable")
+    clear_status = MagicMock()
+
+    with pytest.raises(InfrastructureError) as exc_info:
+        _run(svc=svc, clear_status=clear_status)
+
+    assert exc_info.value.detail == "registry unavailable"
+    svc.read_version.assert_not_called()
+    svc.delete_version.assert_not_called()
+    clear_status.assert_not_called()
+
+
+def test_read_failure_is_infrastructure_error_and_stops():
+    svc = MagicMock()
+    svc.cfg.is_configured = True
+    svc.list_versions.return_value = (True, ["1", "2", "3"], "")
+    svc.read_version.return_value = (False, {}, "version read failed")
+    clear_status = MagicMock()
+
+    with pytest.raises(InfrastructureError) as exc_info:
+        _run(svc=svc, clear_status=clear_status)
+
+    assert exc_info.value.detail == "version read failed"
+    svc.delete_version.assert_not_called()
+    clear_status.assert_not_called()
+
+
+def test_physical_delete_failure_is_infrastructure_error_without_cache_clear():
+    svc = MagicMock()
+    svc.cfg.is_configured = True
+    svc.list_versions.return_value = (True, ["1", "2", "3"], "")
+    svc.read_version.return_value = (True, {"info": {"status": "DRAFT"}}, "")
+    svc.delete_version.return_value = (False, "delete failed")
+    clear_status = MagicMock()
+
+    with pytest.raises(InfrastructureError) as exc_info:
+        _run(svc=svc, clear_status=clear_status)
+
+    assert exc_info.value.detail == "delete failed"
+    svc.delete_version.assert_called_once_with("acme", "1")
+    clear_status.assert_not_called()

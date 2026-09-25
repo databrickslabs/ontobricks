@@ -44,3 +44,23 @@ Modified files:
 - tests/units/api/test_delete_version_endpoints.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6917 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 52.82s
+
+## Preserve registry listing failures during version deletion
+
+Context: Guarded version deletion previously used a convenience listing that
+returned an empty list for both a valid empty result and a backend failure.
+Deletion now preserves the backend failure detail and stops before reading or
+deleting a version.
+
+Changes:
+
+1. src/back/objects/domain/SettingsService.py
+   Replaced the fail-soft version listing with the result-bearing API and retained numeric descending version ordering.
+2. tests/units/settings/test_settings_version_deletion.py
+   Added regression coverage for listing, reading, and physical deletion failures, including later-call suppression.
+
+Modified files:
+- src/back/objects/domain/SettingsService.py
+- tests/units/settings/test_settings_version_deletion.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6920 passed, 308 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.01s
