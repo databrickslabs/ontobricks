@@ -1,0 +1,18 @@
+## Define guarded version deletion policy
+
+Context: Domain-version cards need pure capability data for lifecycle actions
+and safe deletion. The policy now centralizes role, readiness, loaded-version,
+latest-version, and minimum-version safeguards for later UI and service use.
+
+Changes:
+
+1. src/back/objects/registry/version_lifecycle.py
+   Added transition capability metadata and guarded version-deletion policy helpers.
+2. tests/units/registry/test_version_lifecycle.py
+   Added lifecycle capability and safe-deletion policy coverage.
+
+Modified files:
+- src/back/objects/registry/version_lifecycle.py
+- tests/units/registry/test_version_lifecycle.py
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 6909 passed, 308 skipped, 6 deselected, 1 xfailed in 47.95s
