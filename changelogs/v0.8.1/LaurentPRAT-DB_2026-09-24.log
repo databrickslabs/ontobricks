@@ -1,0 +1,28 @@
+# Isolate MCP session state per connection
+
+Context: The MCP server binds one `MCPServerSession` to the FastMCP app for the
+whole process. The selected domain and the label/action caches previously lived
+on that shared instance, so concurrent clients could overwrite each other's
+domain and receive results from the wrong ontology. This change preserves
+LaurentPRAT-DB's original contribution while targeting the 0.8.1 release line.
+
+Changes:
+
+1. `src/mcp-server/server/session_scope.py`
+   Added request-wide MCP session ID binding through a context variable.
+2. `src/mcp-server/server/session.py`
+   Moved selected-domain state and caches into an LRU-bounded per-session store.
+3. `src/mcp-server/server/factory.py`
+   Registered the session-scope middleware on the FastMCP server.
+4. `tests/units/mcp/test_session_isolation.py`
+   Added regression coverage for isolated domains, caches, shared policy, and
+   bounded session retention.
+
+Modified files:
+- src/mcp-server/server/session_scope.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/factory.py
+- tests/units/mcp/test_session_isolation.py
+
+Tests: `uv run --frozen pytest -q tests/units/mcp tests/mcp -m "not scenario"`
+→ 110 passed, 0 failed in 1.91s.

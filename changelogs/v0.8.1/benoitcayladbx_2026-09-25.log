@@ -68,3 +68,36 @@ Modified files:
 - tests/units/mcp/test_find_response_formatting.py
 
 Tests: uv run --frozen pytest -q -m "not scenario" -> 5922 passed, 316 skipped, 6 deselected, 32 warnings in 2556.31s (0:42:36)
+
+## Complete MCP session-isolation review fixes
+
+Context: PR #183 isolated tool-call state by MCP session ID but resource reads
+still used the shared default bucket, and the original test module silently
+skipped because its MCP source path was incorrect. The follow-up applies
+session scope to every MCP request and makes missing-session fallback visible.
+
+Changes:
+
+1. src/mcp-server/server/session_scope.py
+   Moved session binding from the tool-only hook to the request-wide hook,
+   reset scope reliably, and added a once-per-process fallback warning.
+2. tests/units/mcp/test_session_isolation.py
+   Fixed test discovery and added request/resource, fallback-warning, reset,
+   and LRU-eviction regression coverage.
+3. docs/mcp.md
+   Replaced the obsolete concurrency limitation with the per-session behavior,
+   512-session LRU cap, and process-local deployment constraint.
+4. changelogs/v0.8.1/LaurentPRAT-DB_2026-09-24.log
+   Preserved and moved the original contributor's change record to 0.8.1.
+
+Modified files:
+- src/mcp-server/server/session_scope.py
+- tests/units/mcp/test_session_isolation.py
+- docs/mcp.md
+- changelogs/v0.8.1/LaurentPRAT-DB_2026-09-24.log
+- changelogs/v0.8.1/benoitcayladbx_2026-09-25.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5,939 passed,
+304 skipped, 6 deselected, 0 failed in 37.28s. Targeted MCP suite:
+`uv run --frozen pytest -q tests/units/mcp tests/mcp -m "not scenario"` →
+110 passed, 0 failed in 1.91s.

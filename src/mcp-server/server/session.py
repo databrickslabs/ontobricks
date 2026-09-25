@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -27,9 +28,32 @@ from server.constants import (
     REGISTRY_TOOLS,
     _USER_AGENT,
 )
+from server.session_scope import CURRENT_SESSION_ID
 from server.uri_helpers import _local_name
 
 logger = logging.getLogger(__name__)
+
+# Hard cap on tracked connections so an abusive or long-lived process cannot
+# grow the per-session store without bound. Oldest sessions are evicted first;
+# a returning client simply re-selects its domain.
+_MAX_TRACKED_SESSIONS = 512
+
+
+class _DomainState:
+    """Per-connection mutable state, isolated by MCP session id.
+
+    These three fields are what leaks across concurrent clients when shared:
+    the selected domain and the label / class-Action caches populated for it.
+    Everything else on :class:`MCPServerSession` (registry config, per-domain
+    policy, the pooled HTTP client) is server-wide and safely shared.
+    """
+
+    __slots__ = ("selected_domain_name", "ontology_labels", "class_actions")
+
+    def __init__(self) -> None:
+        self.selected_domain_name: Optional[str] = None
+        self.ontology_labels: dict[str, str] = {}  # uri/name (lower) → label
+        self.class_actions: dict[str, dict] = {}   # class URI → {dataset, …}
 
 
 class MCPServerSession:
@@ -39,18 +63,24 @@ class MCPServerSession:
         self.mode = mode
         self.base = _http._base_url(mode)
 
-        self.selected_domain_name: Optional[str] = None
+        # Per-connection state (selected domain + label/action caches) lives in
+        # ``_domain_states`` keyed by MCP session id, so concurrent clients
+        # sharing this one process do not clobber each other. Access goes
+        # through the ``selected_domain_name`` / ``ontology_labels`` /
+        # ``class_actions`` properties, which resolve the current session's
+        # state via ``CURRENT_SESSION_ID`` (set per call by
+        # ``SessionScopeMiddleware``). LRU-bounded by ``_MAX_TRACKED_SESSIONS``.
+        self._domain_states: "OrderedDict[str, _DomainState]" = OrderedDict()
+
         # Per-domain MCP policy, keyed by domain name, as published by
         # ``GET /api/v1/domains``. Filled by ``list_domains`` and lazily by
-        # ``ensure_domain_policies``.
+        # ``ensure_domain_policies``. Server-wide facts — safely shared.
         self.domain_policy: dict[str, dict] = {}
         # Per-domain "has a built graph" flag, same provenance as
         # ``domain_policy``. A domain absent from this map (or mapped True)
         # keeps the full surface; a False value hides every ``GRAPH_TOOLS``
         # entry for that domain.
         self.domain_has_graph: dict[str, bool] = {}
-        self.ontology_labels: dict[str, str] = {}  # uri/name (lower) → display label
-        self.class_actions: dict[str, dict] = {}   # class URI → {"dataset": …, "bridges": …}
         self.registry: dict = {
             "catalog": "",
             "schema": "",
@@ -87,6 +117,45 @@ class MCPServerSession:
         if auth:
             c.headers.update(auth)
         yield c
+
+    # ── Per-connection state (isolated by MCP session id) ─────────────
+
+    def _state(self) -> _DomainState:
+        """Return the current MCP connection's :class:`_DomainState`.
+
+        The session id is read from ``CURRENT_SESSION_ID`` (set per tool call
+        by ``SessionScopeMiddleware``); calls with no session in scope share
+        the default bucket. LRU-bounded so the store cannot grow without limit.
+        """
+        sid = CURRENT_SESSION_ID.get()
+        st = self._domain_states.get(sid)
+        if st is None:
+            st = _DomainState()
+            self._domain_states[sid] = st
+            while len(self._domain_states) > _MAX_TRACKED_SESSIONS:
+                evicted, _ = self._domain_states.popitem(last=False)
+                logger.info("Evicted per-session MCP state for %s (LRU cap)", evicted)
+        else:
+            self._domain_states.move_to_end(sid)
+        return st
+
+    @property
+    def selected_domain_name(self) -> Optional[str]:
+        return self._state().selected_domain_name
+
+    @selected_domain_name.setter
+    def selected_domain_name(self, value: Optional[str]) -> None:
+        self._state().selected_domain_name = value
+
+    @property
+    def ontology_labels(self) -> dict[str, str]:
+        """This connection's uri/name → label cache (mutated in place)."""
+        return self._state().ontology_labels
+
+    @property
+    def class_actions(self) -> dict[str, dict]:
+        """This connection's class-URI → Action metadata cache (mutated in place)."""
+        return self._state().class_actions
 
     async def ensure_registry(self) -> dict:
         """Resolve registry config: volume path → env vars → main app API."""
