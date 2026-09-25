@@ -180,3 +180,25 @@ Tests: `uv run --frozen pytest -q -m "not scenario"` → 6,899 passed,
 308 skipped, 6 deselected, 1 xfailed, 0 failed in 50.33s. Targeted MCP suite:
 `uv run --frozen pytest -q tests/units/mcp tests/mcp -m "not scenario"` →
 109 passed, 0 failed in 2.44s.
+
+## Verify the combined BFS and MCP changes
+
+Context: PR #184 was updated with the current 0.9.0 branch after the MCP
+session-isolation forward-port merged. The changelog conflict was resolved by
+retaining both contributions, and the combined branch was revalidated.
+
+Changes:
+
+1. changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+   Retained the BFS paging and MCP session-isolation records after merging the
+   current 0.9.0 branch.
+2. docs/mcp.md
+   Preserved both the BFS pagination guidance and concurrent-session behavior.
+
+Modified files:
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+- docs/mcp.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6,909 passed,
+320 skipped, 6 deselected, 1 xfailed, 0 failed in 42m 37s. Focused BFS/MCP
+regression suite → 205 passed, 0 failed in 2.53s.
