@@ -428,3 +428,41 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 6959 passed, 316 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.29s
+
+## Forward-port MCP session isolation
+
+Context: The MCP per-connection isolation fix from PR #183 is prepared for the
+0.9.0 release line. The forward-port keeps LaurentPRAT-DB as the original code
+author and includes the request-wide resource isolation and test corrections
+identified during review.
+
+Changes:
+
+1. src/mcp-server/server/session_scope.py
+   Bound all MCP requests, including resources, to per-session state and added
+   a once-per-process warning when a request has no session ID.
+2. src/mcp-server/server/session.py
+   Added the bounded per-session domain and cache store.
+3. src/mcp-server/server/factory.py
+   Registered session-scope middleware.
+4. tests/units/mcp/test_session_isolation.py
+   Added executable coverage for tools/resources, fallback diagnostics, scope
+   reset, and LRU eviction.
+5. docs/mcp.md
+   Documented concurrent-session behavior and the process-local LRU constraint.
+6. changelogs/v0.9.0/LaurentPRAT-DB_2026-09-24.log
+   Preserved the original contributor's change record for the 0.9.0 line.
+
+Modified files:
+- src/mcp-server/server/session_scope.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/factory.py
+- tests/units/mcp/test_session_isolation.py
+- docs/mcp.md
+- changelogs/v0.9.0/LaurentPRAT-DB_2026-09-24.log
+- changelogs/v0.9.0/benoitcayladbx_2026-09-25.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 6,899 passed,
+308 skipped, 6 deselected, 1 xfailed, 0 failed in 50.33s. Targeted MCP suite:
+`uv run --frozen pytest -q tests/units/mcp tests/mcp -m "not scenario"` →
+109 passed, 0 failed in 2.44s.
