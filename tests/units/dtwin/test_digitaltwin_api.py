@@ -245,6 +245,32 @@ class TestExpandUriAliases:
         assert result == uris
 
 
+class TestFindTriplesBfsContract:
+    def test_find_triples_bfs_returns_has_more_with_paged_fetch(self):
+        store = MagicMock()
+        store.bfs_traversal.return_value = [
+            {"entity": "http://ex.org/Customer/CUST001", "min_lvl": 0},
+            {"entity": "http://ex.org/Order/ORD001", "min_lvl": 1},
+        ]
+        store.find_subjects_by_patterns.return_value = {"http://ex.org/CUST001"}
+        store.get_triples_page_for_subjects.return_value = {
+            "rows": [{"subject": "s1", "predicate": "p1", "object": "o1"}],
+            "total": 5,
+        }
+
+        result = DigitalTwin.find_triples_bfs(
+            store,
+            "cat.sch.graph",
+            search="cust",
+            depth=2,
+            limit=1,
+            offset=0,
+        )
+
+        assert result["has_more"] is True
+        store.get_triples_page_for_subjects.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # _sql_escape
 # ---------------------------------------------------------------------------

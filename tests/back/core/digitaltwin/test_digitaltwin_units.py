@@ -13,6 +13,7 @@ to integration tests (T-M2) and the M4 refactor that will split this monolith.
 from __future__ import annotations
 
 import pytest
+from typing import Any, Dict, List, Set
 
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
 
@@ -223,3 +224,98 @@ class TestExpandUriAliases:
             # If the function requires a real store, that's fine — this test
             # documents the contract gap for future integration tests.
             pytest.skip("expand_uri_aliases requires a real store")
+
+
+@pytest.mark.unit
+class TestFindTriplesBfsPaging:
+    class _FakeStore:
+        def __init__(
+            self,
+            *,
+            bfs_rows: List[Dict[str, Any]],
+            alias_rows: Set[str],
+            page_rows: List[Dict[str, str]],
+            total: int,
+        ) -> None:
+            self._bfs_rows = bfs_rows
+            self._alias_rows = alias_rows
+            self._page_rows = page_rows
+            self._total = total
+            self.paged_call_subjects: List[str] | None = None
+            self.paged_call_count = 0
+
+        def bfs_traversal(self, *_args, **_kwargs):
+            return self._bfs_rows
+
+        def find_subjects_by_patterns(self, _table_name, _patterns):
+            return self._alias_rows
+
+        def get_triples_page_for_subjects(
+            self, _table, subjects, *, limit: int, offset: int
+        ):
+            self.paged_call_count += 1
+            self.paged_call_subjects = list(subjects)
+            assert limit == 2
+            assert offset == 0
+            return {"rows": self._page_rows, "total": self._total}
+
+    def test_find_triples_bfs_uses_paged_fetch_and_keeps_alias_subjects(self):
+        alias_uri = "http://ex.org/CUST001"
+        store = self._FakeStore(
+            bfs_rows=[
+                {"entity": "http://ex.org/Customer/CUST001", "min_lvl": 0},
+                {"entity": "http://ex.org/Order/ORD001", "min_lvl": 1},
+            ],
+            alias_rows={alias_uri},
+            page_rows=[
+                {"subject": "s1", "predicate": "p1", "object": "o1"},
+                {"subject": "s2", "predicate": "p2", "object": "o2"},
+            ],
+            total=7,
+        )
+
+        result = DigitalTwin.find_triples_bfs(
+            store, "cat.sch.graph", search="cust", depth=2, limit=2, offset=0
+        )
+
+        assert result["seed_count"] == 1
+        assert result["entity_count"] == 3
+        assert result["total"] == 7
+        assert result["count"] == 2
+        assert result["has_more"] is True
+        assert store.paged_call_subjects is not None
+        assert alias_uri in store.paged_call_subjects
+
+    def test_find_triples_bfs_final_page_has_no_more(self):
+        store = self._FakeStore(
+            bfs_rows=[{"entity": "http://ex.org/Customer/CUST001", "min_lvl": 0}],
+            alias_rows=set(),
+            page_rows=[{"subject": "s1", "predicate": "p1", "object": "o1"}],
+            total=1,
+        )
+
+        result = DigitalTwin.find_triples_bfs(
+            store, "cat.sch.graph", search="cust", depth=1, limit=2, offset=0
+        )
+
+        assert result["has_more"] is False
+        assert result["count"] == 1
+        assert result["total"] == 1
+
+    def test_find_triples_bfs_empty_bfs_skips_paged_fetch(self):
+        store = self._FakeStore(
+            bfs_rows=[],
+            alias_rows=set(),
+            page_rows=[],
+            total=0,
+        )
+
+        result = DigitalTwin.find_triples_bfs(
+            store, "cat.sch.graph", search="cust", depth=1, limit=2, offset=0
+        )
+
+        assert result["seed_count"] == 0
+        assert result["entity_count"] == 0
+        assert result["triples"] == []
+        assert result["total"] == 0
+        assert store.paged_call_count == 0
