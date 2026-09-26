@@ -1,8 +1,8 @@
 """
 E2E — Ontology › OWL Export & Generation.
 
-Scenario A (UI): the #owl-section exposes the copy, download, and
-regenerate buttons.
+Scenario A (UI): Ontology Designer exposes Export (OWL); the hidden
+#owl-section still holds copy/regenerate/preview controls.
 
 Scenario B (API — export): GET /ontology/export-owl
   - Returns 404 when the session has no classes.
@@ -80,6 +80,15 @@ class TestOntologyOwlSection:
     def test_download_button_present(self, page, live_server):
         self._open_owl(page, live_server)
         assert page.locator("#downloadOwl").count() == 1
+
+    def test_designer_download_owl_button_present(self, page, live_server):
+        page.goto(f"{live_server}/ontology")
+        page.wait_for_load_state("domcontentloaded")
+        page.evaluate('SidebarNav.switchTo("map")')
+        page.wait_for_timeout(400)
+        btn = page.locator("#mapDownloadOwl")
+        assert btn.count() == 1
+        assert btn.is_visible()
 
     def test_regenerate_button_present(self, page, live_server):
         self._open_owl(page, live_server)

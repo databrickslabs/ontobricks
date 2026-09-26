@@ -428,7 +428,6 @@ class TestOntologyPage:
             "dataquality",
             "swrl",
             "axioms",
-            "owl",
         ],
     )
     def test_sidebar_has_section_link(self, client, section):
@@ -491,7 +490,7 @@ class TestMappingPage:
 
     @pytest.mark.parametrize(
         "section",
-        ["information", "design", "manual", "autoassign", "r2rml", "sparksql"],
+        ["information", "design", "manual", "autoassign", "sparksql"],
     )
     def test_sidebar_has_section_link(self, client, section):
         html = _html(client, "/mapping")

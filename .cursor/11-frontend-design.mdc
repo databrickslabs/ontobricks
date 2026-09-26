@@ -449,7 +449,7 @@ padding but must keep a zero top/bottom inset. Do not restore vertical content
 padding that shifts the title below the sidebar or shortens the pane.
 Every `.sidebar-layout .section-header` uses `margin-bottom: 0.5rem !important`
 so title/subtitle-to-content spacing is identical across sections, including
-Ontology Designer and Business Views.
+Ontology Studio and Business Views.
 
 **Flex chain.** `.sidebar-content` is a column flex container with
 `min-height: 0`. `.sidebar-section.active` is `flex: 1 1 0; min-height: 0`.
@@ -981,8 +981,8 @@ surfaces:
   - `nav nav-tabs ob-tabs nav-fill flex-shrink-0` —
     DT-DataQuality / DT-Inference (the `flex-shrink-0` keeps the
     tab strip a fixed-size header inside their flex card body).
-  - `nav nav-tabs ob-tabs ob-tabs--compact` — Ontology Designer and Mapping
-    Designer generated forms.
+  - `nav nav-tabs ob-tabs ob-tabs--compact` — Ontology Studio and Mapping
+    Studio generated forms.
   - `nav nav-tabs ob-tabs ob-tabs--compact sg-panel-tabs` — KG Explorer.
 - Do not add `.small` or per-area font/padding declarations. Select the
   standard or compact density instead.
@@ -1053,7 +1053,7 @@ surfaces:
 
 Every screen that pairs a canvas or a browsable list with a contextual
 right-hand panel uses one layout, defined by the Knowledge Graph Explorer
-(`query/css/query-sigmagraph.css`) and shared by Ontology Designer /
+(`query/css/query-sigmagraph.css`) and shared by Ontology Studio /
 Entities / Relationships (`ontology/css/ontology-shared-panels.css`).
 
 The contract:
@@ -1074,7 +1074,7 @@ The contract:
   (D3 / Sigma size from `container.clientWidth`), so a panel that appears
   later leaves the graph centred on the wrong axis.
 - **Empty state instead of collapsing.** With nothing selected the panel
-  title is **Select Item** with no leading icon (same copy as Mapping Designer) and the body
+  title is **Select Item** with no leading icon (same copy as Mapping Studio) and the body
   holds a centred placeholder (`bi-cursor` icon at `3rem`,
   `--db-text-muted`, "Click on an entity or relationship to view
   details"). Clicking the empty canvas returns to that placeholder — and
@@ -1090,7 +1090,7 @@ The contract:
 - **Host the panel on the wrapper, not on the canvas.** It is a *sibling*
   of the content pane; making the canvas container the flex parent means it
   can no longer be framed as a pane.
-- **Mapping Designer uses the same split cards as Ontology**, but in
+- **Mapping Studio uses the same split cards as Ontology**, but in
   `.ob-split-shell--column`: content pane on top and an always-visible bottom
   detail panel with the shared `detail-panel-resize-handle`.
 

@@ -5,27 +5,14 @@
         <div>
             <h4 class="mb-1"><i class="bi bi-journal-text me-2"></i>Audit trail</h4>
             <p class="text-muted mb-0 small">
-                Every ontology/mapping change, status change (with comments) and build run
-                recorded for this domain, newest first.
+                Ontology and mapping edits recorded for this domain, newest first.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <select class="form-select form-select-sm" id="auditVersionFilter"
-                    style="width:auto;" title="Filter by version" aria-label="Filter by version">
+            <select class="form-select form-select-sm audit-version-filter" id="auditVersionFilter"
+                    title="Filter by version" aria-label="Filter by version">
                 <option value="">All versions</option>
             </select>
-            <div class="btn-group btn-group-sm" role="group" aria-label="Filter audit trail" id="auditFilter">
-                <button type="button" class="btn btn-outline-secondary active" data-audit-filter="all">All</button>
-                <button type="button" class="btn btn-outline-secondary" data-audit-filter="changes">
-                    <i class="bi bi-pencil-square me-1"></i>Ontology &amp; mapping
-                </button>
-                <button type="button" class="btn btn-outline-secondary" data-audit-filter="review">
-                    <i class="bi bi-chat-left-text me-1"></i>Status &amp; comments
-                </button>
-                <button type="button" class="btn btn-outline-secondary" data-audit-filter="build">
-                    <i class="bi bi-hdd-stack me-1"></i>Builds
-                </button>
-            </div>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnReloadAudit"
                     title="Reload audit trail from the registry">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Refresh
@@ -36,16 +23,70 @@
     <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 small mb-3" role="note">
         <i class="bi bi-info-circle-fill mt-1"></i>
         <div>
-            Ontology and mapping edits (new entities, attributes, mappings, rules&hellip;)
-            are recorded here when you <strong>Save the domain to the registry</strong>.
-            Changes you make in the current session appear in the trail after the next save.
+            Edits appear here after you <strong>Save the domain to the registry</strong>.
+            Each row names the asset; edits show the previous value and the new value.
         </div>
     </div>
 
-    <div id="auditBody">
-        <div class="text-center text-muted small py-5">
-            <span class="spinner-border spinner-border-sm me-1"></span>
-            Loading audit trail&hellip;
+    <div class="card h-100">
+        <div class="card-body p-0 ob-tabs-wrap">
+            <ul class="nav nav-tabs ob-tabs nav-fill" id="auditTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="audit-tab-ontology"
+                            data-bs-toggle="tab" data-bs-target="#audit-pane-ontology"
+                            type="button" role="tab"
+                            aria-controls="audit-pane-ontology" aria-selected="true">
+                        <i class="bi bi-bezier2 me-1"></i>Ontology
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="audit-tab-mapping"
+                            data-bs-toggle="tab" data-bs-target="#audit-pane-mapping"
+                            type="button" role="tab"
+                            aria-controls="audit-pane-mapping" aria-selected="false">
+                        <i class="bi bi-shuffle me-1"></i>Mapping
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="audit-tab-review"
+                            data-bs-toggle="tab" data-bs-target="#audit-pane-review"
+                            type="button" role="tab"
+                            aria-controls="audit-pane-review" aria-selected="false">
+                        <i class="bi bi-chat-left-text me-1"></i>Status
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="audit-tab-build"
+                            data-bs-toggle="tab" data-bs-target="#audit-pane-build"
+                            type="button" role="tab"
+                            aria-controls="audit-pane-build" aria-selected="false">
+                        <i class="bi bi-hdd-stack me-1"></i>Builds
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content p-3" id="auditTabContent">
+                <div class="tab-pane fade show active" id="audit-pane-ontology"
+                     role="tabpanel" aria-labelledby="audit-tab-ontology">
+                    <div id="auditOntologyBody">
+                        <div class="text-center text-muted small py-5">
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            Loading audit trail&hellip;
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="audit-pane-mapping"
+                     role="tabpanel" aria-labelledby="audit-tab-mapping">
+                    <div id="auditMappingBody"></div>
+                </div>
+                <div class="tab-pane fade" id="audit-pane-review"
+                     role="tabpanel" aria-labelledby="audit-tab-review">
+                    <div id="auditReviewBody"></div>
+                </div>
+                <div class="tab-pane fade" id="audit-pane-build"
+                     role="tabpanel" aria-labelledby="audit-tab-build">
+                    <div id="auditBuildBody"></div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

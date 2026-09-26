@@ -34,7 +34,7 @@ OntoBricks builds a **materialized graph viewer** (triple store) from your Datab
 │Ontology │            │   Mapping    │    Generator         │
 └─────────┘            └──────────────┘           │          │
     │                    Design &                  │     REST API
-    │                   Designer                   │     (httpx)
+    │                    Studio                    │     (httpx)
     │                         ▼                    │          │
     │                 ┌──────────────┐             │          │
     │                 │ Triple Store │◀────────────┘◀─────────┘
@@ -66,7 +66,7 @@ OntoBricks builds a **materialized graph viewer** (triple store) from your Datab
 
 ## Screenshots
 
-### Ontology Designer
+### Ontology Studio
 Design your ontology visually — create entities, relationships, and inheritance hierarchies on an interactive canvas with emoji icons, attributes, constraints, and dashboard integration.
 
 <p align="center">
@@ -90,8 +90,8 @@ Explore your graph viewer — search, filter, and navigate entities and relation
 ## Features
 
 ### Ontology Design
-- **🎨 Ontology Designer**: Main canvas under **Ontology → Designer** (OntoViz) — drag-and-drop entities, relationships, and attributes; sidebar entry is labelled *Designer*
-- **🎨 Visual Ontology Designer**: Drag-and-drop interface to create entities, relationships, and attributes using OntoViz
+- **🎨 Ontology Studio**: Main canvas under **Ontology → Studio** (OntoViz) — drag-and-drop entities, relationships, and attributes; sidebar entry is labelled *Studio*
+- **🎨 Visual Ontology Studio**: Drag-and-drop interface to create entities, relationships, and attributes using OntoViz
 - **📐 Entity-Relationship Diagram**: Interactive canvas with auto-layout, zoom, pan, and centering
 - **🔗 Inheritance Support**: Visual class hierarchies with property inheritance (rdfs:subClassOf)
 - **📋 Constraints & Rules**: Define cardinality, value constraints, property characteristics, and SWRL rules
@@ -107,14 +107,14 @@ Explore your graph viewer — search, filter, and navigate entities and relation
 - **🔶 Partial Mapping Detection**: Visual indicators (orange) for entities with incomplete attribute mappings
 - **🔁 Re-Assign Missing Attributes**: Targeted re-mapping for entities with incomplete attribute mappings
 - **📝 R2RML Generation**: Automatic W3C-compliant R2RML mapping generation
-- **🔀 Unified Panel UI**: Consistent editing experience across Designer and Manual views
+- **🔀 Unified Panel UI**: Consistent editing experience across Studio and Manual views
 
 ### Knowledge Graph (Sync & Explore)
 - **🔄 Triple Store Sync**: Synchronize mapped data to the Delta view + Graph DB engine (Lakebase) with readiness validation
 - **💾 Two Layers**: **Delta view** (Databricks SQL Warehouse, governance + lineage) plus a pluggable **Graph DB engine** (currently Lakebase Postgres — `app_managed` `COPY FROM STDIN` or `managed_synced` Lakeflow mode)
 - **📈 Graph Viewer**: Interactive sigma.js WebGL-powered graph to explore entities and relationships visually with search, filtering, and entity detail panels
 - **🔬 Data Cluster Detection**: Detect communities in the graph viewer using Louvain, Label Propagation, or Greedy Modularity algorithms — client-side (Graphology) for the visible subgraph, server-side (NetworkX) for the full graph; color-by-cluster visualization, adjustable resolution, cluster collapse/expand into super-nodes with member details on click
-- **🗺️ Ontology Designer Viewer**: Read-only D3.js ontology model accessible from Graph Viewer and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
+- **🗺️ Ontology Studio Viewer**: Read-only D3.js ontology model accessible from Graph Viewer and GraphQL sections — frozen force-directed graph with pan/zoom in a fullscreen modal
 - **📊 Dashboard Integration**: Embed Databricks dashboards with parameter mapping to entities
 - **✅ Async Quality Checks**: Validate data against ontology constraints with background processing and progress tracking
 - **📏 SHACL Data Quality**: Run SHACL-based validation against the triple store — shapes defined in the ontology are compiled to SQL and executed against the triple-store VIEW, with violation reporting and pass rates
@@ -281,7 +281,7 @@ Import Unity Catalog tables from **Domain → Data Sources** (**Add Data Source*
 Editors and Builders can do this with `CAN_USE`; `CAN_MANAGE` is not required.
 Then connect those tables to the ontology on the **Mapping** page:
 
-- **Visual Designer**: Click entities/relationships on the interactive designer to configure their SQL queries
+- **Studio**: Click entities/relationships on the interactive canvas to configure their SQL queries
 - **Direct Edit Mode**: Clicking an assigned item immediately loads the editable column-mapping grid
 - **AI Wizard**: Generate SQL queries automatically using the LLM-powered Wizard tab
 - **Auto-Map**: Batch-map all unmapped entities and relationships in one async operation

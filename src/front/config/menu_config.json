@@ -202,7 +202,7 @@
                         },
                         {
                             "id": "map",
-                            "label": "Designer",
+                            "label": "Studio",
                             "icon": "bi-pencil",
                             "default": false,
                             "requires": null
@@ -278,20 +278,6 @@
                             "requires": "domain_saved"
                         }
                     ]
-                },
-                {
-                    "id": "ontology-w3c",
-                    "title": "W3C Standards",
-                    "icon": "bi-filetype-xml",
-                    "items": [
-                        {
-                            "id": "owl",
-                            "label": "OWL",
-                            "icon": "bi-file-earmark-code",
-                            "default": false,
-                            "requires": null
-                        }
-                    ]
                 }
             ]
         },
@@ -329,7 +315,7 @@
                         },
                         {
                             "id": "design",
-                            "label": "Designer",
+                            "label": "Studio",
                             "icon": "bi-pencil",
                             "default": false,
                             "requires": null,
@@ -364,14 +350,6 @@
                     "title": "W3C Standards",
                     "icon": "bi-filetype-xml",
                     "items": [
-                        {
-                            "id": "r2rml",
-                            "label": "R2RML",
-                            "icon": "bi-link-45deg",
-                            "default": false,
-                            "requires": null,
-                            "disabled_during": "autoassign"
-                        },
                         {
                             "id": "sparksql",
                             "label": "Spark SQL",

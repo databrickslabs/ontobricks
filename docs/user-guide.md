@@ -115,7 +115,7 @@ domain context target. If JavaScript is unavailable, it safely falls back to
 
 Navigate to the **Ontology** page by clicking "Ontology" in the navigation bar.
 
-### Option A: Visual Designer (Recommended)
+### Option A: Studio (Recommended)
 
 Click **Business Views** in the sidebar to use the visual drag-and-drop interface.
 
@@ -495,9 +495,9 @@ WIZARD_TEMPLATES = {
 
 The button will appear automatically in the Wizard UI — no HTML changes needed.
 
-### AI Assistant (Designer)
+### AI Assistant (Studio)
 
-The floating assistant on **Ontology → Designer** uses the same saved domain
+The floating assistant on **Ontology → Studio** uses the same saved domain
 LLM as the Wizard. Open it, type a request (for example “Show me all
 relationships”), and the agent reads or edits the in-session ontology.
 
@@ -519,7 +519,7 @@ Industry-standard modules are fetched directly from their official servers/repos
 
 ### Preview OWL Output
 
-Click **OWL** in the sidebar to see the generated OWL in Turtle format.
+Open **Studio** and click **Export** (top right) to download the generated OWL in Turtle format.
 
 ### Save Your Ontology
 
@@ -547,9 +547,9 @@ Click **Information** in the sidebar to view the current mapping status:
 - Count of mapped attributes across all entities
 - Overall completion percentage and status
 
-### Visual Mapping Designer
+### Mapping Studio
 
-Click **Designer** in the sidebar to use the visual mapping interface. This view provides an interactive force-directed graph of your ontology with color-coded mapping status:
+Click **Studio** in the sidebar to use the visual mapping interface. This view provides an interactive force-directed graph of your ontology with color-coded mapping status:
 
 - **Green nodes**: Fully assigned entities (all attributes mapped)
 - **Orange nodes**: Partially assigned entities (some attributes missing)
@@ -611,7 +611,7 @@ FROM main.default.person_collaboration
 
 ### Manual Mapping (Sidebar)
 
-Click **Manual** in the sidebar for a tree-based view of all entities and relationships organized by mapping status. The bottom panel shares the same UI and functionality as the Designer view panel — clicking an item opens the same Wizard/SQL/Mapping tabs.
+Click **Manual** in the sidebar for a tree-based view of all entities and relationships organized by mapping status. The bottom panel shares the same UI and functionality as the Studio view panel — clicking an item opens the same Wizard/SQL/Mapping tabs.
 
 #### Excluding and Including Attributes
 
@@ -652,7 +652,7 @@ Click **Auto-Map** in the sidebar to batch-assign all unmapped entities and rela
 
 **Cancelling a run**: **Cancel** stops the agent at the next item boundary instead of at the end of the batch. Everything already mapped is kept, and the run is recorded as cancelled.
 
-**Execution report in the Audit Trail**: every auto-map run — completed, failed, or cancelled — writes an **Auto-mapping agent run** entry to **Domain → Audit trail**, with the status, the entity/relationship counts, the duration, and the full ordered step list the overlay showed live. Like the individual mapping change entries, it appears in the Audit Trail once the domain version has been saved to the registry.
+**Execution report in the Audit Trail**: every auto-map run — completed, failed, or cancelled — writes an **Auto-mapping agent run** entry on the **Mapping** tab of **Domain → Audit trail**, with the status, the entity/relationship counts, the duration, and the full ordered step list the overlay showed live. Like the individual mapping change entries, it appears once the domain version has been saved to the registry.
 
 **Re-Assign Missing Attributes**: If some entities are assigned but have incomplete attribute mappings, a third card appears showing the count and a **Re-Assign Missing Attributes** button. This re-runs auto-mapping only for those specific entities to fill in the missing *included* attribute mappings (excluded attributes are ignored).
 
@@ -692,7 +692,7 @@ covers those.
 
 ### R2RML Output
 
-The R2RML mapping output is available in the **Domain** section under **R2RML**. Navigate to Domain → R2RML to:
+The R2RML mapping output is available from **Mapping → Studio → Export** (top right) and in the **Domain** section under **R2RML**. Navigate to Domain → R2RML to:
 - View the automatically generated R2RML mapping in Turtle format
 - Copy to clipboard
 - Download as `.ttl` file
@@ -715,7 +715,7 @@ Click **Build** in the sidebar to manage your triple store:
 
 **Storage kind (Lakehouse domains).** On a Lakehouse domain the page names the kind of object `…_data` is, because the two [materialization modes](#materialization-modes-lakehouse) produce objects with the same name and very different behaviour. Next to the target FQN a badge reads either **TABLE · materialized copy** or **VIEW · no data copy**, and the page's subtitle, the note under the FQN, and the status card title all follow the same mode:
 
-| | `Materialized Delta table` | `Views only` |
+| | `Materialized - Faster but needs refresh` | `Views only` |
 |---|---|---|
 | Badge | **TABLE · materialized copy** | **VIEW · no data copy** |
 | What Build does | Copies the gateway output into the Delta table | Refreshes the gateway definition; copies nothing |
@@ -1131,7 +1131,7 @@ cohort operations.
 | Field | Description |
 |-------|-------------|
 | **Backend** | Select the Graph DB engine for this domain (`lakebase`, `databricks` / Lakehouse, or `neo4j`). Build always also creates the Unity Catalog triple-store family below. |
-| **Materialization** | Lakehouse only. `Materialized Delta table` (default) copies the mapped triples into `…_data` at build time; `Views only` makes `…_data` a pass-through view over the gateway instead — nothing is duplicated. See [Materialization modes](#materialization-modes-lakehouse). |
+| **Access type** | Lakehouse only. `Views only` (default) makes `…_data` a pass-through view over the gateway — nothing is duplicated. `Materialized - Faster but needs refresh` copies the mapped triples into `…_data` at build time. See [Materialization modes](#materialization-modes-lakehouse). |
 | **Triple-Store** | Read-only. Base name in the domain's registry `catalog.schema`: `triplestore_<domain>_V<version>`. Build creates four related objects from that base (see below). |
 | **Graph DB table** | Read-only. For Lakebase, the flat triple table name is derived as `g_<domain>_v<version>` in the configured Postgres schema (default `ontobricks_graph`). |
 
@@ -1142,7 +1142,7 @@ When you **commit** the domain name (blur the field or trigger `change`) or chan
 | Object | Kind | What it is for |
 |--------|------|----------------|
 | `triplestore_<domain>_V<n>` | VIEW | Live R2RML mapping over your source tables |
-| `…_data` | Delta TABLE *or* VIEW | Mapped triples — what **Analytics** reads; also the bulk half of the graph. A table by default, a pass-through view under `Views only` materialization |
+| `…_data` | Delta TABLE *or* VIEW | Mapped triples — what **Analytics** reads; also the bulk half of the graph. A pass-through view by default (`Views only`); a Delta table under `Materialized` access type |
 | `…_inferred` | Delta TABLE | Reasoning / cohort / app-written triples |
 | `…_graph` | VIEW | `_data ∪ _inferred` — what Explorer and most graph reads use |
 
@@ -1163,7 +1163,7 @@ Short version:
 
 | Backend / mode | Copy of mapped triples? | How they are created | Indexes (`_adj_*`, `_entity_search`, `_props`) |
 |----------------|-------------------------|----------------------|--------------------------------------|
-| Lakehouse · **Materialized Delta table** | Yes — `_data` TABLE | Build CTAS + `OPTIMIZE` on the Build SQL Warehouse | Physical Delta tables rebuilt at end of Build and by **Refresh cache** |
+| Lakehouse · **Materialized** | Yes — `_data` TABLE | Build CTAS + `OPTIMIZE` on the Build SQL Warehouse | Physical Delta tables rebuilt at end of Build and by **Refresh cache** |
 | Lakehouse · **Views only** | No — `_data` is a pass-through VIEW | Build only refreshes VIEW DDL | Still physical Delta tables (a snapshot of hops/search). Refresh cache recaptures live sources |
 | Lakebase · **app_managed** | Yes, twice: UC `_data` TABLE + Postgres `_sync` | App streams warehouse rows into `_sync`; `__app` holds inferred rows; readers use the union view | Postgres tables rebuilt from that union view |
 | Lakebase · **managed_synced** | Yes, twice: UC `_data` TABLE + Lakeflow `_sync` | Lakeflow owns `_sync`; the app owns `__app` and the union view | Same Postgres index rebuild |
@@ -1176,16 +1176,16 @@ Short version:
 #### Materialization modes (Lakehouse)
 
 A Lakehouse domain chooses how `…_data` is built, in **Domain → Information →
-Knowledge Graph → Materialization**. The rest of the object family is identical
+Backend → Access type**. The rest of the object family is identical
 either way, and a change takes effect on the next Build.
 
-| | Materialized Delta table (default) | Views only |
+| | Views only (default) | Materialized - Faster but needs refresh |
 |---|---|---|
-| `…_data` | Delta table, `CLUSTER BY (predicate, subject)` | View: `SELECT subject, predicate, object FROM <gateway view>` |
-| Storage used | One copy of every mapped triple | None |
-| Build time | Proportional to graph size (CTAS + `OPTIMIZE`) | Near-instant — only DDL runs |
-| Freshness | As of the last Build | Always live: every read re-runs the mapping SQL |
-| Query cost | One scan of a clustered Delta table | Re-executes the R2RML SQL against your source tables |
+| `…_data` | View: `SELECT subject, predicate, object FROM <gateway view>` | Delta table, `CLUSTER BY (predicate, subject)` |
+| Storage used | None | One copy of every mapped triple |
+| Build time | Near-instant — only DDL runs | Proportional to graph size (CTAS + `OPTIMIZE`) |
+| Freshness | Always live: every read re-runs the mapping SQL | As of the last Build |
+| Query cost | Re-executes the R2RML SQL against your source tables | One scan of a clustered Delta table |
 
 Two things are unaffected by the choice:
 
@@ -1386,9 +1386,13 @@ review workflow that collects reviewer sign-offs and keeps a durable audit trail
     These checks are advisory and never block publishing.
   - **Your actions** — context-aware buttons: Submit for review, **Approve** / **Request
     changes** (with an optional comment for the audit trail), Publish, or Reopen.
-  - **Audit trail** — a timeline of every decision (submitted, approved, changes requested,
+  - **Audit trail** — Domain → Audit trail **Status** tab lists every decision (submitted, approved, changes requested,
     published, reopened) with the actor, timestamp, comment, and the `from → to` status
-    snapshot for lifecycle transitions.
+    snapshot for lifecycle transitions. Ontology and mapping edits live on their own tabs
+    as compact `entity | field | old → new` rows (relationships are object properties;
+    SWRL, SHACL, groups, axioms, expressions, and business-rule CRUD are included). Entries
+    appear after the domain is saved to the registry. The Generate wizard still records one
+    summary line rather than a per-element diff.
 - **Roles & quorum** — Submit and Publish stay builder/admin. **Publish** unlocks for a
   builder only once the **sign-off quorum** is reached; an **admin** (app-level or domain-level)
   may **publish at any time, overriding the quorum** (the override is flagged in the audit
@@ -1474,7 +1478,7 @@ Domains are saved in a versioned JSON format and can be stored in Unity Catalog 
 1. **Use Meaningful Names**: Choose clear, descriptive names
 2. **Consistent Naming**: Use CamelCase for classes, camelCase for properties
 3. **Start Simple**: Begin with core entities, add complexity later
-4. **Use the Visual Designer**: The Design view makes it easy to see relationships
+4. **Use Studio**: The Studio view makes it easy to see relationships
 5. **Choose Good Icons**: Visual icons help identify entities in graphs
 6. **Set Relationship Directions**: Be explicit about data flow direction
 7. **Use Inheritance Wisely**: Create class hierarchies for shared attributes
@@ -1629,7 +1633,7 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 ## Example: HR Domain
 
-### Step 1: Design Ontology (Using Visual Designer)
+### Step 1: Design Ontology (Using Studio)
 
 1. Open **Ontology** → **Design**
 2. Create entities:
@@ -1649,7 +1653,7 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 ### Step 2: Create Mappings (Mapping)
 
-1. Open **Mapping** → **Designer**
+1. Open **Mapping** → **Studio**
 2. Click on each entity to configure its mapping:
 
 **Entity Mappings:**
@@ -1831,9 +1835,9 @@ results across all sizes.
 **Problem**: Error when validating mappings
 
 **Solutions**:
-- Ensure all ontology classes are mapped (via Mapping → Designer)
+- Ensure all ontology classes are mapped (via Mapping → Studio)
 - Check all object properties have relationship mappings
-- Verify all entity attributes are assigned to SQL columns (check for orange indicators in Designer view)
+- Verify all entity attributes are assigned to SQL columns (check for orange indicators in Studio view)
 - Use Auto-Map → Re-Assign Missing Attributes to fix incomplete attribute mappings
 - Verify table and column names match
 
@@ -1971,7 +1975,7 @@ Navigate to **Domain** in the top navbar, then open the **Information** sidebar 
 2. Set the **Base URI** for your ontology (e.g., `https://ontobricks.com/ontology/`). This is the namespace for all generated RDF resources.
 3. Open the **LLM** tab, click **Browse**, search the AI Gateway and legacy
    Model Serving groups, and select the model used for ontology generation,
-   the Designer assistant, auto-mapping, and the other in-app agents.
+   the Studio assistant, auto-mapping, and the other in-app agents.
 4. Configure the **Triple Store Table**: select a catalog, schema, and table name where triples will be stored (e.g., `my_catalog.my_schema.triples`). The table will be created automatically during sync.
 
 ---
@@ -2106,12 +2110,12 @@ Auto-Map uses the LLM to automatically generate SQL queries that map each ontolo
 5. When complete, review the results — successfully mapped items show in green.
 6. Click **Apply All** to save all mappings to the domain.
 
-You can verify individual mappings by switching to the **Designer** view:
+You can verify individual mappings by switching to the **Studio** view:
 - **Green** nodes = fully assigned (all attributes mapped)
 - **Orange** nodes = partially assigned (some attributes missing)
 - **Red** nodes = unassigned
 
-> **Tip**: If some entities remain unassigned or partially assigned, you can click on them in the Designer view to manually edit or regenerate their SQL mapping.
+> **Tip**: If some entities remain unassigned or partially assigned, you can click on them in the Studio view to manually edit or regenerate their SQL mapping.
 
 ---
 
@@ -2249,7 +2253,7 @@ After the initial one-time configuration (steps 1–2), the entire pipeline from
 
 - **Table and column naming**: The LLM performs best when table and column names are descriptive. If your tables use cryptic names, add **comments** in Unity Catalog before importing metadata.
 - **Start with a template**: Use one of the Wizard quick-templates (CRM, IoT, etc.) if your domain matches — it provides better guidelines for the LLM.
-- **Review before syncing**: After auto-map, quickly review the Designer view. Fix any red or orange nodes before synchronizing.
+- **Review before syncing**: After auto-map, quickly review the Studio view. Fix any red or orange nodes before synchronizing.
 - **Iterate**: The pipeline is not a one-shot process. You can re-generate the ontology, re-run auto-map, or manually adjust individual mappings at any time.
 - **Save your domain**: After achieving a good result, save the domain to Unity Catalog (**Save** in the domain sub-navigation) so you can reload it later.
 
@@ -2535,4 +2539,4 @@ After import you can:
 - **Start small**: When importing a large standard like FIBO, start with the required foundation module and one domain to evaluate the result before adding more.
 - **Network access**: Industry-standard imports require outbound internet access to fetch modules from their public repositories. If running in Databricks Apps with restricted egress, download the files manually and use the OWL file import instead.
 - **Incremental import**: Each import replaces the current ontology. If you need to combine multiple standards, export after each import and merge the OWL files externally.
-- **Layout reset**: After importing a large ontology, use **Auto-Layout** in the **Ontology Designer** view to arrange entities automatically.
+- **Layout reset**: After importing a large ontology, use **Auto-Layout** in the **Ontology Studio** view to arrange entities automatically.

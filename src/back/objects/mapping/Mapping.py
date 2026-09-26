@@ -798,10 +798,12 @@ class Mapping:
         new_mapping = Mapping.build_entity_mapping(data)
 
         was_update = False
+        old_mapping = None
         for i, m in enumerate(mappings):
             if m.get("ontology_class") == new_mapping["ontology_class"]:
                 if m.get("excluded") and "excluded" not in new_mapping:
                     new_mapping["excluded"] = True
+                old_mapping = dict(m)
                 mappings[i] = new_mapping
                 was_update = True
                 break
@@ -811,12 +813,15 @@ class Mapping:
 
         domain.assignment["entities"] = mappings
         domain.clear_generated_content()
-        domain.record_change(
-            "mapping_entity_updated" if was_update else "mapping_entity_added",
-            entity_type="mapping_entity",
-            entity_ref=new_mapping.get("ontology_class", ""),
-            summary=new_mapping.get("ontology_class", ""),
-        )
+        meta = domain.diff_meta(old_mapping if was_update else {}, new_mapping)
+        if not was_update or meta:
+            domain.record_change(
+                "mapping_entity_updated" if was_update else "mapping_entity_added",
+                entity_type="mapping_entity",
+                entity_ref=new_mapping.get("ontology_class", ""),
+                summary=new_mapping.get("ontology_class", ""),
+                meta=meta,
+            )
         domain.save()
 
         return was_update, new_mapping
@@ -846,10 +851,12 @@ class Mapping:
         new_mapping = Mapping.build_relationship_mapping(data)
 
         was_update = False
+        old_mapping = None
         for i, m in enumerate(mappings):
             if m.get("property") == new_mapping["property"]:
                 if m.get("excluded") and "excluded" not in new_mapping:
                     new_mapping["excluded"] = True
+                old_mapping = dict(m)
                 mappings[i] = new_mapping
                 was_update = True
                 break
@@ -859,13 +866,16 @@ class Mapping:
 
         domain.assignment["relationships"] = mappings
         domain.clear_generated_content()
-        domain.record_change(
-            "mapping_relationship_updated" if was_update
-            else "mapping_relationship_added",
-            entity_type="mapping_relationship",
-            entity_ref=new_mapping.get("property", ""),
-            summary=new_mapping.get("property", ""),
-        )
+        meta = domain.diff_meta(old_mapping if was_update else {}, new_mapping)
+        if not was_update or meta:
+            domain.record_change(
+                "mapping_relationship_updated" if was_update
+                else "mapping_relationship_added",
+                entity_type="mapping_relationship",
+                entity_ref=new_mapping.get("property", ""),
+                summary=new_mapping.get("property", ""),
+                meta=meta,
+            )
         domain.save()
 
         return was_update, new_mapping
@@ -937,12 +947,27 @@ class Mapping:
             ("mapping_relationship", "property", old_rels, new_rels),
         ):
             added, updated, removed = self._diff_mappings(old, new, key)
+            old_map = {m.get(key): m for m in (old or []) if m.get(key)}
+            new_map = {m.get(key): m for m in (new or []) if m.get(key)}
             for verb, refs in (("added", added), ("updated", updated),
                                ("removed", removed)):
                 for ref in refs:
-                    domain.record_change(f"{entity_type}_{verb}",
-                                         entity_type=entity_type,
-                                         entity_ref=ref, summary=ref)
+                    meta = {}
+                    if verb == "updated":
+                        meta = domain.diff_meta(old_map.get(ref), new_map.get(ref))
+                        if not meta:
+                            continue
+                    elif verb == "added":
+                        meta = domain.diff_meta({}, new_map.get(ref))
+                    elif verb == "removed":
+                        meta = domain.diff_meta(old_map.get(ref), {})
+                    domain.record_change(
+                        f"{entity_type}_{verb}",
+                        entity_type=entity_type,
+                        entity_ref=ref,
+                        summary=ref,
+                        meta=meta,
+                    )
 
     def reset_mapping(self) -> None:
         domain = self._domain

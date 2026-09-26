@@ -289,15 +289,15 @@
                             </div>
                         </fieldset>
 
-                        <!-- Materialization mode (shown only when backend = Lakehouse) -->
+                        <!-- Access type (shown only when backend = Lakehouse) -->
                         <div class="mb-4 {% if domain.graph_backend != 'databricks' %}d-none{% endif %}" id="lakehouseMaterializationSection">
                             <label for="domainLakehouseMaterialization" class="form-label fw-semibold">
-                                <i class="bi bi-layers me-1"></i> Materialization
+                                <i class="bi bi-layers me-1"></i> Access type
                             </label>
                             <select class="form-select domain-editable" id="domainLakehouseMaterialization"
-                                    data-saved-value="{{ domain.lakehouse_materialization or 'table' }}">
-                                <option value="table" {% if (domain.lakehouse_materialization or 'table') == 'table' %}selected{% endif %}>Materialized Delta table (recommended)</option>
-                                <option value="view" {% if domain.lakehouse_materialization == 'view' %}selected{% endif %}>Views only &mdash; no data copy</option>
+                                    data-saved-value="{{ domain.lakehouse_materialization or 'view' }}">
+                                <option value="view" {% if (domain.lakehouse_materialization or 'view') != 'table' %}selected{% endif %}>Views only &mdash; no data copy</option>
+                                <option value="table" {% if domain.lakehouse_materialization == 'table' %}selected{% endif %}>Materialized - Faster but needs refresh</option>
                             </select>
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>How the mapped triples

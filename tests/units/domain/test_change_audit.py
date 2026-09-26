@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 from back.objects.domain import Domain
 from back.objects.mapping import Mapping
 from back.objects.ontology import Ontology
+from back.objects.session.DomainSession import DomainSession
 
 
 # ----------------------------------------------------------------------
@@ -60,6 +61,30 @@ class TestSessionBuffer:
         assert domain_session._config_snapshot() == before
 
 
+class TestPreviousValues:
+    def test_records_changed_scalar_and_skips_identity(self):
+        before = DomainSession.previous_values(
+            {"uri": "http://x#C", "name": "Customer", "table": "old"},
+            {"uri": "http://x#C", "name": "Client", "table": "new"},
+        )
+        assert before == {"name": "Customer", "table": "old"}
+
+    def test_ignores_empty_builder_defaults(self):
+        before = DomainSession.previous_values(
+            {"name": "Customer"},
+            {"name": "Customer", "description": "", "properties": []},
+        )
+        assert before == {}
+
+    def test_diff_meta_includes_after_values(self):
+        meta = DomainSession.diff_meta(
+            {"uri": "http://x#C", "name": "Customer"},
+            {"uri": "http://x#C", "name": "Client"},
+        )
+        assert meta["before"] == {"name": "Customer"}
+        assert meta["after"] == {"name": "Client"}
+
+
 # ----------------------------------------------------------------------
 # 2. Ontology instrumentation
 # ----------------------------------------------------------------------
@@ -82,13 +107,19 @@ class TestOntologyInstrumentation:
         Ontology(ps).update_class(
             {"uri": "http://test.org/ontology#Customer", "name": "Client"}
         )
-        assert ps._data["change_log"][-1]["action"] == "class_updated"
+        ev = ps._data["change_log"][-1]
+        assert ev["action"] == "class_updated"
+        assert ev["summary"] == "Client"
+        assert ev["meta"]["before"]["name"] == "Customer"
+        assert ev["meta"]["after"]["name"] == "Client"
 
     def test_delete_class_buffers_event(self, domain_session, sample_ontology_config):
         ps = domain_session
         ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
         Ontology(ps).delete_class_by_uri("http://test.org/ontology#Customer")
-        assert ps._data["change_log"][-1]["action"] == "class_removed"
+        ev = ps._data["change_log"][-1]
+        assert ev["action"] == "class_removed"
+        assert ev["meta"]["before"]["name"] == "Customer"
 
     def test_bulk_save_emits_per_entity_diff(
         self, domain_session, sample_ontology_config
@@ -105,6 +136,35 @@ class TestOntologyInstrumentation:
         actions = [e["action"] for e in ps._data["change_log"]]
         assert "class_added" in actions
         assert "class_removed" in actions
+
+    def test_bulk_save_skips_noop_class_updates(
+        self, domain_session, sample_ontology_config
+    ):
+        ps = domain_session
+        ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
+        cfg = copy.deepcopy(sample_ontology_config)
+        for cls in cfg["classes"]:
+            cls["description"] = cls.get("description", "")
+            cls["properties"] = cls.get("properties", [])
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+        assert [e["action"] for e in ps._data["change_log"]] == []
+
+    def test_update_then_bulk_save_does_not_duplicate(
+        self, domain_session, sample_ontology_config
+    ):
+        ps = domain_session
+        ps._data["ontology"].update(copy.deepcopy(sample_ontology_config))
+        Ontology(ps).update_class(
+            {"uri": "http://test.org/ontology#Customer", "name": "Client"}
+        )
+        cfg = copy.deepcopy(ps.ontology)
+        Ontology(ps).save_ontology_config_from_editor({"config": cfg})
+        updated = [
+            e for e in ps._data["change_log"] if e["action"] == "class_updated"
+        ]
+        assert len(updated) == 1
+        drained = ps.drain_change_log()
+        assert len([e for e in drained if e["action"] == "class_updated"]) == 1
 
     def test_agent_changes_tagged_source_agent(
         self, domain_session, sample_ontology_config
@@ -139,12 +199,32 @@ class TestMappingInstrumentation:
     def test_update_entity_mapping_buffers_updated(self, domain_session):
         ps = domain_session
         ps.assignment["entities"] = [
-            {"ontology_class": "http://x#Customer", "table_name": "old"}
+            {"ontology_class": "http://x#Customer", "table": "old"}
         ]
         Mapping(ps).add_or_update_entity_mapping(
-            {"ontology_class": "http://x#Customer", "table_name": "new"}
+            {"ontology_class": "http://x#Customer", "table": "new"}
         )
-        assert ps._data["change_log"][-1]["action"] == "mapping_entity_updated"
+        ev = ps._data["change_log"][-1]
+        assert ev["action"] == "mapping_entity_updated"
+        assert ev["meta"]["before"]["table"] == "old"
+        assert ev["meta"]["after"]["table"] == "new"
+
+    def test_mapping_bulk_save_skips_noop_updates(self, domain_session):
+        ps = domain_session
+        original = {
+            "ontology_class": "http://x#Customer",
+            "table": "customers",
+            "sql_query": "",
+        }
+        ps.assignment["entities"] = [dict(original)]
+        ps.assignment["relationships"] = []
+        Mapping(ps).save_mapping_config(
+            {
+                "entities": [{**original, "catalog": "", "schema": ""}],
+                "relationships": [],
+            }
+        )
+        assert ps._data["change_log"] == []
 
     def test_delete_entity_mapping_buffers_removed(self, domain_session):
         ps = domain_session

@@ -773,7 +773,7 @@ relational tables:
 | `graph_analytics` | Cache of the LAST knowledge-graph metrics result (centrality/structure) keyed by `(domain_id, version)`; one row, replaced on every successful async recompute (UPSERT). Backs the KG Analytics page and the Domain Validation cockpit |
 | `graph_analytics_runs` | Append-only history of every analytics run launched (success or failure) keyed by `(domain_id, version)`; lightweight per-run metadata (node/edge counts, components, avg degree, density, duration, scope, status). Capped per tuple. Backs the KG Analytics "History" tab |
 | `domain_review_events` | Append-only review/validation audit log (submit / sign-off / publish / reopen / comment) keyed by `(domain_id, version)` |
-| `domain_change_events` | Append-only ontology/mapping change audit ("who changed what, and when") keyed by `(domain_id, version)`. Fine-grained edits (class/property/mapping add/update/remove, imports, resets) are buffered in the working session as they happen and flushed here in one batch on save-to-registry; `source` tags human vs AI-assistant edits; `occurred_at` is the real edit time, `created_at` the flush time |
+| `domain_change_events` | Append-only ontology/mapping change audit ("who changed what, and when") keyed by `(domain_id, version)`. Fine-grained edits (class/property/mapping add/update/remove, SHACL/SWRL/groups/axioms/expressions/business rules, imports, resets) are buffered in the working session as they happen and flushed here in one batch on save-to-registry; `source` tags human vs AI-assistant edits; `occurred_at` is the real edit time, `created_at` the flush time |
 | `domain_comments` | Domain-wide threaded discussion keyed by `(domain_id, version)`; `parent_id` links replies, `resolved` closes a thread |
 | `domain_tasks` | Personalised work items assigned to a teammate (usually born from a comment); `status` walks `open → in_progress → done` (or `cancelled`), surfaced in the assignee's "My Tasks" worklist |
 
@@ -936,8 +936,8 @@ source tables
 
 **Materialization modes** are a per-domain Lakehouse setting (`info['lakehouse_materialization']`, resolved by `GraphDBFactory.resolve_lakehouse_materialization`, applied by `materialize.apply_data_relation`):
 
-- `table` (default) — CTAS + `OPTIMIZE`. One copy of the triples; reads are a single clustered Delta scan.
-- `view` — no copy at all. `_data` is a view over the gateway, so every read re-executes the mapping SQL against the source tables and always sees live data. Builds only run DDL, and `OPTIMIZE` is skipped since there is nothing to compact.
+- `view` (new-domain default, **Domain → Information → Backend → Access type**) — no copy at all. `_data` is a view over the gateway, so every read re-executes the mapping SQL against the source tables and always sees live data. Builds only run DDL, and `OPTIMIZE` is skipped since there is nothing to compact.
+- `table` — CTAS + `OPTIMIZE`. One copy of the triples; reads are a single clustered Delta scan. A missing or unrecognised value still normalises to `table` so Lakehouse domains created before the option existed keep their copy.
 
 Lakebase and Neo4j domains always get the table: the resolver returns `table` for any backend other than `databricks`, because their own graph is not what the analytics job reads.
 

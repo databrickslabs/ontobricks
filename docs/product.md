@@ -55,7 +55,7 @@ flowchart LR
     end
 
     subgraph ontoBricks ["OntoBricks App"]
-        OD["Ontology Designer<br/>OWL / RDFS"]
+        OD["Ontology Studio<br/>OWL / RDFS"]
         MA["Mapping<br/>R2RML Mapping"]
         DT["Knowledge Graph<br/>Graph Viewer"]
     end
@@ -134,7 +134,7 @@ flowchart LR
 
 | Capability                | Description                                                                                  |
 | ------------------------- | -------------------------------------------------------------------------------------------- |
-| Visual Designer (OntoViz) | Drag-and-drop entities, relationships, and inheritance hierarchies on an interactive canvas  |
+| Studio (OntoViz) | Drag-and-drop entities, relationships, and inheritance hierarchies on an interactive canvas  |
 | LLM-Powered Wizard        | Point to Unity Catalog tables; the LLM generates a complete OWL ontology from metadata       |
 | Industry Standards        | One-click import of FIBO (6 domains), CDISC (5 standards), IOF (3 domains)                   |
 | OWL/RDFS Import           | Load existing ontologies from files or Unity Catalog Volumes                                 |

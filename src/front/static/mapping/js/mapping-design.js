@@ -983,7 +983,7 @@ async function initMappingDesigner() {
                 mappingMapSimulation.alpha(0.01).restart();
                 
                 if (typeof showNotification === 'function') {
-                    showNotification('Layout restored from Ontology Designer', 'info', 2000);
+                    showNotification('Layout restored from Ontology Studio', 'info', 2000);
                 }
             } else {
                 if (typeof showNotification === 'function') {

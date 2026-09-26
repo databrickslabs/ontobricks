@@ -87,15 +87,30 @@ class TestThePicker:
         assert '<option value="view" selected' in rendered
         assert '<option value="table" selected' not in rendered
 
-    def test_the_default_selection_is_the_materialized_table(self):
-        """A domain saved before the option existed must not render view-only."""
+    def test_the_section_is_labelled_access_type(self):
+        html = _read(INFO_HTML)
+        block_start = html.index(f'id="{SECTION_ID}"')
+        block = html[block_start : block_start + 1600]
+        assert "Access type" in block
+        assert "Materialized - Faster but needs refresh" in block
+        assert "Views only" in block
+
+    def test_the_default_selection_is_views_only(self):
+        """A new Lakehouse domain must not copy triples until the user opts in."""
         rendered = _render_picker(graph_backend="databricks")
+        assert '<option value="view" selected' in rendered
+        assert '<option value="table" selected' not in rendered
+
+    def test_a_stored_table_choice_is_preselected(self):
+        rendered = _render_picker(
+            graph_backend="databricks", lakehouse_materialization="table"
+        )
         assert '<option value="table" selected' in rendered
         assert '<option value="view" selected' not in rendered
 
-    def test_the_saved_value_baseline_defaults_to_table(self):
+    def test_the_saved_value_baseline_defaults_to_view(self):
         """``dataset.savedValue`` drives re-selection after a refresh."""
-        assert 'data-saved-value="table"' in _render_picker(graph_backend="databricks")
+        assert 'data-saved-value="view"' in _render_picker(graph_backend="databricks")
 
     def test_the_help_text_names_what_stays_a_table(self):
         """Users need to know inferred triples and Analytics are unaffected."""
@@ -143,14 +158,14 @@ class TestBothSavePathsSendTheField:
         assert f"{FIELD}:" in body
 
     def test_the_payload_resets_the_field_off_lakehouse(self):
-        """A domain that leaves Lakehouse must not keep a view-only setting."""
+        """Leaving Lakehouse stores the product default so a later switch stays view-only."""
         body = _function_body(
             _read(NAVBAR_JS), "function buildDomainInfoPayload(", span=2500
         )
         start = body.index(f"{FIELD}:")
         clause = body[start : start + 300]
         assert "'databricks'" in clause
-        assert "'table'" in clause
+        assert "'view'" in clause
 
     def test_the_explicit_save_fallback_includes_the_field(self):
         """``saveDomainInfo`` falls back to its own literal when the builder is absent."""

@@ -1,113 +1,210 @@
-/* Domain → Audit trail: unified review + build timeline */
+/* Domain → Audit trail: compact ontology / mapping timelines */
+
+.audit-version-filter {
+    width: auto;
+}
+
+#auditTabs .nav-link {
+    text-align: left;
+}
 
 .audit-timeline {
     position: relative;
-    padding-left: 0.5rem;
+    padding-left: 0.25rem;
 }
 
 .audit-item {
     position: relative;
     display: flex;
-    gap: 0.75rem;
-    padding-bottom: 1.1rem;
+    gap: 0.5rem;
+    padding-bottom: 0.4rem;
 }
 
-/* connecting vertical line between markers */
 .audit-item:not(:last-child)::before {
     content: "";
     position: absolute;
-    left: 15px;
-    top: 32px;
-    bottom: -4px;
+    left: 9px;
+    top: 20px;
+    bottom: -2px;
     width: 2px;
-    background: var(--db-border, #e0e0e0);
+    background: var(--db-border);
 }
 
 .audit-marker {
     flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.85rem;
-    background: var(--db-bg-secondary, #f5f6f8);
-    border: 1px solid var(--db-border, #e0e0e0);
-    color: var(--db-text-muted, #666);
+    font-size: 0.65rem;
+    background: var(--db-canvas-warm);
+    border: 1px solid var(--db-border);
+    color: var(--db-text-muted);
     z-index: 1;
 }
 
 .audit-marker-review {
-    color: #fff;
-    background: var(--db-primary, #ff3621);
-    border-color: var(--db-primary, #ff3621);
+    color: var(--db-on-primary);
+    background: var(--db-primary);
+    border-color: var(--db-primary);
 }
 
 .audit-marker-build {
-    color: var(--db-text, #1e1e1e);
-    background: #fff;
+    color: var(--db-text);
+    background: var(--db-surface-warm);
 }
 
 .audit-marker-change {
-    color: #fff;
-    background: var(--db-info, #2272b4);
-    border-color: var(--db-info, #2272b4);
+    color: var(--db-on-primary);
+    background: var(--db-status-info);
+    border-color: var(--db-status-info);
+}
+
+.audit-marker-remove {
+    color: var(--db-status-danger);
+    background: var(--db-status-danger-soft-bg);
+    border-color: var(--db-status-danger);
 }
 
 .audit-content {
     flex: 1 1 auto;
     min-width: 0;
-    background: var(--db-bg-secondary, #f5f6f8);
-    border: 1px solid var(--db-border, #e0e0e0);
-    border-radius: 10px;
-    padding: 0.5rem 0.75rem;
+    background: var(--db-canvas-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    padding: 0.15rem 0.5rem;
 }
 
 .audit-head {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 0.4rem 0.6rem;
+    flex-wrap: nowrap;
+    gap: 0.2rem 0.4rem;
+    min-width: 0;
+}
+
+.audit-head .audit-diffs {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.audit-diffs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    text-align: left;
+}
+
+.audit-diff-row {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.audit-asset {
+    font-weight: 600;
+}
+
+.audit-field {
+    color: var(--db-text-muted);
+    font-size: 0.7rem;
+}
+
+.audit-old {
+    color: var(--db-text-muted);
+}
+
+.audit-arrow {
+    color: var(--db-text-muted);
+}
+
+.audit-new {
+    font-weight: 600;
 }
 
 .audit-title {
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+.audit-timeline .badge {
+    font-size: 0.65rem;
+    font-weight: 500;
+    line-height: 1.2;
+    padding: 0.08em 0.4em;
+    vertical-align: middle;
 }
 
 .audit-chip {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
+    line-height: 1.2;
     font-family: var(--bs-font-monospace, monospace);
-    background: #fff;
-    border: 1px solid var(--db-border, #e0e0e0);
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
     border-radius: 4px;
-    padding: 0 0.35rem;
-    color: var(--db-text-muted, #666);
+    padding: 0 0.3rem;
+    color: var(--db-text-muted);
 }
 
 .audit-time {
     margin-left: auto;
-    font-size: 0.75rem;
-    color: var(--db-text-muted, #666);
+    font-size: 0.7rem;
+    color: var(--db-text-muted);
     white-space: nowrap;
 }
 
 .audit-details {
-    padding: 0.05rem 0.4rem;
+    padding: 0.05rem 0.35rem;
     line-height: 1.2;
 }
 
+.audit-detail {
+    margin-top: 0.1rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: var(--db-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .audit-comment {
-    margin-top: 0.35rem;
-    font-size: 0.9rem;
-    color: var(--db-text, #1e1e1e);
+    margin-top: 0.2rem;
+    font-size: 0.8rem;
+    color: var(--db-text);
     white-space: pre-wrap;
     word-break: break-word;
 }
 
 .audit-meta {
-    margin-top: 0.3rem;
+    margin-top: 0.1rem;
+    font-size: 0.7rem;
+    color: var(--db-text-muted);
+}
+
+.audit-agent-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.15rem 0;
     font-size: 0.75rem;
-    color: var(--db-text-muted, #666);
+}
+
+.audit-agent-type {
+    min-width: 6.5rem;
+    color: var(--db-text-muted);
+}
+
+.audit-agent-log {
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--db-surface-warm);
 }

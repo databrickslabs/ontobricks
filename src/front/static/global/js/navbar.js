@@ -760,12 +760,12 @@ function buildDomainInfoPayload() {
         neo4j_connection: graphBackendEl
             ? (graphBackendEl.value === 'neo4j' && neo4jConnEl ? neo4jConnEl.value : '')
             : undefined,
-        // Only meaningful for Lakehouse; reset for other backends so a domain
-        // that moved off Lakehouse cannot carry a view-only setting the other
-        // engines would have to ignore.
+        // Only meaningful for Lakehouse. Off Lakehouse, store the product
+        // default (`view`) so switching back to Lakehouse does not revive a
+        // materialized copy. Other engines ignore this field.
         lakehouse_materialization: graphBackendEl
             ? (graphBackendEl.value === 'databricks' && materializationEl
-                ? materializationEl.value : 'table')
+                ? materializationEl.value : 'view')
             : undefined,
         version: versionEl ? versionEl.value : undefined,
         mcp_policy: buildMcpPolicy(),

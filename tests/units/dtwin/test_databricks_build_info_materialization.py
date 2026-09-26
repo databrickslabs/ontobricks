@@ -65,9 +65,16 @@ def test_a_materialized_domain_is_reported_as_such(api_client, domain_session):
     assert payload["materialization"] == "table"
 
 
-def test_the_field_defaults_to_table(api_client, domain_session):
+def test_the_field_defaults_to_table_when_missing(api_client, domain_session):
     """A domain saved before the option existed must not look view-only."""
-    assert _info(api_client, _configure(domain_session))["materialization"] == "table"
+    session = _configure(domain_session)
+    session.info.pop("lakehouse_materialization", None)
+    assert _info(api_client, session)["materialization"] == "table"
+
+
+def test_a_new_domain_defaults_to_view(api_client, domain_session):
+    """The Access type picker default is Views only."""
+    assert _info(api_client, _configure(domain_session))["materialization"] == "view"
 
 
 def test_a_non_lakehouse_domain_is_never_view_only(api_client, domain_session):

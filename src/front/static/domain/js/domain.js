@@ -315,7 +315,7 @@ async function saveDomainInfo() {
             neo4j_connection: (graphBackendEl && graphBackendEl.value === 'neo4j' && neo4jDbEl)
                 ? neo4jDbEl.value : '',
             lakehouse_materialization: (graphBackendEl && graphBackendEl.value === 'databricks' && materializationEl)
-                ? materializationEl.value : 'table',
+                ? materializationEl.value : 'view',
         };
     
     try {

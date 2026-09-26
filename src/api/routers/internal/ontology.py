@@ -506,8 +506,10 @@ async def save_shape(
         shapes = list(domain.shacl_shapes)
 
         is_update = bool(shape_id and any(s["id"] == shape_id for s in shapes))
+        old = next((dict(s) for s in shapes if s.get("id") == shape_id), {})
         if is_update:
             shapes = SHACLService.update_shape(shapes, shape_id, shape_data)
+            saved = next((s for s in shapes if s.get("id") == shape_id), shape_data)
         else:
             new_shape = SHACLService.create_shape(
                 category=shape_data.get("category", "conformance"),
@@ -525,13 +527,15 @@ async def save_shape(
                 condition_logic=shape_data.get("condition_logic", "and"),
             )
             shapes.append(new_shape)
+            saved = new_shape
 
         domain.shacl_shapes = shapes
-        _ref = shape_id or shape_data.get("label", "") or shape_data.get("target_class", "")
+        _ref = shape_id or saved.get("label", "") or saved.get("target_class", "")
         domain.record_change(
             "shacl_updated" if is_update else "shacl_added",
             entity_type="shacl", entity_ref=_ref,
-            summary=shape_data.get("label", "") or _ref,
+            summary=saved.get("label", "") or _ref,
+            meta=domain.diff_meta(old if is_update else {}, saved),
         )
         domain.save()
         return {"success": True, "message": "Shape saved", "shapes": shapes}
@@ -549,11 +553,14 @@ async def delete_shape(
             raise ValidationError("Shape id is required")
 
         domain = get_domain(session_mgr)
+        shapes = list(domain.shacl_shapes)
+        old = next((dict(s) for s in shapes if s.get("id") == shape_id), {})
         shapes = SHACLService.delete_shape(domain.shacl_shapes, shape_id)
         domain.shacl_shapes = shapes
         domain.record_change(
             "shacl_removed", entity_type="shacl",
-            entity_ref=shape_id, summary=shape_id,
+            entity_ref=shape_id, summary=old.get("label") or shape_id,
+            meta=domain.diff_meta(old, {}),
         )
         domain.save()
         return {"success": True, "message": "Shape deleted", "shapes": shapes}
@@ -874,6 +881,7 @@ async def save_swrl_rule(
         rules = domain.swrl_rules
 
         is_update = 0 <= index < len(rules)
+        old = dict(rules[index]) if is_update else {}
         if is_update:
             rules[index] = rule
         else:
@@ -884,6 +892,7 @@ async def save_swrl_rule(
             "swrl_updated" if is_update else "swrl_added",
             entity_type="swrl", entity_ref=rule.get("name", ""),
             summary=rule.get("name", ""),
+            meta=domain.diff_meta(old, rule),
         )
         domain.save()
         return {
@@ -907,12 +916,14 @@ async def delete_swrl_rule(
         if not (0 <= index < len(rules)):
             raise ValidationError("Invalid rule index")
 
-        removed_name = rules[index].get("name", "") if isinstance(rules[index], dict) else ""
+        removed = dict(rules[index]) if isinstance(rules[index], dict) else {}
+        removed_name = removed.get("name", "")
         rules.pop(index)
         domain.swrl_rules = rules
         domain.record_change(
             "swrl_removed", entity_type="swrl",
             entity_ref=removed_name, summary=removed_name,
+            meta=domain.diff_meta(removed, {}),
         )
         domain.save()
         return {"success": True, "message": "SWRL rule deleted", "rules": rules}
@@ -986,11 +997,13 @@ async def import_swrl(
         rules = list(domain.swrl_rules)
         rules.extend(imported)
         domain.swrl_rules = rules
+        names = [r.get("name", "") for r in imported if isinstance(r, dict)]
         domain.record_change(
             "swrl_added",
             entity_type="swrl",
             entity_ref=f"{len(imported)} imported",
             summary=f"Imported {len(imported)} SWRL rule(s)",
+            meta=domain.diff_meta({}, {"name": ", ".join(n for n in names if n)}),
         )
         domain.save()
         return {
@@ -1048,12 +1061,20 @@ async def save_rule(
         domain = get_domain(session_mgr)
         rules = list((domain.ontology or {}).get(key, []))
 
-        if 0 <= index < len(rules):
+        is_update = 0 <= index < len(rules)
+        old = dict(rules[index]) if is_update else {}
+        if is_update:
             rules[index] = rule
         else:
             rules.append(rule)
 
         domain._data["ontology"][key] = rules
+        domain.record_change(
+            f"{key}_updated" if is_update else f"{key}_added",
+            entity_type=key, entity_ref=rule.get("name", ""),
+            summary=rule.get("name", ""),
+            meta=domain.diff_meta(old, rule),
+        )
         domain.save()
         return {"success": True, "message": "Rule saved", "rules": rules}
 
@@ -1078,8 +1099,15 @@ async def delete_rule(
         if not (0 <= index < len(rules)):
             raise ValidationError("Invalid rule index")
 
+        removed = dict(rules[index]) if isinstance(rules[index], dict) else {}
         rules.pop(index)
         domain._data["ontology"][key] = rules
+        domain.record_change(
+            f"{key}_removed",
+            entity_type=key, entity_ref=removed.get("name", ""),
+            summary=removed.get("name", ""),
+            meta=domain.diff_meta(removed, {}),
+        )
         domain.save()
         return {"success": True, "message": "Rule deleted", "rules": rules}
 
@@ -1439,7 +1467,10 @@ async def save_axiom(
         else:
             items = domain.axioms
 
-        if 0 <= index < len(items):
+        kind = "expression" if collection == "expressions" else "axiom"
+        is_update = 0 <= index < len(items)
+        old = dict(items[index]) if is_update else {}
+        if is_update:
             items[index] = axiom
         else:
             items.append(axiom)
@@ -1448,6 +1479,12 @@ async def save_axiom(
             domain.expressions = items
         else:
             domain.axioms = items
+        _ref = axiom.get("subject") or axiom.get("type") or kind
+        domain.record_change(
+            f"{kind}_updated" if is_update else f"{kind}_added",
+            entity_type=kind, entity_ref=_ref, summary=_ref,
+            meta=domain.diff_meta(old, axiom),
+        )
         domain.save()
         return {
             "success": True,
@@ -1479,11 +1516,19 @@ async def delete_axiom(
         if not (0 <= index < len(items)):
             raise ValidationError("Invalid axiom index")
 
+        kind = "expression" if collection == "expressions" else "axiom"
+        removed = dict(items[index]) if isinstance(items[index], dict) else {}
         items.pop(index)
         if collection == "expressions":
             domain.expressions = items
         else:
             domain.axioms = items
+        _ref = removed.get("subject") or removed.get("type") or kind
+        domain.record_change(
+            f"{kind}_removed",
+            entity_type=kind, entity_ref=_ref, summary=_ref,
+            meta=domain.diff_meta(removed, {}),
+        )
         domain.save()
         return {
             "success": True,

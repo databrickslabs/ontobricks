@@ -21,6 +21,10 @@ class TestGetEmptyDomain:
         data = get_empty_domain()
         assert data["domain"]["info"]["name"] == "NewDomain"
 
+    def test_default_lakehouse_access_type_is_view(self):
+        data = get_empty_domain()
+        assert data["domain"]["info"]["lakehouse_materialization"] == "view"
+
     def test_default_llm_endpoint_kind_is_empty(self):
         data = get_empty_domain()
         assert data["domain"]["info"]["llm_endpoint_kind"] == ""
@@ -508,6 +512,10 @@ class TestExportImport:
         assert export["info"]["lakehouse_materialization"] == "view"
         domain_session.reset()
         domain_session.import_from_file(export)
+        assert domain_session.info["lakehouse_materialization"] == "view"
+
+    def test_new_session_defaults_lakehouse_materialization_to_view(self, domain_session):
+        """The Information picker defaults to Views only for a brand-new domain."""
         assert domain_session.info["lakehouse_materialization"] == "view"
 
     def test_lakehouse_materialization_defaults_to_table_on_import(self, domain_session):

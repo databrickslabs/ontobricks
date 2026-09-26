@@ -146,7 +146,7 @@
                                     <div class="help-step-badge">4</div>
                                     <div>
                                         <h5><i class="bi bi-shuffle me-2"></i>Map your data &amp; Sync</h5>
-                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Designer</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Knowledge Graph &rarr; Sync</strong> and click <em>Synchronize</em> &mdash; triples are materialized into your triple store.</p>
+                                        <p>Open <strong>Mapping</strong> to connect your ontology to Databricks tables. You can either <strong>map manually</strong> using the <em>Studio</em> or <em>Manual</em> views (click each entity / relationship, write or tweak the SQL, assign columns), or <strong>let an agent do it for you</strong> via <em>Auto-Map</em> &rarr; <em>Start Auto-Map</em>. Once mappings are in place, go to <strong>Knowledge Graph &rarr; Sync</strong> and click <em>Synchronize</em> &mdash; triples are materialized into your triple store.</p>
                                     </div>
                                 </div>
                                 <div class="help-step-card">
@@ -223,7 +223,7 @@
                                         <div class="accordion-body">
                                             <p>Four ways to build an ontology:</p>
                                             <ol>
-                                                <li><strong>Model (Designer)</strong> &mdash; drag &amp; drop entities, relationships, inheritance arrows on the OntoViz canvas. Auto-save. Click the smiley face (<i class="bi bi-emoji-smile"></i>) to auto-assign emoji icons via LLM.</li>
+                                                <li><strong>Studio</strong> &mdash; drag &amp; drop entities, relationships, inheritance arrows on the OntoViz canvas. Auto-save. Click the smiley face (<i class="bi bi-emoji-smile"></i>) to auto-assign emoji icons via LLM.</li>
                                                 <li><strong>Generate (Wizard)</strong> &mdash; AI generates the full ontology from your UC metadata. Pick a Quick Template or write custom guidelines.</li>
                                                 <li><strong>Import</strong> &mdash; load OWL/RDFS files, or pull industry standards: <em>FIBO</em>, <em>CDISC</em>, <em>IOF</em>.</li>
                                                 <li><strong>Form-based</strong> &mdash; use the <strong>Entities</strong> and <strong>Relationships</strong> sidebar sections to add entities and object properties manually.</li>
@@ -241,7 +241,7 @@
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
                                                 <li><strong>Pitfalls</strong> &mdash; detect structural, logical and semantic modeling issues, with a precision score</li>
                                             </ul>
-                                            <p>Preview the generated OWL/Turtle under <strong>W3C Standards &rarr; OWL</strong>.</p>
+                                            <p>Export the generated OWL/Turtle from <strong>Studio</strong> with <strong>Export</strong> (top right).</p>
                                         </div>
                                     </div>
                                 </div>
@@ -257,12 +257,12 @@
                                         <div class="accordion-body">
                                             <p>Several complementary interfaces:</p>
                                             <ul>
-                                                <li><strong>Designer</strong> &mdash; force-directed graph of your ontology. Click nodes to open the mapping panel (Wizard / SQL / Mapping tabs).</li>
+                                                <li><strong>Studio</strong> &mdash; force-directed graph of your ontology. Click nodes to open the mapping panel (Wizard / SQL / Mapping tabs). Use <strong>Export</strong> (top right) to download the generated R2RML.</li>
                                                 <li><strong>Manual</strong> &mdash; tree grouped by mapping status (unmapped, partial, mapped)</li>
                                                 <li><strong>Auto-Map</strong> &mdash; LLM generates SQL mappings for every entity and relationship in one shot</li>
                                                 <li><strong>Import</strong> &mdash; load mappings from a file</li>
                                                 <li><strong>Diagnostics</strong> &mdash; consistency checks on the mapping</li>
-                                                <li><strong>R2RML / Spark SQL</strong> &mdash; preview generated code</li>
+                                                <li><strong>Spark SQL</strong> &mdash; preview generated Spark SQL</li>
                                             </ul>
                                             <p>In the mapping panel, the <em>Mapping</em> tab lets you assign columns as <strong>ID</strong>, <strong>Label</strong> or a specific <strong>attribute</strong>, with a live data preview.</p>
                                             <div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mappings store the query <em>without</em> a <code>LIMIT</code> &mdash; the preview limit only affects the UI.</div>
@@ -385,7 +385,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">Do I have to write OWL or SPARQL by hand?</button></h2>
-                                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">No. The visual <em>Model</em> designer and the <em>AI Wizard</em> generate OWL automatically. For querying, use the <strong>GraphQL</strong> endpoint or the interactive Graph Viewer &mdash; SPARQL is optional.</div></div>
+                                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">No. The visual <em>Studio</em> and the <em>AI Wizard</em> generate OWL automatically. For querying, use the <strong>GraphQL</strong> endpoint or the interactive Graph Viewer &mdash; SPARQL is optional.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>

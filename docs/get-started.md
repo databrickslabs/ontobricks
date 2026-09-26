@@ -219,7 +219,7 @@ In local development mode, there are no restrictions — all users have full adm
    Then run `make bootstrap-lakebase` once to grant the app SP
    USAGE/DML on the freshly-created schema.
 
-### 2. Design an Ontology (Visual Designer)
+### 2. Design an Ontology (Studio)
 
 The fastest way to create an ontology is using the visual **Business Views** interface:
 
@@ -275,7 +275,7 @@ Alternatively, use the traditional form interface:
 
 ### 4. Preview and Save
 
-1. Click **OWL** to see your generated ontology in Turtle format
+1. Open **Studio** and click **Export** (top right) to download the generated ontology as Turtle
 2. Click **Validate** to check your ontology
 3. Click **Save** to store in Unity Catalog
 
@@ -290,8 +290,8 @@ Then map those tables on the **Mapping** page:
 1. Go to the **Mapping** page (click on "Mapping" in the navbar)
 2. Your ontology must be loaded (indicated by green checkmark)
 
-#### Visual Mapping (Designer View)
-1. Click **Designer** in the sidebar to use the visual mapping interface
+#### Visual Mapping (Studio)
+1. Click **Studio** in the sidebar to use the visual mapping interface
 2. Click on entities to open the mapping dialog:
    - Enter a SQL query that returns entity data (e.g., `SELECT * FROM main.default.person`)
    - Click **Test Query** to validate and preview results
@@ -309,8 +309,8 @@ Then map those tables on the **Mapping** page:
 1. Click **Manual** in the sidebar for advanced mapping options
 
 #### R2RML Output
-1. Navigate to **Domain** → **Export**
-2. View the auto-generated R2RML mapping
+1. Open **Mapping → Studio** and click **Export** (top right) to download the generated R2RML
+2. You can also view the mapping under **Domain → R2RML**
 3. Copy or download as needed
 
 4. Click **Validate** (in navbar) to verify all mappings are complete
@@ -400,7 +400,7 @@ other graph backends retain their native or iterative traversal.
 | **Information** | Basic ontology settings (name, URI) |
 | **Import** | Import OWL, RDFS, FIBO, CDISC, IOF standards |
 | **Generate** | AI-powered ontology generation from database schema using an LLM |
-| **Designer** | Interactive force-directed ontology graph (OntoViz canvas) |
+| **Studio** | Interactive force-directed ontology graph (OntoViz canvas) |
 | **Groups** | Manage entity groupings |
 | **Business Views** | Visual drag-and-drop business view designer |
 | **Entities** | Manage classes with form interface |
@@ -410,7 +410,6 @@ other graph backends retain their native or iterative traversal.
 | **Cohorts** | Define cohort queries for data slicing |
 | **Expr. & Axioms** | OWL class expressions and axioms |
 | **Pitfalls** | Automated ontology pitfall detection |
-| **OWL** | View generated Turtle/OWL |
 
 > **Tip**: The **Generate** wizard provides domain-specific quick templates (CRM, E-Commerce, IoT, Healthcare, Energy). These are defined in `src/shared/config/constants.py` and can be customised or extended.
 

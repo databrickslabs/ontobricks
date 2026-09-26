@@ -1525,7 +1525,7 @@ POST /ontology/save-to-uc
 POST /ontology/assistant/chat
 ```
 
-Conversational ontology editing used by **Ontology → Designer**. The request
+Conversational ontology editing used by **Ontology → Studio**. The request
 does not include an LLM target; the route uses the LLM saved on the domain
 (`llm_endpoint` + `llm_endpoint_kind`, AI Gateway or Model Serving). An empty
 target (**No LLM**) returns HTTP 400.

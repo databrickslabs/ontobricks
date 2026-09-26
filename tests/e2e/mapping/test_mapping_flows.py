@@ -11,7 +11,7 @@ import pytest
 class TestMappingSidebar:
     @pytest.mark.parametrize(
         "section",
-        ["information", "design", "manual", "autoassign", "r2rml", "sparksql"],
+        ["information", "design", "manual", "autoassign", "sparksql"],
     )
     def test_sidebar_switches_section(self, page, live_server, section):
         page.goto(f"{live_server}/mapping")

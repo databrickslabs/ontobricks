@@ -25,7 +25,7 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Set, Tuple
 
 from back.core.logging import get_logger
 from back.core.mcp_tools import coerce_mcp_policy
@@ -93,7 +93,9 @@ def get_empty_domain() -> Dict[str, Any]:
                 "neo4j_connection": "",
                 # How the Lakehouse backend builds ``…_data``: table | view.
                 # Only honoured when graph_backend == "databricks".
-                "lakehouse_materialization": "table",
+                # New domains default to view; missing values on import still
+                # normalise to table so legacy Lakehouse domains keep a copy.
+                "lakehouse_materialization": "view",
             },
             "triplestore": {
                 "stats": {},
@@ -617,6 +619,64 @@ class DomainSession:
                 }
             ),
         )
+
+    _IDENTITY_KEYS = frozenset({
+        "uri", "ontology_class", "property", "localName", "id",
+    })
+
+    @staticmethod
+    def previous_values(
+        old: Optional[Dict[str, Any]],
+        new: Optional[Dict[str, Any]],
+        *,
+        skip: Optional[Set[str]] = None,
+    ) -> Dict[str, Any]:
+        """Return ``{field: previous_value}`` for keys that changed.
+
+        Skips identity keys (URI / mapping target). Ignores empty builder
+        defaults that were not present on the old object, so a save that
+        only fills ``description: ""`` does not pollute the audit trail.
+        """
+        old_map = dict(old or {})
+        new_map = dict(new or {})
+        ignored = set(skip or ()) | DomainSession._IDENTITY_KEYS
+        before: Dict[str, Any] = {}
+        for key in set(old_map) | set(new_map):
+            if key in ignored:
+                continue
+            ov = old_map.get(key)
+            nv = new_map.get(key)
+            if ov == nv:
+                continue
+            if key not in old_map and DomainSession._is_empty_audit_value(nv):
+                continue
+            before[key] = ov if key in old_map else None
+        return before
+
+    @staticmethod
+    def _is_empty_audit_value(value: Any) -> bool:
+        return value in ("", None) or value == [] or value == {}
+
+    @staticmethod
+    def diff_meta(
+        old: Optional[Dict[str, Any]],
+        new: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """``{"before": ..., "after": ...}`` for changed fields, else ``{}``."""
+        before = DomainSession.previous_values(old, new)
+        if not before:
+            return {}
+        new_map = dict(new or {})
+        after = {key: new_map.get(key) for key in before}
+        return {"before": before, "after": after}
+
+    @staticmethod
+    def before_meta(
+        old: Optional[Dict[str, Any]],
+        new: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Alias of :meth:`diff_meta` (kept for existing call sites)."""
+        return DomainSession.diff_meta(old, new)
 
     def record_change(
         self,

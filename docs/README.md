@@ -11,7 +11,7 @@ OntoBricks is a **Graph Viewer Builder** for the Databricks platform. It lets yo
 | Topic | File | What you'll find |
 |-------|------|------------------|
 | **Get Started** | [get-started.md](get-started.md) | Install, first run, Databricks setup, environment variables |
-| **User Guide** | [user-guide.md](user-guide.md) | Day-to-day usage — domain cockpit & versions (MCP-active vs loaded), ontology **Designer**, data mapping, triple-store pipeline, quality checks, reasoning, import (OWL, FIBO, CDISC, IOF, FHIR), Pitfalls Detector, Registry OBX export/import |
+| **User Guide** | [user-guide.md](user-guide.md) | Day-to-day usage — domain cockpit & versions (MCP-active vs loaded), ontology **Studio**, data mapping, triple-store pipeline, quality checks, reasoning, import (OWL, FIBO, CDISC, IOF, FHIR), Pitfalls Detector, Registry OBX export/import |
 | **Examples** | [examples.md](examples.md) | Family-tree and customer-journey walkthroughs you can follow along |
 | **Deployment** | [deployment.md](deployment.md) | Local dev, Databricks Apps, `app.yaml` resources, Unity Catalog grants for the app SP, in-app permissions, MCP deploy |
 | **Architecture** | [architecture.md](architecture.md) | System design, semantic web standards, agents, OntoViz, triple-store backends, [Lakehouse UC objects](architecture.md#lakehouse-unity-catalog-objects) (`_data` / `_inferred` / `_graph`), reasoning engine |

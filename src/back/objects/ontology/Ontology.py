@@ -453,11 +453,28 @@ class Ontology:
             ("property", old_props, new_props),
         ):
             added, updated, removed = self._diff_by_uri(old, new)
+            old_map = {i.get("uri"): i for i in (old or []) if i.get("uri")}
+            new_map = {i.get("uri"): i for i in (new or []) if i.get("uri")}
             for verb, items in (("added", added), ("updated", updated),
                                 ("removed", removed)):
                 for uri, name in items:
-                    s.record_change(f"{entity_type}_{verb}", entity_type=entity_type,
-                                    entity_ref=uri, summary=name, source=source)
+                    meta = {}
+                    if verb == "updated":
+                        meta = s.diff_meta(old_map.get(uri), new_map.get(uri))
+                        if not meta:
+                            continue
+                    elif verb == "added":
+                        meta = s.diff_meta({}, new_map.get(uri))
+                    elif verb == "removed":
+                        meta = s.diff_meta(old_map.get(uri), {})
+                    s.record_change(
+                        f"{entity_type}_{verb}",
+                        entity_type=entity_type,
+                        entity_ref=uri,
+                        summary=name,
+                        source=source,
+                        meta=meta,
+                    )
 
     def save_ontology_config_from_editor(
         self, raw_body: Dict[str, Any]
@@ -718,10 +735,11 @@ class Ontology:
         if len(classes) >= original_len:
             raise NotFoundError("Class not found")
 
-        removed_name = next(
-            (c.get("name") for c in s.get_classes() if c.get("uri") == class_uri),
-            class_uri,
+        removed = next(
+            (c for c in s.get_classes() if c.get("uri") == class_uri),
+            None,
         )
+        removed_name = (removed or {}).get("name") or class_uri
         s.ontology["classes"] = classes
         entity_mappings = s.get_entity_mappings()
         original_mapping_len = len(entity_mappings)
@@ -735,6 +753,7 @@ class Ontology:
         s.record_change(
             "class_removed", entity_type="class",
             entity_ref=class_uri, summary=removed_name or class_uri,
+            meta=s.diff_meta(removed or {}, {}),
         )
         s.save()
         return {
@@ -753,10 +772,11 @@ class Ontology:
         if len(properties) >= original_len:
             raise NotFoundError("Property not found")
 
-        removed_name = next(
-            (p.get("name") for p in s.get_properties() if p.get("uri") == property_uri),
-            property_uri,
+        removed = next(
+            (p for p in s.get_properties() if p.get("uri") == property_uri),
+            None,
         )
+        removed_name = (removed or {}).get("name") or property_uri
         s.ontology["properties"] = properties
         rel_mappings = s.get_relationship_mappings()
         original_mapping_len = len(rel_mappings)
@@ -768,6 +788,7 @@ class Ontology:
         s.record_change(
             "property_removed", entity_type="property",
             entity_ref=property_uri, summary=removed_name or property_uri,
+            meta=s.diff_meta(removed or {}, {}),
         )
         s.save()
         return {
@@ -790,6 +811,7 @@ class Ontology:
         s.record_change(
             "class_added", entity_type="class",
             entity_ref=new_class.get("uri", ""), summary=new_class.get("name", ""),
+            meta=s.diff_meta({}, new_class),
         )
         s.save()
         return {"success": True, "class": new_class}
@@ -805,14 +827,18 @@ class Ontology:
                 if new_name and new_name != cls.get("name"):
                     if any(c.get("name") == new_name for j, c in enumerate(classes) if j != i):
                         raise ValidationError("Class with this name already exists")
+                old_cls = dict(cls)
                 classes[i] = Ontology.build_class_from_data(data, cls)
                 s.ontology["classes"] = classes
                 s.clear_generated_content()
-                s.record_change(
-                    "class_updated", entity_type="class",
-                    entity_ref=classes[i].get("uri", ""),
-                    summary=classes[i].get("name", ""),
-                )
+                meta = s.diff_meta(old_cls, classes[i])
+                if meta:
+                    s.record_change(
+                        "class_updated", entity_type="class",
+                        entity_ref=classes[i].get("uri", ""),
+                        summary=classes[i].get("name", ""),
+                        meta=meta,
+                    )
                 s.save()
                 return {"success": True, "class": classes[i]}
         raise NotFoundError("Class not found")
@@ -833,6 +859,7 @@ class Ontology:
             "property_added", entity_type="property",
             entity_ref=new_property.get("uri", ""),
             summary=new_property.get("name", ""),
+            meta=s.diff_meta({}, new_property),
         )
         s.save()
         return {"success": True, "property": new_property}
@@ -848,14 +875,18 @@ class Ontology:
                 if new_name and new_name != prop.get("name"):
                     if any(p.get("name") == new_name for j, p in enumerate(properties) if j != i):
                         raise ValidationError("Property with this name already exists")
+                old_prop = dict(prop)
                 properties[i] = Ontology.build_property_from_data(data, prop)
                 s.ontology["properties"] = properties
                 s.clear_generated_content()
-                s.record_change(
-                    "property_updated", entity_type="property",
-                    entity_ref=properties[i].get("uri", ""),
-                    summary=properties[i].get("name", ""),
-                )
+                meta = s.diff_meta(old_prop, properties[i])
+                if meta:
+                    s.record_change(
+                        "property_updated", entity_type="property",
+                        entity_ref=properties[i].get("uri", ""),
+                        summary=properties[i].get("name", ""),
+                        meta=meta,
+                    )
                 s.save()
                 return {"success": True, "property": properties[i]}
         raise NotFoundError("Property not found")
@@ -2360,8 +2391,10 @@ class Ontology:
             raise ValidationError("Group name is required")
 
         groups = self._domain.groups
+        was_update = 0 <= index < len(groups)
+        old = dict(groups[index]) if was_update else {}
 
-        if 0 <= index < len(groups):
+        if was_update:
             groups[index] = group
         else:
             if any(g.get("name") == name for g in groups):
@@ -2372,8 +2405,9 @@ class Ontology:
         self._sync_class_group_field(groups)
         self._domain.groups = groups
         self._domain.record_change(
-            "group_updated" if 0 <= index < len(groups) else "group_added",
+            "group_updated" if was_update else "group_added",
             entity_type="group", entity_ref=name, summary=name,
+            meta=self._domain.diff_meta(old, group),
         )
         self._domain.save()
         return self._domain.groups
@@ -2390,9 +2424,14 @@ class Ontology:
         groups = self._domain.groups
 
         if 0 <= index < len(groups):
-            removed_ref = groups[index].get("name", "") or str(index)
+            removed = dict(groups[index])
+            removed_ref = removed.get("name", "") or str(index)
             groups.pop(index)
         elif name:
+            removed = next(
+                (dict(g) for g in groups if g.get("name") == name),
+                {},
+            )
             removed_ref = name
             groups[:] = [g for g in groups if g.get("name") != name]
         else:
@@ -2403,6 +2442,7 @@ class Ontology:
         self._domain.record_change(
             "group_removed", entity_type="group",
             entity_ref=removed_ref, summary=removed_ref,
+            meta=self._domain.diff_meta(removed or {}, {}),
         )
         self._domain.save()
         return self._domain.groups
@@ -2427,6 +2467,7 @@ class Ontology:
             raise ValidationError(f'Group "{group_name}" not found')
 
         to_remove = set(remove or [])
+        old = dict(target)
         members = [m for m in target.get("members", []) if m not in to_remove]
         existing = set(members)
         for m in add or []:
@@ -2438,6 +2479,13 @@ class Ontology:
         self._enforce_exclusive_membership(groups, group_name)
         self._sync_class_group_field(groups)
         self._domain.groups = groups
+        self._domain.record_change(
+            "group_updated",
+            entity_type="group",
+            entity_ref=group_name,
+            summary=group_name,
+            meta=self._domain.diff_meta(old, target),
+        )
         self._domain.save()
         return self._domain.groups
 
