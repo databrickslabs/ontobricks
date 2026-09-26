@@ -61,6 +61,7 @@ resolve_analytics_job_enabled = DatabricksHelpers.resolve_analytics_job_enabled
 resolve_analytics_job_name = DatabricksHelpers.resolve_analytics_job_name
 resolve_app_registry_context = DatabricksHelpers.resolve_app_registry_context
 get_databricks_client = DatabricksHelpers.get_databricks_client
+get_data_plane_client = DatabricksHelpers.get_data_plane_client
 get_databricks_credentials = DatabricksHelpers.get_databricks_credentials
 get_build_sql_credentials = DatabricksHelpers.get_build_sql_credentials
 get_delta_databricks_credentials = DatabricksHelpers.get_delta_databricks_credentials
@@ -86,6 +87,7 @@ __all__ = [
     "resolve_analytics_job_name",
     "resolve_app_registry_context",
     "get_databricks_client",
+    "get_data_plane_client",
     "get_databricks_credentials",
     "get_build_sql_credentials",
     "get_delta_databricks_credentials",

@@ -7,7 +7,8 @@ from functools import partial
 from typing import Any, Callable, Dict, Tuple
 
 import back.core.databricks as _databricks
-from back.core.errors import ValidationError
+from back.core.databricks.request_identity import get_request_identity
+from back.core.errors import AuthorizationError, ValidationError
 from back.core.logging import get_logger
 from shared.config.constants import DEFAULT_BASE_URI
 from shared.llm_target import normalize_llm_endpoint_kind
@@ -464,6 +465,43 @@ class DatabricksHelpers:
             )
 
         return None
+
+    @staticmethod
+    def get_data_plane_client(domain, settings):
+        """Return a Databricks client bound to the caller for UC data reads.
+
+        In Databricks App mode the client authenticates with the caller's
+        forwarded OAuth token (on-behalf-of), so Unity Catalog governs what
+        can be read. A missing forwarded token is a hard failure — we never
+        fall back to the app service principal for data-plane reads.
+
+        In local / PAT / CLI mode there is no proxy identity, so this behaves
+        exactly like :meth:`get_databricks_client`.
+        """
+        if not _databricks.is_databricks_app():
+            return DatabricksHelpers.get_databricks_client(domain, settings)
+
+        identity = get_request_identity()
+        if not identity.user_token:
+            raise AuthorizationError(
+                "User authorization is required for this data access. "
+                "The Databricks Apps proxy did not forward a user token."
+            )
+
+        dbcfg = _domain_databricks(domain)
+        host = (
+            dbcfg.get("host")
+            or settings.databricks_host
+            or _databricks.get_workspace_host()
+        )
+        warehouse_id = DatabricksHelpers.resolve_warehouse_id(domain, settings)
+        use_cloud_fetch = DatabricksHelpers.resolve_use_cloud_fetch(domain, settings)
+        return _databricks.DatabricksClient(
+            host=host,
+            token=identity.user_token,
+            warehouse_id=warehouse_id,
+            use_cloud_fetch=use_cloud_fetch,
+        )
 
     @staticmethod
     def get_databricks_credentials(domain, settings) -> Tuple[str, str, str]:
