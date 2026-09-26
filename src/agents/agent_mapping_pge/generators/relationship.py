@@ -164,6 +164,13 @@ READ BOTH SQLs: they are the source of truth for your endpoint values.
 overlap_pct, kind} and candidate_tables[] the Planner curated. Prefer \
 high-overlap, high-confidence joins.
 
+METRIC VIEW SOURCES (CRITICAL)
+If a source table's object_kind is "metric_view", NEVER query it with \
+SELECT *. Project its dimensions directly and wrap each measure column in \
+MEASURE(), with a GROUP BY over the projected dimensions. Endpoint columns \
+(source_id / target_id) MUST be dimensions (or expressions over dimensions) — \
+a measure is an aggregate and can never be a join key or endpoint id.
+
 THE EDGE MUST CONNECT EXISTING NODES
 An edge row is (source_id, target_id). Each value MUST already exist as a \
 node id in the corresponding entity, or it "dangles" and the mapping is \

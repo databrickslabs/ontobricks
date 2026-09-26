@@ -215,6 +215,16 @@ BOTH to a common type (``CAST(... AS STRING)`` is the safe default). A \
 ``CAST_INVALID_INPUT`` / type-mismatch error from execute_sql always means a \
 column's types differ across branches — fix the casts, do not change the ID.
 
+METRIC VIEW SOURCES (CRITICAL)
+If a source table's object_kind is "metric_view", it is a Unity Catalog metric \
+view and MUST NOT be queried with SELECT *. Project its dimension columns \
+directly and wrap EACH measure column in MEASURE(): \
+`SELECT <dim1>, <dim2>, MEASURE(<measure>) AS <measure> FROM <table> \
+GROUP BY <dim1>, <dim2>`. Only columns whose role is "measure" go inside \
+MEASURE(); role "dimension" columns are projected raw and listed in GROUP BY. \
+Never use a measure column as the ID (canonical identifier) — an ID must be a \
+dimension. A dimension-only metric view is projected without GROUP BY.
+
 TOOLS
 You have three tools:
   • execute_sql           – Validate the composed SELECT before submitting. \

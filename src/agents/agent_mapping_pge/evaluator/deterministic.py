@@ -79,6 +79,67 @@ def _fail(
     )
 
 
+def check_metric_view_sql(
+    sql: str, source_columns: List[dict]
+) -> Optional[EvalFailure]:
+    """Static guard for metric-view SQL. Returns a failure or ``None``.
+
+    A metric view cannot be queried with ``SELECT *``; every referenced measure
+    must be wrapped in ``MEASURE()`` and, when any measure is projected, the
+    query must ``GROUP BY`` its dimensions. This is a cheap pre-execution check;
+    the runtime ``sql_execution`` check remains the backstop for anything subtle.
+
+    ``source_columns`` is the metric view's column list, each ``{"name","role"}``
+    (``role`` in ``{"dimension","measure"}``).
+    """
+    import re
+
+    text = sql or ""
+    if re.search(r"(?i)\bselect\s+\*", text):
+        return _fail(
+            check="metric_view_sql",
+            expected="explicit dimension / MEASURE projection",
+            observed="SELECT *",
+            hint=(
+                "A metric view cannot be queried with SELECT *. Project the "
+                "dimension columns directly and wrap each measure in MEASURE()."
+            ),
+        )
+
+    measures = [c["name"] for c in source_columns if c.get("role") == "measure"]
+    wrapped = {
+        m.lower()
+        for m in re.findall(r"(?i)MEASURE\(\s*`?([A-Za-z0-9_]+)`?\s*\)", text)
+    }
+    referenced = [
+        m
+        for m in measures
+        if re.search(rf"(?i)(?<![A-Za-z0-9_])`?{re.escape(m)}`?(?![A-Za-z0-9_])", text)
+    ]
+    unwrapped = [m for m in referenced if m.lower() not in wrapped]
+    if unwrapped:
+        return _fail(
+            check="metric_view_sql",
+            expected="measures wrapped in MEASURE()",
+            observed=f"unwrapped: {unwrapped}",
+            hint=(
+                f"Wrap metric-view measure column(s) {unwrapped} in MEASURE(...): "
+                "e.g. MEASURE(revenue) AS revenue."
+            ),
+        )
+    if referenced and not re.search(r"(?i)\bgroup\s+by\b", text):
+        return _fail(
+            check="metric_view_sql",
+            expected="GROUP BY over dimensions",
+            observed="no GROUP BY",
+            hint=(
+                "A metric-view query that projects a measure must GROUP BY the "
+                "projected dimension columns."
+            ),
+        )
+    return None
+
+
 class _SqlExecError(Exception):
     """A generated mapping's SQL parsed but failed at execution time.
 
@@ -210,6 +271,11 @@ def evaluate_entity_mapping(
 
     failures: List[EvalFailure] = []
     bubble = False
+
+    if mapping.get("source_object_kind") == "metric_view":
+        mv_fail = check_metric_view_sql(sql, mapping.get("source_columns") or [])
+        if mv_fail is not None:
+            failures.append(mv_fail)
 
     if row_count == 0:
         failures.append(
@@ -413,6 +479,11 @@ def evaluate_relationship_mapping(
 
     failures: List[EvalFailure] = []
     bubble = False
+
+    if mapping.get("source_object_kind") == "metric_view":
+        mv_fail = check_metric_view_sql(sql, mapping.get("source_columns") or [])
+        if mv_fail is not None:
+            failures.append(mv_fail)
 
     if total_edges == 0:
         failures.append(

@@ -40,14 +40,21 @@ class TableRoleCandidate:
 
 @dataclass
 class TableRole:
-    """A source table together with its ranked ontology-class candidates."""
+    """A source table together with its ranked ontology-class candidates.
+
+    ``object_kind`` (``'table' | 'view' | 'metric_view'``) tells the Generator
+    how to query the source: a metric view must be projected with ``MEASURE()``
+    over its measures and ``GROUP BY`` its dimensions, never ``SELECT *``.
+    """
 
     table: str  # full name catalog.schema.table
+    object_kind: str = "table"
     ontology_class_candidates: List[TableRoleCandidate] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "table": self.table,
+            "object_kind": self.object_kind,
             "ontology_class_candidates": [
                 c.to_dict() for c in self.ontology_class_candidates
             ],
@@ -57,6 +64,7 @@ class TableRole:
     def from_dict(cls, data: Dict[str, Any]) -> "TableRole":
         return cls(
             table=data["table"],
+            object_kind=data.get("object_kind", "table"),
             ontology_class_candidates=[
                 TableRoleCandidate.from_dict(c)
                 for c in data.get("ontology_class_candidates", [])
