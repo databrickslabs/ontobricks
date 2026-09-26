@@ -10,6 +10,7 @@ module object (late binding) rather than importing the names directly.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import os
 import time
@@ -23,6 +24,56 @@ logger = logging.getLogger(__name__)
 # Cached M2M OAuth token (module-level to survive across _get_auth_headers calls)
 _oauth_cache: dict = {"token": "", "ts": 0.0}
 _OAUTH_TOKEN_TTL = 3000  # refresh well before the typical 3600 s expiry
+
+# ── End-user identity forwarding (OBO) ────────────────────────────────────
+# The MCP server authenticates to the main app with its own M2M principal, but
+# data-plane (UC / graph) routes must resolve the *end user* so OBO + Team
+# gating apply. ``SessionScopeMiddleware`` captures the inbound
+# ``x-forwarded-*`` headers per tool call and binds them here; every outbound
+# ``_get`` / ``_post`` merges them alongside the M2M ``Authorization`` so the
+# main app can fail-closed when the user identity is absent.
+_FWD: "contextvars.ContextVar[dict]" = contextvars.ContextVar(
+    "mcp_fwd_identity", default={}
+)
+
+# Server mode (``local`` / ``mounted`` / ``databricks``). Set once by
+# ``MCPServerSession.__init__`` so the module-level ``_get`` / ``_post`` know
+# which auth strategy to mint without threading ``mode`` through every call.
+_current_mode: str = "local"
+
+
+def set_mode(mode: str) -> None:
+    """Record the server mode used to mint outbound auth headers."""
+    global _current_mode
+    _current_mode = mode
+
+
+def set_forwarded_identity(email: str = "", user_token: str = "") -> None:
+    """Bind the end-user identity to forward to the main app (per request)."""
+    fwd: dict = {}
+    if email:
+        fwd["x-forwarded-email"] = email
+    if user_token:
+        fwd["x-forwarded-access-token"] = user_token
+    _FWD.set(fwd)
+
+
+def clear_forwarded_identity() -> None:
+    """Drop any bound end-user identity (call in a request ``finally``)."""
+    _FWD.set({})
+
+
+def _merged_headers(mode: str | None = None) -> dict:
+    """M2M auth headers merged with the forwarded end-user identity.
+
+    Resolved through the module object so tests can monkeypatch
+    ``_get_auth_headers``. Forwarded ``x-forwarded-*`` headers never override
+    the M2M ``Authorization`` (they occupy distinct header names).
+    """
+    m = mode if mode is not None else _current_mode
+    headers = dict(_get_auth_headers(m))
+    headers.update(_FWD.get())
+    return headers
 
 
 def _base_url(mode: str) -> str:
@@ -172,7 +223,9 @@ async def _get(
             "GET %s%s params=%s (attempt %d)", client.base_url, path, params or {}, attempt + 1
         )
         started = time.monotonic()
-        resp = await client.get(path, params=params, timeout=120)
+        resp = await client.get(
+            path, params=params, headers=_merged_headers(), timeout=120
+        )
         elapsed_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""
@@ -213,7 +266,9 @@ async def _post(
     while True:
         logger.info("POST %s%s (attempt %d)", client.base_url, path, attempt + 1)
         started = time.monotonic()
-        resp = await client.post(path, json=json or {}, timeout=120)
+        resp = await client.post(
+            path, json=json or {}, headers=_merged_headers(), timeout=120
+        )
         elapsed_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             body_excerpt = resp.text[:500].replace("\n", " ") if resp.text else ""

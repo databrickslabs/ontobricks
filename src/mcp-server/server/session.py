@@ -62,6 +62,9 @@ class MCPServerSession:
     def __init__(self, mode: str) -> None:
         self.mode = mode
         self.base = _http._base_url(mode)
+        # Let the module-level ``_get`` / ``_post`` mint the right auth headers
+        # (and merge the forwarded end-user identity) without threading ``mode``.
+        _http.set_mode(mode)
 
         # Per-connection state (selected domain + label/action caches) lives in
         # ``_domain_states`` keyed by MCP session id, so concurrent clients
