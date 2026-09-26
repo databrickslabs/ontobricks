@@ -12,6 +12,28 @@ let loadMetadataWidgetInitialized = false; // Track if widget is initialized
 let pendingLoadCatalog = ''; // Catalog selected in the load metadata modal
 let pendingLoadSchema = ''; // Schema selected in the load metadata modal
 
+// Visual metadata for a data-source object kind (table | view | metric_view).
+// Returns the row icon, its color class, and an optional inline badge.
+function objectKindMeta(objectKind) {
+    switch (objectKind) {
+        case 'metric_view':
+            return {
+                icon: 'bi-graph-up-arrow',
+                iconClass: 'text-info',
+                badge: '<span class="badge bg-info ms-1">Metric View</span>',
+            };
+        case 'view':
+            return {
+                icon: 'bi-eye',
+                iconClass: 'text-secondary',
+                badge: '<span class="badge bg-secondary ms-1">View</span>',
+            };
+        case 'table':
+        default:
+            return { icon: 'bi-table', iconClass: 'text-primary', badge: '' };
+    }
+}
+
 const _metadataGauges = {};
 
 function _drawMetadataGauge(canvasId, score) {
@@ -318,6 +340,7 @@ function showTableSelectionModal(catalog, schema, perms) {
         const statusBadge = table.already_loaded 
             ? '<span class="badge bg-info">Already loaded</span>' 
             : '<span class="badge bg-success">New</span>';
+        const kind = objectKindMeta(table.object_kind);
         
         html += `
             <tr class="import-table-row ${table.already_loaded ? 'table-light' : ''}" data-table="${table.name}">
@@ -327,8 +350,9 @@ function showTableSelectionModal(catalog, schema, perms) {
                            ${isSelected ? 'checked' : ''}>
                 </td>
                 <td>
-                    <i class="bi bi-table text-primary me-1"></i>
+                    <i class="bi ${kind.icon} ${kind.iconClass} me-1"></i>
                     <strong>${table.name}</strong>
+                    ${kind.badge}
                 </td>
                 <td>${statusBadge}</td>
             </tr>
@@ -710,8 +734,9 @@ function displayMetadataPreview(metadata) {
                            ${isMarked ? 'checked' : ''}>
                 </td>
                 <td class="meta-cursor-pointer" data-meta-action="table-details" data-table-index="${index}" title="${fullName}">
-                    <i class="bi bi-table text-primary me-1"></i>
+                    <i class="bi ${objectKindMeta(table.object_kind).icon} ${objectKindMeta(table.object_kind).iconClass} me-1"></i>
                     <strong>${displayName}</strong>
+                    ${objectKindMeta(table.object_kind).badge}
                 </td>
                 <td class="meta-cursor-pointer" data-meta-action="open-ds-modal" data-table-index="${index}" title="Click to change data source">
                     ${dataSource
