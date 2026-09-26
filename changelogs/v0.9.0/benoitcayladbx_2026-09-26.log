@@ -179,3 +179,36 @@ Modified files:
 
 Tests:
 - `uv run --frozen pytest tests/units/front -q` → 1342 passed.
+
+## Make the "Data Access & Permissions" block backend-specific
+
+Context:
+The access/permissions info in the Backend tab previously listed all three
+backends in one static table. Show only the authorization details for the
+backend the domain actually uses, updating live when the selection changes.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Replaced the all-backends table with three `.graph-access-detail` panels
+   (`data-backend="databricks|lakebase|neo4j"`). Only the panel matching
+   `domain.graph_backend` is shown on server render; each panel spells out the
+   identity (OBO signed-in user vs service principal vs Bolt profile), the read
+   requirements (UC grants + Team, or Team-only), and the build identity. The
+   Team-gate/admin-bypass/local-dev intro stays generic.
+2. `src/front/static/domain/js/domain-information.js`
+   `applyGraphlessConstraints()` now toggles `.graph-access-detail` panels so the
+   visible detail follows the selected backend live (on change / init / rehydrate),
+   in addition to hiding the whole section for No Backend.
+3. `tests/units/front/test_kg_access_info.py`
+   Reworked to assert one panel per backend, that exactly the selected backend's
+   panel is visible (lakehouse/lakebase/neo4j + default lakebase), per-panel copy
+   matches the auth model, and the JS shows only the matching panel.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_kg_access_info.py
+
+Tests:
+- `uv run --frozen pytest tests/units/front -q` → 1347 passed.

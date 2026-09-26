@@ -96,6 +96,11 @@ function applyGraphlessConstraints() {
         el.checked = !graphless;
     });
     if (typeof syncMcpSelectAll === 'function') syncMcpSelectAll();
+
+    // Show only the access/permissions detail for the selected backend.
+    document.querySelectorAll('.graph-access-detail').forEach(el => {
+        el.classList.toggle('d-none', el.dataset.backend !== backend);
+    });
 }
 
 // Populate the Neo4j connection dropdown from Settings named connections.

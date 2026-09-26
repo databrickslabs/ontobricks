@@ -372,56 +372,69 @@
                             </small>
                         </div>
 
-                        <!-- Data access & permissions per backend -->
+                        <!-- Data access & permissions for the selected backend -->
                         <div class="alert alert-light border mb-0 {% if domain.graph_backend == 'none' %}d-none{% endif %}"
                              id="graphAccessInfoSection">
                             <h6 class="alert-heading mb-2"><i class="bi bi-shield-lock me-1"></i> Data Access &amp; Permissions</h6>
-                            <p class="small mb-2">
-                                Who may read this domain's graph data &mdash; and whose identity the query runs
-                                under &mdash; depends on the backend. In Databricks Apps every graph read also
-                                requires <strong>Team membership</strong> on this domain
-                                (<em>Viewer</em> role or higher); App administrators bypass. These checks are
-                                disabled in local development.
+                            <p class="small mb-3">
+                                Whose identity a graph read runs under depends on the backend selected above.
+                                In Databricks Apps every graph read also requires <strong>Team membership</strong>
+                                on this domain (<em>Viewer</em> role or higher); App administrators bypass, and
+                                these checks are disabled in local development.
                             </p>
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle small mb-2">
-                                    <thead>
-                                        <tr>
-                                            <th scope="col">Backend</th>
-                                            <th scope="col">Reads run as</th>
-                                            <th scope="col">OBO (user identity)</th>
-                                            <th scope="col">Read requires</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td><i class="bi bi-hdd-network me-1"></i>Lakehouse <span class="text-muted">(Unity Catalog)</span></td>
-                                            <td>The signed-in user</td>
-                                            <td><i class="bi bi-check-circle-fill text-success me-1"></i>Yes</td>
-                                            <td>Unity Catalog grants on the data <em>and</em> Team Viewer+</td>
-                                        </tr>
-                                        <tr>
-                                            <td><i class="bi bi-database me-1"></i>Lakebase <span class="text-muted">(Postgres)</span></td>
-                                            <td>The app service principal</td>
-                                            <td><i class="bi bi-dash-circle text-muted me-1"></i>No</td>
-                                            <td>Team Viewer+</td>
-                                        </tr>
-                                        <tr>
-                                            <td><i class="bi bi-diagram-3 me-1"></i>Neo4j</td>
-                                            <td>The stored Bolt profile</td>
-                                            <td><i class="bi bi-dash-circle text-muted me-1"></i>No</td>
-                                            <td>Team Viewer+</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+
+                            {% set _backend = domain.graph_backend or 'lakebase' %}
+
+                            <!-- Lakehouse (Unity Catalog) — OBO -->
+                            <div class="graph-access-detail {% if _backend != 'databricks' %}d-none{% endif %}"
+                                 data-backend="databricks">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-hdd-network me-1"></i>Lakehouse <span class="text-muted">(Unity Catalog)</span>
+                                </div>
+                                <ul class="small mb-0">
+                                    <li><strong>Reads run as</strong> the signed-in user &mdash;
+                                        <i class="bi bi-check-circle-fill text-success me-1"></i>on-behalf-of (OBO).</li>
+                                    <li><strong>Read requires</strong> the caller's own Unity Catalog grants on the
+                                        data (<code>USE CATALOG</code> / <code>USE SCHEMA</code> / <code>SELECT</code>,
+                                        and <code>EXECUTE</code> for functions) <em>and</em> Team Viewer+.</li>
+                                    <li>A user who lacks the required UC grants is <strong>denied</strong> &mdash; the
+                                        read never silently falls back to the service principal.</li>
+                                    <li>The <strong>build</strong> (materialising the graph) runs as the app service
+                                        principal, not the user.</li>
+                                </ul>
                             </div>
-                            <p class="small text-muted mb-0">
-                                <i class="bi bi-info-circle me-1"></i>
-                                The <strong>build</strong> (materialising the graph) always runs as the app
-                                service principal, regardless of backend. On Lakehouse a user who lacks the
-                                required Unity Catalog grants is denied &mdash; the read never silently falls
-                                back to the service principal.
-                            </p>
+
+                            <!-- Lakebase (Postgres) — no OBO -->
+                            <div class="graph-access-detail {% if _backend != 'lakebase' %}d-none{% endif %}"
+                                 data-backend="lakebase">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-database me-1"></i>Lakebase <span class="text-muted">(Postgres)</span>
+                                </div>
+                                <ul class="small mb-0">
+                                    <li><strong>Reads run as</strong> the app service principal &mdash;
+                                        <i class="bi bi-dash-circle text-muted me-1"></i>no OBO (Postgres carries no
+                                        Unity Catalog identity).</li>
+                                    <li><strong>Read requires</strong> Team membership on this domain
+                                        (Viewer role or higher); the query is pinned to this domain's graph table.</li>
+                                    <li>Both reads and the build use the same service-principal identity.</li>
+                                </ul>
+                            </div>
+
+                            <!-- Neo4j — no OBO -->
+                            <div class="graph-access-detail {% if _backend != 'neo4j' %}d-none{% endif %}"
+                                 data-backend="neo4j">
+                                <div class="fw-semibold mb-1">
+                                    <i class="bi bi-diagram-3 me-1"></i>Neo4j
+                                </div>
+                                <ul class="small mb-0">
+                                    <li><strong>Reads run as</strong> the stored Bolt profile
+                                        (<a href="/settings?section=neo4j">Settings &rarr; Neo4j</a>) &mdash;
+                                        <i class="bi bi-dash-circle text-muted me-1"></i>no OBO.</li>
+                                    <li><strong>Read requires</strong> Team membership on this domain
+                                        (Viewer role or higher); queries are pinned to this domain's Neo4j database.</li>
+                                    <li>Both reads and the build use the same Bolt profile identity.</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
 
