@@ -161,3 +161,21 @@ Tests:
 
 Note: static informational alert built from existing Bootstrap + `--db-*`
 tokens (no new CSS); not exercised with a live browser pass.
+
+## Rename Domain → Information "Knowledge Graph" tab to "Backend"
+
+Context:
+The tab fronts the graph-backend selection and now the per-backend access
+matrix, so "Backend" reads truer than "Knowledge Graph".
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Renamed the `#tab-triplestore` tab label from "Knowledge Graph" to "Backend"
+   and switched its icon to `bi-hdd-network` (matching the Graph Backend field).
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+
+Tests:
+- `uv run --frozen pytest tests/units/front -q` → 1342 passed.
