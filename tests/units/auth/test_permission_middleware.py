@@ -1510,3 +1510,70 @@ class TestGenerateCompleteLifecycleGate:
         it is not a design mutation."""
         _, _, result = _dispatch_with_edit_lock("Bob", path=path)
         assert result.get("passed")
+
+
+# ------------------------------------------------------------------
+# Request identity binding (OBO)
+# ------------------------------------------------------------------
+
+
+class TestRequestIdentityBinding:
+    """PermissionMiddleware binds the caller identity for the request scope."""
+
+    def test_identity_bound_during_call_next(self):
+        from shared.fastapi.main import PermissionMiddleware
+        from back.core.databricks.request_identity import get_request_identity
+
+        req = _make_request(
+            method="GET",
+            path="/dtwin/query",
+            headers={"x-forwarded-access-token": "utok"},
+        )
+        seen = {}
+
+        async def call_next(r):
+            ident = get_request_identity()
+            seen["email"] = ident.email
+            seen["token"] = ident.user_token
+            seen["domain_role"] = ident.domain_role
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+
+        with (
+            patch("back.core.databricks.is_databricks_app", return_value=True),
+            patch.object(
+                PermissionMiddleware,
+                "_resolve_roles",
+                return_value=(ROLE_APP_USER, ROLE_VIEWER),
+            ),
+        ):
+            _run(middleware.dispatch(req, call_next))
+
+        assert seen["email"] == "user@test.com"
+        assert seen["token"] == "utok"
+        assert seen["domain_role"] == ROLE_VIEWER
+        assert req.state.user_token == "utok"
+        # Identity is reset after the request completes.
+        assert get_request_identity().user_token == ""
+
+    def test_local_dev_binds_admin_identity(self):
+        from shared.fastapi.main import PermissionMiddleware
+        from back.core.databricks.request_identity import get_request_identity
+
+        req = _make_request(method="GET", path="/dtwin/query")
+        seen = {}
+
+        async def call_next(r):
+            seen["role"] = get_request_identity().app_role
+            seen["token"] = get_request_identity().user_token
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+
+        with patch("back.core.databricks.is_databricks_app", return_value=False):
+            _run(middleware.dispatch(req, call_next))
+
+        assert seen["role"] == "admin"
+        assert seen["token"] == ""
+        assert get_request_identity().user_token == ""

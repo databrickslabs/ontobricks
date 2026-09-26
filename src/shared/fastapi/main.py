@@ -19,6 +19,11 @@ from contextlib import asynccontextmanager
 from shared.config.settings import get_settings
 from shared.config.constants import APP_VERSION, SESSION_COOKIE_NAME
 from back.objects.session import FileSessionMiddleware, reap_expired_sessions
+from back.core.databricks.request_identity import (
+    RequestIdentity,
+    set_request_identity,
+    reset_request_identity,
+)
 from back.core.logging import setup_logging, get_logger
 from shared.fastapi.ui_branding import UIBrandingMiddleware
 
@@ -367,7 +372,19 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 request.state.user_email = get_local_user_email()
             request.state.user_role = "admin"
             request.state.user_domain_role = "admin"
-            return await call_next(request)
+            request.state.user_token = ""
+            _tok = set_request_identity(
+                RequestIdentity(
+                    email=request.state.user_email,
+                    user_token="",
+                    app_role="admin",
+                    domain_role="admin",
+                )
+            )
+            try:
+                return await call_next(request)
+            finally:
+                reset_request_identity(_tok)
 
         # Raw routed path, not request.url.path: the latter is reconstructed
         # from the Host header and could be poisoned (BadHost / CVE-2026-48710).
@@ -376,7 +393,12 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in _PERM_BYPASS_PREFIXES):
             request.state.user_role = ""
             request.state.user_domain_role = ""
-            return await call_next(request)
+            request.state.user_token = ""
+            _tok = set_request_identity(RequestIdentity())
+            try:
+                return await call_next(request)
+            finally:
+                reset_request_identity(_tok)
 
         try:
             role, domain_role = self._resolve_roles(request, email)
@@ -488,7 +510,20 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                     "read-only access. Take over editing to make changes.",
                 )
 
-        return await call_next(request)
+        user_token = request.headers.get("x-forwarded-access-token", "") or ""
+        request.state.user_token = user_token
+        _tok = set_request_identity(
+            RequestIdentity(
+                email=email,
+                user_token=user_token,
+                app_role=role,
+                domain_role=domain_role,
+            )
+        )
+        try:
+            return await call_next(request)
+        finally:
+            reset_request_identity(_tok)
 
     @staticmethod
     def _session_edit_lock_holder(request: Request) -> str:
