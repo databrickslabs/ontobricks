@@ -100,12 +100,17 @@ and `source_columns`.
 - **Metric-view set:** `tests/eval/datasets/agent_mapping_pge/metric_view.jsonl`
   (mirrored at `.planning/agents/agent_mapping_pge/eval/metric_view.jsonl`) — 10
   cases (4 happy / 3 ambiguous / 3 adversarial) asserting `MEASURE()` + `GROUP
-  BY`, no `SELECT *`, and measures never used as ids. Kept separate from the
-  parsed-corpus `baseline.jsonl` because the current
-  `run_agent_mapping_pge.py` runner is a document-corpus contract (needs
-  `input.documents`); a SQL-generation runner over a live metric view is the
-  remaining harness to wire. `check_metric_view_sql` already enforces the
-  contract deterministically in unit tests.
+  BY`, no `SELECT *`, and measures never used as ids.   Kept separate from the
+  parsed-corpus `baseline.jsonl` because that runner is a document-corpus
+  contract (needs `input.documents`). Scored by a dedicated SQL-generation
+  runner, `tests/eval/run_agent_mapping_pge_metric.py` (judge in
+  `tests/eval/metric_view_contract.py`, threshold
+  `mapping_pge.metric_view_sql_correctness`): dry-run validates the judge
+  against a `build_metric_view_base_sql` reference (aggregate 1.000); `--live`
+  scores the real EntityGenerator against metric views that exist in the target
+  warehouse and logs `metric_view_sql_correctness` (+ per-tag) to MLflow.
+  `check_metric_view_sql` additionally enforces the contract deterministically
+  in unit tests.
 - **Regression:** added on first production mis-mapping.
 
 ## 8. MLflow tracing

@@ -78,4 +78,7 @@ mapping_pge:
   sql_executes: 0.98
   semantic_correctness: 0.85
   parsed_corpus_contract: 0.90
+  # Metric-view SQL-generation contract (SPEC §5). Scored by
+  # run_agent_mapping_pge_metric.py against datasets/.../metric_view.jsonl.
+  metric_view_sql_correctness: 0.95
   aggregate: 0.90

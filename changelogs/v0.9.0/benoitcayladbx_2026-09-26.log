@@ -623,3 +623,52 @@ correctness is enforced deterministically by `check_metric_view_sql` and its
 unit tests in the meantime.
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 7084 passed, 315 skipped, 6 deselected, 1 xfailed in 47.50s
+
+---
+
+# Metric-view SQL-generation eval runner (agent_mapping_pge AI gate)
+
+Context:
+Close the remaining AI-feature-gate step for the UC metric-view mapping work:
+the metric-view eval set previously had no runner (the existing
+`run_agent_mapping_pge.py` is a parsed-document-corpus contract that needs
+`input.documents`). Add a dedicated SQL-generation contract that scores the
+SQL the EntityGenerator produces for a metric view against the metric-aware
+constraints, so baseline/delta runs are one command away.
+
+Changes:
+1. `tests/eval/metric_view_contract.py` (new)
+   Pure deterministic judge: loads `metric_view.jsonl`, scores a produced
+   `(sql, id_column)` against the constraint kinds (`metric_sql_no_select_star`,
+   `metric_measure_wrapped`, `metric_dimension_not_wrapped`, `metric_group_by`,
+   `metric_group_by_includes`, `metric_no_group_by_without_measure`,
+   `metric_id_is_dimension`, `metric_id_not_measure`). Provides a
+   `build_metric_view_base_sql` reference observation for dry runs and a
+   `run_contract` that logs `metric_view_sql_correctness` + per-tag scores to
+   MLflow on live runs.
+2. `tests/eval/run_agent_mapping_pge_metric.py` (new)
+   CLI: dry-run (default) validates the judge (aggregate 1.000); `--live`
+   shapes each row into a single-candidate SourceModel slice, runs
+   `run_entity_generator` against a live warehouse + Foundation Model endpoint,
+   and scores the emitted SQL. Threshold read from `thresholds.yaml`.
+3. `tests/eval/thresholds.yaml`
+   Add `mapping_pge.metric_view_sql_correctness: 0.95`.
+4. `.planning/agents/agent_mapping_pge/SPEC.md`
+   §7 now points at the runner + judge and documents the dry-run vs `--live`
+   split.
+5. `tests/units/agents/test_metric_view_eval_contract.py` (new)
+   Judge validation: reference SQL scores 1.000 on every row; SELECT *,
+   unwrapped measure, missing GROUP BY, and measure-as-id all drop the score.
+
+Modified files:
+- tests/eval/metric_view_contract.py (new)
+- tests/eval/run_agent_mapping_pge_metric.py (new)
+- tests/eval/thresholds.yaml
+- .planning/agents/agent_mapping_pge/SPEC.md
+- tests/units/agents/test_metric_view_eval_contract.py (new)
+
+Follow-up (user environment): run `--live` once metric views exist in the
+target warehouse to record the baseline `metric_view_sql_correctness` MLflow
+metric and, after any future prompt/tool change, the delta.
+
+Tests: `uv run --frozen pytest -q tests/units/agents/test_metric_view_eval_contract.py` → 8 passed. Dry-run runner aggregate 1.000 (threshold 0.950).
