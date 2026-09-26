@@ -130,6 +130,12 @@ class GraphDBFactory:
         Resolves ``domain.info.neo4j_connection`` against
         ``engine_config.connections`` (or a nested graph_engine_config root).
         The matched profile supplies URI / database / auth fields.
+
+        Authorization note (2026-09-26-domain-obo-graph-access-design): Neo4j
+        connects with the stored Bolt profile — there is no user OBO. Team
+        membership (Viewer+) is enforced at the read endpoint via
+        ``assert_domain_graph_read`` and queries are pinned to the domain's
+        database; this is intentional, not a missing OBO.
         """
         try:
             from back.core.graphdb.engine_config import (
@@ -387,7 +393,14 @@ class GraphDBFactory:
         *,
         engine_config: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
-        """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance."""
+        """Instantiate :class:`LakebaseFlatStore` on the bound Lakebase instance.
+
+        Authorization note (2026-09-26-domain-obo-graph-access-design): Lakebase
+        connects as the app service principal (``PGUSER``) — there is no user
+        OBO on Postgres. Team membership (Viewer+) is enforced at the read
+        endpoint via ``assert_domain_graph_read`` and the query is pinned to the
+        loaded domain's graph table; this is intentional, not a missing OBO.
+        """
         try:
             from back.core.graphdb.lakebase import LAKEBASE_AVAILABLE
             from back.core.graphdb.lakebase.LakebaseBase import (

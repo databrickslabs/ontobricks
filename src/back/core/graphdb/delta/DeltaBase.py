@@ -36,6 +36,18 @@ def create_databricks_client(
                 host, token = get_databricks_host_and_token(domain, settings)
                 warehouse_id = resolve_delta_warehouse_id(domain, settings)
                 use_sea = resolve_lakehouse_use_sea(domain, settings)
+                # OBO: a Delta *read* driven by a user request runs on the
+                # caller's forwarded token so Unity Catalog governs the data.
+                # Build / health-probe / background reads carry no request
+                # identity and keep the service-principal token resolved above.
+                if is_databricks_app():
+                    from back.core.databricks.request_identity import (
+                        get_request_identity,
+                    )
+
+                    user_token = get_request_identity().user_token
+                    if user_token:
+                        token = user_token
             use_cloud_fetch = resolve_use_cloud_fetch(domain, settings)
         else:
             db = getattr(domain, "databricks", None) or {}

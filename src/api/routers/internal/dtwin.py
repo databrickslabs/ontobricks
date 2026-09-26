@@ -504,6 +504,7 @@ async def detect_clusters(
     settings: Settings = Depends(get_settings),
 ):
     """Run community detection on the full knowledge graph."""
+    assert_domain_graph_read(request)
     try:
         data = await request.json()
         algorithm = data.get("algorithm", "louvain")
@@ -1634,6 +1635,7 @@ async def execute_dataquality_check(
     settings: Settings = Depends(get_settings),
 ):
     """Execute a single SHACL shape check against the triple-store VIEW."""
+    assert_domain_graph_read(request)
     try:
         data = await request.json()
         shape = data.get("shape", {})
@@ -1951,6 +1953,7 @@ async def get_inferred_triples(
     settings: Settings = Depends(get_settings),
 ):
     """Return live materialized-inference status without listing triples."""
+    assert_domain_graph_read(session_mgr.request)
     domain = get_domain(session_mgr)
     store = _require_graph_store(domain, settings)
     graph_name = effective_graph_name(domain)
@@ -2159,6 +2162,7 @@ async def dtwin_nodes_context(
     settings: Settings = Depends(get_settings),
 ):
     """Resolve node context against the active session domain."""
+    assert_domain_graph_read(session_mgr.request)
     domain = get_domain(session_mgr)
     payload = await NodeContextService.resolve_context(
         domain,
@@ -2862,6 +2866,7 @@ async def dtwin_triples_find(
     """
     from back.core.query_limits import get_graph_chat_result_cap
 
+    assert_domain_graph_read(session_mgr.request)
     if not entity_type and not search:
         raise ValidationError("Provide at least entity_type or search")
 
@@ -2935,6 +2940,7 @@ async def dtwin_neighbors(
     present in the visited set are returned, so the front-end can render
     proper edges without ghost endpoints.
     """
+    assert_domain_graph_read(session_mgr.request)
     if not uri:
         raise ValidationError("Provide 'uri'")
 
