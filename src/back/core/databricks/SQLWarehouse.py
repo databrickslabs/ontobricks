@@ -5,6 +5,7 @@ through a SQL Warehouse endpoint.  Connections are pooled so that
 repeated queries reuse existing TCP/TLS sessions.
 """
 
+import hashlib
 import queue
 import threading
 import time
@@ -108,14 +109,38 @@ class SQLWarehouse:
 
     def __init__(self, auth: DatabricksAuth) -> None:
         self._auth = auth
-        self._pool: queue.Queue[_PooledConnection] = queue.Queue(
-            maxsize=_POOL_MAX_SIZE
-        )
+        # One pool per identity: connections authenticated with different
+        # tokens must never be shared, or one caller could reuse another's
+        # on-behalf-of (OBO) session. Keyed by :meth:`_identity_key`.
+        self._pools: "dict[str, queue.Queue[_PooledConnection]]" = {}
         self._pool_lock = threading.Lock()
 
     @property
     def warehouse_id(self) -> str:
         return self._auth.warehouse_id
+
+    def _identity_key(self) -> str:
+        """Stable per-identity pool key.
+
+        The app OAuth / service-principal path collapses to a single ``sp``
+        bucket; a PAT / forwarded user token gets its own bucket keyed by a
+        short token hash (never the raw token).
+        """
+        token = getattr(self._auth, "token", "") or ""
+        if not token:
+            return "sp"
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+        return f"user:{digest}"
+
+    def _pool_for_identity(self) -> "queue.Queue[_PooledConnection]":
+        """Return (creating if needed) the connection pool for this identity."""
+        key = self._identity_key()
+        with self._pool_lock:
+            pool = self._pools.get(key)
+            if pool is None:
+                pool = queue.Queue(maxsize=_POOL_MAX_SIZE)
+                self._pools[key] = pool
+            return pool
 
     def _require_warehouse(self) -> None:
         if not self._auth.warehouse_id:
@@ -134,9 +159,10 @@ class SQLWarehouse:
         be broken the caller should **not** return it (the ``except`` branch
         takes care of that).
         """
+        pool = self._pool_for_identity()
         conn: Optional[_PooledConnection] = None
         try:
-            conn = self._pool.get_nowait()
+            conn = pool.get_nowait()
             if conn.age > _POOL_MAX_IDLE_SECS:
                 self._close_quietly(conn)
                 conn = None
@@ -153,7 +179,7 @@ class SQLWarehouse:
             raise
         else:
             try:
-                self._pool.put_nowait(conn)
+                pool.put_nowait(conn)
             except queue.Full:
                 self._close_quietly(conn)
 
