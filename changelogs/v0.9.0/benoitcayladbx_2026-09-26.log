@@ -1,0 +1,91 @@
+# Domain-scoped OBO user access + Team-gated graph data access
+
+Context:
+Enforce per-domain, on-behalf-of (OBO) access for graph data. In Databricks
+Apps, every non-build Unity Catalog data read now runs as the signed-in user
+(their forwarded token), so UC governance applies per user instead of the app
+service principal. Backends that carry no UC identity (Lakebase Postgres,
+Neo4j) are gated by Team membership — the caller must hold at least the Viewer
+role on the loaded domain. Build (view/triplestore materialisation) stays on
+the control-plane service principal. The MCP server forwards the end-user
+identity so the same rules apply to MCP-driven reads. All data-plane reads are
+fail-closed: no forwarded user token → access denied (never a silent SP
+fallback). Local dev is unaffected (OBO and the Team gate are no-ops outside
+App mode). Design + plan: `docs/superpowers/specs/2026-09-26-domain-obo-graph-access-design.md`,
+`docs/superpowers/plans/2026-09-26-domain-obo-graph-access.md`.
+
+Changes:
+
+1. `src/back/core/databricks/request_identity.py`
+   New request-scoped `RequestIdentity` (email, user_token, app_role,
+   domain_role) backed by a `ContextVar`, with set/get/reset helpers.
+2. `src/shared/fastapi/main.py`
+   `PermissionMiddleware` stamps the request identity (and `request.state.user_token`
+   from `x-forwarded-access-token`) around every `call_next`, with try/finally reset.
+3. `src/back/core/helpers/DatabricksHelpers.py`, `src/back/core/helpers/__init__.py`
+   Added `get_data_plane_client(domain, settings)` — mints a user-token client in
+   App mode (fail-closed: raises `AuthorizationError` when no user token), delegates
+   to the SP client in local mode. Exported from the helpers package.
+4. `src/back/core/databricks/SQLWarehouse.py`
+   Connection pools keyed by caller identity (`sp` vs `user:<sha256(token)[:16]>`)
+   so a connection minted for one user is never reused for another.
+5. `src/api/routers/internal/_graph_access.py`
+   New `assert_domain_graph_read(request)` Team gate: no-op in local mode, App
+   admins bypass, everyone else needs Viewer+ on the loaded domain.
+6. `src/back/objects/digitaltwin/DigitalTwin.py`, `src/api/routers/internal/dtwin.py`
+   SPARQL / GraphQL / triples / neighbors / clusters / DQ / inferred / node-context
+   reads run via `get_data_plane_client` and are guarded by `assert_domain_graph_read`.
+7. `src/back/core/graphdb/delta/DeltaBase.py`, `src/back/core/graphdb/GraphDBFactory.py`
+   Delta read path overrides the token with the request user token (OBO) in App
+   mode; Lakebase/Neo4j keep SP + Team-gate (documented via intent comments).
+8. `src/api/routers/internal/mapping.py`, `.../VirtualAttributeService.py`,
+   `.../NodeContextService.py`
+   Mapping preview / test-query / UC browse, Class Action `EXECUTE`, and
+   virtual-attribute compute repointed to `get_data_plane_client`. LLM/wizard
+   (model-serving) paths left on the control-plane.
+9. `src/mcp-server/server/http_client.py`, `.../session.py`, `.../session_scope.py`
+   MCP forwards the end-user identity: `set_forwarded_identity` / `_merged_headers`
+   attach `x-forwarded-email` / `x-forwarded-access-token` (+ M2M `Authorization`)
+   on every `_get` / `_post`; the session-scope middleware binds the inbound
+   headers per tool call and clears them in `finally`; session sets the server mode.
+10. Docs — `docs/deployment.md` (§E new "On-Behalf-Of (OBO) data-plane identity"),
+    `docs/features.md` (Security OBO + per-domain gating bullets, per-identity SQL
+    pooling), `docs/data-access.md` (MCP identity forwarding note).
+
+Modified/added files:
+- src/back/core/databricks/request_identity.py (new)
+- src/shared/fastapi/main.py
+- src/back/core/helpers/DatabricksHelpers.py
+- src/back/core/helpers/__init__.py
+- src/back/core/databricks/SQLWarehouse.py
+- src/api/routers/internal/_graph_access.py (new)
+- src/back/objects/digitaltwin/DigitalTwin.py
+- src/api/routers/internal/dtwin.py
+- src/back/core/graphdb/delta/DeltaBase.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/api/routers/internal/mapping.py
+- src/back/objects/digitaltwin/VirtualAttributeService.py
+- src/back/objects/digitaltwin/NodeContextService.py
+- src/mcp-server/server/http_client.py
+- src/mcp-server/server/session.py
+- src/mcp-server/server/session_scope.py
+- docs/deployment.md
+- docs/features.md
+- docs/data-access.md
+- tests: tests/back/core/databricks/test_request_identity.py,
+  tests/back/core/databricks/test_sqlwarehouse_pool_identity.py,
+  tests/back/core/helpers/test_data_plane_client.py,
+  tests/units/api/test_graph_access_gate.py,
+  tests/back/core/digitaltwin/test_sparql_obo.py,
+  tests/units/api/test_explorer_access.py,
+  tests/units/api/test_mapping_obo.py,
+  tests/mcp/test_user_header_forwarding.py,
+  tests/units/api/test_mcp_dataplane_failclosed.py, plus patch-target fixups in
+  test_node_context_endpoint.py, test_virtual_attributes_endpoint.py,
+  test_node_action_endpoint.py, test_virtual_attribute_service.py,
+  test_node_context_virtual_attributes.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → 7006 passed, 316 skipped,
+  6 deselected, 1 xfailed, 32 warnings (after node-action patch fixup).
+- Full MCP suite: `uv run --frozen pytest tests/mcp -q` → 38 passed.

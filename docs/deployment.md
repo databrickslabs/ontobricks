@@ -265,6 +265,36 @@ All four layers must be satisfied before the application is fully functional. Th
 
 > **Deployment order matters.** Layer 1 bootstrap must run before the first user logs in. Layer 2 grants must be in place before any build or sync. Layer 3 grants for `ontobricks_registry` must be applied after the registry schema is initialized (step 14 in the Full Deployment Checklist). Layer 3 grants for `ontobricks_graph` must be applied after the first Knowledge Graph build creates that schema.
 
+#### On-Behalf-Of (OBO) data-plane identity — v0.9.0
+
+Since v0.9.0, **Unity Catalog data reads run on-behalf-of the signed-in user**,
+not the app service principal. Databricks Apps forward the caller's token on the
+`x-forwarded-access-token` header; `PermissionMiddleware` stamps it onto a
+request-scoped identity and the data-plane client factory
+(`DatabricksHelpers.get_data_plane_client`) mints a **user-token** Databricks
+client for every non-build UC read: SPARQL/GraphQL Delta reads, Graph Explorer
+Delta views, mapping preview / test-query / `information_schema` browse, Class
+Action `EXECUTE`, and virtual-attribute compute.
+
+Implications for Layer 2:
+
+- The **SELECT / USE / EXECUTE** grants in the table above must now be held by
+  **each end user** (or a group they belong to), not only the app SP. The app SP
+  still needs them for **build** (`CREATE VIEW` / triplestore materialisation),
+  which stays on the control-plane principal.
+- The read path is **fail-closed**: in App mode a UC data read with no forwarded
+  user token is denied (`AuthorizationError`) — it never silently falls back to
+  the SP.
+- **Lakebase Postgres and Neo4j reads keep the service-principal identity**
+  (they carry no UC identity). Access to those backends is gated by **Team
+  membership**: the caller must hold at least the **Viewer** role on the loaded
+  domain (`assert_domain_graph_read`); App admins bypass the Team check.
+- The **MCP server** authenticates to the main app with its own M2M principal
+  **and forwards** the end-user `x-forwarded-email` / `x-forwarded-access-token`
+  so the same OBO + Team rules apply to MCP-driven reads.
+- **Local dev is unchanged** — OBO and the Team gate are no-ops outside App mode
+  (`is_databricks_app()` guards), so a single developer token keeps working.
+
 ---
 
 ## 1. Local Development Setup

@@ -109,13 +109,15 @@
 - **Toast Notifications**: All user feedback uses non-blocking toast notifications (no `alert()` dialogs).
 
 ## Performance
-- **SQL Connection Pooling**: `SQLWarehouse` maintains a `queue.Queue`-based pool of database connections, eliminating per-query TLS handshake overhead.
+- **SQL Connection Pooling**: `SQLWarehouse` maintains `queue.Queue`-based pools of database connections, eliminating per-query TLS handshake overhead. Pools are **keyed by caller identity** (service principal vs a hash of each user's OBO token) so a connection minted for one user is never reused for another.
 - **Dedicated Thread Pool**: Blocking Databricks I/O runs in a dedicated `ThreadPoolExecutor` (configurable via `ONTOBRICKS_THREAD_POOL_SIZE`, default 20). Knowledge Graph stats, load, BFS, and neighbour expansion run on that pool so a slow warehouse query does not freeze the rest of the UI. Explorer preview applies seed `LIMIT` in SQL.
 - **Consistent Asset Versioning**: All static assets use deterministic `?v={{ asset_version }}` cache busting.
 
 ## Security
 - **CSRF Protection**: Double-submit cookie pattern for all state-changing requests; `X-CSRF-Token` header auto-attached by the frontend fetch wrapper.
 - **Secure Cookies**: Session cookies use `secure=True` and `samesite=lax` in Databricks Apps deployments (HTTPS-only).
+- **On-Behalf-Of (OBO) Unity Catalog access**: In Databricks Apps, every non-build UC data read runs as the **signed-in user**, not the app service principal — SPARQL/GraphQL Delta reads, Graph Explorer, mapping preview & UC browse, Class Actions (`EXECUTE`), and virtual-attribute compute all use the caller's forwarded token (`x-forwarded-access-token`). UC governance is therefore enforced per user. The path is **fail-closed**: a UC read with no forwarded user token is denied rather than silently run as the SP. Build (view/triplestore materialisation) stays on the control-plane service principal. Local dev is unaffected (OBO is a no-op outside App mode).
+- **Per-domain graph gating (Lakebase / Neo4j)**: Reads against backends that carry no UC identity (Lakebase Postgres, Neo4j) require **Team membership** on the loaded domain — at least the **Viewer** role — enforced by `assert_domain_graph_read` on every graph read endpoint; App admins bypass. The MCP server forwards the end-user identity so the same OBO + Team rules apply to MCP-driven reads.
 
 ## Observability
 - **Structured JSON Logging**: Set `LOG_FORMAT=json` for machine-readable log lines with `ts`, `level`, `logger`, `module`, `func`, `line`, `msg` fields.
