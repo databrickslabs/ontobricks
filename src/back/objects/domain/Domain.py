@@ -1737,16 +1737,26 @@ class Domain:
                     "Databricks not configured. Please configure connection in Settings.",
                 )
             client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
-            tables = await run_blocking(client.get_tables, catalog, schema)
+            # Typed listing so metric views/views are distinguishable from tables.
+            listing = await run_blocking(
+                client.list_tables_and_views, catalog, schema
+            )
+            type_by_name = {
+                r["name"]: r.get("table_type", "") for r in listing if r.get("name")
+            }
+            tables = sorted(type_by_name.keys())
             existing_metadata = self._s.catalog_metadata
             existing_table_names = set()
             if existing_metadata and existing_metadata.get("tables"):
                 existing_table_names = {t["name"] for t in existing_metadata["tables"]}
             table_list = []
-            for table_name in sorted(tables):
+            for table_name in tables:
                 table_list.append(
                     {
                         "name": table_name,
+                        "object_kind": client.catalog.object_kind_for_table_type(
+                            type_by_name.get(table_name, "")
+                        ),
                         "already_loaded": table_name in existing_table_names,
                     }
                 )
