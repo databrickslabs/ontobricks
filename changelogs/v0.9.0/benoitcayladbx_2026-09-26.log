@@ -402,3 +402,224 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 7051 passed, 315 skipped, 6 deselected, 1 xfailed in 47.08s
 
+## Red trash icon for audit-trail deletions
+
+Context: Deletion rows used the same info-coloured marker as other edits, so
+removes were easy to miss. They now use a red trash icon.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-audit.js`
+   `*_removed` (and reset) actions use `bi-trash` and `audit-marker-remove`.
+2. `src/front/static/domain/css/domain-audit.css`
+   Danger-token marker for deletions.
+3. `tests/units/front/test_domain_audit.py`
+   Contract for trash icon and red marker.
+
+Modified files:
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/css/domain-audit.css
+- tests/units/front/test_domain_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7051 passed, 315 skipped, 6 deselected, 1 xfailed in 47.25s
+
+## Audit trail diffs for SWRL, SHACL, relationships, axioms
+
+Context: Domain → Audit trail Ontology rows need ``entity | field | old → new``
+for every ontology edit, not only class CRUD. Relationships (object properties),
+SWRL, SHACL, groups, axioms/expressions, and business-rule CRUD now store
+``meta.before`` / ``meta.after``. Generate wizard remains a single summary line.
+
+Changes:
+
+1. `src/api/routers/internal/ontology.py`
+   SHACL/SWRL/axioms/expressions/business-rule save and delete (plus SWRL import)
+   record ``diff_meta``.
+2. `src/back/objects/ontology/Ontology.py`
+   Class/property delete and group member updates include full before/after.
+3. `src/back/objects/session/DomainSession.py`
+   Skip identity key ``id`` in diffs.
+4. `src/front/static/domain/js/domain-audit.js`
+   Field labels and default fields for relationships, SWRL, SHACL, axioms,
+   and rule types.
+5. `docs/user-guide.md`, `docs/architecture.md`
+   Document covered ontology edit types vs Generate wizard summary.
+6. `tests/units/front/test_domain_audit.py`, `tests/units/domain/test_change_audit.py`
+   Contracts for renderer helpers and class-delete ``meta.before``.
+
+Modified files:
+- src/api/routers/internal/ontology.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/session/DomainSession.py
+- src/front/static/domain/js/domain-audit.js
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/front/test_domain_audit.py
+- tests/units/domain/test_change_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7055 passed, 315 skipped, 6 deselected, 1 xfailed in 48.38s
+
+## Default Lakehouse access type to views only
+
+Context: On Domain → Information → Backend (Lakehouse), the Access type control
+was labelled Materialization and defaulted to a materialized Delta table.
+The product default is now a live view: faster to stand up, no copy, with
+materialization as an explicit opt-in for query speed.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   Renamed the section to Access type, retitled the table option, defaulted
+   the picker to Views only.
+2. `src/back/objects/session/DomainSession.py`
+   New domains store `lakehouse_materialization=view`.
+3. `src/front/static/global/js/navbar.js`, `src/front/static/domain/js/domain.js`
+   Off-Lakehouse saves now persist `view` so switching back stays view-only.
+4. `docs/user-guide.md`, `docs/architecture.md`
+   Documented the Access type labels and the new-domain default (legacy
+   missing values still normalise to table).
+5. `tests/units/front/test_lakehouse_materialization_ui.py`,
+   `tests/units/domain/test_domain_session.py`,
+   `tests/units/dtwin/test_databricks_build_info_materialization.py`
+   Contracts for labels, default selection, empty-session default, and
+   missing-field fallback to table.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/back/objects/session/DomainSession.py
+- src/front/static/global/js/navbar.js
+- src/front/static/domain/js/domain.js
+- docs/user-guide.md
+- docs/architecture.md
+- tests/units/front/test_lakehouse_materialization_ui.py
+- tests/units/domain/test_domain_session.py
+- tests/units/dtwin/test_databricks_build_info_materialization.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7067 passed, 315 skipped, 6 deselected, 1 xfailed in 47.11s
+
+## Left-align audit trail row headers
+
+Context: Audit trail entity/field labels sat in fixed 8rem/6rem columns, so
+short names looked inset. Tabs were also centred by `nav-fill`. Both now
+start on the left; the diff grid sizes the name and field columns to content.
+
+Changes:
+
+1. `src/front/static/domain/css/domain-audit.css`
+   Left-align `#auditTabs` labels; entity/field columns use `max-content`
+   with `justify-items: start`.
+2. `tests/units/front/test_domain_audit.py`
+   Contract for left-aligned asset, field grid, and tab labels.
+
+Modified files:
+- src/front/static/domain/css/domain-audit.css
+- tests/units/front/test_domain_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7071 passed, 315 skipped, 6 deselected, 1 xfailed in 49.16s
+
+## Audit trail lines without column gaps
+
+Context: Rows such as "Call entity → Call" still looked tabulated because
+entity/field/old/new sat in CSS grid columns. They are now one inline phrase
+with normal spaces; empty old/new values are omitted.
+
+Changes:
+
+1. `src/front/static/domain/js/domain-audit.js`
+   Join asset, field, values with spaces; skip empty sides of the arrow.
+2. `src/front/static/domain/css/domain-audit.css`
+   Drop the grid; inline nowrap ellipsis.
+3. `tests/units/front/test_domain_audit.py`
+   Contract for space-joined rows and no grid.
+
+Modified files:
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/css/domain-audit.css
+- tests/units/front/test_domain_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7079 passed, 315 skipped, 6 deselected, 1 xfailed in 47.43s
+
+
+
+---
+
+# Unity Catalog Metric Views as a first-class data source
+
+Context:
+Extend the domain metadata layer so Unity Catalog **Metric Views** load and map
+alongside plain tables and views instead of being invisible or mis-treated as
+tables. Every data source now carries an `object_kind` discriminator
+(`table` / `view` / `metric_view`); metric-view columns additionally carry a
+`role` (`dimension` / `measure`) resolved from `SHOW CREATE TABLE`. Because a
+metric view must be queried `SELECT <dims>, MEASURE(<measure>) AS <measure>
+FROM <fqn> GROUP BY <dims>` (never `SELECT *`), the `agent_mapping_pge` mapping
+agent is taught to emit metric-aware SQL and a deterministic evaluator rejects
+malformed metric-view SQL. The picker and loaded-sources list flag metric views
+with a dedicated badge. Databricks Pages and the Knowledge Store are out of
+scope. Design + plan:
+`docs/superpowers/specs/2026-09-26-uc-metric-views-as-data-source-design.md`,
+`docs/superpowers/plans/2026-09-26-uc-metric-views-as-data-source.md`.
+AI-feature gate: `.planning/agents/agent_mapping_pge/SPEC.md`.
+
+Changes:
+1. `src/back/core/databricks/uc/UnityCatalog.py`
+   Add `object_kind_for_table_type()`, metric-view detection, and
+   `get_metric_view_columns_with_roles()` (parses measure names from the DDL,
+   soft-fails to an empty set).
+2. `src/back/core/databricks/uc/MetadataService.py`
+   Tag each fetched source with `object_kind`; resolve metric-view column roles,
+   defaulting others to `dimension`. Switched to `list_tables_and_views` to
+   capture `table_type`.
+3. `src/back/objects/domain/Domain.py`
+   `list_schema_tables_result` now surfaces `object_kind` per picker entry.
+4. `src/back/core/databricks/uc/metric_sql.py` (new)
+   Pure `build_metric_view_base_sql()` — projects dimensions, wraps measures in
+   `MEASURE(col) AS col`, adds `GROUP BY` only when measures + dimensions exist.
+5. `src/agents/agent_mapping_pge/contracts.py`
+   `TableRole` gains an `object_kind` field (serialised in to/from dict).
+6. `src/agents/agent_mapping_pge/generators/{entity,relationship}.py`
+   Add a "METRIC VIEW SOURCES (CRITICAL)" rule to both system prompts.
+7. `src/agents/agent_mapping_pge/evaluator/deterministic.py`
+   Add `check_metric_view_sql()` and wire it into entity/relationship mapping
+   evaluation (rejects `SELECT *`, unwrapped measures, missing `GROUP BY`).
+8. `src/front/static/domain/js/domain-metadata.js`
+   Add `objectKindMeta()` and render a metric-view badge/icon in both the import
+   picker and the loaded-sources list.
+9. `.planning/agents/agent_mapping_pge/SPEC.md`
+   New `metric_view_sql_correctness` eval dimension, failure mode, and
+   metric-view change checklist.
+10. `tests/eval/datasets/agent_mapping_pge/metric_view.jsonl` (+ planning mirror)
+    10 metric-view eval rows (4 happy / 3 ambiguous / 3 adversarial).
+
+Modified files:
+- src/back/core/databricks/uc/UnityCatalog.py
+- src/back/core/databricks/uc/MetadataService.py
+- src/back/core/databricks/uc/metric_sql.py
+- src/back/objects/domain/Domain.py
+- src/agents/agent_mapping_pge/contracts.py
+- src/agents/agent_mapping_pge/generators/entity.py
+- src/agents/agent_mapping_pge/generators/relationship.py
+- src/agents/agent_mapping_pge/evaluator/deterministic.py
+- src/front/static/domain/js/domain-metadata.js
+- .planning/agents/agent_mapping_pge/SPEC.md
+- tests/eval/datasets/agent_mapping_pge/metric_view.jsonl
+- .planning/agents/agent_mapping_pge/eval/metric_view.jsonl
+- docs/features.md
+- docs/data-access.md
+- tests/units/core/test_unity_catalog_object_kind.py (new)
+- tests/units/core/test_metadata_service_object_kind.py (new)
+- tests/units/core/test_metric_sql.py (new)
+- tests/units/core/test_metadata_mgt.py
+- tests/units/domain/test_list_schema_tables_object_kind.py (new)
+- tests/units/agents/test_contracts_object_kind.py (new)
+- tests/units/agents/test_deterministic_metric_sql.py (new)
+- tests/units/agents/test_generator_prompt_metric.py (new)
+- tests/units/front/test_mapping_metric_view_ui.py (new)
+
+Follow-up (user environment): the SQL-generation eval runner + baseline/delta
+MLflow runs over a live metric view are the remaining AI-gate steps — they need
+a warehouse + Foundation Model access and could not be run here. Metric-SQL
+correctness is enforced deterministically by `check_metric_view_sql` and its
+unit tests in the meantime.
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7084 passed, 315 skipped, 6 deselected, 1 xfailed in 47.50s
