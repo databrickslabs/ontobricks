@@ -50,7 +50,7 @@ def _invoke(client, action_full_name, mock_client, classes=None):
         "api.routers.digitaltwin.DigitalTwin.resolve_domain",
         return_value=_mock_domain(classes),
     ), patch(
-        "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+        "back.objects.digitaltwin.NodeContextService.get_data_plane_client",
         return_value=mock_client,
     ), patch(
         "back.objects.digitaltwin.NodeContextService.run_blocking",
@@ -135,7 +135,7 @@ class TestNodeActionEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=_mock_domain(),
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_data_plane_client",
             return_value=mock_client,
         ):
             resp = client.post(
