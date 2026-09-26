@@ -1308,11 +1308,14 @@ class DigitalTwin:
         """Execute a SPARQL query on Databricks using R2RML mapping."""
         from shared.config.constants import DEFAULT_BASE_URI
         from back.core.w3c import sparql
-        from back.core.helpers import get_databricks_client, run_blocking
+        from back.core.helpers import get_data_plane_client, run_blocking
 
         domain = self._domain
         try:
-            client = get_databricks_client(domain, settings)
+            # OBO: SPARQL compiles to SQL on the triplestore VIEW / source
+            # tables in Unity Catalog. Run it as the signed-in user so UC
+            # governs what is readable (fail-closed when no user token).
+            client = get_data_plane_client(domain, settings)
 
             if not client:
                 raise ValidationError(

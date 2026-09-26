@@ -18,6 +18,7 @@ from back.core.errors import (
     ValidationError,
 )
 from api.routers.internal._guards import require
+from api.routers.internal._graph_access import assert_domain_graph_read
 from back.objects.registry import ROLE_BUILDER
 from shared.config.constants import DEFAULT_BASE_URI, DEFAULT_GRAPH_NAME
 from back.objects.session import SessionManager, get_session_manager, get_domain
@@ -158,6 +159,7 @@ async def execute_sparql(
     settings: Settings = Depends(get_settings),
 ):
     """Execute a SPARQL query via Spark SQL."""
+    assert_domain_graph_read(request)
     data = await request.json()
     query = sparql.require_read_only_sparql(data.get("query", ""))
     limit = data.get("limit")
@@ -2783,6 +2785,7 @@ async def dtwin_graphql_execute(
     from back.core.graphql import build_schema_for_domain, DEFAULT_DEPTH, MAX_DEPTH
     from back.core.helpers import effective_graph_name
 
+    assert_domain_graph_read(request)
     domain = get_domain(session_mgr)
     display_name = _chat_resolve_domain_name(domain)
     if not display_name:
