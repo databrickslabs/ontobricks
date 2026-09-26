@@ -85,12 +85,18 @@ class MetadataService:
                 existing_tables = existing_metadata["tables"]
                 existing_names = {t["name"] for t in existing_tables}
 
-            uc_tables = self._catalog.get_tables(catalog, schema)
+            # Typed listing: captures ``table_type`` so metric views and views
+            # can be distinguished from tables (``get_tables`` is untyped).
+            listing = self._catalog.list_tables_and_views(catalog, schema)
+            type_by_name = {t["name"]: t.get("table_type", "") for t in listing}
+            uc_tables = list(type_by_name.keys())
             if not uc_tables:
                 return False, f"No tables found in {catalog}.{schema}", {}
 
             new_names = [t for t in uc_tables if t not in existing_names]
-            new_tables = self._fetch_tables_metadata(catalog, schema, new_names)
+            new_tables = self._fetch_tables_metadata(
+                catalog, schema, new_names, type_by_name
+            )
             merged = existing_tables + new_tables
 
             metadata = {"tables": merged, "table_count": len(merged)}
@@ -130,7 +136,11 @@ class MetadataService:
                     {"tables": existing_tables, "table_count": len(existing_tables)},
                 )
 
-            new_tables = self._fetch_tables_metadata(catalog, schema, new_names)
+            listing = self._catalog.list_tables_and_views(catalog, schema)
+            type_by_name = {t["name"]: t.get("table_type", "") for t in listing}
+            new_tables = self._fetch_tables_metadata(
+                catalog, schema, new_names, type_by_name
+            )
             merged = existing_tables + new_tables
             metadata = {"tables": merged, "table_count": len(merged)}
             msg = f"Added {len(new_tables)} new table(s). Total: {len(merged)} tables."
@@ -180,13 +190,29 @@ class MetadataService:
             return False, str(exc), existing_metadata
 
     def _fetch_tables_metadata(
-        self, catalog: str, schema: str, table_names: List[str]
+        self,
+        catalog: str,
+        schema: str,
+        table_names: List[str],
+        type_by_name: Optional[Dict[str, str]] = None,
     ) -> List[Dict[str, Any]]:
+        type_by_name = type_by_name or {}
         tables: list = []
         for name in table_names:
             fqn = f"{catalog}.{schema}.{name}"
+            object_kind = self._catalog.object_kind_for_table_type(
+                type_by_name.get(name, "")
+            )
             try:
-                columns = self._catalog.get_table_columns(catalog, schema, name)
+                if object_kind == "metric_view":
+                    # Dimensions + measures with per-column ``role``.
+                    columns = self._catalog.get_metric_view_columns_with_roles(
+                        catalog, schema, name
+                    )
+                else:
+                    columns = self._catalog.get_table_columns(catalog, schema, name)
+                    for col in columns:
+                        col.setdefault("role", "dimension")
                 comment = self._catalog.get_table_comment(catalog, schema, name)
                 select_probe = self._catalog.check_table_select_permission(
                     catalog, schema, name
@@ -195,6 +221,7 @@ class MetadataService:
                     {
                         "name": name,
                         "full_name": fqn,
+                        "object_kind": object_kind,
                         "comment": comment,
                         "description": comment,
                         "columns": columns,
@@ -208,6 +235,7 @@ class MetadataService:
                     {
                         "name": name,
                         "full_name": fqn,
+                        "object_kind": object_kind,
                         "comment": "",
                         "description": "",
                         "columns": [],

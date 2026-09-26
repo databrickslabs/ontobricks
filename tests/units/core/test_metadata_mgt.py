@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 _metadata_service_mod = importlib.import_module("back.core.databricks.uc.MetadataService")
 
+from back.core.databricks.uc.UnityCatalog import UnityCatalog
+
 from back.core.databricks import (
     MetadataService,
     build_metadata_dict,
@@ -98,7 +100,13 @@ class TestMetadataService:
     @patch.object(_metadata_service_mod, "DatabricksAuth")
     def test_load_schema_metadata(self, MockAuth, MockCatalog):
         cat_instance = MockCatalog.return_value
-        cat_instance.get_tables.return_value = ["t1", "t2"]
+        cat_instance.list_tables_and_views.return_value = [
+            {"name": "t1", "table_type": "MANAGED"},
+            {"name": "t2", "table_type": "MANAGED"},
+        ]
+        cat_instance.object_kind_for_table_type.side_effect = (
+            UnityCatalog.object_kind_for_table_type
+        )
         cat_instance.get_table_columns.return_value = [
             {"name": "id", "type": "int", "comment": "PK"}
         ]
@@ -122,7 +130,13 @@ class TestMetadataService:
     @patch.object(_metadata_service_mod, "DatabricksAuth")
     def test_load_with_existing(self, MockAuth, MockCatalog):
         cat_instance = MockCatalog.return_value
-        cat_instance.get_tables.return_value = ["t1", "t2"]
+        cat_instance.list_tables_and_views.return_value = [
+            {"name": "t1", "table_type": "MANAGED"},
+            {"name": "t2", "table_type": "MANAGED"},
+        ]
+        cat_instance.object_kind_for_table_type.side_effect = (
+            UnityCatalog.object_kind_for_table_type
+        )
         cat_instance.get_table_columns.return_value = []
         cat_instance.get_table_comment.return_value = ""
 
