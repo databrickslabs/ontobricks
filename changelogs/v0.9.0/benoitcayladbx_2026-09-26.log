@@ -89,3 +89,35 @@ Tests:
 - `uv run --frozen pytest -q -m "not scenario"` → 7006 passed, 316 skipped,
   6 deselected, 1 xfailed, 32 warnings (after node-action patch fixup).
 - Full MCP suite: `uv run --frozen pytest tests/mcp -q` → 38 passed.
+
+## Per-backend OBO identity tests (Delta / Lakebase / Neo4j)
+
+Context:
+Locked the OBO identity split at the backend-construction layer so the contract
+can't silently change: Delta/Lakehouse reads run on-behalf-of the caller, while
+Lakebase Postgres and Neo4j stay on the service principal / stored Bolt profile
+and never consult the request identity (they are gated at the endpoint by Team
+membership instead).
+
+Changes:
+
+1. `tests/units/graphdb/test_obo_backends.py` (new)
+   Backend-parametrised OBO contract via a `get_request_identity` spy fixture:
+   - Delta read through `GraphDBFactory(engine="delta")` binds the forwarded
+     user token (OBO) and consults the request identity.
+   - Delta read in local mode (`is_databricks_app()` False) keeps the resolved
+     SP token — OBO is not applied.
+   - Delta build (`for_write=True`) keeps the SP token and never consults the
+     identity.
+   - Lakebase (`_create_lakebase`) is built from the SP `get_lakebase_auth()`
+     result and never reads the request identity.
+   - Neo4j (`_create_neo4j`) uses the named Bolt profile's database and never
+     reads the request identity.
+
+Modified files:
+- tests/units/graphdb/test_obo_backends.py (new)
+
+Tests:
+- `uv run --frozen pytest tests/units/graphdb/test_obo_backends.py -q` → 5 passed.
+- Full suite `uv run --frozen pytest -q -m "not scenario"` → 7018 passed,
+  316 skipped, 6 deselected, 1 xfailed, 32 warnings.
