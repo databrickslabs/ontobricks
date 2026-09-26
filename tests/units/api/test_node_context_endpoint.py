@@ -269,7 +269,7 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_data_plane_client",
             return_value=mock_client,
         ) as mock_get_client, patch(
             "back.objects.digitaltwin.NodeContextService.run_blocking",
@@ -303,7 +303,7 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_data_plane_client",
             return_value=mock_client,
         ), patch(
             "back.objects.digitaltwin.NodeContextService.run_blocking",
@@ -335,7 +335,7 @@ class TestNodeContextEndpoint:
             "api.routers.digitaltwin.DigitalTwin.resolve_domain",
             return_value=mock_domain,
         ), patch(
-            "back.objects.digitaltwin.NodeContextService.get_databricks_client",
+            "back.objects.digitaltwin.NodeContextService.get_data_plane_client",
             return_value=mock_client,
         ), patch(
             "back.objects.digitaltwin.NodeContextService.run_blocking",

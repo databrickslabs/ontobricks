@@ -127,7 +127,7 @@ class TestCompute:
             client = _client(rows)
             monkeypatch.setattr(
                 va_module,
-                "get_databricks_client",
+                "get_data_plane_client",
                 lambda *_a, **_kw: client,
             )
             return client
@@ -210,7 +210,7 @@ class TestCompute:
         ]
         monkeypatch.setattr(
             va_module,
-            "get_databricks_client",
+            "get_data_plane_client",
             lambda *_a, **_kw: client,
         )
 
@@ -261,7 +261,7 @@ class TestCompute:
     async def test_missing_databricks_client_raises(self, monkeypatch):
         monkeypatch.setattr(
             va_module,
-            "get_databricks_client",
+            "get_data_plane_client",
             lambda *_a, **_kw: None,
         )
 
@@ -281,7 +281,7 @@ class TestCompute:
 
         monkeypatch.setattr(
             va_module,
-            "get_databricks_client",
+            "get_data_plane_client",
             fail,
         )
 

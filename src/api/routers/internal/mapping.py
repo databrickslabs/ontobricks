@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from shared.config.settings import get_settings, Settings
 from back.core.databricks import DatabricksClient
 from back.core.helpers import (
+    get_data_plane_client,
     get_databricks_client,
     get_databricks_credentials,
     require_domain_llm,
@@ -213,12 +214,14 @@ async def test_sql_query(
 
     try:
         domain = get_domain(session_mgr)
-        host, token, warehouse_id = get_databricks_credentials(domain, settings)
-
-        if not warehouse_id:
+        # OBO: previewing source data runs as the caller so Unity Catalog
+        # governs what they can read.
+        client = get_data_plane_client(domain, settings)
+        if not client:
+            raise ValidationError("Databricks not configured")
+        if not client.warehouse_id:
             raise ValidationError("No SQL warehouse configured")
 
-        client = DatabricksClient(host=host, token=token, warehouse_id=warehouse_id)
         result = await run_blocking(
             Mapping.test_sql_query, client, sql_query, limit=int(limit)
         )
@@ -258,7 +261,7 @@ async def get_tables(
 
     try:
         domain = get_domain(session_mgr)
-        client = get_databricks_client(domain, settings)
+        client = get_data_plane_client(domain, settings)
         if not client:
             raise ValidationError("Databricks not configured")
         return {"tables": await run_blocking(client.get_tables, catalog, schema)}
@@ -286,7 +289,7 @@ async def get_table_columns(
 
     try:
         domain = get_domain(session_mgr)
-        client = get_databricks_client(domain, settings)
+        client = get_data_plane_client(domain, settings)
         if not client:
             raise ValidationError("Databricks not configured")
         return {
@@ -464,7 +467,7 @@ async def get_schema_context(
             raise ValidationError("Catalog and schema are required")
 
         domain = get_domain(session_mgr)
-        client = get_databricks_client(domain, settings)
+        client = get_data_plane_client(domain, settings)
 
         if not client:
             raise ValidationError("Databricks not configured")

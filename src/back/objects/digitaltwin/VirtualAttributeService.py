@@ -22,7 +22,7 @@ from back.core.errors import InfrastructureError, ValidationError
 from back.core.helpers import (
     SAFE_COL_IDENT,
     SAFE_SQL_IDENT,
-    get_databricks_client,
+    get_data_plane_client,
     run_blocking,
     sql_escape,
 )
@@ -169,7 +169,8 @@ class VirtualAttributeService:
         if not groups:
             return []
 
-        client_db = get_databricks_client(domain, settings)
+        # OBO: virtual attributes run a UC function; execute as the caller.
+        client_db = get_data_plane_client(domain, settings)
         if client_db is None:
             raise InfrastructureError("Databricks client is not configured")
 

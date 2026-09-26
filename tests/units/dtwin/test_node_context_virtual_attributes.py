@@ -48,7 +48,7 @@ def domain():
 def uc_client(monkeypatch):
     fake = MagicMock()
     fake.execute_query.return_value = [{"risk_score": 0.82, "risk_band": "B"}]
-    monkeypatch.setattr(va_module, "get_databricks_client", lambda *_a, **_kw: fake)
+    monkeypatch.setattr(va_module, "get_data_plane_client", lambda *_a, **_kw: fake)
     return fake
 
 

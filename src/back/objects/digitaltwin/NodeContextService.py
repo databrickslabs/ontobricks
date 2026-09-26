@@ -17,7 +17,7 @@ from back.core.helpers import (
     SAFE_SQL_IDENT as _SAFE_SQL_IDENT,
     effective_graph_query_table,
     extract_local_name,
-    get_databricks_client,
+    get_data_plane_client,
     run_blocking,
     sql_escape,
 )
@@ -507,7 +507,8 @@ class NodeContextService:
         full_name = action["fullName"]
         returns_table = action["returns_table"]
 
-        client_db = get_databricks_client(domain, settings)
+        # OBO: a Class Action runs a UC function; execute as the caller.
+        client_db = get_data_plane_client(domain, settings)
         if client_db is None:
             raise InfrastructureError("Databricks client is not configured")
 
@@ -586,7 +587,7 @@ class NodeContextService:
                 key_col_missing = True
             else:
                 try:
-                    client_db = get_databricks_client(domain, settings)
+                    client_db = get_data_plane_client(domain, settings)
                     if client_db is None:
                         fetch_error = "Databricks client is not configured"
                         rows = []
