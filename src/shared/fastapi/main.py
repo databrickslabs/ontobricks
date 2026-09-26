@@ -391,10 +391,21 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         path = request.scope["path"]
 
         if any(path.startswith(p) for p in _PERM_BYPASS_PREFIXES):
+            # These prefixes skip the session role gate (programmatic /api,
+            # GraphQL, static, health, docs) so M2M / MCP callers are not
+            # 302-redirected to /access-denied. We still stamp the forwarded
+            # end-user identity so Lakehouse / Unity Catalog reads run
+            # on-behalf-of the caller (OBO) when a Databricks Apps user token
+            # is attached — e.g. the MCP companion forwarding the signed-in
+            # user's x-forwarded-access-token. This mirrors Explorer / Graph
+            # Chat on the internal routes. No token → SP fallback, unchanged.
+            user_token = request.headers.get("x-forwarded-access-token", "") or ""
             request.state.user_role = ""
             request.state.user_domain_role = ""
-            request.state.user_token = ""
-            _tok = set_request_identity(RequestIdentity())
+            request.state.user_token = user_token
+            _tok = set_request_identity(
+                RequestIdentity(email=email, user_token=user_token)
+            )
             try:
                 return await call_next(request)
             finally:

@@ -1577,3 +1577,69 @@ class TestRequestIdentityBinding:
         assert seen["role"] == "admin"
         assert seen["token"] == ""
         assert get_request_identity().user_token == ""
+
+
+# ------------------------------------------------------------------
+# Bypass paths still carry the forwarded user token for OBO (MCP)
+# ------------------------------------------------------------------
+
+
+class TestBypassBindsForwardedTokenForOBO:
+    """`/api/*` and `/graphql/*` skip the session role gate, but they must
+    still stamp the forwarded ``x-forwarded-access-token`` into the request
+    identity so Lakehouse / Unity Catalog reads run on-behalf-of the caller
+    (MCP OBO), exactly like Explorer and Graph Chat on the internal routes.
+
+    Missing token → empty (service-principal fallback, unchanged)."""
+
+    @pytest.mark.parametrize("path", ["/api/v1/digitaltwin/triples/find", "/graphql/"])
+    def test_forwarded_token_bound_on_bypass(self, path):
+        from shared.fastapi.main import PermissionMiddleware
+        from back.core.databricks.request_identity import get_request_identity
+
+        req = _make_request(
+            method="GET",
+            path=path,
+            email="user@test.com",
+            headers={"x-forwarded-access-token": "utok"},
+        )
+        seen = {}
+
+        async def call_next(r):
+            ident = get_request_identity()
+            seen["email"] = ident.email
+            seen["token"] = ident.user_token
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+        with patch("back.core.databricks.is_databricks_app", return_value=True):
+            _run(middleware.dispatch(req, call_next))
+
+        # Session role gate is still bypassed (no redirect for programmatic
+        # / MCP callers) ...
+        assert req.state.user_role == ""
+        assert req.state.user_domain_role == ""
+        # ... but the forwarded user token is available for OBO.
+        assert seen["token"] == "utok"
+        assert seen["email"] == "user@test.com"
+        assert req.state.user_token == "utok"
+        # Identity is reset after the request completes.
+        assert get_request_identity().user_token == ""
+
+    def test_bypass_without_token_stays_service_principal(self):
+        from shared.fastapi.main import PermissionMiddleware
+        from back.core.databricks.request_identity import get_request_identity
+
+        req = _make_request(method="GET", path="/api/v1/domains", email="")
+        seen = {}
+
+        async def call_next(r):
+            seen["token"] = get_request_identity().user_token
+            return MagicMock(status_code=200)
+
+        middleware = PermissionMiddleware(MagicMock())
+        with patch("back.core.databricks.is_databricks_app", return_value=True):
+            _run(middleware.dispatch(req, call_next))
+
+        assert seen["token"] == ""
+        assert req.state.user_token == ""

@@ -617,7 +617,10 @@ class TestDtTriplesBackendSelection:
         mock_store.return_value = store
 
         resp = await dt_triples(
-            backend="graph", session_mgr=MagicMock(), settings=MagicMock()
+            request=MagicMock(),
+            backend="graph",
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
         )
 
         assert resp.total == 1
@@ -639,7 +642,12 @@ class TestDtTriplesBackendSelection:
         store = self._store()
         mock_store.return_value = store
 
-        await dt_triples(backend="view", session_mgr=MagicMock(), settings=MagicMock())
+        await dt_triples(
+            request=MagicMock(),
+            backend="view",
+            session_mgr=MagicMock(),
+            settings=MagicMock(),
+        )
 
         assert store.paginated_count.call_args[0][0] == "c.s.view_V1"
 
@@ -673,6 +681,7 @@ class TestTriplesFindHasMorePropagation:
         mock_run_blocking.side_effect = lambda fn: fn()
 
         result = await dt_triples_find(
+            request=MagicMock(),
             search="cust",
             limit=1,
             offset=0,

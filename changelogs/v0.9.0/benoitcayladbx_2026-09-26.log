@@ -212,3 +212,193 @@ Modified files:
 
 Tests:
 - `uv run --frozen pytest tests/units/front -q` → 1347 passed.
+
+## MCP OBO on Lakehouse: bypass path carries the forwarded user token
+
+Context:
+Explorer and Graph Chat already run Lakehouse / Unity Catalog reads
+on-behalf-of the signed-in user, but MCP did not. MCP hits the public
+`/api/v1/*` + `/graphql/*` surface, which `PermissionMiddleware` lists in
+`_PERM_BYPASS_PREFIXES` (they skip the session role gate so programmatic /
+MCP callers are not 302-redirected to `/access-denied`). The bypass branch
+stamped an *empty* request identity, discarding the forwarded
+`x-forwarded-access-token`, so `create_databricks_client` fell back to the
+app service principal — MCP graph reads inherited the SP's UC rights instead
+of the user's. This wires OBO on that path so MCP leverages OBO on Lakehouse
+exactly like Explorer and Chat.
+
+Changes:
+
+1. `src/shared/fastapi/main.py`
+   In the `_PERM_BYPASS_PREFIXES` branch of `PermissionMiddleware.dispatch`,
+   read `x-forwarded-access-token` and bind it (with the forwarded email) into
+   the request-scoped `RequestIdentity` / `request.state.user_token`. The
+   session role gate stays bypassed (roles remain `""`, no redirect), but the
+   forwarded user token is now available to `get_graphdb` →
+   `create_databricks_client`, so Lakehouse reads on `/api/v1/digitaltwin/*`
+   and `/graphql/*` run OBO. No token → SP fallback (unchanged).
+2. `tests/units/auth/test_permission_middleware.py`
+   Added `TestBypassBindsForwardedTokenForOBO`: the forwarded token is bound
+   into the request identity on `/api/*` and `/graphql/*` while roles stay
+   empty; a request with no token keeps an empty token (SP fallback).
+
+Modified files:
+- src/shared/fastapi/main.py
+- tests/units/auth/test_permission_middleware.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → 7034 passed, 316 skipped.
+
+## MCP Team gate + fail-closed on the public graph-read handlers
+
+Context:
+Part (a) gave the public `/api/v1/*` + `/graphql/*` surface the forwarded
+user token for OBO, but the public graph-read handlers still had no Team gate
+— the middleware bypasses the session role gate on those prefixes, so
+`request.state` carried empty roles and any M2M caller reached graph data.
+This closes the gap so MCP-driven reads get the same Viewer+ / admin-bypass /
+fail-closed enforcement as Explorer & Graph Chat on the internal routes
+(design §MCP: "resolve Team and OBO from the forwarded user headers … fail
+closed if those user headers are missing on a data-plane graph or UC route").
+Unattended M2M callers with no forwarded user now resolve to `none` → 403.
+
+Changes:
+
+1. `src/api/routers/internal/_graph_access.py`
+   Added `assert_public_graph_read(request, domain, settings)`: resolves the
+   forwarded user's role for the **target** (query-param / MCP-selected)
+   domain via `SettingsService.resolve_domain_role`, stamps it onto
+   `request.state`, and delegates to `assert_domain_graph_read` (Viewer+;
+   admin bypass; no-op outside App mode).
+2. `src/api/routers/digitaltwin.py`
+   Threaded `request: Request` into the public graph-read handlers
+   (`dt_status`, `dt_stats`, `dt_triples_find`, `dt_triples`,
+   `dt_nodes_context`, `dt_nodes_action`, `dt_nodes_virtual_attributes`) and
+   call the gate right after `resolve_domain`, before building the store /
+   invoking UC. Added a module-level lazy wrapper around the internal gate to
+   avoid an import cycle (external Block A is imported by the internal
+   package during its own init).
+3. `src/back/fastapi/graphql_routes.py`
+   Same gate on `graphql_execute` and `graphql_debug` (the graph-reading
+   routes); SDL / playground stay open (schema-only, no DB hit). Same lazy
+   wrapper to avoid the cycle.
+4. `tests/units/api/test_graph_access_gate.py`
+   Added `assert_public_graph_read` unit tests (local no-op, non-member 403,
+   no-forwarded-user 403, viewer allowed + state stamped, admin bypass) and
+   two wiring tests proving `dt_triples_find` and `graphql_execute` invoke the
+   gate before touching the store.
+5. `tests/units/dtwin/test_digitaltwin_api.py`
+   Pass a `request` arg to the direct `dt_triples` / `dt_triples_find` calls
+   (gate is a no-op in local test mode).
+
+Modified files:
+- src/api/routers/internal/_graph_access.py
+- src/api/routers/digitaltwin.py
+- src/back/fastapi/graphql_routes.py
+- tests/units/api/test_graph_access_gate.py
+- tests/units/dtwin/test_digitaltwin_api.py
+
+Tests:
+- `uv run --frozen pytest -q -m "not scenario"` → 7041 passed, 316 skipped.
+
+## Compact Domain audit trail with before → after values
+
+Context: Domain → Audit trail mixed ontology and mapping into one noisy feed
+with tall action headers (“Entity added”) and version badges that added little
+information. Edits only named the asset. Designer saves also logged every class
+as updated when dict shape changed (e.g. `localName`), which duplicated rows.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_audit.html`
+   Card-integrated Ontology / Mapping / Status / Builds tabs; version filter
+   stays in the section header.
+2. `src/front/static/domain/js/domain-audit.js`
+   Change rows drop the action title and version badge (icon + `aria-label`
+   carry the action). One line: asset · field: previous → new. Collapse
+   identical historical rows.
+3. `src/front/static/domain/css/domain-audit.css`
+   Compact 20px markers and single-line row layout.
+4. `src/back/objects/session/DomainSession.py`
+   `diff_meta` stores `before` and `after` for changed fields; skip derived
+   keys such as `localName`.
+5. `src/back/objects/ontology/Ontology.py`, `src/back/objects/mapping/Mapping.py`
+   Attach diffs on add/update/remove; skip no-op bulk updates.
+6. `docs/features.md`, `docs/user-guide.md`
+   Document the tabbed trail and before → after lines.
+7. `tests/units/front/test_domain_audit.py`, `tests/units/domain/test_change_audit.py`
+   Structural and instrumentation contracts.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_audit.html
+- src/front/static/domain/js/domain-audit.js
+- src/front/static/domain/css/domain-audit.css
+- src/back/objects/session/DomainSession.py
+- src/back/objects/ontology/Ontology.py
+- src/back/objects/mapping/Mapping.py
+- docs/features.md
+- docs/user-guide.md
+- tests/units/front/test_domain_audit.py
+- tests/units/domain/test_change_audit.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7051 passed, 315 skipped, 6 deselected, 1 xfailed in 48.63s
+
+## Rename Designer to Studio and move OWL/R2RML export onto the canvas
+
+Context: OWL and R2RML no longer need dedicated Ontology/Mapping sidebar
+pages. Export belongs on the visual canvas. The canvas itself is now
+named Studio (Ontology Studio / Mapping Studio), with a matching Export
+button top-right.
+
+Changes:
+
+1. `src/front/config/menu_config.json`
+   Ontology and Mapping sidebar items labelled **Studio**. Removed Ontology
+   OWL and Mapping R2RML submenu items (Spark SQL stays).
+2. `src/front/templates/partials/ontology/_ontology_map.html`
+   Page title **Ontology Studio**; **Export** (OWL) in the top-right toolbar.
+3. `src/front/templates/partials/mapping/_mapping_design.html`
+   Page title **Mapping Studio**; **Export** (R2RML) in the top-right toolbar.
+4. `src/front/static/ontology/js/ontology-owl-content.js`,
+   `src/front/static/mapping/js/mapping-r2rml.js`
+   Studio Export generates then downloads Turtle.
+5. `src/front/templates/partials/layout/help_modal.html`,
+   `src/front/templates/partials/mapping/_mapping_autoassign.html`,
+   `src/front/static/query/js/query-ontology-viewer.js`
+   Help, Auto-Map “View in Studio”, and KG ontology viewer title follow the
+   new names.
+6. `docs/features.md`, `docs/user-guide.md`, `docs/get-started.md`,
+   `docs/INFO.md`, `docs/api.md`, `docs/development.md`
+   Product copy uses Studio and Studio → Export.
+7. `tests/units/front/test_help_center_menu_sync.py`,
+   `tests/units/api/test_ui_rendering.py`, e2e sidebar/export tests
+   Contracts for Studio labels and no OWL/R2RML sidebar links.
+
+Modified files:
+- src/front/config/menu_config.json
+- src/front/templates/partials/ontology/_ontology_map.html
+- src/front/templates/partials/mapping/_mapping_design.html
+- src/front/templates/partials/mapping/_mapping_autoassign.html
+- src/front/templates/partials/layout/help_modal.html
+- src/front/static/ontology/js/ontology-owl-content.js
+- src/front/static/mapping/js/mapping-r2rml.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/query/js/query-ontology-viewer.js
+- docs/features.md
+- docs/user-guide.md
+- docs/get-started.md
+- docs/INFO.md
+- docs/api.md
+- docs/development.md
+- docs/README.md
+- docs/data-access.md
+- docs/product.md
+- .cursor/11-frontend-design.mdc
+- tests/units/front/test_help_center_menu_sync.py
+- tests/units/api/test_ui_rendering.py
+- tests/e2e/ontology/test_sidebar_flows.py
+- tests/e2e/ontology/test_owl_export_flows.py
+- tests/e2e/mapping/test_mapping_flows.py
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7051 passed, 315 skipped, 6 deselected, 1 xfailed in 47.08s
+

@@ -18,7 +18,7 @@ Use ``GET /api/v1/domain/versions?domain_name=...`` to discover available versio
 
 import time
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import AliasChoices, BaseModel, Field
 from typing import Any, Dict, List, Optional
 
@@ -49,6 +49,20 @@ _RDF_TYPE = NodeContextService.RDF_TYPE
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+def assert_public_graph_read(request, domain, settings) -> None:
+    """Team gate for the public graph-read surface (see ``_graph_access``).
+
+    Imported lazily to avoid an import cycle: this external (Block A) module
+    is imported *by* the ``api.routers.internal`` package during its own
+    initialization, so a top-level import of the internal gate would recurse.
+    """
+    from api.routers.internal._graph_access import (
+        assert_public_graph_read as _impl,
+    )
+
+    _impl(request, domain, settings)
 
 # Short-TTL, in-process cache for ``GET /stats`` results keyed by the graph
 # query table. Triple-store stats only change on a build, so a small TTL
@@ -371,6 +385,7 @@ async def dt_registry(
     "and how many triples it currently contains.",
 )
 async def dt_status(
+    request: Request,
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
@@ -403,6 +418,7 @@ async def dt_status(
         domain_version,
         read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     view_table = effective_view_table(domain, settings).strip()
     graph_name = effective_graph_name(domain)
 
@@ -456,6 +472,7 @@ async def dt_status(
     "label/relationship totals.",
 )
 async def dt_stats(
+    request: Request,
     domain_name: Optional[str] = Query(
         None,
         validation_alias=AliasChoices("domain_name", "project_name"),
@@ -488,6 +505,7 @@ async def dt_stats(
         domain_version,
         read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     graph_name = effective_graph_name(domain)
 
     if not graph_name:
@@ -692,6 +710,7 @@ async def dt_build_progress(task_id: str):
     "Returns all triples discovered during traversal.",
 )
 async def dt_triples_find(
+    request: Request,
     entity_type: Optional[str] = None,
     search: Optional[str] = None,
     depth: int = 1,
@@ -735,6 +754,7 @@ async def dt_triples_find(
         domain_version,
         read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     store = get_graphdb(domain, settings)
     if not store:
         raise ValidationError("Graph backend not configured")
@@ -814,6 +834,7 @@ async def dt_triples_find(
     "and pagination via limit/offset.",
 )
 async def dt_triples(
+    request: Request,
     subject: Optional[str] = None,
     predicate: Optional[str] = None,
     object: Optional[str] = None,
@@ -855,6 +876,7 @@ async def dt_triples(
         registry_volume,
         domain_version,
     )
+    assert_public_graph_read(request, domain, settings)
     engine = None if (backend or "graph") == "graph" else backend
     store = get_graphdb(domain, settings, engine=engine)
     if not store:
@@ -1657,6 +1679,7 @@ async def dt_cohort_materialize(
     "declared on the class (with optional on-demand computation).",
 )
 async def dt_nodes_context(
+    request: Request,
     entity_uri: str = Query(..., description="Full URI of the entity node"),
     domain_name: Optional[str] = Query(
         None,
@@ -1689,6 +1712,7 @@ async def dt_nodes_context(
         registry_catalog, registry_schema, registry_volume,
         domain_version, read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     payload = await NodeContextService.resolve_context(
         domain,
         settings,
@@ -1724,6 +1748,7 @@ async def dt_nodes_context(
 )
 async def dt_nodes_action(
     payload: NodeActionRequest,
+    request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
     settings: Settings = Depends(get_settings),
 ):
@@ -1732,6 +1757,7 @@ async def dt_nodes_action(
         payload.registry_catalog, payload.registry_schema, payload.registry_volume,
         payload.domain_version, read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     result = await NodeContextService.invoke_action(
         domain,
         settings,
@@ -1767,6 +1793,7 @@ class ComputeVirtualAttributesResponse(BaseModel):
     "receives exactly one argument: the entity's local ID.",
 )
 async def dt_nodes_virtual_attributes(
+    request: Request,
     entity_uri: str = Query(..., description="Full URI of the entity node"),
     function: Optional[str] = Query(
         None,
@@ -1790,6 +1817,7 @@ async def dt_nodes_virtual_attributes(
         registry_catalog, registry_schema, registry_volume,
         domain_version, read_only=True,
     )
+    assert_public_graph_read(request, domain, settings)
     payload = await NodeContextService.compute_virtual_attributes(
         domain,
         settings,

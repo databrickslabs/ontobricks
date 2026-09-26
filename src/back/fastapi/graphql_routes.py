@@ -43,6 +43,18 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def assert_public_graph_read(request, domain, settings) -> None:
+    """Team gate for the public GraphQL graph-read surface.
+
+    Imported lazily to avoid an import cycle with the ``api.routers.internal``
+    package (which transitively imports the external routers)."""
+    from api.routers.internal._graph_access import (
+        assert_public_graph_read as _impl,
+    )
+
+    _impl(request, domain, settings)
+
+
 def _graphql_safe_error_message(exc: BaseException) -> str:
     """Return a client-safe GraphQL error message (no raw exception strings)."""
     if isinstance(exc, OntoBricksError):
@@ -364,6 +376,7 @@ async def graphql_execute(
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
+    assert_public_graph_read(request, domain, settings)
     schema, context = _get_schema_and_context(domain, settings)
 
     if body.depth is not None:
@@ -462,6 +475,7 @@ async def graphql_debug(
     domain = _load_domain_from_registry(
         domain_name, session_mgr, settings, external=is_external
     )
+    assert_public_graph_read(request, domain, settings)
     schema, context = _get_schema_and_context(domain, settings)
 
     from back.core.graphql import build_schema_for_domain
