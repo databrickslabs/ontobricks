@@ -100,13 +100,13 @@ and the engine that ultimately runs (column **Engine**).
 | Browse / open / create / save domain | Registry modal (`partials/layout/registry_modal.html`), `templates/domain.html` | `GET/POST /api/v1/domain/...`, `/settings/registry/...`, `/domain/...` | REST | Python services (`DomainService`, `RegistryService`); files on UC Volumes |
 | Schedule (background actions) | `settings` (Automation → Scheduler) | `/settings/schedules`, `/settings/cohort-schedules` | REST | Python `BuildScheduler` + Databricks Jobs SDK |
 | Cockpit / readiness | `domain-validation` | `GET /api/v1/domain/design-status` | REST | Python aggregator over OWL / R2RML / metadata |
-| Data Sources (UC tables preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables (sample queries) |
+| Data Sources (UC tables / views / metric views preview) | `domain-metadata` | Internal REST → `databricks-sql-connector` | REST → Spark SQL | **Spark SQL** on UC tables, views and **metric views** (sample queries). Each source is tagged with `object_kind` (`table` / `view` / `metric_view`); metric-view columns also carry a `role` (`dimension` / `measure`) resolved via `SHOW CREATE TABLE`. |
 | Data source deletion guard | `domain-metadata` | `POST /domain/metadata/removal-impact` | REST | `Mapping.find_mappings_referencing` over the session `assignment` (no warehouse call) |
 | Metadata refresh diff preview | `domain-metadata` | `POST /domain/metadata/update-async` → `GET /tasks/{id}` | REST → Spark SQL | `compute_column_diff` over the pre-merge snapshot; applied only after the user confirms |
 | Knowledge Store upload / status / retry / purge | `domain-documents.js` | `/domain/documents/upload`, `/domain/documents/list`, `/domain/documents/retry-parse` | REST → Spark SQL parse → Lakebase | Parsed text stored in Lakebase `domain_documents` (no originals kept); one asynchronous inline-base64 `ai_parse_document` call per changed source hash; 10 MB per-file cap |
 | Versions | `domain-versions` | `/api/v1/domain/versions` | REST | UC Volume listing |
 
-### 4.2 Ontology Designer
+### 4.2 Ontology Studio
 
 | UI Feature | JS file | Endpoint(s) | Wrapper | Engine |
 |---|---|---|---|---|
@@ -114,7 +114,7 @@ and the engine that ultimately runs (column **Engine**).
 | OWL viewer / generator | `ontology-owl.js`, agent `OWLGenerator` | `/ontology/owl/...`, `/agents/owl-generator/run` | REST | `OntologyParser`, `OntologyGenerator` (rdflib) |
 | Import (OWL, FIBO, CDISC, IOF) | `ontology-import.js` | `/ontology/import/*` | REST | rdflib parsers |
 | Generate (Wizard) | `ontology-wizard.js` | Domain LLM via `agent_owl_generator` | REST → LLM | Saved domain LLM: Databricks AI Gateway or Model Serving + tool-calling; selected ready documents come from the shared parsed corpus in the Lakebase Knowledge Store (`domain_documents`) |
-| AI Assistant | Designer floating chat, `agent_ontology_assistant` | `POST /ontology/assistant/chat`, `POST /ontology/assistant/invoke` | REST → LLM | Saved domain LLM (`llm_endpoint` + `llm_endpoint_kind`): AI Gateway chat completions or Model Serving invocations |
+| AI Assistant | Studio floating chat, `agent_ontology_assistant` | `POST /ontology/assistant/chat`, `POST /ontology/assistant/invoke` | REST → LLM | Saved domain LLM (`llm_endpoint` + `llm_endpoint_kind`): AI Gateway chat completions or Model Serving invocations |
 | **Data Quality** rules editor | `ontology-dataquality.js` | `/ontology/dataquality/...` | REST | SHACL (`SHACLService`) on the in-memory ontology |
 | **Business Rules (SWRL)** editor | `ontology-business-rules.js` | `/ontology/swrl/...` | REST | `SWRLParser`, validated against ontology |
 | Expressions & Axioms | `ontology-axioms.js` | `/ontology/axioms/...` | REST | OWL axiom storage |
@@ -257,7 +257,7 @@ These agents do not query the triple store at runtime; they operate on the
 | Agent | Purpose | Tools call | Wrapper | Engine |
 |---|---|---|---|---|
 | `agent_owl_generator` | Build an OWL ontology from metadata + documents | `metadata.list_tables`, `metadata.preview_table`, `documents.read`, `ontology.write_owl` | REST + Spark SQL (samples) | `databricks-sql-connector` against UC tables, plus rdflib write |
-| `agent_auto_assignment` | Map ontology entities to Spark SQL queries | `tables.list`, `tables.sample`, `mapping.write` | REST + Spark SQL (samples) | Same as above; output stored as R2RML |
+| `agent_auto_assignment` | Map ontology entities to Spark SQL queries | `tables.list`, `tables.sample`, `mapping.write` | REST + Spark SQL (samples) | Same as above; output stored as R2RML. Metric-view sources (`object_kind == "metric_view"`) drive metric-aware generation — measures are wrapped in `MEASURE()` and a `GROUP BY` over dimensions is emitted; a deterministic evaluator rejects `SELECT *`, unwrapped measures, or a missing `GROUP BY`. |
 | `agent_auto_icon_assign` | Pick emojis for entities | Inspects ontology + metadata | REST | None — generation only |
 | `agent_ontology_assistant` | Conversational ontology editing | Dozens of tools mutating the in-session ontology | REST | Python ontology object model |
 | `agent_dtwin_chat` | Conversational graph querying | See §6 | REST + **GraphQL** + **SPARQL** | **Spark SQL** + **Cypher** (engine-side) |
