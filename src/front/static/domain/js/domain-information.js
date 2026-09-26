@@ -84,7 +84,8 @@ function applyGraphlessConstraints() {
     [
         'graphBackendMigrationNotice',
         'dualKnowledgeGraphSection',
-        'tripleStoreGatewaySection'
+        'tripleStoreGatewaySection',
+        'graphAccessInfoSection'
     ].forEach(sectionId => {
         const section = document.getElementById(sectionId);
         if (section) section.classList.toggle('d-none', graphless);

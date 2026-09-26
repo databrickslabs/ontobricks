@@ -121,3 +121,43 @@ Tests:
 - `uv run --frozen pytest tests/units/graphdb/test_obo_backends.py -q` → 5 passed.
 - Full suite `uv run --frozen pytest -q -m "not scenario"` → 7018 passed,
   316 skipped, 6 deselected, 1 xfailed, 32 warnings.
+
+## Surface OBO/permissions per backend in the Knowledge Graph tab
+
+Context:
+Document, in the UI where a user actually picks a graph backend
+(Domain → Information → Knowledge Graph), how data access works per backend:
+which identity a read runs under (OBO vs service principal) and what a read
+requires (Unity Catalog grants and/or Team membership). Keeps the OBO model
+visible at the point of choice.
+
+Changes:
+
+1. `src/front/templates/partials/domain/_domain_information.html`
+   New `#graphAccessInfoSection` "Data Access & Permissions" alert at the end of
+   the Knowledge Graph tab: intro on the Team gate (Viewer+, admin bypass, local
+   no-op) + a per-backend table (Lakehouse = OBO / signed-in user / UC grants +
+   Team; Lakebase = SP / no OBO / Team; Neo4j = Bolt profile / no OBO / Team) +
+   a note that build stays on the service principal and Lakehouse reads are
+   fail-closed. Hidden for the `none` (ontology-only) backend.
+2. `src/front/static/domain/js/domain-information.js`
+   Added `graphAccessInfoSection` to the graph-only section list in
+   `applyGraphlessConstraints()` so the block also hides live when the user
+   switches to No Backend without reloading.
+3. `tests/units/front/test_kg_access_info.py` (new)
+   Structural contract: section present, hides for `none`, each backend's
+   identity/OBO answer documented, Team gate + admin bypass copy, build note,
+   and the JS toggles the new section.
+
+Modified files:
+- src/front/templates/partials/domain/_domain_information.html
+- src/front/static/domain/js/domain-information.js
+- tests/units/front/test_kg_access_info.py (new)
+
+Tests:
+- `uv run --frozen pytest tests/units/front -q` → 1342 passed.
+- Full suite `uv run --frozen pytest -q -m "not scenario"` → 7026 passed,
+  316 skipped, 6 deselected, 1 xfailed, 32 warnings.
+
+Note: static informational alert built from existing Bootstrap + `--db-*`
+tokens (no new CSS); not exercised with a live browser pass.
