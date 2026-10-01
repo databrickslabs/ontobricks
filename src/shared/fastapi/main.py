@@ -149,6 +149,18 @@ _PERM_BYPASS_PREFIXES = (
 
 _VIEWER_BLOCKED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
+# Read-only endpoints that take their parameters as a POST body. Viewers need
+# them to use the Knowledge Graph at all: the Explorer's search and expand
+# (/sync/filter) and Graph Chat. None of them persists domain content; Graph
+# Chat's write actions go through /dtwin/nodes/action/request and /confirm,
+# which stay blocked for viewers. /sync/load stays blocked: it is one of the
+# data-refresh operations reserved for builders.
+_VIEWER_READ_ONLY_POSTS = frozenset({
+    "/dtwin/sync/filter",
+    "/dtwin/assistant/chat",
+    "/dtwin/assistant/chat/stream",
+})
+
 _PERM_ADMIN_ONLY_PREFIXES = (
     "/settings",
 )
@@ -426,6 +438,9 @@ class PermissionMiddleware(BaseHTTPMiddleware):
                 is_domain_scoped
                 and domain_role == ROLE_VIEWER
                 and request.method in _VIEWER_BLOCKED_METHODS
+                and not (
+                    request.method == "POST" and path in _VIEWER_READ_ONLY_POSTS
+                )
             ):
                 return self._forbidden_json(
                     request, "Viewer role does not allow write operations"

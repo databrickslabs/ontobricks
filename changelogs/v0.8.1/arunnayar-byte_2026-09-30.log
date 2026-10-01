@@ -1,0 +1,26 @@
+## Permissions: viewers can search the graph and use Graph Chat
+Context: The permission middleware blocks every POST, PUT, PATCH and DELETE
+on a domain-scoped path for the Viewer role. The Explorer's search and expand
+(/dtwin/sync/filter) and Graph Chat (/dtwin/assistant/chat,
+/dtwin/assistant/chat/stream) take their parameters as a POST body but only
+read, so a Viewer could open the Knowledge Graph but not search it ("Viewer
+role does not allow write operations").
+Changes:
+1. src/shared/fastapi/main.py
+   New _VIEWER_READ_ONLY_POSTS: exact paths a Viewer may POST to. The viewer
+   write gate skips them for POST only. Graph Chat's write actions
+   (/dtwin/nodes/action/request and /confirm) stay blocked, and so does
+   /dtwin/sync/load, which stays with the builder-only data-refresh
+   operations.
+Tests added:
+- tests/units/auth/test_permission_middleware.py (TestDomainScopedRoutes):
+  viewers can POST to the three read-only paths; other /dtwin POSTs
+  (sync/start, sync/load, nodes/action/request and confirm, a longer path
+  with the same prefix) stay blocked; PUT, PATCH and DELETE on a read-only
+  path stay blocked; a user with no team entry still cannot search.
+Modified files:
+- src/shared/fastapi/main.py
+- tests/units/auth/test_permission_middleware.py
+- changelogs/v0.8.1/arunnayar-byte_2026-09-30.log
+Tests: uv run --frozen pytest -q tests/units/auth/test_permission_middleware.py
+— 299 passed.

@@ -480,6 +480,49 @@ class TestDomainScopedRoutes:
         )
         assert result.get("passed")
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/dtwin/sync/filter",
+            "/dtwin/assistant/chat",
+            "/dtwin/assistant/chat/stream",
+        ],
+    )
+    def test_viewer_can_post_to_read_only_graph_endpoints(self, path):
+        _, _, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="POST", path=path
+        )
+        assert result.get("passed")
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/dtwin/sync/start",
+            "/dtwin/sync/load",
+            "/dtwin/nodes/action/request",
+            "/dtwin/nodes/action/confirm",
+            "/dtwin/sync/filter/extra",
+        ],
+    )
+    def test_viewer_still_cannot_post_elsewhere_under_dtwin(self, path):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method="POST", path=path
+        )
+        assert resp.status_code == 403 and not result.get("passed")
+
+    @pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+    def test_read_only_paths_accept_post_only(self, method):
+        _, resp, _ = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_VIEWER, method=method, path="/dtwin/sync/filter"
+        )
+        assert resp.status_code == 403
+
+    def test_non_member_still_cannot_search(self):
+        _, resp, result = _dispatch_with_roles(
+            ROLE_APP_USER, ROLE_NONE, method="POST", path="/dtwin/sync/filter"
+        )
+        assert resp.status_code == 403 and not result.get("passed")
+
     @pytest.mark.parametrize("domain_role", [ROLE_EDITOR, ROLE_BUILDER])
     @pytest.mark.parametrize(
         "path",
