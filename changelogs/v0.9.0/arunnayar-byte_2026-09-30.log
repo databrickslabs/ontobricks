@@ -1,0 +1,26 @@
+## Explorer: entity-type filter no longer recounts the graph on open
+Context: Landed on 0.9.0 (PR #189 was opened against master/0.8.1). The
+Knowledge Graph Explorer's Filter panel filled its entity-type list from
+/dtwin/sync/stats?refresh=true. The refresh flag bypasses the stats cache,
+so every open recomputed all graph aggregates (total, distinct subjects,
+type and predicate distributions) over the whole triple store. On a
+20.8M-triple Lakebase graph the list stayed on "Loading types..." for a
+long time.
+Changes:
+1. src/front/static/query/js/query-sigmagraph.js
+   _populateFilterEntityTypes fills the list from the loaded ontology first
+   (new _ontologyEntityTypes, a read of /ontology/get-loaded-ontology), then
+   narrows it to the types with instances from /dtwin/sync/stats without
+   refresh. The stats cache is cleared at the start of every build, so the
+   cached list matches the current graph. _renderStatsDropdown keeps the
+   user's selection when the list is re-rendered.
+Tests added:
+- tests/units/front/test_explorer_type_dropdown.py: the type list does not
+  bypass the stats cache, reads the cached stats, fills from the ontology
+  first, and keeps the selection on re-render.
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_type_dropdown.py
+- changelogs/v0.9.0/arunnayar-byte_2026-09-30.log
+Tests: uv run --frozen pytest -q tests/units/front — 1048 passed. node --check
+on the edited script: OK.

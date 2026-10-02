@@ -1898,24 +1898,46 @@ var SigmaGraph = (function () {
             }
         }
 
-        // Always query the triple store live (with refresh=true to bypass server cache)
+        // Fill from the ontology first: instant, no graph query. Then narrow to
+        // the types that have instances from the server's cached stats. The
+        // cache is cleared by every build, so it matches the current graph;
+        // forcing a refresh here recounted the whole store on every open.
         sel.innerHTML = '<option value="">Loading types...</option>';
+        var ontologyTypes = await _ontologyEntityTypes();
+        if (ontologyTypes.length > 0) _renderStatsDropdown(sel, ontologyTypes);
         try {
-            var resp = await fetch('/dtwin/sync/stats?refresh=true', { credentials: 'same-origin' });
+            var resp = await fetch('/dtwin/sync/stats', { credentials: 'same-origin' });
             var stats = await resp.json();
-            if (stats.success && stats.entity_types) {
+            if (stats.success && stats.entity_types && stats.entity_types.length > 0) {
                 _cachedStats = stats.entity_types;
                 _renderStatsDropdown(sel, _cachedStats);
-            } else {
+            } else if (ontologyTypes.length === 0) {
                 sel.innerHTML = '<option value="">All</option>';
             }
         } catch (err) {
             console.warn('[SigmaGraph] Failed to load stats for entity types:', err);
-            sel.innerHTML = '<option value="">All</option>';
+            if (ontologyTypes.length === 0) sel.innerHTML = '<option value="">All</option>';
+        }
+    }
+
+    async function _ontologyEntityTypes() {
+        try {
+            var resp = await fetch('/ontology/get-loaded-ontology', { credentials: 'same-origin' });
+            if (!resp.ok) return [];
+            var data = await resp.json();
+            var classes = (data.ontology && data.ontology.classes) || [];
+            return classes
+                .filter(function (c) { return c && c.uri; })
+                .map(function (c) { return { uri: c.uri }; })
+                .sort(function (a, b) { return a.uri.localeCompare(b.uri); });
+        } catch (err) {
+            return [];
         }
     }
 
     function _renderStatsDropdown(sel, entityTypes) {
+        // Re-rendered when the stats arrive: keep what the user already picked.
+        var previous = sel.value;
         var html = '<option value="">All</option>';
         entityTypes.forEach(function (et) {
             var uri = et.uri || '';
@@ -1924,6 +1946,9 @@ var SigmaGraph = (function () {
             html += '<option value="' + _esc(uri) + '">' + _iconForType(uri) + ' ' + _esc(shortName) + '</option>';
         });
         sel.innerHTML = html;
+        if (previous && Array.prototype.some.call(sel.options, function (o) { return o.value === previous; })) {
+            sel.value = previous;
+        }
     }
 
     // -- Seed preview modal state ---------------------------------------
