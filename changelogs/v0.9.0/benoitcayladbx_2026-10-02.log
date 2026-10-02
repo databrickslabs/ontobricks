@@ -110,3 +110,65 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-10-02.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 7288 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.30s
+
+## Auto-provision Lakebase registry on deploy
+
+Context: First install required a pre-existing Lakebase database and a
+manual Settings → Registry → Initialize click. make deploy now creates
+missing UC/Lakebase resources and initializes the registry schema.
+
+Changes:
+
+1. scripts/_internal/_init-lakebase-registry.py
+   Serverless warehouse picker and LakebaseRegistryStore.initialize() CLI.
+2. tests/units/scripts/test_init_lakebase_registry.py
+   Picker and initialize wrapper contracts.
+3. scripts/deploy.sh
+   Resolve empty WAREHOUSE_ID; ensure UC catalog/schema; call setup-lakebase.sh;
+   initialize registry before grants.
+4. scripts/deploy.config.sh
+   Document create-if-missing and empty warehouse default.
+5. scripts/bootstrap/setup-lakebase.sh
+   Drop the UI Initialize next-step (deploy does it).
+6. scripts/bootstrap/lakebase-perms.sh
+   Comments: schema is created at deploy time.
+7. docs/DEPLOY_CHECKLIST.md / docs/deployment.md / docs/dab-reference.md / docs/INFO.md
+   First deploy no longer requires a manual Initialize click.
+
+Modified files:
+- scripts/_internal/_init-lakebase-registry.py
+- tests/units/scripts/test_init_lakebase_registry.py
+- scripts/deploy.sh
+- scripts/deploy.config.sh
+- scripts/bootstrap/setup-lakebase.sh
+- scripts/bootstrap/lakebase-perms.sh
+- docs/DEPLOY_CHECKLIST.md
+- docs/deployment.md
+- docs/dab-reference.md
+- docs/INFO.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7298 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 68.93s
+
+## Skip Lakebase recreate and owner-only initialize on existing registries
+
+Context: make deploy against an Autoscaling project (not database/instances)
+tried POST /database/instances and failed. Replaying initialize() as the
+human deployer hit "must be owner of table" on app-owned tables.
+
+Changes:
+
+1. scripts/bootstrap/setup-lakebase.sh
+   Treat an existing /api/2.0/postgres/projects/{name} as already provisioned.
+2. scripts/_internal/_init-lakebase-registry.py
+   Skip initialize() when store.is_initialized() is true.
+3. tests/units/scripts/test_init_lakebase_registry.py
+   Cover the already-initialized skip path.
+
+Modified files:
+- scripts/bootstrap/setup-lakebase.sh
+- scripts/_internal/_init-lakebase-registry.py
+- tests/units/scripts/test_init_lakebase_registry.py
+
+Tests: uv run --frozen pytest tests/units/scripts/test_init_lakebase_registry.py -q → 6 passed
+
+

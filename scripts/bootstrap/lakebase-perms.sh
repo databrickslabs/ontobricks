@@ -39,8 +39,7 @@ set -euo pipefail
 #      Coords : deploy.config.sh → LAKEBASE_PROJECT / LAKEBASE_BRANCH /
 #               LAKEBASE_DATABASE / LAKEBASE_SCHEMA
 #      → ``scripts/deploy.sh`` grants this one automatically on every
-#        dev-lakebase deploy (re-run after "Settings > Registry > Initialize"
-#        if the schema did not exist yet at deploy time).
+#        dev-lakebase deploy (schema is created by deploy-time initialize).
 #
 #   2. Graph schema  (e.g. ontobricks_graph)
 #      Configured IN-APP (Settings → Graph DB) and may live in a

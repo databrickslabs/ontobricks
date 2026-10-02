@@ -79,8 +79,8 @@ databricks bundle deploy
 
 ## Post-Deploy Steps (First Time Only)
 
-1. **Bind resources** — In the Databricks Apps UI, bind `sql-warehouse` and `volume` for both apps
-2. **Initialize registry** — Open the app > Settings > Registry > Initialize
+1. **Bind resources** — In the Databricks Apps UI, bind `sql-warehouse` (and postgres on Lakebase targets) for both apps
+2. **Registry** — `make deploy` initializes the registry. Use Settings > Registry > Initialize only for upgrade/repair.
 3. **Set MCP URL** — Update `ONTOBRICKS_URL` in `src/mcp-server/app.yaml` with the main app URL
 
 Resource bindings persist across redeployments.

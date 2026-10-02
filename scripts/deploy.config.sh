@@ -9,7 +9,7 @@
 # ┌─────────────────────────────────────────────────────────────────┐
 # │  TO DEPLOY A NEW INSTANCE (keeps existing apps):                │
 # │    1. Set DEFAULT_INSTANCE_ID (e.g. "07x").                     │
-# │    2. Set DEFAULT_LAKEBASE_DATABASE (existing Postgres datname).│
+# │    2. Set DEFAULT_LAKEBASE_DATABASE (created if missing).       │
 # │    3. Optionally set DEFAULT_DATABRICKS_PROFILE if you use a    │
 # │       non-default Databricks CLI profile.                       │
 # │    4. Optionally set DEFAULT_LAKEBASE_SCHEMA if you want a      │
@@ -51,8 +51,9 @@ DEFAULT_INSTANCE_ID="${DEFAULT_INSTANCE_ID:-09x}"
 # `databricks` invocations when this file is sourced (make deploy, bootstrap, …).
 DEFAULT_DATABRICKS_PROFILE="${DEFAULT_DATABRICKS_PROFILE-DEFAULT}"
 
-# SQL Warehouse
-DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
+# SQL Warehouse. Leave empty to use the workspace Serverless Starter Warehouse
+# (resolved at deploy time). A set id is never replaced.
+DEFAULT_WAREHOUSE_ID="" #d2096aa075ad44a3
 
 # Unity Catalog
 DEFAULT_REGISTRY_CATALOG="benoit_cayla"

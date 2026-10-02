@@ -45,26 +45,27 @@ databricks auth login --host https://<workspace> --profile <profile>
 
 ---
 
-## 3. Workspace resources (must exist before deploy)
+## 3. Workspace resources (created if missing on `make deploy`)
 
 Configure in `scripts/deploy.config.sh` (single source of truth).
+`make deploy` on a Lakebase target creates missing catalog, schema,
+Lakebase project/database, and initializes the Postgres registry schema.
 
 | Resource | Config variable(s) | Permission you need |
 |----------|------------------|---------------------|
-| **SQL warehouse** | `DEFAULT_WAREHOUSE_ID` | CAN USE |
-| **Unity Catalog catalog** | `DEFAULT_REGISTRY_CATALOG` | USE CATALOG, CREATE SCHEMA (first time) |
-| **UC schema + Volume** | `DEFAULT_REGISTRY_SCHEMA`, `DEFAULT_REGISTRY_VOLUME` | ALL PRIVILEGES on schema (or CREATE TABLE/VOLUME) |
-| **Lakebase project** | `DEFAULT_LAKEBASE_PROJECT` | CAN USE on project; create via `scripts/bootstrap/setup-lakebase.sh` if missing |
+| **SQL warehouse** | `DEFAULT_WAREHOUSE_ID` (empty → workspace Serverless Starter Warehouse) | CAN USE |
+| **Unity Catalog catalog** | `DEFAULT_REGISTRY_CATALOG` | USE CATALOG, CREATE CATALOG (first time) |
+| **UC schema** | `DEFAULT_REGISTRY_SCHEMA` | CREATE SCHEMA on the catalog (first time) |
+| **Lakebase project** | `DEFAULT_LAKEBASE_PROJECT` | CAN USE; `setup-lakebase.sh` is invoked by `make deploy` when missing |
 | **Lakebase branch** | `DEFAULT_LAKEBASE_BRANCH` | Usually `production` |
-| **Postgres database (datname)** | `DEFAULT_LAKEBASE_DATABASE` | Created by `setup-lakebase.sh` or UI — use `status.postgres_database` from `list-databases`, **not** the hyphenated `db-…` id |
-| **Postgres registry schema** | `DEFAULT_LAKEBASE_SCHEMA` | Created by **Settings → Registry → Initialize** in the app (after first deploy) |
+| **Postgres database (datname)** | `DEFAULT_LAKEBASE_DATABASE` | Created by `setup-lakebase.sh` — use `status.postgres_database` from `list-databases`, **not** the hyphenated `db-…` id |
+| **Postgres registry schema** | `DEFAULT_LAKEBASE_SCHEMA` | Created by `make deploy` (`LakebaseRegistryStore.initialize()`) |
 | **Databricks Apps (sandbox)** | `DEFAULT_APP_NAME`, `DEFAULT_MCP_APP_NAME` | Created by `make deploy` on first run |
 
 Verify resources:
 
 ```bash
 databricks warehouses get <WAREHOUSE_ID>
-databricks volumes read <catalog>.<schema>.<volume>
 databricks postgres list-databases "projects/<project>/branches/<branch>" -o json
 ```
 
@@ -83,7 +84,7 @@ make bootstrap-lakebase
 | **psql on PATH** | Connects with a minted Lakebase JWT |
 | **CLI authenticated as schema owner** (or GRANT OPTION) | Applies GRANTs + idempotent DDL migrations |
 | **Active Postgres endpoint** | Project/branch must expose a host via `/api/2.0/postgres/.../endpoints` |
-| **Registry schema exists** | After **Settings → Registry → Initialize** — CAN_USE + `pgcrypto` are applied even before init, but schema GRANTs need the schema |
+| **Registry schema exists** | `make deploy` creates it. CAN_USE + `pgcrypto` are applied even before tables exist; schema GRANTs need the schema |
 | **Apps deployed** | Service principal ids are resolved from existing apps (warn-only on first deploy) |
 | **`pgcrypto` in `public`** | Companion `__app` tables need `digest(..., 'sha256')`. Step 1b installs it **in `public`** and relocates a stranded copy — an extension sitting in a graph schema is invisible once that schema changes. Applies **per database**, so the graph DB needs it too |
 
@@ -176,10 +177,10 @@ make bootstrap-perms
     for a pre-0.7 in-place upgrade also set DEFAULT_DAB_TARGET=dev-lakebase — see §5)
 [ ] scripts/_internal/check-deploy-prerequisites.sh          # or make deploy-check
 [ ] make deploy-dry-run                            # read-only full orchestrator check
-[ ] make deploy                                    # deploy + bootstrap
-[ ] Databricks Apps UI: bind sql-warehouse, volume, postgres (first time only)
-[ ] App UI: Settings → Registry → Initialize
-[ ] make bootstrap-lakebase                          # if schema was created after deploy
+[ ] make deploy                                    # deploy + create-if-missing registry + bootstrap
+[ ] Databricks Apps UI: bind sql-warehouse, postgres (first time only)
+[ ] App UI: Settings → Registry → Initialize     # upgrade/repair only, not first install
+[ ] make bootstrap-lakebase                          # if grants need a refresh
 [ ] App UI: Settings → Graph DB → Create graph DB  # grants graph schema separately
 ```
 

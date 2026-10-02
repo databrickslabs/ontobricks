@@ -658,7 +658,7 @@ or a manual `bootstrap-lakebase-perms.sh` run.
 
 | Schema | When to bootstrap | Who runs it |
 |--------|-------------------|-------------|
-| Registry (`ontobricks_registry`) | After **Settings → Registry → Initialize** has created the schema | `deploy.sh` automatically (`LAKEBASE_REGISTRY_SCHEMA` in `deploy.config.sh`) |
+| Registry (`ontobricks_registry`) | After `make deploy` has created the schema | `deploy.sh` automatically (`LAKEBASE_SCHEMA` in `deploy.config.sh`) |
 | Graph DB (`ontobricks_graph`) | After the **first Knowledge Graph Build** has created the schema | In-app "Create graph DB" flow, or manual run with the graph project/branch/database |
 
 The script grants:
@@ -734,23 +734,19 @@ After the first deployment, bind the app resources in the Databricks workspace U
 
 > **Note:** Resource bindings persist across redeployments — you only need to do this once per workspace. Once the `sql-warehouse` and `volume` resources are bound, the corresponding controls in the Settings page are **locked**. To change them, update the resource bindings in the Apps UI and restart the app.
 
-### Step 8 — Initialize the registry (first deploy only)
+### Step 8 — Registry initialize (upgrade / repair)
 
-If the volume is empty (first deployment):
+`make deploy` already creates missing UC/Lakebase resources and runs
+`LakebaseRegistryStore.initialize()`. A first install does **not** need
+Settings → Registry → Initialize.
 
-1. Open the app URL
-2. Go to **Settings > Registry**
-3. Click **Initialize** to bootstrap the registry — on the Lakebase
-   backend this also self-applies the **Postgres schema** grants the app +
-   MCP service principals need (results shown under **Permission Grants**).
-   Control-plane re-grants (`CAN_USE` on the Lakebase project, UC
-   `ALL_PRIVILEGES` on the catalog) are best-effort: the app SP usually
-   lacks `CAN_MANAGE` / catalog `MANAGE`, so those lines may warn even
-   when deploy already applied them. If UC privileges are actually
-   missing, re-run `scripts/bootstrap/lakebase-perms.sh` with `-c` as a
-   workspace admin (do **not** need to elevate the app SP to `CAN_MANAGE`).
-   Use **Repair permissions** on the Lakebase Connection panel to re-apply
-   schema grants later (e.g. after a rebind).
+Use **Initialize** in the app as an upgrade/repair path (new columns,
+re-pin the UC triplet, or **Repair permissions** after a rebind).
+Control-plane re-grants (`CAN_USE` on the Lakebase project, UC
+`ALL_PRIVILEGES` on the catalog) are best-effort in-app: the app SP
+usually lacks `CAN_MANAGE` / catalog `MANAGE`. If UC privileges are
+missing, re-run `scripts/bootstrap/lakebase-perms.sh` with `-c` as a
+workspace admin.
 
 ### Step 9 — Verify
 
@@ -1232,8 +1228,8 @@ databricks bundle run mcp_ontobricks_app -t dev-lakebase
 
 ### 5.6 — Initialize and verify
 
-1. Open the app URL
-2. Go to **Settings > Registry > Initialize** (if the volume is empty)
+1. Open the app URL — the registry schema is created by `make deploy`.
+2. Use **Settings > Registry > Initialize** only if you need an upgrade/repair.
 3. Verify both apps are **Running**: `databricks apps get ontobricks-XXX` and `databricks apps get mcp-ontobricks`
 
 ### 5.7 — Update MCP server URL
@@ -1276,10 +1272,8 @@ databricks bundle run mcp_ontobricks_app -t dev-lakebase
 [ ] 10. Grant UC privileges to each app's service principal (see §3):
         registry USE CATALOG / USE SCHEMA / CREATE TABLE / CREATE VIEW +
         volume READ/WRITE + source-table SELECT
-[ ] 11. Open app → Settings → Registry → Initialize
-[ ] 12. Re-run make deploy (or scripts/bootstrap/lakebase-perms.sh) so the
-        registry / graph / sync schema GRANTs apply against the just-
-        created schemas
+[ ] 11. Open app → Settings → Registry → Initialize only for upgrade/repair
+[ ] 12. Re-run make deploy (or scripts/bootstrap/lakebase-perms.sh) if grants need a refresh
 [ ] 13. Verify both apps are RUNNING
 [ ] 14. Update ONTOBRICKS_URL in src/mcp-server/app.yaml with the main app URL
 [ ] 15. databricks bundle deploy -t dev-lakebase && databricks bundle run mcp_ontobricks_app -t dev-lakebase
@@ -1641,8 +1635,8 @@ Use this checklist when deploying OntoBricks from scratch on any workspace:
 [ ] 12. App self-permissions:
         make bootstrap-perms
         (already invoked by `make deploy`, but safe to re-run anytime.)
-[ ] 13. Open app URL → Settings → Registry → Initialize (creates the Postgres schema)
-[ ] 14. Re-run Lakebase GRANT bootstrap so the now-existing schemas pick up USAGE/DML:
+[ ] 13. Registry schema: created by `make deploy`. Settings → Registry → Initialize is upgrade/repair only.
+[ ] 14. Re-run Lakebase GRANT bootstrap if needed:
         make bootstrap-lakebase
         (also runs as part of `make deploy`; idempotent.)
 [ ] 15. Verify main app is RUNNING:

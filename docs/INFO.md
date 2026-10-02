@@ -207,7 +207,7 @@ make deploy
 # Or: scripts/deploy.sh
 ```
 
-After deployment, bind the **sql-warehouse** and **volume** resources in the Databricks Apps UI (**Compute > Apps > ontobricks > Resources**). If the registry volume is empty, open the app and click **Settings > Registry > Initialize**.
+After deployment, bind the **sql-warehouse** (and **postgres** on Lakebase targets) resources in the Databricks Apps UI (**Compute > Apps > ontobricks > Resources**). `make deploy` initializes the registry schema; use **Settings > Registry > Initialize** only as an upgrade/repair.
 
 See [Deployment Guide](docs/deployment.md) for detailed instructions including resource configuration, permissions, and the full deployment checklist.
 
