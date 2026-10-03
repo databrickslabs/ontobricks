@@ -68,7 +68,7 @@ jobs:
 
       - name: Install Databricks CLI
         # Pin to v1.10.0 commit SHA — never @main next to DATABRICKS_TOKEN
-        uses: databricks/setup-cli@d76f84cea9893ce68311a1f33fb0c95af6c963b7 # v1.17.0
+        uses: databricks/setup-cli@9230f12203ef173d0b901846f62a55ce997efef7 # v1.19.0
         with:
           version: "1.10.0"
 
