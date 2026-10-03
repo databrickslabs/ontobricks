@@ -37,7 +37,7 @@ env:
   - name: DATABRICKS_SQL_WAREHOUSE_ID
     valueFrom: sql-warehouse
   - name: DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT
-    value: "d2096aa075ad44a3"
+    value: "66e8366e84d57752"
 
   # ── Lakebase ──────────────────────────────────────────────────────
   # When deployed to a *-lakebase target the DAB binds a ``database``
