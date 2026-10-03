@@ -123,8 +123,11 @@ async function loadMapLayout() {
 /**
  * Initialize the mapping designer (D3.js Designer)
  */
-async function initMappingDesigner() {
-    showMappingDesignerLoading(true);
+async function initMappingDesigner(opts) {
+    const showLoading = !(opts && opts.showLoading === false);
+    if (showLoading) {
+        showMappingDesignerLoading(true);
+    }
     initMappingMapGridToggle();
     setupMappingDesignerResizeHandle();
     restoreMappingDesignerPanelHeight();
@@ -219,7 +222,7 @@ async function initMappingDesigner() {
         const savedLayout = await loadMapLayout();
         if (!mappingDriftLoaded) {
             loadSchemaDrift().then(() => {
-                if (mappingMapInitialized) initMappingDesigner();
+                if (mappingMapInitialized) initMappingDesigner({ showLoading: false });
             }).catch(() => {});
         }
         
@@ -1027,9 +1030,11 @@ async function initMappingDesigner() {
     } catch (error) {
         console.error('Error initializing mapping map:', error);
     } finally {
-        setTimeout(() => {
-            showMappingDesignerLoading(false);
-        }, 500);
+        if (showLoading) {
+            setTimeout(() => {
+                showMappingDesignerLoading(false);
+            }, 500);
+        }
     }
 }
 

@@ -171,4 +171,24 @@ Modified files:
 
 Tests: uv run --frozen pytest tests/units/scripts/test_init_lakebase_registry.py -q → 6 passed
 
+## Skip second Mapping Designer spinner after a mapping change
+
+Context: Saving or unmapping an entity rebuilt the designer canvas (spinner)
+then re-fetched schema drift. When that fetch finished it called
+initMappingDesigner() again with the full overlay, so a slow warehouse
+check flashed the spinner twice.
+
+Changes:
+
+1. src/front/static/mapping/js/mapping-design.js
+   Drift re-init uses { showLoading: false }; overlay only on user-facing loads.
+2. tests/units/front/test_mapping_designer_loading.py
+   Source contracts for silent drift re-render.
+
+Modified files:
+- src/front/static/mapping/js/mapping-design.js
+- tests/units/front/test_mapping_designer_loading.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-02.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7302 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 56.40s
 
