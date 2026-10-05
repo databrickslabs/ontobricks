@@ -17,6 +17,7 @@ from back.core.logging import get_logger
 from back.core.w3c.rdf_utils import uri_local_name
 from back.core.reasoning.constants import AGG_FUNCTIONS, AGG_OPERATORS, RDF_TYPE
 from back.core.reasoning.models import InferredTriple, ReasoningResult, RuleViolation
+from back.core.helpers import sql_numeric
 
 logger = get_logger(__name__)
 
@@ -33,10 +34,15 @@ class AggregateRuleEngine:
         data_ns = base_uri.rstrip("#").rstrip("/") + "/" if base_uri else ""
 
         uri_map: Dict[str, str] = {}
+
+        base_ns = base_uri.rstrip("#").rstrip("/") if base_uri else ""
         for cls in ontology.get("classes", []):
             name = cls.get("name", "") or cls.get("localName", "")
             uri = cls.get("uri", "")
-            if not uri and name:
+            if base_ns and uri and not uri.startswith(base_ns):
+                local = uri_local_name(uri)
+                uri = base_uri + sep + local
+            elif not uri and name:
                 uri = base_uri + sep + name
             if name:
                 uri_map[name.lower()] = uri
@@ -78,6 +84,12 @@ class AggregateRuleEngine:
         _resolve("result_class", "result_class_uri", is_class=True)
         return rule
 
+    @staticmethod
+    def _dialect_for_store(store) -> str:
+        """Best-effort SQL dialect detection from the store's class name."""
+        name = type(store).__name__.lower()
+        return "postgres" if "lakebase" in name or "postgres" in name else "databricks"
+
     def execute_rules(
         self,
         rules: List[Dict],
@@ -90,6 +102,7 @@ class AggregateRuleEngine:
         t0 = time.time()
         result = ReasoningResult()
         base_uri = ontology.get("base_uri", "")
+        dialect = self._dialect_for_store(store)
 
         for rule in rules:
             if not rule.get("enabled", True):
@@ -103,6 +116,7 @@ class AggregateRuleEngine:
                     table_name,
                     base_uri,
                     materialize,
+                    dialect,
                 )
                 result.merge(rule_result)
             except Exception as e:
@@ -133,11 +147,12 @@ class AggregateRuleEngine:
         table_name: str,
         base_uri: str,
         materialize: bool,
+        dialect: str,
     ) -> ReasoningResult:
         result = ReasoningResult()
         name = rule.get("name", "unnamed")
 
-        query = self.build_sql(rule, store.sql_table_reference(table_name), base_uri)
+        query = self.build_sql(rule, store.sql_table_reference(table_name), base_uri, dialect)
 
         if not query:
             return result
@@ -156,7 +171,14 @@ class AggregateRuleEngine:
                         rule_type="aggregate",
                     )
                 )
-                if materialize and rule.get("result_class_uri"):
+                # Computed for every dry-run preview, same as SWRL/Decision
+                # Tables/SPARQL — whether these triples get written to the
+                # store is decided later by the top-level "Materialise"
+                # action, not by this internal flag. Gating this on
+                # `materialize` made Aggregate Rules the only engine whose
+                # preview ("Run") always showed 0 inferred even when a
+                # Result Entity was configured and real rows matched.
+                if rule.get("result_class_uri"):
                     result.inferred_triples.append(
                         InferredTriple(
                             subject=subj,
@@ -171,7 +193,9 @@ class AggregateRuleEngine:
 
         return result
 
-    def build_sql(self, rule: Dict, table: str, base_uri: str) -> Optional[str]:
+    def build_sql(
+        self, rule: Dict, table: str, base_uri: str, dialect: str = "databricks"
+    ) -> Optional[str]:
         """Build SQL with GROUP BY / HAVING for an aggregate rule."""
         target_uri = rule.get("target_class_uri", "")
         group_prop_uri = rule.get("group_by_property_uri", "")
@@ -188,28 +212,31 @@ class AggregateRuleEngine:
         def esc(v: str) -> str:
             return v.replace("'", "''")
 
+        def cast(expr: str) -> str:
+            return sql_numeric(expr, dialect=dialect)
+
         if group_prop_uri and agg_prop_uri:
             return (
-                f"SELECT t0.subject AS s, {func}(TRY_CAST(t_agg.object AS DOUBLE)) AS agg_val\n"
+                f"SELECT t0.subject AS s, {func}({cast('t_agg.object')}) AS agg_val\n"
                 f"FROM {table} t0\n"
                 f"JOIN {table} t_grp ON t_grp.subject = t0.subject AND t_grp.predicate = '{esc(group_prop_uri)}'\n"
                 f"JOIN {table} t_agg ON t_agg.subject = t_grp.object AND t_agg.predicate = '{esc(agg_prop_uri)}'\n"
                 f"WHERE t0.predicate = '{RDF_TYPE}' AND t0.object = '{esc(target_uri)}'\n"
                 f"GROUP BY t0.subject\n"
-                f"HAVING {func}(TRY_CAST(t_agg.object AS DOUBLE)) {sql_op} {threshold}"
+                f"HAVING {func}({cast('t_agg.object')}) {sql_op} {threshold}"
             )
         elif agg_prop_uri:
             return (
-                f"SELECT t0.subject AS s, {func}(TRY_CAST(t_agg.object AS DOUBLE)) AS agg_val\n"
+                f"SELECT t0.subject AS s, {func}({cast('t_agg.object')}) AS agg_val\n"
                 f"FROM {table} t0\n"
                 f"JOIN {table} t_agg ON t_agg.subject = t0.subject AND t_agg.predicate = '{esc(agg_prop_uri)}'\n"
                 f"WHERE t0.predicate = '{RDF_TYPE}' AND t0.object = '{esc(target_uri)}'\n"
                 f"GROUP BY t0.subject\n"
-                f"HAVING {func}(TRY_CAST(t_agg.object AS DOUBLE)) {sql_op} {threshold}"
+                f"HAVING {func}({cast('t_agg.object')}) {sql_op} {threshold}"
             )
         elif group_prop_uri:
             agg_expr = (
-                f"{func}(TRY_CAST(t_grp.object AS DOUBLE))"
+                f"{func}({cast('t_grp.object')})"
                 if func != "COUNT"
                 else "COUNT(t_grp.object)"
             )

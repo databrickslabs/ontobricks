@@ -30,7 +30,7 @@ class SQLHelpers:
         return str(value).replace("\\", "\\\\").replace("'", "''")
 
     @staticmethod
-    def sql_cast(expr: str, sql_type: str) -> str:
+    def sql_cast(expr: str, sql_type: str, dialect: str = "databricks") -> str:
         """Cast a value to *sql_type* without failing the query.
 
         Databricks warehouses run with ANSI mode on, so a plain ``CAST``
@@ -39,18 +39,30 @@ class SQLHelpers:
         emits — stringification, typed literals, typed NULLs, numeric
         coercion — must use this helper (or inline ``TRY_CAST``) instead of a
         bare ``CAST``.
+
+        PostgreSQL (Lakebase) has no ``TRY_CAST``. When *dialect* is
+        ``"postgres"`` this instead emits a regex-guarded
+        ``CASE WHEN … THEN …::type ELSE NULL END`` that yields the same
+        "cast or NULL, never raise" semantics as ``TRY_CAST``.
         """
+        if dialect == "postgres":
+            pg_type = "DOUBLE PRECISION" if sql_type.upper() == "DOUBLE" else sql_type
+            return (
+                f"(CASE WHEN ({expr}) ~ '^\\s*[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?\\s*$' "
+                f"THEN ({expr})::{pg_type} ELSE NULL END)"
+            )
         return f"TRY_CAST({expr} AS {sql_type})"
 
     @staticmethod
-    def sql_numeric(expr: str, sql_type: str = "DOUBLE") -> str:
+    def sql_numeric(expr: str, sql_type: str = "DOUBLE", dialect: str = "databricks") -> str:
         """Cast a triple-store value to a number without failing the query.
 
         Every object in the triple store is stored as a string, so a numeric
         comparison has to cast. See :meth:`sql_cast` for why this is a
-        ``TRY_CAST`` rather than a bare ``CAST``.
+        ``TRY_CAST`` (or the Postgres-safe equivalent) rather than a bare
+        ``CAST``.
         """
-        return SQLHelpers.sql_cast(expr, sql_type)
+        return SQLHelpers.sql_cast(expr, sql_type, dialect=dialect)
 
     @staticmethod
     def validate_uc_identifier(name: str, *, role: str = "identifier") -> str:
