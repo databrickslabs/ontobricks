@@ -551,6 +551,71 @@
     pointer-events: none;
 }
 
+/* Find Path typeahead (modal) */
+.sg-find-path-picker {
+    position: relative;
+}
+
+.sg-find-path-suggest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 2px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 1060;
+    background: var(--db-surface-warm);
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-control);
+    box-shadow: var(--db-shadow-md);
+}
+
+.sg-find-path-suggest-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    padding: 0.4rem 0.75rem;
+    color: var(--db-text);
+    border-radius: 0;
+}
+
+.sg-find-path-suggest-item:hover,
+.sg-find-path-suggest-item.active {
+    background: var(--db-hover-indigo);
+}
+
+.sg-find-path-suggest-type {
+    display: block;
+    color: var(--db-text-muted);
+    font-size: 0.75rem;
+}
+
+.sg-find-path-picked {
+    margin-top: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--db-border);
+    border-radius: var(--db-radius-chip);
+    background: var(--db-primary-light);
+    color: var(--db-primary-darker);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.sg-find-path-picked-label {
+    min-width: 0;
+    flex: 1;
+}
+
+.sg-find-path-picked .btn-close {
+    width: 0.5em;
+    height: 0.5em;
+    padding: 0.2em;
+}
+
 @media (max-width: 768px) {
     .sidebar-content:has(#sigmagraph-section.active),
     #sigmagraph-section.active {

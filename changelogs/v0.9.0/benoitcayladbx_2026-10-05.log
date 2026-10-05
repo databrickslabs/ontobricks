@@ -1,4 +1,63 @@
-## Group graph-index companions in Lakehouse Delete and grant warehouse CAN_USE
+## Propose Managed sync in Settings; Snapshot-only Lakeflow schedule
+
+Context: Settings → Lakebase → Bulk loading still led with App-managed, and
+offered Triggered and Continuous Lakeflow schedules. Those two need Change
+Data Feed; the mapped source is an R2RML view, so only Snapshot can run.
+
+Changes:
+
+1. src/front/templates/settings.html
+   Managed sync is first and selected; schedule select is Snapshot-only with CDF explanation.
+2. src/front/static/config/js/settings.js
+   Unset sync_mode hydrates as managed_synced; saved app_managed is preserved; always persist snapshot.
+3. src/back/core/graphdb/lakebase/LakebaseBase.py
+   normalize_sync_table_mode() coerces triggered/continuous to snapshot on save.
+4. src/back/core/graphdb/GraphDBFactory.py
+   Runtime also coerces unknown/legacy schedules to snapshot; omitted sync_mode still app_managed.
+5. src/back/core/graphdb/lakebase/__init__.py
+   Export normalize_sync_table_mode.
+6. tests/units/front/test_settings_lakebase_sync_defaults.py
+   HTML/JS contracts for the new default and Snapshot-only schedule.
+7. tests/units/graphdb/test_graph_engine_config_keys.py
+   Coercion and rejection tests for sync_table_mode.
+8. tests/units/settings/test_graph_engine_config.py
+   Round-trip of legacy triggered now stores snapshot.
+9. docs/lakebase-graphdb.md
+   Document Settings proposal vs factory fallback, Snapshot-only schedule.
+10. docs/graphdb-integration.md
+    Same distinction; drop triggered/continuous as valid options.
+11. docs/architecture.md
+    Settings proposes managed_synced; Snapshot-only because views have no CDF.
+12. docs/deployment.md
+    Same write-mode wording.
+13. docs/user-guide.md
+    Lakebase modes: Settings proposes managed_synced Snapshot-sync.
+14. docs/superpowers/specs/2026-10-05-lakebase-managed-sync-default-design.md
+    Approved design.
+15. docs/superpowers/plans/2026-10-05-lakebase-managed-sync-default.md
+    Implementation plan.
+
+Modified files:
+- src/front/templates/settings.html
+- src/front/static/config/js/settings.js
+- src/back/core/graphdb/lakebase/LakebaseBase.py
+- src/back/core/graphdb/GraphDBFactory.py
+- src/back/core/graphdb/lakebase/__init__.py
+- tests/units/front/test_settings_lakebase_sync_defaults.py
+- tests/units/graphdb/test_graph_engine_config_keys.py
+- tests/units/settings/test_graph_engine_config.py
+- docs/lakebase-graphdb.md
+- docs/graphdb-integration.md
+- docs/architecture.md
+- docs/deployment.md
+- docs/user-guide.md
+- docs/superpowers/specs/2026-10-05-lakebase-managed-sync-default-design.md
+- docs/superpowers/plans/2026-10-05-lakebase-managed-sync-default.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7367 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.56s
+
+
 
 Context: After switching ontobricks-09x to the Serverless Starter warehouse,
 Knowledge Graph builds failed with "not authorized to use this SQL Endpoint"
@@ -228,3 +287,292 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 7346 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.46s
+
+## Explain the Aggregate Rule editor
+
+Context: The "Add / Edit Aggregate Rule" popup listed bare fields (Group-by
+Property, Aggregate Property, Function, Threshold, Result Entity) with no
+explanation of how they combine. The engine builds one of four SQL shapes
+depending on which properties are set, which was invisible to the user.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_business_rules.html
+   Intro alert describing what an aggregate rule does; helper text (linked via
+   aria-describedby) under every field; live "What this rule does" preview
+   region (aria-live); labels bound to their inputs; g-3 gutters so stacked
+   columns keep spacing on mobile.
+2. src/front/static/ontology/js/ontology-business-rules.js
+   New aggDescribeRule(rule) giving a plain-English sentence for the four
+   AggregateRuleEngine.build_sql shapes, plus warnings (non-COUNT without a
+   property; Result entity without a property). _aggRenderPreview refreshes it
+   on open, on any field change and while typing the threshold. Form reading
+   extracted to _aggFormRule, shared by the preview and aggSave.
+3. tests/units/front/test_aggregate_rule_editor_help.py (new)
+   Markup contracts plus node-executed checks of aggDescribeRule.
+
+Browser check: desktop 1400px and mobile 400px, preview updates live, no
+console errors from the modal.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- tests/units/front/test_aggregate_rule_editor_help.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7353 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 61.37s
+
+## Explain the Decision Table editor
+
+Context: The "Add / Edit Decision Table" popup gave no guidance on how
+columns, rows, the OR/AND toggle, the hit policy and the output combine.
+Several engine behaviours were invisible: instances lacking a column
+attribute never match (INNER JOIN), text comparisons are case-insensitive,
+empty / "any" cells are ignored, the hit policy only applies to OR tables
+with an output, "Unique" is not enforced, and "Assign entity" is not
+applied by DecisionTableEngine.
+
+Changes:
+
+1. src/front/templates/partials/ontology/_ontology_business_rules.html
+   Intro alert; helper text for Target Entity, Hit Policy, the grid and the
+   Output Action (aria-describedby, labels bound to inputs); live "What this
+   table does" preview with a warning list (aria-live); g-3 gutters and a
+   wrapping Conditions toolbar so the row-logic hint stays readable on mobile.
+2. src/front/static/ontology/js/ontology-business-rules.js
+   New dtDescribeTable(dt) building a plain-English reading of the table
+   (row conditions, OR/AND, output, hit policy) plus warnings (column without
+   attribute, no effective condition, Assign entity not applied, output value
+   without property, output property without value). _dtRenderPreview runs
+   after every grid render and on any modal change/input; cell values now
+   update state while typing. Row-logic hint reworded. Form reading extracted
+   to _dtFormRule, shared by the preview and dtSave.
+3. tests/units/front/test_decision_table_editor_help.py (new)
+   Markup contracts plus node-executed checks of dtDescribeTable.
+
+Browser check: desktop 1400px and mobile 400px, preview updates live while
+typing, no console errors.
+
+Modified files:
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- tests/units/front/test_decision_table_editor_help.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7367 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 53.08s
+
+## Fix decision table semantics: optional columns, Unique hit policy, Assign entity
+
+Context: Three DecisionTableEngine behaviours contradicted the editor:
+(1) every input column was INNER JOINed, so an instance missing any column
+attribute never matched, even where its cell was "any"; a condition on a
+column without an attribute referenced an alias that was never joined;
+(2) the "unique" hit policy behaved like "all"; (3) the "Assign entity"
+output action was ignored, so nothing was inferred.
+
+Changes:
+
+1. src/back/core/reasoning/DecisionTableEngine.py
+   build_violation_sql LEFT JOINs only the columns used by an active
+   condition and skips conditions on columns without an attribute.
+   Per-row execution collects matches per instance, then applies the hit
+   policy: first (first row), all (every row), unique (several rows ->
+   conflict violation, no output). New ASSIGN_CLASS output: _resolve_dt
+   resolves the class named in output value / row action values and the
+   engine infers rdf:type triples. Output emission factored into _emit /
+   _describe_output. validate_table requires an entity for Assign entity.
+2. src/back/objects/ontology/OntologyRules.py
+   decision_table_reference_errors flags unknown classes assigned by an
+   assign_class output.
+3. src/front/templates/partials/ontology/_ontology_business_rules.html
+   Output row reordered (action first); new "Entity to assign" select shown
+   for Assign entity; Hit Policy, grid and output help texts describe the
+   new behaviour.
+4. src/front/static/ontology/js/ontology-business-rules.js
+   Editor loads/saves assign_class as {property: "", action, value: class};
+   _dtSyncOutputValue toggles property/value vs entity fields;
+   dtDescribeTable describes Assign entity ("typed as X") and Unique
+   conflicts, drops the "has a value for" clause and the obsolete warning.
+5. docs/features.md
+   Decision Tables & Aggregate Rules entry.
+6. tests/units/ontology/test_decision_table_semantics.py (new),
+   tests/units/front/test_decision_table_editor_help.py
+   Engine coverage (LEFT JOIN, skipped columns, first/all/unique, assign
+   class default and per-row, validation, reference errors); editor
+   expectations updated.
+
+Browser check: desktop 1400px and mobile 400px; Assign entity save, reload
+and delete round-trip OK; no console errors.
+
+Modified files:
+- src/back/core/reasoning/DecisionTableEngine.py
+- src/back/objects/ontology/OntologyRules.py
+- src/front/templates/partials/ontology/_ontology_business_rules.html
+- src/front/static/ontology/js/ontology-business-rules.js
+- docs/features.md
+- tests/units/ontology/test_decision_table_semantics.py
+- tests/units/front/test_decision_table_editor_help.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7379 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.36s
+
+## Add Find Path highlight on the KG Explorer canvas
+
+Context: The Graph Explorer could locate entities by name but could not show
+how two loaded nodes connect. Users needed a way to highlight shortest
+paths on the current canvas, with text search for endpoints and a hop cap.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Find Path header button, canvas context-menu entry, and Bootstrap modal
+   with source/destination text pickers and max hops (1–10, default 5).
+2. src/front/templates/dtwin.html
+   Load query-find-path.js after query-sigmagraph.js.
+3. src/front/static/query/js/query-find-path.js
+   Typeahead over loaded instance nodes and undirected BFS of all shortest
+   paths within the hop budget.
+4. src/front/static/query/js/query-sigmagraph.js
+   Path highlight state, node/edge reducers that dim off-path elements
+   (edges only if they sit on a reconstructed path), clear on search/reload.
+5. src/front/static/query/css/query-sigmagraph.css
+   Typeahead list and picked-entity chip using --db-* tokens.
+6. tests/units/front/test_explorer_find_path.py
+   Markup/JS contracts for the button, modal, BFS helpers, and edge reducer.
+7. docs/user-guide.md
+   Explorer workflow lists Find Path.
+8. docs/features.md
+   Graph Viewer bullet covers Find Path.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/templates/dtwin.html
+- src/front/static/query/js/query-find-path.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/css/query-sigmagraph.css
+- tests/units/front/test_explorer_find_path.py
+- docs/user-guide.md
+- docs/features.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7384 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 57.51s
+
+## Clear Find Path on click; add it to the entity context menu
+
+Context: After highlighting a path, clicking another node or the canvas left
+the path overlay in place. Right-click on an entity also had no Find Path
+entry, so the source had to be searched again.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Clear path highlight on node click, canvas click, and selectEntity.
+   Entity context menu now leads with Find Path and passes the node URI.
+2. src/front/static/query/js/query-find-path.js
+   open(sourceNodeId) prefills Source from the right-clicked entity (else
+   the current selection).
+3. tests/units/front/test_explorer_find_path.py
+   Contracts for click-to-clear and the node-menu Find Path item.
+4. docs/user-guide.md
+   Right-click opens Find Path with source prefilled; click clears highlight.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-find-path.js
+- tests/units/front/test_explorer_find_path.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7386 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.54s
+
+## Split entity Find Path into From and To
+
+Context: Right-click only offered one Find Path action that always filled
+Source. Users exploring from a Filter search needed the clicked node as
+either endpoint, with the Filter seed as the other.
+
+Changes:
+
+1. src/front/static/query/js/query-sigmagraph.js
+   Entity menu: Find path (From) then Find path (To). getFilterAnchorNodeId
+   resolves the Filter expansion seed / search term on the loaded graph.
+2. src/front/static/query/js/query-find-path.js
+   open({selectedId, role}) pairs the clicked entity with the Filter anchor.
+3. tests/units/front/test_explorer_find_path.py
+   From/To order and Filter-anchor wiring.
+4. docs/user-guide.md
+   Document From/To and Filter prefill.
+
+Modified files:
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-find-path.js
+- tests/units/front/test_explorer_find_path.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7386 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.90s
+
+## Walk group super-nodes on Find Path
+
+Context: Collapsed groups rewrite instance edges onto super-nodes. Find Path
+skipped those nodes and missed inbound directed edges, so paths vanished
+once a group was expanded or left collapsed. Maximum hops was also
+redundant (canvas-only search). Find path (To) no longer needs a dialog.
+
+Changes:
+
+1. src/front/static/query/js/query-find-path.js
+   BFS uses inbound+outbound neighbours and traverses group/cluster
+   super-nodes; resolveDisplayedNodeId maps a collapsed member URI to its
+   super-node. Find path (To) calls _runDirect with no modal. Hop cap removed.
+2. src/front/static/query/js/query-sigmagraph.js
+   Filter anchor resolves through super-node membership.
+3. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Remove Maximum hops from the Find Path modal.
+4. tests/units/front/test_explorer_find_path.py
+   Super-node traversal, no hop field, To skips the modal.
+5. docs/user-guide.md
+   Groups, To-without-dialog, no hop parameter.
+6. docs/features.md
+   Drop max-hops wording.
+
+Modified files:
+- src/front/static/query/js/query-find-path.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- tests/units/front/test_explorer_find_path.py
+- docs/user-guide.md
+- docs/features.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7386 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.61s
+
+## Rename Explorer Filter tab to Search
+
+Context: The right-hand Explorer pane labeled the graph query surface Filter
+even though it is a search/load action. The visible tab is now Search.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Tab and pane heading: Search with bi-search (ids unchanged).
+2. src/front/static/query/js/query-sigmagraph.js
+   Empty-state copy points at the Search tab.
+3. tests/units/front/test_explorer_highlight_search_value.py
+   Visible Search tab label contract.
+4. docs/user-guide.md
+   Explorer Search bullet.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_highlight_search_value.py
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7387 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 55.47s
+
+
+
+
+

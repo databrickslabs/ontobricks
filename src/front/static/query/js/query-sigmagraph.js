@@ -89,6 +89,8 @@ var SigmaGraph = (function () {
     var _visibleEdgeTypes = new Set();
     var _searchMatched = null;   // null = no search active; Set of directly matched node IDs
     var _searchNeighbors = null; // Set of neighbor node IDs of matched nodes
+    var _pathHighlightNodes = null; // null = no path highlight; Set of node IDs on shortest path(s)
+    var _pathHighlightEdges = null; // Set of undirected edge keys (nodeA\0nodeB)
     var _highlightedSeeds = null; // Set of node IDs to visually emphasize (ring effect)
     var _pendingHighlightTerm = null; // term to auto-highlight after next filter execution
     var _graphFilterActive = false;
@@ -930,6 +932,7 @@ var SigmaGraph = (function () {
         _renderer.on('clickNode', function (e) {
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = e.node;
             _hoveredNode = null;
             _switchToTab('sgTabDetails');
@@ -956,6 +959,7 @@ var SigmaGraph = (function () {
         _renderer.on('clickStage', function () {
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = null;
             _hoveredNode = null;
             _showPlaceholder();
@@ -1221,6 +1225,19 @@ var SigmaGraph = (function () {
             res.zIndex = 10;
         }
 
+        // Find Path: nodes on a shortest path stay bright; everything else is dimmed
+        if (_pathHighlightNodes !== null) {
+            if (_pathHighlightNodes.has(node)) {
+                res.highlighted = true;
+                res.size = data.size * 1.6;
+            } else {
+                res.color = '#e0e0e0';
+                res.label = '';
+                res.size = 3;
+            }
+            return res;
+        }
+
         // Search filter: matched nodes get highlighted, neighbors stay visible, rest dimmed
         if (_searchMatched !== null) {
             if (_searchMatched.has(node)) {
@@ -1261,6 +1278,23 @@ var SigmaGraph = (function () {
         // Edge type filter
         if (_visibleEdgeTypes.size > 0 && pred && !_visibleEdgeTypes.has(pred)) {
             res.hidden = true;
+            return res;
+        }
+
+        // Find Path: only edges that sit on a reconstructed shortest path
+        if (_pathHighlightNodes !== null) {
+            var pathSrc = _graph.source(edge);
+            var pathTgt = _graph.target(edge);
+            var pathKey = (typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.undirectedEdgeKey)
+                ? ExplorerFindPath.undirectedEdgeKey(pathSrc, pathTgt)
+                : (pathSrc < pathTgt ? pathSrc + '\0' + pathTgt : pathTgt + '\0' + pathSrc);
+            if (_pathHighlightEdges && _pathHighlightEdges.has(pathKey)) {
+                res.color = '#333';
+                res.size = 2.5;
+            } else {
+                res.color = '#f0f0f0';
+                res.label = '';
+            }
             return res;
         }
 
@@ -2130,6 +2164,7 @@ var SigmaGraph = (function () {
         _resetSearchTiming();
         _searchTimerStart();
         _showGraphLoading('Searching…');
+        _clearPathHighlight(false);
 
         var includeInferredPreview = document.getElementById('sgShowInferred')?.checked !== false;
         try {
@@ -2350,6 +2385,8 @@ var SigmaGraph = (function () {
         _graphFilterActive = false;
         _searchMatched = null;
         _searchNeighbors = null;
+        _pathHighlightNodes = null;
+        _pathHighlightEdges = null;
         _highlightedSeeds = null;
         _pendingHighlightTerm = null;
         _selectedNode = null;
@@ -2438,8 +2475,13 @@ var SigmaGraph = (function () {
         var nodeAttrs = _graph ? _graph.getNodeAttributes(nodeId) : null;
         var isVirtualNode = !!(nodeAttrs && (nodeAttrs._isGroup || nodeAttrs._isClusterNode));
         if (!isVirtualNode) {
+            items += '<div class="ctx-item" data-sg-node-action="find-path-from" data-uri="' + esc(nodeId) + '">' +
+                '<i class="bi bi-signpost-split"></i> Find path (From)</div>';
+            items += '<div class="ctx-item" data-sg-node-action="find-path-to" data-uri="' + esc(nodeId) + '">' +
+                '<i class="bi bi-signpost-2"></i> Find path (To)</div>';
             var menuDepth = 1;
             var hopLabel = menuDepth + ' hop' + (menuDepth > 1 ? 's' : '');
+            items += '<div class="ctx-divider"></div>';
             items += '<div class="ctx-header">Graph</div>';
             items += '<div class="ctx-item" data-sg-node-action="expandHop" ' +
                 'data-uri="' + esc(nodeId) + '" data-depth="' + menuDepth + '">' +
@@ -2631,9 +2673,21 @@ var SigmaGraph = (function () {
         if (popup) popup.classList.add('d-none');
     }
 
+    function _clearPathHighlight(refreshCamera) {
+        var hadPath = _pathHighlightNodes !== null;
+        _pathHighlightNodes = null;
+        _pathHighlightEdges = null;
+        if (hadPath && _renderer) {
+            if (refreshCamera) _renderer.getCamera().animatedReset({ duration: 300 });
+            _renderer.refresh();
+        }
+    }
+
     function _applyHighlightQuery(query) {
         if (!_graph) return;
         var typeFilter = '';
+
+        _clearPathHighlight(false);
 
         if (!query) {
             SigmaGraph.clearSearch();
@@ -2740,7 +2794,7 @@ var SigmaGraph = (function () {
                     '<div class="text-muted">' +
                     '<i class="bi bi-share" style="font-size:2.5rem;"></i>' +
                     '<p class="mt-2 mb-1 fw-semibold">Graph Viewer</p>' +
-                    '<p class="small">Use the filter panel to search and explore entities.</p>' +
+                    '<p class="small">Use the Search tab to search and explore entities.</p>' +
                     '</div>';
                 container.appendChild(placeholder);
             }
@@ -2840,6 +2894,7 @@ var SigmaGraph = (function () {
             return true;
         },
         reload: async function () {
+            _clearPathHighlight(false);
             if (_hasData()) {
                 _showGraphLoading('Loading graph data…');
                 await _waitForGraphLoadingPaint();
@@ -2869,6 +2924,7 @@ var SigmaGraph = (function () {
             if (!_graph || !_graph.hasNode(entityId)) return;
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = entityId;
             _hoveredNode = null;
             _showNodeDetails(entityId);
@@ -2995,6 +3051,87 @@ var SigmaGraph = (function () {
         openFindPopup: function () { _openFindPopup(); },
         closeFindPopup: function () { _closeFindPopup(); },
 
+        openFindPathModal: function () {
+            if (typeof ExplorerFindPath !== 'undefined') ExplorerFindPath.open();
+        },
+        applyFindPath: function () {
+            if (typeof ExplorerFindPath !== 'undefined') ExplorerFindPath.apply();
+        },
+        getGraph: function () { return _graph; },
+        getSelectedNodeId: function () { return _selectedNode; },
+        getFilterAnchorNodeId: function (excludeId) {
+            if (!_graph) return null;
+            var resolve = (typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.resolveDisplayedNodeId)
+                ? ExplorerFindPath.resolveDisplayedNodeId
+                : function (graph, id) { return graph.hasNode(id) ? id : null; };
+            function usable(id) {
+                if (!id || id === excludeId) return null;
+                var displayed = resolve(_graph, id);
+                if (!displayed || displayed === excludeId) return null;
+                return displayed;
+            }
+            if (_lastExpandedSeedUris && _lastExpandedSeedUris.length) {
+                if (_lastExpandedSeedUris.length === 1) {
+                    var onlySeed = usable(_lastExpandedSeedUris[0]);
+                    if (onlySeed) return onlySeed;
+                }
+                for (var i = 0; i < _lastExpandedSeedUris.length; i++) {
+                    var mappedSeed = usable(_lastExpandedSeedUris[i]);
+                    if (mappedSeed) return mappedSeed;
+                }
+            }
+            if (_highlightedSeeds && _highlightedSeeds.size === 1) {
+                var only = null;
+                _highlightedSeeds.forEach(function (id) { only = id; });
+                var mappedHighlight = usable(only);
+                if (mappedHighlight) return mappedHighlight;
+            }
+            var term = (document.getElementById('sgFilterValue')?.value || '').trim();
+            if (term && typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.searchLoadedNodes) {
+                var hits = ExplorerFindPath.searchLoadedNodes(_graph, term, 20).filter(function (hit) {
+                    return usable(hit.id);
+                });
+                var needle = term.toLowerCase();
+                var exact = hits.filter(function (hit) {
+                    return (hit.label || '').toLowerCase() === needle;
+                });
+                if (exact.length === 1) return usable(exact[0].id);
+                if (hits.length === 1) return usable(hits[0].id);
+                if (hits.length > 0) return usable(hits[0].id);
+            }
+            return null;
+        },
+        applyPathHighlight: function (result) {
+            if (!result || !result.nodes || !result.nodes.length) return;
+            _searchMatched = null;
+            _searchNeighbors = null;
+            _pathHighlightNodes = new Set(result.nodes);
+            _pathHighlightEdges = new Set();
+            var keyFn = (typeof ExplorerFindPath !== 'undefined' && ExplorerFindPath.undirectedEdgeKey)
+                ? ExplorerFindPath.undirectedEdgeKey
+                : function (a, b) { return a < b ? a + '\0' + b : b + '\0' + a; };
+            (result.edges || []).forEach(function (edge) {
+                if (!edge || !edge.source || !edge.target) return;
+                _pathHighlightEdges.add(keyFn(edge.source, edge.target));
+            });
+            _selectedNode = null;
+            _hoveredNode = null;
+            if (_renderer) {
+                _renderer.refresh();
+                _focusCameraOnNodes(_pathHighlightNodes);
+            }
+            if (typeof showNotification === 'function') {
+                var hops = result.hopCount || 0;
+                var paths = result.pathCount || 1;
+                showNotification(
+                    'Highlighted ' + paths + ' shortest path' + (paths === 1 ? '' : 's') +
+                    ' (' + hops + ' hop' + (hops === 1 ? '' : 's') + ').',
+                    'success'
+                );
+            }
+        },
+        clearFindPath: function () { _clearPathHighlight(true); },
+
         toggleType: function (type) {
             if (_visibleTypes.has(type)) _visibleTypes.delete(type);
             else _visibleTypes.add(type);
@@ -3035,6 +3172,7 @@ var SigmaGraph = (function () {
         clearSearch: function () {
             _searchMatched = null;
             _searchNeighbors = null;
+            _clearPathHighlight(false);
             _selectedNode = null;
             _hoveredNode = null;
             var info = document.getElementById('sgSearchInfo');
@@ -3709,7 +3847,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!node) return false;
         var sec = document.getElementById('sigmagraph-section');
         var seedModal = document.getElementById('sgSeedPreviewModal');
-        return (sec && sec.contains(node)) || (seedModal && seedModal.contains(node));
+        var pathModal = document.getElementById('sgFindPathModal');
+        return (sec && sec.contains(node))
+            || (seedModal && seedModal.contains(node))
+            || (pathModal && pathModal.contains(node));
     }
 
     var sgContainer = document.getElementById('sgContainer');
@@ -3777,7 +3918,15 @@ document.addEventListener('DOMContentLoaded', function () {
             var nodeMenu = document.getElementById('sgNodeContextMenu');
             if (nodeMenu) nodeMenu.style.display = 'none';
             var action = nodeItem.getAttribute('data-sg-node-action');
-            if (action === 'expandHop') {
+            if (action === 'find-path-from' || action === 'find-path-to') {
+                var pathUri = nodeItem.getAttribute('data-uri');
+                if (typeof ExplorerFindPath !== 'undefined' && typeof ExplorerFindPath.open === 'function') {
+                    ExplorerFindPath.open({
+                        selectedId: pathUri,
+                        role: action === 'find-path-to' ? 'to' : 'from'
+                    });
+                }
+            } else if (action === 'expandHop') {
                 var seedUri = nodeItem.getAttribute('data-uri');
                 var depth = parseInt(nodeItem.getAttribute('data-depth') || '1', 10);
                 if (!depth || depth < 1) depth = 1;

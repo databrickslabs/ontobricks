@@ -50,3 +50,14 @@ def test_highlight_filter_value_reads_search_value_input() -> None:
     assert "sgFilterValue" in body
     assert "sgSearchValue" not in body
     assert "_applyHighlightQuery" in body
+
+
+def test_explorer_right_panel_tab_is_named_search() -> None:
+    html = SIGMA_HTML.read_text(encoding="utf-8")
+    tab = html[html.index('id="sgTabFilter"') : html.index('id="sgTabFilterPane"')]
+    assert "bi-search" in tab
+    assert "</i> Search" in tab
+    assert "</i> Filter" not in tab
+    pane_head = html[html.index('id="sgTabFilterPane"') : html.index('id="sgFilterEntityType"')]
+    assert "Filter Graph" not in pane_head
+

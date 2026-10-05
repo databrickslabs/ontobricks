@@ -36,6 +36,9 @@
                 <option value="20000">20 000</option>
             </select>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-sg-action="openFindPathModal" title="Find shortest path between two loaded entities">
+            <i class="bi bi-signpost-split me-1"></i> Find Path
+        </button>
         <button type="button" class="btn btn-sm btn-outline-primary" data-sg-action="openOntologyViewer" title="View ontology model">
             <i class="bi bi-bezier2"></i> Ontology
         </button>
@@ -100,6 +103,9 @@
                     <div id="sgContextMenu" class="graph-context-menu">
                         <div class="ctx-item" data-sg-ctx="openFindPopup">
                             <i class="bi bi-geo-alt"></i> Find in graph
+                        </div>
+                        <div class="ctx-item" data-sg-ctx="openFindPathModal">
+                            <i class="bi bi-signpost-split"></i> Find Path
                         </div>
                         <div class="ctx-divider"></div>
                         <div class="ctx-item" data-sg-ctx="openGroupsPopup">
@@ -200,7 +206,7 @@
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="sgTabFilter" data-bs-toggle="tab" data-bs-target="#sgTabFilterPane" type="button" role="tab" aria-selected="false">
-                            <i class="bi bi-funnel"></i> Filter
+                            <i class="bi bi-search"></i> Search
                         </button>
                     </li>
                 </ul>
@@ -286,11 +292,11 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Filter Tab -->
+                    <!-- Search Tab -->
                     <div class="tab-pane fade sg-tab-pane" id="sgTabFilterPane" role="tabpanel">
                         <div class="sg-tab-inner p-3">
-                            <span class="small fw-semibold"><i class="bi bi-funnel"></i> Filter Graph</span>
-                            <p class="text-muted small mt-1 mb-2">Search and filter entities from the graph viewer.</p>
+                            <span class="small fw-semibold"><i class="bi bi-search"></i> Search</span>
+                            <p class="text-muted small mt-1 mb-2">Search entities and load them onto the graph viewer.</p>
                             <label class="form-label small mb-1" for="sgFilterEntityType">Entity</label>
                             <select class="form-select form-select-sm mb-2" id="sgFilterEntityType" title="Restrict the search to a single entity type (All searches every type)">
                                 <option value="">All</option>
@@ -368,8 +374,45 @@
             <div class="modal-footer py-2">
                 <span class="me-auto small text-muted"><span id="sgSeedSelectedCount">0</span> selected</span>
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-sm btn-primary" id="sgSeedExploreBtn" data-sg-action="expandSelectedSeeds">
-                    <i class="bi bi-diagram-3 me-1"></i>Explore selected
+            <button type="button" class="btn btn-sm btn-primary" id="sgSeedExploreBtn" data-sg-action="expandSelectedSeeds">
+                <i class="bi bi-diagram-3 me-1"></i>Explore selected
+            </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Find Path Modal -->
+<div class="modal fade" id="sgFindPathModal" tabindex="-1" aria-labelledby="sgFindPathModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sgFindPathModalLabel">
+                    <i class="bi bi-signpost-split me-2"></i>Find Path
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">Highlight the shortest path(s) between two entities on the loaded graph. Edges are treated as undirected.</p>
+                <label class="form-label" for="sgFindPathSource">Source</label>
+                <div class="sg-find-path-picker mb-3">
+                    <input type="text" class="form-control" id="sgFindPathSource" placeholder="Search loaded entities…" autocomplete="off" aria-autocomplete="list" aria-controls="sgFindPathSourceList" aria-expanded="false">
+                    <input type="hidden" id="sgFindPathSourceId">
+                    <div id="sgFindPathSourceList" class="sg-find-path-suggest d-none" role="listbox"></div>
+                    <div id="sgFindPathSourcePicked" class="sg-find-path-picked d-none"></div>
+                </div>
+                <label class="form-label" for="sgFindPathTarget">Destination</label>
+                <div class="sg-find-path-picker mb-3">
+                    <input type="text" class="form-control" id="sgFindPathTarget" placeholder="Search loaded entities…" autocomplete="off" aria-autocomplete="list" aria-controls="sgFindPathTargetList" aria-expanded="false">
+                    <input type="hidden" id="sgFindPathTargetId">
+                    <div id="sgFindPathTargetList" class="sg-find-path-suggest d-none" role="listbox"></div>
+                    <div id="sgFindPathTargetPicked" class="sg-find-path-picked d-none"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="sgFindPathApplyBtn" data-sg-action="applyFindPath">
+                    <i class="bi bi-geo-alt me-1"></i>Highlight path
                 </button>
             </div>
         </div>
