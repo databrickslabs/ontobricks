@@ -36,6 +36,7 @@ from back.objects.digitaltwin import (
     DigitalTwin,
     DomainSnapshot,
     GraphFilter,
+    NodeBusinessRuleService,
     NodeContextService,
     TwinAssistantCache,
     TwinDataQualityRun,
@@ -1608,6 +1609,7 @@ async def dtwin_classes(
 ):
     """Return session-domain classes and Graph Chat action metadata."""
     domain = get_domain(session_mgr)
+    swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
     return {
         "success": True,
         "domain_name": _chat_resolve_domain_name(domain),
@@ -1623,6 +1625,7 @@ async def dtwin_classes(
                     drop_unavailable=False,
                 ),
                 "actions": NodeContextService.class_action_entries(cls),
+                "business_rules": NodeBusinessRuleService.class_entries(cls, swrl_rules),
                 "virtualAttributes": VirtualAttributeService.class_entries(cls),
             }
             for cls in (domain.get_classes() or [])
@@ -1731,6 +1734,7 @@ async def dtwin_nodes_action_confirm(
     entry = cache["pending_actions"].get(token)
     if (
         not entry
+        or entry.get("kind", "action") != "action"
         or entry.get("used")
         or entry.get("domain") != domain_key
         or entry.get("expires_at", 0) <= time.time()
@@ -1768,6 +1772,121 @@ async def dtwin_nodes_action_cancel(
         if cache["pending_actions"].pop(token, None) is not None:
             _chat_save_cache(session_mgr, cache)
     return {"success": True}
+
+
+@router.post(
+    "/nodes/business-rule/request",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def dtwin_nodes_business_rule_request(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Validate an entity + class-declared business rule and mint a one-time token.
+
+    Does **not** run the rule. Call ``POST /dtwin/nodes/business-rule/confirm``
+    with the returned token to execute it and write the inferred triples.
+    """
+    data = await request.json()
+    entity_uri = (data.get("entity_uri") or "").strip()
+    rule_name = (data.get("rule") or "").strip()
+    if not entity_uri or not rule_name:
+        raise ValidationError("entity_uri and rule are required")
+
+    domain = get_domain(session_mgr)
+    resolved = NodeContextService.resolve_business_rule(
+        domain, entity_uri=entity_uri, rule_name=rule_name
+    )
+    rule = resolved["rule"]
+
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+    token = secrets.token_urlsafe(24)
+    cache["pending_actions"][token] = {
+        "kind": "business_rule",
+        "domain": domain_key,
+        "entity_uri": entity_uri,
+        "rule": rule["name"],
+        "expires_at": time.time() + _PENDING_ACTION_TTL_SEC,
+        "used": False,
+    }
+    _chat_save_cache(session_mgr, cache)
+
+    entity_label = DigitalTwin.extract_local_id(entity_uri)
+    logger.info(
+        "nodes/business-rule/request: minted token for entity=%s rule=%s domain=%s",
+        entity_label,
+        rule["name"],
+        domain_key,
+    )
+    return {
+        "success": True,
+        "pending_business_rule": {
+            "token": token,
+            "entity_uri": entity_uri,
+            "entity_label": entity_label,
+            "rule": rule["name"],
+            "description": rule.get("description"),
+            "antecedent": rule.get("antecedent", ""),
+            "consequent": rule.get("consequent", ""),
+            "expires_in_sec": _PENDING_ACTION_TTL_SEC,
+        },
+    }
+
+
+@router.post(
+    "/nodes/business-rule/confirm",
+    dependencies=[Depends(require(ROLE_BUILDER, scope="domain"))],
+)
+async def dtwin_nodes_business_rule_confirm(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Consume a pending business-rule token and run the rule once.
+
+    The token is marked ``used`` before execution so a double-click cannot
+    run the rule twice; it is not refunded on failure.
+    """
+    data = await request.json()
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise ValidationError("token is required")
+
+    domain = get_domain(session_mgr)
+    domain_key = _chat_domain_key(domain)
+    cache = _chat_cache(session_mgr)
+    _pending_actions_prune(cache)
+
+    entry = cache["pending_actions"].get(token)
+    if (
+        not entry
+        or entry.get("kind") != "business_rule"
+        or entry.get("used")
+        or entry.get("domain") != domain_key
+        or entry.get("expires_at", 0) <= time.time()
+    ):
+        raise ValidationError("Business rule request expired — request again")
+
+    entry["used"] = True
+    _chat_save_cache(session_mgr, cache)
+
+    return await NodeContextService.run_business_rule(
+        domain,
+        settings,
+        entity_uri=entry["entity_uri"],
+        rule_name=entry["rule"],
+    )
+
+
+@router.post("/nodes/business-rule/cancel")
+async def dtwin_nodes_business_rule_cancel(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+):
+    """Discard a pending business-rule token if present. Always returns success."""
+    return await dtwin_nodes_action_cancel(request, session_mgr)
 
 
 @router.get("/nodes/context", response_model=NodeContextResponse, response_model_exclude_none=True)

@@ -88,8 +88,9 @@ def _format_class_context_block(
     dataset = cls_actions.get("dataset")
     bridges = cls_actions.get("bridges") or []
     actions = cls_actions.get("actions") or []
+    business_rules = cls_actions.get("business_rules") or []
     virtual = cls_actions.get("virtualAttributes") or []
-    if not dataset and not bridges and not actions and not virtual:
+    if not dataset and not bridges and not actions and not business_rules and not virtual:
         return ""
 
     lines: list[str] = []
@@ -155,6 +156,22 @@ def _format_class_context_block(
                 "over answering from the graph alone — these actions return "
                 "live, authoritative results",
                 neutral="    → call invoke_entity_action(entity_uri, action) to run one",
+            )
+        )
+
+    if business_rules:
+        lines.append("  Business rules:")
+        for br in business_rules:
+            lines.append(f"    → {br.get('name', '')}: {br.get('description') or ''}")
+        lines.append(
+            _hint(
+                context_policy,
+                "business_rules",
+                directive="    → when the user asks to apply or evaluate one of "
+                "these rules, call run_entity_business_rule(entity_uri, rule) — it "
+                "writes the inferred facts to the graph",
+                neutral="    → call run_entity_business_rule(entity_uri, rule) to "
+                "apply one (writes inferred facts to the graph)",
             )
         )
 
@@ -270,6 +287,30 @@ def _format_node_context_response(
         )
         lines.append("")
 
+    business_rules = data.get("business_rules") or []
+    if business_rules:
+        lines.append("Business rules (SWRL):")
+        for br in business_rules:
+            lines.append(f"  → {br.get('name', '')}")
+            desc = (br.get("description") or "").strip()
+            if desc:
+                lines.append(f"    Description: {desc}")
+            lines.append(
+                f"    Rule: {br.get('antecedent', '')} -> {br.get('consequent', '')}"
+            )
+        lines.append(
+            _hint(
+                context_policy,
+                "business_rules",
+                directive="  → when asked to apply a rule, call "
+                "run_entity_business_rule(entity_uri, rule) — it writes the "
+                "inferred facts to the graph",
+                neutral="  → call run_entity_business_rule(entity_uri, rule) to "
+                "apply one (writes inferred facts to the graph)",
+            )
+        )
+        lines.append("")
+
     virtual = data.get("virtual_attributes") or []
     if virtual:
         lines.extend(_format_virtual_attribute_lines(virtual, context_policy))
@@ -381,6 +422,42 @@ def _format_node_action_response(data: dict) -> str:
     lines.append(f"Result ({len(rows)} row{'s' if len(rows) != 1 else ''}):")
     for row in rows:
         lines.append("  " + "  |  ".join(f"{k}: {v}" for k, v in row.items()))
+    return "\n".join(lines)
+
+
+def _format_node_business_rule_response(data: dict, max_triples: int = 20) -> str:
+    """Format the /nodes/business-rule JSON response as LLM-friendly text."""
+    if not data.get("success"):
+        return (
+            data.get("message")
+            or (data.get("error") if isinstance(data.get("error"), str) else None)
+            or "Could not run the business rule."
+        )
+
+    written = int(data.get("materialized_count") or 0)
+    inferred = int(data.get("inferred_count") or 0)
+    lines: list[str] = [
+        f"Business rule: {data.get('rule', '')}",
+        f"Entity: {data.get('entity_local_id', '')}  ({data.get('class_name', 'Unknown')})",
+        "",
+    ]
+    if not inferred:
+        lines.append("Completed — the rule produced no new facts for this entity.")
+        return "\n".join(lines)
+
+    lines.append(
+        f"Inferred {inferred} triple{'s' if inferred != 1 else ''}, "
+        f"{written} written to the graph:"
+    )
+    triples = data.get("triples") or []
+    for t in triples[:max_triples]:
+        lines.append(
+            f"  • {_local_name(t.get('subject', ''))}  "
+            f"{_local_name(t.get('predicate', ''))}  {_local_name(t.get('object', ''))}"
+        )
+    hidden = inferred - min(len(triples), max_triples)
+    if hidden > 0:
+        lines.append(f"  … {hidden} more")
     return "\n".join(lines)
 
 

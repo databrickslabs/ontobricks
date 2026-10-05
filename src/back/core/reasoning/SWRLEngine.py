@@ -36,6 +36,7 @@ class SWRLEngine:
         materialize: bool = False,
         inference_limit: Optional[int] = None,
         progress_callback: Optional[Any] = None,
+        focus: Optional[Dict[str, Any]] = None,
     ) -> ReasoningResult:
         """Run all SWRL rules and collect inferred triples.
 
@@ -48,6 +49,9 @@ class SWRLEngine:
             inference_limit: Max inferred triples per rule (None = unlimited).
             progress_callback: Optional ``(idx, total, rule_name)`` callable
                 for progress reporting.
+            focus: Optional ``{"vars": [...], "uri": "..."}`` restricting
+                inference to triples involving one entity (see
+                ``SWRLSQLTranslator._build_focus_filter``).
         """
         t0 = time.time()
         result = ReasoningResult()
@@ -74,6 +78,8 @@ class SWRLEngine:
                 "base_uri": base_uri,
                 "uri_map": uri_map,
             }
+            if focus:
+                params["focus"] = focus
 
             try:
                 self._infer_rule(

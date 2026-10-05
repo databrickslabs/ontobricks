@@ -80,6 +80,10 @@ let sharedPanelDataset = null;  // Linked Unity Catalog dataset { catalog, schem
 // The bound function must take exactly one parameter: the ID of the entity
 // being acted on — it is passed automatically at invocation time.
 let sharedPanelActions = [];
+// SWRL business rules referenced by name: [{ name }]. Only rules whose class
+// atoms cite this entity (or one of its parents) can be attached; they are
+// triggered on a single entity from the Knowledge Graph and over MCP.
+let sharedPanelBusinessRules = [];
 // Virtual attribute declarations. One entry per bound Unity Catalog function:
 // { catalog, schema, function, fullName, description, returns_table,
 //   attributes: [{ name, column, label, dataType }] }.
@@ -407,6 +411,7 @@ function closeSharedPanel() {
     sharedPanelBridges = [];
     sharedPanelDataset = null;
     sharedPanelActions = [];
+    sharedPanelBusinessRules = [];
     sharedPanelDirty = false;
 }
 
@@ -464,6 +469,7 @@ async function openEntityPanel(options = {}) {
     sharedPanelBridges = [];  // Reset bridges for new entity
     sharedPanelDataset = null;  // Reset dataset for new entity
     sharedPanelActions = [];  // Reset UC function actions for new entity
+    sharedPanelBusinessRules = [];  // Reset business rules for new entity
     sharedPanelVirtualAttributes = [];  // Reset virtual attributes for new entity
     
     openSharedPanel();
@@ -507,6 +513,7 @@ async function openEntityPanelForEdit(idx, options = {}) {
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
     sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
     sharedPanelActions = cls.actions ? JSON.parse(JSON.stringify(cls.actions)) : [];
+    sharedPanelBusinessRules = cls.business_rules ? JSON.parse(JSON.stringify(cls.business_rules)) : [];
     sharedPanelVirtualAttributes = cls.virtualAttributes ? JSON.parse(JSON.stringify(cls.virtualAttributes)) : [];
 
     console.log('[SharedPanel] Edit - Loaded class:', cls.name, 'dataProperties:', (cls.dataProperties || []).length);
@@ -548,6 +555,7 @@ async function openEntityPanelForView(idx, options = {}) {
     sharedPanelBridges = cls.bridges ? JSON.parse(JSON.stringify(cls.bridges)) : [];
     sharedPanelDataset = cls.dataset ? JSON.parse(JSON.stringify(cls.dataset)) : null;
     sharedPanelActions = cls.actions ? JSON.parse(JSON.stringify(cls.actions)) : [];
+    sharedPanelBusinessRules = cls.business_rules ? JSON.parse(JSON.stringify(cls.business_rules)) : [];
     sharedPanelVirtualAttributes = cls.virtualAttributes ? JSON.parse(JSON.stringify(cls.virtualAttributes)) : [];
 
     sharedPanelInheritedAttributes = getSharedInheritedProperties(cls.parent);
@@ -735,6 +743,18 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
                 </div>
                 <div class="mb-3">
                     <label class="form-label d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-diagram-3 me-1"></i>Business rules</span>
+                        ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBusinessRuleSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
+                    </label>
+                    <div id="sharedEntityBusinessRules" class="border rounded p-2" style="background: #ffffff;">
+                        <div id="sharedEntityBusinessRulesContent">
+                            <small class="text-muted">No business rules assigned</small>
+                        </div>
+                    </div>
+                    <div class="form-text small">SWRL rules triggered from the Knowledge Graph on a single entity; the inferred triples are written to the graph.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-signpost-2 me-1"></i>Bridges</span>
                         ${!viewOnly ? '<button type="button" class="btn btn-sm btn-outline-primary py-0 px-1" onclick="openBridgeSelectorModal()"><i class="bi bi-plus"></i> Add</button>' : ''}
                     </label>
@@ -794,6 +814,7 @@ async function renderEntityForm(panel, cls, viewOnly = false) {
     renderSharedEntityDashboard(viewOnly);
     renderSharedEntityDataset(viewOnly);
     renderSharedEntityActions(viewOnly);
+    renderSharedEntityBusinessRules(viewOnly);
     renderSharedEntityBridges(viewOnly);
     if (!viewOnly) {
         var _btnEl = panelGetById('sharedEntityEmojiBtn');
@@ -1873,6 +1894,164 @@ function closeActionSelectorModal() {
 }
 
 // =====================================================
+// BUSINESS RULES (SWRL rules referenced by the entity)
+// =====================================================
+// Mirrors OntologyRules.swrl_rule_classes / rules_for_class on the backend.
+
+const _SWRL_CLASS_ATOM_RE = /(?:(\w+):)?([A-Za-z_]\w*)\s*\(([^)]*)\)/g;
+let _businessRuleCandidates = [];
+
+function swrlRuleClassNames(rule) {
+    const names = new Set();
+    ['antecedent', 'consequent'].forEach(part => {
+        for (const m of String((rule && rule[part]) || '').matchAll(_SWRL_CLASS_ATOM_RE)) {
+            if (m[1]) continue;
+            const args = m[3].split(',').map(a => a.trim()).filter(Boolean);
+            if (args.length === 1) names.add(m[2].toLowerCase());
+        }
+    });
+    return names;
+}
+
+function rulesUsingClass(rules, classes, className, parentName) {
+    const lineage = [className];
+    if (parentName) lineage.push(parentName, ...ancestorClassNames(classes, parentName));
+    else lineage.push(...ancestorClassNames(classes, className));
+    const wanted = new Set(lineage.filter(Boolean).map(n => n.toLowerCase()));
+    return (rules || []).filter(r => {
+        if (!r || !r.name) return false;
+        for (const n of swrlRuleClassNames(r)) if (wanted.has(n)) return true;
+        return false;
+    });
+}
+
+function renderSharedEntityBusinessRules(viewOnly = false) {
+    const container = panelGetById('sharedEntityBusinessRulesContent');
+    if (!container) return;
+    if (!sharedPanelBusinessRules.length) {
+        container.innerHTML = '<small class="text-muted">No business rules assigned</small>';
+        return;
+    }
+    container.innerHTML = sharedPanelBusinessRules.map((ref, idx) => `
+        <div class="${idx > 0 ? 'mt-2 pt-2 border-top' : ''} d-flex align-items-center gap-2">
+            <i class="bi bi-diagram-3 text-primary"></i>
+            <div class="flex-grow-1 fw-semibold">${escapeHtml(ref.name || '')}</div>
+            ${!viewOnly ? `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removeSharedEntityBusinessRule(${idx})" title="Remove business rule"><i class="bi bi-x"></i></button>` : ''}
+        </div>
+    `).join('');
+}
+
+function removeSharedEntityBusinessRule(index) {
+    sharedPanelBusinessRules.splice(index, 1);
+    markPanelDirty();
+    renderSharedEntityBusinessRules(false);
+}
+
+async function openBusinessRuleSelectorModal() {
+    const modalId = 'businessRuleSelectorModal';
+    document.getElementById(modalId)?.remove();
+
+    const className = panelGetById('sharedEntityName')?.value.trim() || sharedPanelOriginalName || '';
+    const parentName = panelGetById('sharedEntityParent')?.value || '';
+    if (!className) {
+        showNotification('Enter the entity name first', 'warning');
+        return;
+    }
+
+    const modalHtml = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-diagram-3 me-2"></i>Select business rules</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info py-2 px-3 small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Only SWRL rules that reference <strong>${escapeHtml(className)}</strong> or one of its parents are listed.
+                        </div>
+                        <div class="d-flex gap-2 mb-2">
+                            <input type="text" class="form-control form-control-sm" id="businessRuleSearch" placeholder="Search rules..." oninput="_renderBusinessRuleCandidates()">
+                            <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" onclick="_toggleAllBusinessRules()">Select all</button>
+                        </div>
+                        <div id="businessRuleList" class="list-group" style="max-height: 340px; overflow-y: auto;">
+                            <div class="text-muted p-3 text-center">Loading rules...</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="_addSelectedBusinessRules()"><i class="bi bi-plus me-1"></i>Add selected</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    new bootstrap.Modal(document.getElementById(modalId)).show();
+
+    let rules = [];
+    try {
+        const r = await fetch('/ontology/swrl/list', { credentials: 'same-origin' });
+        const d = await r.json();
+        rules = d.rules || [];
+    } catch (e) {
+        console.error('[SharedPanel] Could not load SWRL rules:', e);
+    }
+    const attached = new Set(sharedPanelBusinessRules.map(b => b.name));
+    _businessRuleCandidates = rulesUsingClass(rules, OntologyState.config.classes || [], className, parentName)
+        .filter(r => !attached.has(r.name));
+    _renderBusinessRuleCandidates();
+}
+
+function _renderBusinessRuleCandidates() {
+    const list = document.getElementById('businessRuleList');
+    if (!list) return;
+    if (!_businessRuleCandidates.length) {
+        list.innerHTML = '<div class="text-muted p-3 text-center">No SWRL rule references this entity or its parents.</div>';
+        return;
+    }
+    const q = (document.getElementById('businessRuleSearch')?.value || '').toLowerCase();
+    const checked = new Set(Array.from(list.querySelectorAll('input[type=checkbox]:checked')).map(i => i.value));
+    list.innerHTML = _businessRuleCandidates
+        .filter(r => !q || `${r.name} ${r.description || ''}`.toLowerCase().includes(q))
+        .map(r => {
+            const disabled = r.enabled === false;
+            return `
+                <label class="list-group-item d-flex gap-2 align-items-start ${disabled ? 'text-muted' : ''}">
+                    <input class="form-check-input mt-1" type="checkbox" value="${escapeHtml(r.name)}" ${disabled ? 'disabled' : ''} ${checked.has(r.name) ? 'checked' : ''}>
+                    <span class="flex-grow-1">
+                        <span class="fw-semibold">${escapeHtml(r.name)}</span>
+                        ${disabled ? '<span class="badge bg-secondary ms-1">Disabled</span>' : ''}
+                        ${r.description ? `<small class="d-block">${escapeHtml(r.description)}</small>` : ''}
+                        <code class="small d-block text-break">${escapeHtml(r.antecedent || '')} &rarr; ${escapeHtml(r.consequent || '')}</code>
+                    </span>
+                </label>`;
+        }).join('');
+}
+
+function _toggleAllBusinessRules() {
+    const boxes = Array.from(document.querySelectorAll('#businessRuleList input[type=checkbox]:not(:disabled)'));
+    const allChecked = boxes.length > 0 && boxes.every(b => b.checked);
+    boxes.forEach(b => { b.checked = !allChecked; });
+}
+
+function _addSelectedBusinessRules() {
+    const names = Array.from(document.querySelectorAll('#businessRuleList input[type=checkbox]:checked')).map(i => i.value);
+    if (!names.length) {
+        showNotification('Select at least one rule', 'warning');
+        return;
+    }
+    names.forEach(name => {
+        if (!sharedPanelBusinessRules.some(b => b.name === name)) sharedPanelBusinessRules.push({ name });
+    });
+    markPanelDirty();
+    renderSharedEntityBusinessRules(false);
+    _ucClosePickerModal('businessRuleSelectorModal');
+    showNotification(`${names.length} business rule(s) added`, 'success', 2000);
+}
+
+// =====================================================
 // VIRTUAL ATTRIBUTES
 // =====================================================
 // A virtual attribute is not mapped and not stored in the graph: a Unity
@@ -2932,6 +3111,7 @@ async function saveSharedEntity(options = {}) {
         bridges: sharedPanelBridges.length > 0 ? sharedPanelBridges : undefined,
         dataset: sharedPanelDataset || undefined,
         actions: sharedPanelActions.length > 0 ? sharedPanelActions : undefined,
+        business_rules: sharedPanelBusinessRules.length > 0 ? sharedPanelBusinessRules : undefined,
         virtualAttributes: sharedPanelVirtualAttributes.length > 0 ? sharedPanelVirtualAttributes : undefined
     };
     

@@ -73,6 +73,26 @@ class SWRLSQLTranslator:
         return filters
 
     @staticmethod
+    def _build_focus_filter(focus: Optional[Dict], var_bindings: Dict[str, tuple]):
+        """Restrict a rule to one entity: ``{"vars": [...], "uri": "..."}``.
+
+        Returns ``None`` when no focus is requested, ``False`` when none of
+        the focus variables is bound (the rule cannot involve the entity),
+        otherwise an ``OR`` predicate over the bound focus variables.
+        """
+        if not focus or not focus.get("uri"):
+            return None
+        bound = [v for v in focus.get("vars") or [] if v in var_bindings]
+        if not bound:
+            return False
+        uri = SWRLSQLTranslator._escape(str(focus["uri"]))
+        conds = []
+        for var in bound:
+            a, c = var_bindings[var]
+            conds.append(f"{a}.{c} = '{uri}'")
+        return "(" + " OR ".join(conds) + ")"
+
+    @staticmethod
     def _build_negated_atoms(
         negated_atoms: List[Dict],
         table: str,
@@ -690,6 +710,12 @@ class SWRLSQLTranslator:
         builtin_filters = self._build_builtin_filters(builtin_atoms, var_bindings)
         if builtin_filters:
             where_parts.extend(builtin_filters)
+
+        focus_filter = self._build_focus_filter(params.get("focus"), var_bindings)
+        if focus_filter is False:
+            return None
+        if focus_filter:
+            where_parts.append(focus_filter)
 
         selects: List[str] = []
         for atom in cons_atoms:

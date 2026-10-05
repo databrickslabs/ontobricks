@@ -495,6 +495,17 @@ async function showEntityDetails(entity) {
         `;
     }
 
+    // SWRL business rules declared on the class — applied to this entity only
+    const businessRules = classInfo?.businessRules || [];
+    if (businessRules.length > 0 && typeof renderBusinessRuleSection === 'function') {
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-diagram-3"></i> Business rules</h6>
+                ${renderBusinessRuleSection(entity.id, businessRules)}
+            </div>
+        `;
+    }
+
     // Cross-domain bridges
     const bridges = entityMapping?.bridges || classInfo?.bridges || [];
     if (bridges.length > 0) {

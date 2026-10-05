@@ -1,6 +1,6 @@
 """MCP tool registration for the OntoBricks server.
 
-``register_tools(mcp, session)`` binds all 13 ``@mcp.tool`` handlers to a
+``register_tools(mcp, session)`` binds all 14 ``@mcp.tool`` handlers to a
 :class:`~server.session.MCPServerSession`. The handlers are thin: they enforce
 the per-domain policy gate, issue the HTTP call through
 :mod:`server.http_client` (late-bound for monkeypatching) and hand the JSON to
@@ -24,6 +24,7 @@ from server.constants import (
     API_V1_DOMAIN_VERSIONS,
     API_V1_DOMAINS,
     API_V1_DT_NODE_ACTION,
+    API_V1_DT_NODE_BUSINESS_RULE,
     API_V1_DT_NODE_CONTEXT,
     API_V1_DT_NODE_VIRTUAL_ATTRIBUTES,
     API_V1_DT_STATS,
@@ -35,6 +36,7 @@ from server.formatting import (
     _format_find_response,
     _format_graphql_response,
     _format_node_action_response,
+    _format_node_business_rule_response,
     _format_node_context_response,
     _format_virtual_attributes_response,
 )
@@ -249,6 +251,7 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                             "dataset": cls.get("dataset") or None,
                             "bridges": cls.get("bridges") or [],
                             "actions": cls.get("actions") or [],
+                            "business_rules": cls.get("business_rules") or [],
                             "virtualAttributes": cls.get("virtualAttributes") or [],
                         }
                 logger.info(
@@ -373,6 +376,8 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                     tags.append(f"{len(cls['bridges'])} bridge(s)")
                 if cls.get("actions"):
                     tags.append(f"{len(cls['actions'])} action(s)")
+                if cls.get("business_rules"):
+                    tags.append(f"{len(cls['business_rules'])} business rule(s)")
                 if cls.get("virtualAttributes"):
                     tags.append(f"{len(cls['virtualAttributes'])} virtual attr")
                 suffix = f"  [{', '.join(tags)}]" if tags else ""
@@ -452,6 +457,10 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
                     fn_desc = (fn_action.get("description") or "").strip()
                     suffix = f" — {fn_desc}" if fn_desc else ""
                     lines.append(f"    Action: {fn_action.get('fullName', '')}{suffix}")
+                for br in actions.get("business_rules") or []:
+                    br_desc = (br.get("description") or "").strip()
+                    suffix = f" — {br_desc}" if br_desc else ""
+                    lines.append(f"    Business rule: {br.get('name', '')}{suffix}")
             lines.append("")
 
         top_predicates = data.get("top_predicates", [])
@@ -891,3 +900,49 @@ def register_tools(mcp: FastMCP, session: MCPServerSession) -> None:
             )
 
         return _format_node_action_response(data)
+
+    @mcp.tool()
+    async def run_entity_business_rule(entity_uri: str, rule: str) -> str:
+        """Trigger a SWRL business rule declared on an entity's class.
+
+        Requires a domain to be selected first via select_domain and the
+        Builder role on that domain. Discover the available rules with
+        get_entity_context or describe_entity — only rules declared on the
+        entity's ontology class can be triggered.
+
+        The rule is evaluated for this entity only and the inferred triples
+        are WRITTEN to the knowledge graph (idempotent: facts already present
+        are not inferred again).
+
+        Args:
+            entity_uri: Full URI of the entity (e.g. from describe_entity).
+            rule: Name of the business rule.
+        """
+        blocked = session.require_domain("run_entity_business_rule")
+        if blocked:
+            return blocked
+        # Disabling the business_rules element also stops execution, even
+        # when the tool itself is still exposed.
+        blocked = session.ensure_context_allowed("business_rules", "Business rules")
+        if blocked:
+            return blocked
+
+        body: dict = {"entity_uri": entity_uri, "rule": rule}
+        body.update(session.registry_params())
+        body["domain_name"] = session.selected_domain_name
+
+        try:
+            async with session.client() as client:
+                data = await _http._post(client, API_V1_DT_NODE_BUSINESS_RULE, json=body)
+        except httpx.HTTPStatusError as exc:
+            try:
+                err_body = exc.response.json()
+            except Exception:
+                err_body = {}
+            return (
+                err_body.get("message")
+                or err_body.get("error")
+                or f"Could not run the business rule (HTTP {exc.response.status_code})."
+            )
+
+        return _format_node_business_rule_response(data)

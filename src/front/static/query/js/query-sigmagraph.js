@@ -1649,6 +1649,15 @@ var SigmaGraph = (function () {
             }
         }
 
+        // SWRL business rules declared on the class — applied to this entity only
+        var nodeRules = (classInfo && classInfo.businessRules) || [];
+        if (nodeRules.length > 0 && typeof renderBusinessRuleSection === 'function') {
+            var ruleBody = renderBusinessRuleSection(entity.id, nodeRules);
+            if (ruleBody) {
+                html += _sec('bi bi-diagram-3', 'Business rules (' + nodeRules.length + ')', ruleBody, true);
+            }
+        }
+
         var bridges = (entityMapping && entityMapping.bridges) || (classInfo && classInfo.bridges) || [];
         if (bridges.length > 0) {
             var bridgeBody = '';
@@ -2412,9 +2421,10 @@ var SigmaGraph = (function () {
         var dashboardParams = (entityMapping && entityMapping.dashboardParams) || (classInfo && classInfo.dashboardParams) || {};
         var dataset = (entityMapping && entityMapping.dataset) || (classInfo && classInfo.dataset) || null;
         var actions = (entityMapping && entityMapping.actions) || (classInfo && classInfo.actions) || [];
+        var businessRules = (classInfo && classInfo.businessRules) || [];
         var virtualAttributes = (entityMapping && entityMapping.virtualAttributes) || (classInfo && classInfo.virtualAttributes) || [];
 
-        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, virtualAttributes: virtualAttributes, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
+        return { bridges: bridges, dashboardUrl: dashboardUrl, dashboardParams: dashboardParams, dataset: dataset, actions: actions, businessRules: businessRules, virtualAttributes: virtualAttributes, entity: entity, actualIdValue: actualIdValue, classInfo: classInfo, entityMapping: entityMapping };
     }
 
     function _showNodeContextMenu(nodeId, mouseEvent) {
@@ -2484,6 +2494,19 @@ var SigmaGraph = (function () {
                 if (items) items += '<div class="ctx-divider"></div>';
                 items += '<div class="ctx-header">Actions</div>' + actionItems;
             }
+        }
+
+        var ctxRules = meta.businessRules || [];
+        if (ctxRules.length > 0 && meta.entity && meta.entity.id
+            && (typeof canRunBusinessRules !== 'function' || canRunBusinessRules())) {
+            if (items) items += '<div class="ctx-divider"></div>';
+            items += '<div class="ctx-header">Business rules</div>';
+            ctxRules.forEach(function (rule) {
+                if (!rule || !rule.name) return;
+                items += '<div class="ctx-item" data-sg-node-action="business-rule" data-uri="' + esc(meta.entity.id) +
+                    '" data-rule="' + esc(rule.name) + '">' +
+                    '<i class="bi bi-diagram-3"></i> ' + esc(rule.name) + '</div>';
+            });
         }
 
         // Shortcut to the detail panel's "Compute all": right-click does not
@@ -3786,6 +3809,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     openEntityActionModal(actUri, actName, actLbl, actDesc);
                 } else if (typeof showNotification === 'function') {
                     showNotification('Action execution is unavailable.', 'warning');
+                }
+            } else if (action === 'business-rule') {
+                var brUri = nodeItem.getAttribute('data-uri');
+                var brName = nodeItem.getAttribute('data-rule');
+                if (brUri && brName && typeof openEntityBusinessRuleModal === 'function') {
+                    openEntityBusinessRuleModal(brUri, brName);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('Business rule execution is unavailable.', 'warning');
                 }
             } else if (action === 'virtual-attributes') {
                 var vaUri = nodeItem.getAttribute('data-uri');

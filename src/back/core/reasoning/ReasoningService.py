@@ -224,8 +224,13 @@ class ReasoningService:
         inference_limit: Optional[int] = None,
         progress_callback: Optional[Any] = None,
         rule_names: Optional[set] = None,
+        focus: Optional[Dict[str, Any]] = None,
     ) -> ReasoningResult:
-        """Execute SWRL rules against the triple store."""
+        """Execute SWRL rules against the triple store.
+
+        *focus* (``{"vars": [...], "uri": "..."}``) restricts inference to the
+        triples involving a single entity.
+        """
         rules = self._get_swrl_rules()
         if rule_names:
             rules = [r for r in rules if r.get("name") in rule_names]
@@ -260,6 +265,7 @@ class ReasoningService:
             materialize=materialize,
             inference_limit=inference_limit,
             progress_callback=progress_callback,
+            focus=focus,
         )
 
     def run_graph_reasoning(self, options: Optional[Dict] = None) -> ReasoningResult:

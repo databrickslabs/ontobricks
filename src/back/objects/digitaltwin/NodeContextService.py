@@ -24,6 +24,10 @@ from back.core.helpers import (
 from back.core.logging import get_logger
 from back.core.mcp_tools import MCP_CONTEXT_MODE_DEFAULT, coerce_mcp_policy
 from back.objects.digitaltwin.DigitalTwin import DigitalTwin
+from back.objects.digitaltwin.NodeBusinessRuleService import (
+    BUSINESS_RULES_FEATURE,
+    NodeBusinessRuleService,
+)
 from back.objects.digitaltwin.VirtualAttributeService import (
     VIRTUAL_ATTRIBUTES_FEATURE,
     VirtualAttributeService,
@@ -330,6 +334,13 @@ class NodeContextService:
             if disabled(context_policy, "actions")
             else NodeContextService.class_action_entries(matched_cls)
         )
+        business_rules_out = (
+            []
+            if disabled(context_policy, BUSINESS_RULES_FEATURE)
+            else NodeBusinessRuleService.class_entries(
+                matched_cls, NodeBusinessRuleService.domain_swrl_rules(domain)
+            )
+        )
 
         # Declarations are cheap (a read of the class dict); the values cost a
         # warehouse round-trip per function, so they only come when asked for.
@@ -375,13 +386,14 @@ class NodeContextService:
 
         logger.info(
             "nodes/context: entity=%s class=%s domain=%s dataset=%s bridges=%d "
-            "actions=%d virtual=%d computed=%s",
+            "actions=%d business_rules=%d virtual=%d computed=%s",
             local_id,
             class_name,
             dname,
             bool(dataset_out),
             len(bridges_out),
             len(actions_out),
+            len(business_rules_out),
             len(virtual_out),
             compute_virtual_attributes,
         )
@@ -394,6 +406,7 @@ class NodeContextService:
             "dataset": dataset_out,
             "bridges": bridges_out or None,
             "actions": actions_out or None,
+            "business_rules": business_rules_out or None,
             "virtual_attributes": virtual_out or None,
             "message": fetch_error,
         }
@@ -547,6 +560,81 @@ class NodeContextService:
             "returns_table": returns_table,
             "rows": rows,
         }
+
+    @staticmethod
+    def resolve_business_rule(
+        domain: Any,
+        *,
+        entity_uri: str,
+        rule_name: str,
+        context_policy: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Check that *rule_name* is a runnable business rule of *entity_uri*'s class.
+
+        Returns ``{"matched_cls", "rule"}`` where ``rule`` is the class entry.
+
+        Raises:
+            NotFoundError: no ontology class matches the entity.
+            ValidationError: business rules disabled for the domain, or rule
+                not declared (or not enabled) on the class.
+        """
+        if NodeContextService.context_feature_disabled(
+            context_policy, BUSINESS_RULES_FEATURE
+        ):
+            raise ValidationError(
+                "Business rules are disabled for this domain by its MCP policy"
+            )
+        matched_cls = NodeContextService.match_ontology_class(
+            entity_uri, domain.get_classes() or []
+        )
+        if matched_cls is None:
+            raise NotFoundError("No ontology class matches this entity URI")
+        requested = (rule_name or "").strip()
+        rule = next(
+            (
+                e
+                for e in NodeBusinessRuleService.class_entries(
+                    matched_cls, NodeBusinessRuleService.domain_swrl_rules(domain)
+                )
+                if e["name"] == requested
+            ),
+            None,
+        )
+        if rule is None:
+            raise ValidationError(
+                f"Business rule {requested!r} is not configured on class "
+                f"{matched_cls.get('name', '')!r}"
+            )
+        return {"matched_cls": matched_cls, "rule": rule}
+
+    @staticmethod
+    async def run_business_rule(
+        domain: Any,
+        settings: Any,
+        *,
+        entity_uri: str,
+        rule_name: str,
+        context_policy: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Trigger a class-declared SWRL business rule on *entity_uri*.
+
+        A domain that disabled the ``business_rules`` context element refuses
+        every execution, independently of whether the
+        ``run_entity_business_rule`` MCP tool is still exposed.
+        """
+        resolved = NodeContextService.resolve_business_rule(
+            domain,
+            entity_uri=entity_uri,
+            rule_name=rule_name,
+            context_policy=context_policy,
+        )
+        return await NodeBusinessRuleService.execute(
+            domain,
+            settings,
+            entity_uri=entity_uri,
+            matched_cls=resolved["matched_cls"],
+            rule_name=resolved["rule"]["name"],
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers

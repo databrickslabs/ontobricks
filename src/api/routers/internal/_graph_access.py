@@ -12,7 +12,7 @@ from fastapi import Request
 
 from back.core.databricks import is_databricks_app
 from back.core.errors import AuthorizationError
-from back.objects.registry import ROLE_ADMIN, ROLE_VIEWER, role_level
+from back.objects.registry import ROLE_ADMIN, ROLE_BUILDER, ROLE_VIEWER, role_level
 
 
 def assert_domain_graph_read(request: Request) -> None:
@@ -58,3 +58,20 @@ def assert_public_graph_read(request: Request, domain, settings) -> None:
     if role_level(domain_role) >= role_level(ROLE_ADMIN):
         request.state.user_role = ROLE_ADMIN
     assert_domain_graph_read(request)
+
+
+def assert_public_graph_write(request: Request, domain, settings) -> None:
+    """Builder gate for public routes that **write** to the graph.
+
+    Same role resolution as :func:`assert_public_graph_read`, then requires
+    at least the Builder role on the target domain (app admins bypass).
+    No-op outside Databricks App mode.
+    """
+    if not is_databricks_app():
+        return
+    assert_public_graph_read(request, domain, settings)
+    if (getattr(request.state, "user_role", "") or "") == ROLE_ADMIN:
+        return
+    domain_role = getattr(request.state, "user_domain_role", "") or ""
+    if role_level(domain_role) < role_level(ROLE_BUILDER):
+        raise AuthorizationError("The Builder role is required to modify this domain's graph")

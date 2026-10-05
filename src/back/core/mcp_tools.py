@@ -110,6 +110,13 @@ MCP_DOMAIN_TOOLS: tuple[Dict[str, Any], ...] = (
         "virtual attributes and return their live values.",
         "requires_graph": True,
     },
+    {
+        "name": "run_entity_business_rule",
+        "label": "Run entity business rule",
+        "description": "Trigger a SWRL business rule declared on the entity's "
+        "class and write the inferred triples to the graph (Builder role).",
+        "requires_graph": True,
+    },
 )
 
 MCP_DOMAIN_TOOL_NAMES: frozenset[str] = frozenset(
@@ -145,6 +152,13 @@ MCP_CONTEXT_FEATURES: tuple[Dict[str, str], ...] = (
         "description": "Class attributes computed on demand by a Unity Catalog "
         "function instead of being mapped. Disabling this also refuses "
         "computation, not just the listing.",
+    },
+    {
+        "name": "business_rules",
+        "label": "Business rules",
+        "description": "SWRL rules declared on a class that can be triggered "
+        "on one entity to materialise inferred facts. Disabling this also "
+        "refuses execution, not just the listing.",
     },
 )
 

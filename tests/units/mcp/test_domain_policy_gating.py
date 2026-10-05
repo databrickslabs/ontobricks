@@ -154,7 +154,7 @@ async def _select(tools, domain: str, ctx: FakeContext | None = None) -> str:
 
 def test_all_registered_tools_are_counted(mcp_env) -> None:
     tools, _ = mcp_env
-    assert len(tools) == 13
+    assert len(tools) == 14
     assert "describe_ontology" in tools
 
 

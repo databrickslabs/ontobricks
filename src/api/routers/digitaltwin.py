@@ -64,6 +64,15 @@ def assert_public_graph_read(request, domain, settings) -> None:
 
     _impl(request, domain, settings)
 
+
+def assert_public_graph_write(request, domain, settings) -> None:
+    """Builder gate for public routes that write to the graph (lazy import, see above)."""
+    from api.routers.internal._graph_access import (
+        assert_public_graph_write as _impl,
+    )
+
+    _impl(request, domain, settings)
+
 # Short-TTL, in-process cache for ``GET /stats`` results keyed by the graph
 # query table. Triple-store stats only change on a build, so a small TTL
 # removes the 3–4 full-table aggregate scans from repeated read-only tool
@@ -232,6 +241,15 @@ class NodeContextAction(BaseModel):
     returns_table: bool = False
 
 
+class NodeContextBusinessRule(BaseModel):
+    """A SWRL rule declared on the node's ontology class, runnable on the node."""
+
+    name: str
+    description: Optional[str] = None
+    antecedent: str = ""
+    consequent: str = ""
+
+
 class NodeContextVirtualAttribute(BaseModel):
     name: str
     column: str = ""
@@ -264,6 +282,7 @@ class NodeContextResponse(BaseModel):
     dataset: Optional[NodeContextDataset] = None
     bridges: Optional[List[NodeContextBridge]] = None
     actions: Optional[List[NodeContextAction]] = None
+    business_rules: Optional[List[NodeContextBusinessRule]] = None
     virtual_attributes: Optional[List[NodeContextVirtualAttributeGroup]] = None
     message: Optional[str] = None
 
@@ -288,6 +307,35 @@ class NodeActionResponse(BaseModel):
     action: Optional[str] = None
     returns_table: bool = False
     rows: Optional[List[Dict[str, Any]]] = None
+    message: Optional[str] = None
+
+
+class NodeBusinessRuleRequest(BaseModel):
+    entity_uri: str = Field(..., description="Instance URI of the node to apply the rule to")
+    rule: str = Field(..., description="Name of a SWRL business rule declared on the class")
+    domain_name: Optional[str] = Field(None, description="Domain name in the registry")
+    domain_version: Optional[str] = Field(None, description="Domain version to load")
+    registry_catalog: Optional[str] = None
+    registry_schema: Optional[str] = None
+    registry_volume: Optional[str] = None
+
+
+class InferredTripleOut(BaseModel):
+    subject: str
+    predicate: str
+    object: str
+
+
+class NodeBusinessRuleResponse(BaseModel):
+    success: bool
+    entity_uri: str = ""
+    entity_local_id: str = ""
+    class_name: Optional[str] = None
+    rule: Optional[str] = None
+    inferred_count: int = 0
+    materialized_count: int = 0
+    triples: List[InferredTripleOut] = []
+    truncated: bool = False
     message: Optional[str] = None
 
 
@@ -1797,6 +1845,43 @@ async def dt_nodes_action(
         context_policy=NodeContextService.resolve_context_policy(domain),
     )
     return NodeActionResponse(**result)
+
+
+# ---------------------------------------------------------------------------
+# POST /nodes/business-rule
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/nodes/business-rule",
+    response_model=NodeBusinessRuleResponse,
+    response_model_exclude_none=True,
+    summary="Trigger a SWRL business rule on a node",
+    description="Run one of the SWRL business rules declared on the node's "
+    "ontology class, restricted to that node, and write the inferred triples "
+    "to the graph. Requires the Builder role on the domain. Only rules "
+    "declared on the resolved class may be triggered.",
+)
+async def dt_nodes_business_rule(
+    payload: NodeBusinessRuleRequest,
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    domain = DigitalTwin.resolve_domain(
+        payload.domain_name, session_mgr, settings,
+        payload.registry_catalog, payload.registry_schema, payload.registry_volume,
+        payload.domain_version, read_only=True,
+    )
+    assert_public_graph_write(request, domain, settings)
+    result = await NodeContextService.run_business_rule(
+        domain,
+        settings,
+        entity_uri=payload.entity_uri,
+        rule_name=payload.rule,
+        context_policy=NodeContextService.resolve_context_policy(domain),
+    )
+    return NodeBusinessRuleResponse(**result)
 
 
 # ---------------------------------------------------------------------------

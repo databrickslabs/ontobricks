@@ -20,7 +20,7 @@ from back.core.errors import (
 )
 from back.objects.session import SessionManager, get_session_manager
 from shared.config.settings import get_settings, Settings
-from back.objects.ontology import Ontology
+from back.objects.ontology import Ontology, OntologyRules
 from back.objects.ontology import GenerateWorkflow
 from back.objects.session import get_domain
 from back.core.task_manager import get_task_manager
@@ -888,6 +888,10 @@ async def save_swrl_rule(
             rules.append(rule)
 
         domain.swrl_rules = rules
+        if is_update:
+            OntologyRules.rename_business_rule_refs(
+                domain.get_classes(), old.get("name", ""), rule.get("name", "")
+            )
         domain.record_change(
             "swrl_updated" if is_update else "swrl_added",
             entity_type="swrl", entity_ref=rule.get("name", ""),
@@ -920,6 +924,10 @@ async def delete_swrl_rule(
         removed_name = removed.get("name", "")
         rules.pop(index)
         domain.swrl_rules = rules
+        if removed_name and not any(
+            isinstance(r, dict) and r.get("name") == removed_name for r in rules
+        ):
+            OntologyRules.drop_business_rule_refs(domain.get_classes(), removed_name)
         domain.record_change(
             "swrl_removed", entity_type="swrl",
             entity_ref=removed_name, summary=removed_name,

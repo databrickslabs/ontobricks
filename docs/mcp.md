@@ -46,6 +46,7 @@ topic covered by one of the listed domains, the LLM selects it automatically.
 | `get_entity_context` | Returns a node's external context: linked Unity Catalog dataset (optionally with rows), cross-domain bridges, the Unity Catalog function **actions** configured on its class, and its **virtual attributes** (declared always; values via `compute_virtual_attributes` or the inline `compute_virtual_attributes=True` flag) |
 | `compute_virtual_attributes` | Runs the Unity Catalog functions that compute an entity's **virtual attributes** and returns their live values. Call this when the user asks about a virtual attribute — those values are not stored in the graph. Only functions declared on the entity's class can be invoked |
 | `invoke_entity_action` | Runs one of the class's Unity Catalog function actions on an entity. The function is called with exactly one argument: the entity's ID. Only functions declared on the entity's ontology class can be invoked |
+| `run_entity_business_rule` | Runs one of the SWRL **business rules** attached to the entity's class, scoped to that entity, and materialises the inferred triples into the graph (no confirmation step). Requires the Builder role on the domain; only rules declared on the class can be run. On Neo4j-backed domains it currently infers nothing |
 | `get_status` | Compact diagnostic: domain name, view table, graph name, data availability, triple count |
 | `get_graphql_schema` | Returns the auto-generated GraphQL schema (SDL) for the selected domain — shows types, fields, and relationships |
 | `query_graphql` | Executes a GraphQL query against the selected domain's graph viewer with structured, nested results |
@@ -379,7 +380,8 @@ authoring UI is unaffected and always shows the ontology designer everything.
 > after the names were hidden. `Virtual attributes` works the same way: with
 > the element disabled, `compute_virtual_attributes(entity_uri)` is refused
 > (and so is `get_entity_context(compute_virtual_attributes=True)`) rather than
-> silently returning nothing.
+> silently returning nothing. `Business rules` follows the same rule:
+> disabled, `run_entity_business_rule` is refused.
 
 ### Switching domains switches the tool set
 

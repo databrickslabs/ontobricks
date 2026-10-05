@@ -137,6 +137,19 @@ async function loadOntologyClasses() {
         if (typeof ontologyProperties !== 'undefined') ontologyProperties = {};
         
         if (data && data.success && data.config) {
+            // Business rules: keep references to existing, enabled SWRL rules.
+            const swrlByName = {};
+            let hasSwrl = false;
+            try {
+                const swrlResp = await fetch('/ontology/swrl/list');
+                const swrlData = await swrlResp.json();
+                if (swrlData && Array.isArray(swrlData.rules)) {
+                    hasSwrl = true;
+                    swrlData.rules.forEach(r => { if (r && r.name) swrlByName[r.name] = r; });
+                }
+            } catch (e) {
+                console.log('No SWRL rules loaded:', e.message);
+            }
             // Load classes
             for (const cls of (data.config.classes || [])) {
                 const classInfo = {
@@ -148,6 +161,10 @@ async function loadOntologyClasses() {
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
                     actions: cls.actions || [],
+                    businessRules: (cls.business_rules || [])
+                        .filter(ref => ref && ref.name && (!hasSwrl
+                            || (swrlByName[ref.name] && swrlByName[ref.name].enabled !== false)))
+                        .map(ref => ({ name: ref.name, description: (swrlByName[ref.name] || {}).description || '' })),
                     virtualAttributes: cls.virtualAttributes || [],
                     description: cls.description || cls.comment || '',
                     dataProperties: cls.dataProperties || []

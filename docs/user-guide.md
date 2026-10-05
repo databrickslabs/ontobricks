@@ -1287,6 +1287,7 @@ unrecoverable.
 | **Bridges** | Cross-domain links declared between ontology classes. |
 | **Actions** | Unity Catalog functions declared on a class. |
 | **Virtual attributes** | Class attributes computed on demand by a Unity Catalog function instead of being mapped. |
+| **Business rules** | SWRL rules attached to a class that can be run on an entity (`run_entity_business_rule`). |
 
 > **The Actions overlap.** The `invoke_entity_action` *tool* and the
 > **Actions** *context element* are two switches over the same feature.
@@ -1640,6 +1641,7 @@ OntoBricks includes an MCP server that exposes knowledge-graph tools to LLM clie
 | `describe_entity` | Full-text description of an entity with BFS traversal |
 | `get_entity_context` | Linked dataset rows, cross-domain bridges, and class actions for a node |
 | `invoke_entity_action` | Run a Unity Catalog function action on an entity (entity ID passed as the single argument) |
+| `run_entity_business_rule` | Run a SWRL business rule attached to the entity's class and materialise the inferred triples (Builder role) |
 | `get_graphql_schema` | Auto-generated GraphQL schema (SDL) for the domain |
 | `query_graphql` | Execute a GraphQL query with structured results |
 | `get_status` | Triple store diagnostic (view, graph, count) |

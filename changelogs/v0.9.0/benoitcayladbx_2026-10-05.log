@@ -135,3 +135,96 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 7308 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.03s
 
+
+## Entity business rules (SWRL) in Studio, Explorer and MCP
+
+Context: Ontology designers can attach SWRL business rules to a class in
+Studio. Builders then run a rule on one entity from the Graph Explorer
+(confirmation modal) or through a new MCP tool (no confirmation). The rule
+runs scoped to that entity, the inferred triples are materialised into the
+graph, and the Explorer canvas refreshes. Candidate rules are those whose
+atoms cite the class or one of its parent classes. The Cypher translator
+(Neo4j) is still scaffolding, so Neo4j domains infer no facts.
+
+Changes:
+
+1. src/back/objects/ontology/OntologyRules.py
+   Rule/class matching (swrl_rule_classes, rules_for_class with lineage),
+   focus variables, and rename/drop cascade of class business_rules refs.
+2. src/back/objects/ontology/OntologyClassModel.py,
+   src/back/core/w3c/owl/OntologyGenerator.py, src/back/core/w3c/owl/OntologyParser.py
+   Persist the class business_rules list (ontobricks:businessRules JSON literal).
+3. src/back/core/reasoning/SWRLSQLTranslator.py, SWRLEngine.py, ReasoningService.py
+   Optional entity focus filter on the inference SQL, threaded through run_swrl_rules.
+4. src/back/objects/digitaltwin/NodeBusinessRuleService.py (new), NodeContextService.py, __init__.py
+   Policy-gated class entries, allow-list resolution, entity-scoped run and
+   materialisation, business_rules in node context.
+5. src/back/core/mcp_tools.py
+   New domain tool run_entity_business_rule and context feature business_rules.
+6. src/api/routers/digitaltwin.py, src/api/routers/internal/_graph_access.py
+   POST /api/v1/digitaltwin/nodes/business-rule with Builder write gate
+   (assert_public_graph_write); business_rules in node context response.
+7. src/api/routers/internal/dtwin.py
+   Confirm-gated /dtwin/nodes/business-rule/request|confirm|cancel (Builder);
+   token kind isolation from actions; business_rules in /dtwin/classes.
+8. src/api/routers/domains.py, src/api/routers/internal/ontology.py
+   business_rules in domain classes; SWRL save/delete cascades class refs.
+9. src/mcp-server/server/constants.py, tools.py, formatting.py
+   run_entity_business_rule tool, business rules in describe_ontology,
+   class context and node context output.
+10. src/front/static/ontology/js/ontology-shared-panels.js, ontology-swrl.js,
+    ontology-information.js, src/front/static/global/js/ontology-design.js
+    Studio References "Business rules" block, selector modal, front cascade.
+11. src/front/static/query/js/query-business-rules.js (new), query-loaders.js,
+    query-sigmagraph.js, query-entity-details.js, src/front/templates/dtwin.html
+    Explorer details section, context-menu entries, confirmation modal,
+    result table and graph refresh.
+12. docs/api.md, docs/mcp.md, docs/data-access.md, docs/user-guide.md, docs/features.md
+    Document the endpoint, tool, policy element, Builder requirement and Neo4j limitation.
+13. docs/superpowers/specs/2026-10-05-entity-business-rules-design.md (new)
+    Design spec.
+14. tests/units/dtwin/test_entity_business_rules.py, tests/units/api/test_dtwin_nodes_business_rule.py,
+    tests/units/mcp/test_business_rule_tool.py, tests/units/front/test_entity_business_rules_ui.py (new);
+    tests/units/core/test_mcp_tools_policy.py, tests/units/mcp/test_domain_policy_gating.py
+    New coverage; tool counts updated.
+
+Modified files:
+- src/back/objects/ontology/OntologyRules.py
+- src/back/objects/ontology/OntologyClassModel.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/reasoning/SWRLSQLTranslator.py
+- src/back/core/reasoning/SWRLEngine.py
+- src/back/core/reasoning/ReasoningService.py
+- src/back/core/mcp_tools.py
+- src/back/objects/digitaltwin/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/NodeContextService.py
+- src/back/objects/digitaltwin/__init__.py
+- src/api/routers/digitaltwin.py
+- src/api/routers/internal/_graph_access.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/internal/ontology.py
+- src/api/routers/domains.py
+- src/mcp-server/server/constants.py
+- src/mcp-server/server/tools.py
+- src/mcp-server/server/formatting.py
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/ontology/js/ontology-swrl.js
+- src/front/static/ontology/js/ontology-information.js
+- src/front/static/global/js/ontology-design.js
+- src/front/static/query/js/query-business-rules.js
+- src/front/static/query/js/query-loaders.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/static/query/js/query-entity-details.js
+- src/front/templates/dtwin.html
+- docs/api.md, docs/mcp.md, docs/data-access.md, docs/user-guide.md, docs/features.md
+- docs/superpowers/specs/2026-10-05-entity-business-rules-design.md
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/mcp/test_business_rule_tool.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/core/test_mcp_tools_policy.py
+- tests/units/mcp/test_domain_policy_gating.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7346 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 47.46s

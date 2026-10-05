@@ -381,6 +381,7 @@ async function parseAndLoadOwl(content, filename) {
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
                     actions: cls.actions || [],
+                    business_rules: cls.business_rules || [],
                     virtualAttributes: cls.virtualAttributes || [],
                     dataProperties: merged
                 };
@@ -759,6 +760,7 @@ async function parseAndLoadRdfs(content, filename) {
                     bridges: cls.bridges || [],
                     dataset: cls.dataset || null,
                     actions: cls.actions || [],
+                    business_rules: cls.business_rules || [],
                     virtualAttributes: cls.virtualAttributes || [],
                     dataProperties: merged
                 };

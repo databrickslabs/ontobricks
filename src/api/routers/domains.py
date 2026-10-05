@@ -19,6 +19,10 @@ from back.core.errors import (
 from back.core.logging import get_logger
 from back.objects.digitaltwin import DigitalTwin
 from back.objects.digitaltwin.NodeContextService import NodeContextService
+from back.objects.digitaltwin.NodeBusinessRuleService import (
+    BUSINESS_RULES_FEATURE,
+    NodeBusinessRuleService,
+)
 from back.objects.digitaltwin.VirtualAttributeService import VirtualAttributeService
 from back.objects.registry import RegistryCfg, RegistryService
 from back.objects.session import SessionManager, get_domain, get_session_manager
@@ -143,6 +147,7 @@ class ClassActionsItem(BaseModel):
     dataset: Optional[dict] = None
     bridges: List[dict] = Field(default_factory=list)
     actions: List[dict] = Field(default_factory=list)
+    business_rules: List[dict] = Field(default_factory=list)
     virtualAttributes: List[dict] = Field(default_factory=list)
 
 
@@ -518,6 +523,7 @@ async def get_domain_classes(
     # attachment is never handed to an MCP client.
     policy = NodeContextService.resolve_context_policy(domain)
     disabled = NodeContextService.context_feature_disabled
+    swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
 
     items: List[ClassActionsItem] = []
     for cls in raw_classes:
@@ -535,6 +541,11 @@ async def get_domain_classes(
             )
         )
         actions = [] if disabled(policy, "actions") else cls.get("actions") or []
+        business_rules = (
+            []
+            if disabled(policy, BUSINESS_RULES_FEATURE)
+            else NodeBusinessRuleService.class_entries(cls, swrl_rules)
+        )
         virtual_attributes = (
             []
             if disabled(policy, "virtual_attributes")
@@ -547,6 +558,7 @@ async def get_domain_classes(
                 dataset=dataset,
                 bridges=bridges,
                 actions=actions,
+                business_rules=business_rules,
                 virtualAttributes=virtual_attributes,
             )
         )

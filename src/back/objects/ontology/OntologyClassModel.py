@@ -275,6 +275,9 @@ class OntologyClassModel:
             "bridges": data.get("bridges", existing.get("bridges", [])),
             "dataset": data.get("dataset", existing.get("dataset", None)),
             "actions": data.get("actions", existing.get("actions", [])),
+            "business_rules": data.get(
+                "business_rules", existing.get("business_rules", [])
+            ),
             "virtualAttributes": data.get(
                 "virtualAttributes", existing.get("virtualAttributes", [])
             ),

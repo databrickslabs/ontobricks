@@ -84,6 +84,84 @@ class OntologyRules:
             )
         return errors
 
+    # -- Entity business rules (SWRL rules referenced from a class) ---------
+
+    @staticmethod
+    def _swrl_class_atoms(rule: Dict[str, Any]):
+        """Yield ``(name, variable)`` for every unprefixed unary atom of *rule*."""
+        for part in ("antecedent", "consequent"):
+            for m in OntologyRules._SWRL_ATOM_RE.finditer(rule.get(part, "") or ""):
+                if m.group(1):
+                    continue
+                args = [a.strip() for a in m.group(3).split(",") if a.strip()]
+                if len(args) == 1:
+                    yield m.group(2), args[0]
+
+    @staticmethod
+    def swrl_rule_classes(rule: Dict[str, Any]) -> Set[str]:
+        """Lowercased local names of the classes a SWRL rule references."""
+        return {name.lower() for name, _ in OntologyRules._swrl_class_atoms(rule)}
+
+    @staticmethod
+    def class_lineage(classes: List[Dict[str, Any]], class_name: str) -> List[str]:
+        """*class_name* followed by its ancestors, nearest first."""
+        from back.objects.ontology.OntologyClassModel import OntologyClassModel
+
+        return [class_name] + OntologyClassModel.ancestor_names(classes, class_name)
+
+    @staticmethod
+    def rules_for_class(
+        class_name: str,
+        swrl_rules: List[Dict[str, Any]],
+        classes: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """SWRL rules whose class atoms cite *class_name* or one of its ancestors."""
+        lineage = {n.lower() for n in OntologyRules.class_lineage(classes, class_name)}
+        return [
+            r
+            for r in swrl_rules or []
+            if isinstance(r, dict) and OntologyRules.swrl_rule_classes(r) & lineage
+        ]
+
+    @staticmethod
+    def swrl_focus_variables(
+        rule: Dict[str, Any], class_names: List[str]
+    ) -> List[str]:
+        """Variables typed by one of *class_names* in *rule*, in atom order."""
+        wanted = {n.lower() for n in class_names}
+        out: List[str] = []
+        for name, var in OntologyRules._swrl_class_atoms(rule):
+            if name.lower() in wanted and var.startswith("?") and var not in out:
+                out.append(var)
+        return out
+
+    @staticmethod
+    def rename_business_rule_refs(
+        classes: List[Dict[str, Any]], old_name: str, new_name: str
+    ) -> int:
+        """Point every class ``business_rules`` entry named *old_name* to *new_name*."""
+        if not old_name or old_name == new_name:
+            return 0
+        changed = 0
+        for cls in classes or []:
+            for ref in cls.get("business_rules") or []:
+                if isinstance(ref, dict) and ref.get("name") == old_name:
+                    ref["name"] = new_name
+                    changed += 1
+        return changed
+
+    @staticmethod
+    def drop_business_rule_refs(classes: List[Dict[str, Any]], name: str) -> int:
+        """Remove every class ``business_rules`` entry named *name*."""
+        changed = 0
+        for cls in classes or []:
+            refs = cls.get("business_rules") or []
+            kept = [r for r in refs if not (isinstance(r, dict) and r.get("name") == name)]
+            if len(kept) != len(refs):
+                changed += len(refs) - len(kept)
+                cls["business_rules"] = kept
+        return changed
+
     @staticmethod
     def _ref_local_name(term: str):
         """Return ``(checkable, local_name)`` for a SPARQL/CURIE term.

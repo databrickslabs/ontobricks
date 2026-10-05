@@ -873,6 +873,39 @@ with `success: false` and nothing is executed. Table-valued functions run as
 > is deliberately independent of whether the `invoke_entity_action` MCP tool is
 > still published.
 
+#### `POST /api/v1/digitaltwin/nodes/business-rule`
+
+Run one of the SWRL business rules attached to the node's class (Ontology →
+Studio → References → **Business rules**), **scoped to that entity**, and
+materialise the inferred triples into the graph.
+
+**Body:**
+- `entity_uri`: Instance URI of the node the rule is triggered on
+- `rule`: Name of a SWRL rule declared in the class's `business_rules` list
+- `domain_name` / `domain_version` (optional): Registry domain and version
+
+Only rules declared on the resolved class (and still present and enabled in the
+domain's SWRL rules) can be run — the ontology is the allow-list. The rule's
+antecedent gets an extra predicate binding the class variable(s) to
+`entity_uri`, so only facts involving that entity are inferred. Re-running is
+idempotent: facts already in the graph are not inserted twice.
+
+**Response:** `success`, `entity_uri`, `class_name`, `rule`, `inferred_count`,
+`materialized_count`, `triples` (capped at 200) and `truncated`.
+
+> **Permissions.** This route writes to the graph: in app mode the caller needs
+> the **Builder** role (or higher) on the domain; viewers get `403`. If the
+> domain sets **Business rules** to **Disabled** in its MCP policy, every call
+> is refused.
+>
+> **Neo4j.** The Cypher translation of SWRL rules is not implemented yet, so on
+> a Neo4j-backed domain the call succeeds with `inferred_count: 0`.
+
+The Graph Explorer uses a confirm-gated internal flow instead:
+`POST /dtwin/nodes/business-rule/request` mints a short-lived token,
+`POST /dtwin/nodes/business-rule/confirm` runs the rule, and
+`POST /dtwin/nodes/business-rule/cancel` discards the token. These routes also require Builder.
+
 #### `GET /api/v1/digitaltwin/nodes/virtual-attributes`
 
 Compute the virtual attributes declared on an entity's ontology class by running

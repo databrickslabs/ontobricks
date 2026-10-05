@@ -296,6 +296,15 @@ class OntologyParser:
                     pass
                 break
 
+            # Get referenced SWRL business rules from OntoBricks property
+            business_rules = []
+            for br in self.graph.objects(cls, ONTOBRICKS_NS.businessRules):
+                try:
+                    business_rules = json.loads(str(br))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                break
+
             # Get virtual attribute declarations from OntoBricks property
             virtual_attributes = []
             for va in self.graph.objects(cls, ONTOBRICKS_NS.virtualAttributes):
@@ -337,6 +346,7 @@ class OntologyParser:
                     "bridges": bridges,
                     "dataset": dataset,
                     "actions": actions,
+                    "business_rules": business_rules,
                     "virtualAttributes": virtual_attributes,
                     "dataProperties": data_properties,
                 }

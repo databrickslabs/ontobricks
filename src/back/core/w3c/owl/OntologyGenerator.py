@@ -579,6 +579,17 @@ class OntologyGenerator:
                 (class_uri, ONTOBRICKS_NS.actions, Literal(json.dumps(actions)))
             )
 
+        # Add referenced SWRL business rules (by rule name) as JSON string
+        business_rules = cls.get("business_rules", [])
+        if business_rules:
+            self.graph.add(
+                (
+                    class_uri,
+                    ONTOBRICKS_NS.businessRules,
+                    Literal(json.dumps(business_rules)),
+                )
+            )
+
         # Add virtual attribute declarations as JSON string. These are computed
         # on demand by a UC function, never materialized, so they are kept out
         # of the owl:DatatypeProperty block below on purpose.

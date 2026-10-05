@@ -669,6 +669,7 @@ function commitDesignToOntologyState() {
             bridges: existing.bridges || [],
             dataset: existing.dataset || null,
             actions: existing.actions || [],
+            business_rules: existing.business_rules || [],
             virtualAttributes: existing.virtualAttributes || [],
             dataProperties: [...ownProperties, ...inheritedProperties]
         };
