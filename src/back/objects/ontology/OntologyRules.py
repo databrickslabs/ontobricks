@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Set
 
+from back.core.reasoning.DecisionTableEngine import ASSIGN_CLASS
 from back.core.w3c.shacl.constants import QUALITY_CATEGORIES
 
 class OntologyRules:
@@ -189,9 +190,11 @@ class OntologyRules:
     ) -> List[str]:
         """Flag a decision table referencing unknown classes/properties.
 
-        Target class, every input-column property and the output-column
-        property must already exist in the ontology.
+        Target class, every input-column property, the output-column
+        property and any class assigned by an ``assign_class`` output must
+        already exist in the ontology.
         """
+
         errors: List[str] = []
         target = rule.get("target_class", "")
         if target and target.lower() not in class_names:
@@ -200,9 +203,17 @@ class OntologyRules:
             prop = (col or {}).get("property", "")
             if prop and prop.lower() not in property_names:
                 errors.append(f"input column references unknown property '{prop}'")
-        out_prop = (rule.get("output_column") or {}).get("property", "")
+        out = rule.get("output_column") or {}
+        out_prop = out.get("property", "")
         if out_prop and out_prop.lower() not in property_names:
             errors.append(f"output column references unknown property '{out_prop}'")
+        if out.get("action") == ASSIGN_CLASS:
+            assigned = [out.get("value", "")] + [
+                r.get("action_value", "") for r in rule.get("rows", []) or []
+            ]
+            for cls in filter(None, assigned):
+                if cls.lower() not in class_names:
+                    errors.append(f"output assigns unknown class '{cls}'")
         return errors
 
     @staticmethod

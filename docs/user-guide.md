@@ -2278,7 +2278,8 @@ After sync, you can explore the triple store:
 #### Graph Explorer
 Open **Explorer** in the sidebar to explore the graph viewer interactively:
 - **Find** specific entities by name, type, or URI — matching entities and their neighbors are highlighted
-- **Filter** by entity type, field, match type, and relationship depth
+- **Find Path** highlights the shortest undirected path(s) between two entities already on the canvas (including through group/cluster super-nodes). Open it from the header or empty-canvas menu, or right-click an entity: **Find path (From)** opens the dialog with that entity as source; **Find path (To)** highlights immediately (Search seed → clicked entity, no dialog). Click a node or empty canvas to clear the highlight.
+- **Search** by entity type, field, match type, and relationship depth
 - **Cap expansion** with the max-entities control (default 5 000, up to 20 000). The server uses the value you pick, including in Databricks Apps.
 - **Navigate** relationships — click an entity to see its attributes, values, and connected entities in the detail panel
 - **Toggle labels** for node and edge labels

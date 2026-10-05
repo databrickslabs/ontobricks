@@ -7,7 +7,7 @@ seam similar to :class:`back.core.reasoning.SWRLEngine`.
 """
 
 import time
-from typing import Dict
+from typing import Dict, List
 
 from back.core.helpers import sql_numeric
 from back.core.logging import get_logger
@@ -22,6 +22,8 @@ from back.core.reasoning.constants import (
 
 logger = get_logger(__name__)
 
+ASSIGN_CLASS = "assign_class"
+
 
 class DecisionTableEngine:
     """Decision table engine — compile tabular business rules to SQL.
@@ -29,10 +31,15 @@ class DecisionTableEngine:
     A decision table has:
 
     - *input_columns*: each maps to a class property (conditions)
-    - *output_column*: the inferred predicate or class assignment (action)
+    - *output_column*: ``set_value`` writes ``property = value``;
+      ``assign_class`` types matches as the class named in ``value``
     - *rows*: each row has condition cells and an action cell
     - *hit_policy*: ``first`` (first matching row wins), ``all`` (all matching
-      rows fire), or ``unique`` (at most one row should match)
+      rows fire), or ``unique`` (an instance matching several rows is reported
+      as a conflict and gets no output)
+
+    A column only constrains an instance in rows where its cell holds a
+    condition: instances missing that attribute still match ``any`` cells.
     """
 
     @staticmethod
@@ -99,6 +106,16 @@ class DecisionTableEngine:
                 name.lower(), data_ns + name if name else ""
             )
         dt["output_column"] = out
+        if out.get("action") == ASSIGN_CLASS:
+
+            def class_uri(name: str) -> str:
+                return uri_map.get(name.lower(), base_uri + sep + name) if name else ""
+
+            out["class_uri"] = class_uri(out.get("value", ""))
+            dt["rows"] = [
+                {**row, "action_uri": class_uri(row.get("action_value", ""))}
+                for row in dt.get("rows", [])
+            ]
         return dt
 
     def execute_tables(self, tables, store, table_name, ontology, materialize=False):
@@ -149,143 +166,106 @@ class DecisionTableEngine:
             [c.get("property_uri") for c in dt.get("input_columns", [])],
         )
         out_col = dt.get("output_column") or {}
-        output_prop_uri = out_col.get("property_uri", "")
-        output_prop_name = out_col.get("property", "")
-        output_default_val = out_col.get("value", "")
-        row_logic = dt.get("row_logic", "or")
-        hit_policy = dt.get("hit_policy", "first")
-        has_output = bool(output_prop_uri)
-        if row_logic == "and" or not has_output:
-            self._execute_combined(
-                dt,
-                store,
-                table_name,
-                base_uri,
-                result,
-                dt_name,
-                output_prop_uri,
-                output_prop_name,
-                rows,
-                output_default_val,
-            )
+        assign = out_col.get("action") == ASSIGN_CLASS
+        if assign:
+            predicate = RDF_TYPE
+            default_obj = out_col.get("class_uri", "")
+            row_obj_key = "action_uri"
+        else:
+            predicate = out_col.get("property_uri", "")
+            default_obj = out_col.get("value", "")
+            row_obj_key = "action_value"
+        output = {
+            "predicate": predicate,
+            "label": "" if assign else out_col.get("property", ""),
+            "objects": [default_obj or r.get(row_obj_key, "") for r in rows],
+        }
+        if dt.get("row_logic", "or") == "and" or not predicate:
+            self._execute_combined(dt, store, table_name, base_uri, result, dt_name, output)
         else:
             self._execute_per_row(
-                dt,
-                store,
-                table_name,
-                base_uri,
-                result,
-                dt_name,
-                output_prop_uri,
-                output_prop_name,
-                rows,
-                hit_policy,
-                output_default_val,
+                dt, store, table_name, base_uri, result, dt_name, output,
+                dt.get("hit_policy", "first"),
             )
         return result
 
-    def _execute_combined(
-        self,
-        dt,
-        store,
-        table_name,
-        base_uri,
-        result,
-        dt_name,
-        output_prop_uri,
-        output_prop_name,
-        rows,
-        output_default_val="",
-    ):
-        tbl_ref = store.sql_table_reference(table_name)
-        query = self.build_violation_sql(dt, tbl_ref, base_uri)
+    @staticmethod
+    def _describe_output(output, obj):
+        if not obj:
+            return ""
+        if output["predicate"] == RDF_TYPE:
+            return f" → {uri_local_name(obj)}"
+        return f" → {output['label']} = {obj}" if output["label"] else ""
+
+    def _emit(self, result, dt_name, subj, msg, output, obj, provenance):
+        result.violations.append(
+            RuleViolation(
+                rule_name=dt_name,
+                subject=subj,
+                message=msg + self._describe_output(output, obj),
+                check_type="decision_table",
+                rule_type="decision_table",
+            )
+        )
+        if output["predicate"] and obj:
+            result.inferred_triples.append(
+                InferredTriple(
+                    subject=subj,
+                    predicate=output["predicate"],
+                    object=obj,
+                    provenance=provenance,
+                    rule_name=dt_name,
+                )
+            )
+
+    def _execute_combined(self, dt, store, table_name, base_uri, result, dt_name, output):
+        query = self.build_violation_sql(dt, store.sql_table_reference(table_name), base_uri)
         if not query:
             logger.warning("Decision table '%s': query builder returned None", dt_name)
             return
         logger.debug("Decision table '%s' query:\n%s", dt_name, query)
-        action_val = output_default_val or ""
-        if not action_val:
-            for r in rows:
-                if r.get("action_value"):
-                    action_val = r["action_value"]
-                    break
+        obj = next((o for o in output["objects"] if o), "")
         for subj in self._run_query(store, query, dt_name):
-            msg = f"Matches decision table '{dt_name}'"
-            if action_val and output_prop_name:
-                msg += f" → {output_prop_name} = {action_val}"
-            result.violations.append(
-                RuleViolation(
-                    rule_name=dt_name,
-                    subject=subj,
-                    message=msg,
-                    check_type="decision_table",
-                    rule_type="decision_table",
-                )
+            self._emit(
+                result, dt_name, subj, f"Matches decision table '{dt_name}'",
+                output, obj, f"decision_table:{dt_name}",
             )
-            if output_prop_uri and action_val:
-                result.inferred_triples.append(
-                    InferredTriple(
-                        subject=subj,
-                        predicate=output_prop_uri,
-                        object=action_val,
-                        provenance=f"decision_table:{dt_name}",
-                        rule_name=dt_name,
-                    )
-                )
 
-    def _execute_per_row(
-        self,
-        dt,
-        store,
-        table_name,
-        base_uri,
-        result,
-        dt_name,
-        output_prop_uri,
-        output_prop_name,
-        rows,
-        hit_policy,
-        output_default_val="",
-    ):
-        seen: set = set()
-        for ri, row in enumerate(rows):
-            action_val = output_default_val or row.get("action_value", "")
-            single_dt = dict(dt)
-            single_dt["rows"] = [row]
-            single_dt["row_logic"] = "or"
-            tbl_ref = store.sql_table_reference(table_name)
-            query = self.build_violation_sql(single_dt, tbl_ref, base_uri)
+    def _execute_per_row(self, dt, store, table_name, base_uri, result, dt_name, output, hit_policy):
+        tbl_ref = store.sql_table_reference(table_name)
+        matches: Dict[str, List[int]] = {}
+        for ri, row in enumerate(dt.get("rows", [])):
+            query = self.build_violation_sql(
+                {**dt, "rows": [row], "row_logic": "or"}, tbl_ref, base_uri
+            )
             if not query:
                 continue
-            logger.debug(
-                "Decision table '%s' row %d query:\n%s", dt_name, ri + 1, query
-            )
+            logger.debug("Decision table '%s' row %d query:\n%s", dt_name, ri + 1, query)
             for subj in self._run_query(store, query, dt_name):
-                if hit_policy == "first" and subj in seen:
-                    continue
-                seen.add(subj)
-                msg = f"Row {ri + 1} of '{dt_name}'"
-                if action_val and output_prop_name:
-                    msg += f" → {output_prop_name} = {action_val}"
+                matches.setdefault(subj, []).append(ri)
+
+        for subj, row_idx in matches.items():
+            if hit_policy == "unique" and len(row_idx) > 1:
+                rows_txt = ", ".join(str(i + 1) for i in row_idx)
                 result.violations.append(
                     RuleViolation(
                         rule_name=dt_name,
                         subject=subj,
-                        message=msg,
+                        message=(
+                            f"Matches rows {rows_txt} of '{dt_name}' — the Unique hit "
+                            "policy allows at most one, so no output is applied"
+                        ),
                         check_type="decision_table",
                         rule_type="decision_table",
                     )
                 )
-                if output_prop_uri and action_val:
-                    result.inferred_triples.append(
-                        InferredTriple(
-                            subject=subj,
-                            predicate=output_prop_uri,
-                            object=action_val,
-                            provenance=f"decision_table:{dt_name}:row{ri + 1}",
-                            rule_name=dt_name,
-                        )
-                    )
+                continue
+            fired = row_idx[:1] if hit_policy == "first" else row_idx
+            for ri in fired:
+                self._emit(
+                    result, dt_name, subj, f"Row {ri + 1} of '{dt_name}'",
+                    output, output["objects"][ri], f"decision_table:{dt_name}:row{ri + 1}",
+                )
 
     @staticmethod
     def _run_query(store, query, dt_name):
@@ -306,20 +286,11 @@ class DecisionTableEngine:
         rows = dt.get("rows", [])
         if not target_cls_uri or not inputs or not rows:
             return None
-        joins = []
         base_where = [
             f"t0.predicate = '{RDF_TYPE}'",
             f"t0.object = '{self._esc_sql(target_cls_uri)}'",
         ]
-        for i, inp in enumerate(inputs):
-            alias = f"inp{i}"
-            prop_uri = inp.get("property_uri", "")
-            if not prop_uri:
-                continue
-            joins.append(
-                f"INNER JOIN {table} {alias} ON {alias}.subject = t0.subject "
-                f"AND {alias}.predicate = '{self._esc_sql(prop_uri)}'"
-            )
+        used_cols = set()
         row_conditions = []
         for row in rows:
             conds = row.get("conditions", [])
@@ -329,10 +300,13 @@ class DecisionTableEngine:
                 val = cond.get("value", "")
                 if op == "any" or not val:
                     continue
-                alias = f"inp{j}"
+                if j >= len(inputs) or not inputs[j].get("property_uri"):
+                    continue
                 sql_op = DT_OP_SQL.get(op)
                 if sql_op is None:
                     continue
+                alias = f"inp{j}"
+                used_cols.add(j)
                 if self._is_numeric(val):
                     v_expr = val
                     lhs = (
@@ -352,6 +326,12 @@ class DecisionTableEngine:
                 row_conditions.append("(" + " AND ".join(parts) + ")")
         if not row_conditions:
             return None
+        # LEFT JOIN: a column only constrains rows whose cell holds a condition.
+        joins = [
+            f"LEFT JOIN {table} inp{j} ON inp{j}.subject = t0.subject "
+            f"AND inp{j}.predicate = '{self._esc_sql(inputs[j]['property_uri'])}'"
+            for j in sorted(used_cols)
+        ]
         row_joiner = " AND " if dt.get("row_logic") == "and" else " OR "
         sql = (
             f"SELECT DISTINCT t0.subject AS s\n"
@@ -379,4 +359,8 @@ class DecisionTableEngine:
                 errors.append(
                     f"Row {i+1}: expected {expected} conditions, got {len(conds)}"
                 )
+        out = dt.get("output_column") or {}
+        if out.get("action") == ASSIGN_CLASS and not out.get("value"):
+            if not any(r.get("action_value") for r in dt.get("rows", [])):
+                errors.append("Assign entity needs the entity to assign")
         return errors

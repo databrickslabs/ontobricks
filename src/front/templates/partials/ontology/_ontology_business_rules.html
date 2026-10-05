@@ -305,29 +305,45 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="dtEditIndex" value="-1">
-                <div class="row mb-3">
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    A decision table checks every instance of the <strong>target entity</strong> against a grid of
+                    conditions. Each <strong>column</strong> reads one attribute of the instance; each
+                    <strong>row</strong> is a combination of conditions that must all hold. Matching instances are
+                    reported in Data Quality and Reasoning; with an <strong>output</strong>, reasoning can also write a
+                    value on them (e.g. <em>riskTier = high</em>).
+                </div>
+                <div class="row g-3 mb-3">
                     <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Name <span class="text-danger">*</span></label>
+                        <label class="form-label small fw-semibold" for="dtName">Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control form-control-sm" id="dtName" placeholder="e.g., RiskClassification">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Target Entity <span class="text-danger">*</span></label>
-                        <select class="form-select form-select-sm" id="dtTargetClass">
+                        <label class="form-label small fw-semibold" for="dtTargetClass">Target Entity <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="dtTargetClass" aria-describedby="dtTargetClassHelp">
                             <option value="">Select entity&hellip;</option>
                         </select>
+                        <div class="form-text small" id="dtTargetClassHelp">
+                            The entity whose instances are evaluated, e.g. <em>Customer</em>. Columns and output
+                            pick from its attributes.
+                        </div>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Hit Policy</label>
-                        <select class="form-select form-select-sm" id="dtHitPolicy">
+                        <label class="form-label small fw-semibold" for="dtHitPolicy">Hit Policy</label>
+                        <select class="form-select form-select-sm" id="dtHitPolicy" aria-describedby="dtHitPolicyHelp">
                             <option value="first">First (first matching row wins)</option>
                             <option value="all">All (all matching rows fire)</option>
                             <option value="unique">Unique (at most one row matches)</option>
                         </select>
+                        <div class="form-text small" id="dtHitPolicyHelp">
+                            What happens when several rows match the same instance. Only used with <strong>OR</strong>
+                            and an output. <em>Unique</em> reports such an instance as a conflict and applies no output.
+                        </div>
                     </div>
                 </div>
                 <hr>
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="d-flex align-items-center gap-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div class="d-flex flex-wrap align-items-center gap-2 column-gap-3">
                         <strong class="small">Conditions &amp; Actions</strong>
                         <div class="btn-group btn-group-sm" id="dtRowLogicToggle" role="group" aria-label="Row logic">
                             <input type="radio" class="btn-check" name="dtRowLogic" id="dtRowLogicOr" value="or"
@@ -341,7 +357,7 @@
                             </label>
                         </div>
                         <small class="text-muted br-row-logic-hint" id="dtRowLogicHint">
-                            Rows match if <strong>any</strong> row fires
+                            An instance matches if it satisfies <strong>at least one</strong> row
                         </small>
                     </div>
                     <div class="btn-group btn-group-sm">
@@ -359,25 +375,50 @@
                         <tbody id="dtGridBody"></tbody>
                     </table>
                 </div>
+                <div class="form-text small" id="dtGridHelp">
+                    Pick an attribute in each column header, then an operator and a value per cell. Cells in a row are
+                    combined with AND; the OR / AND toggle combines rows. Numbers compare numerically; text comparisons
+                    (=, &ne;, starts, ends, contains) are case-insensitive. An empty value or <em>any</em> ignores the
+                    cell. A cell only requires its attribute when it holds a condition: instances missing that
+                    attribute still match <em>any</em> or empty cells.
+                </div>
                 <div class="mt-3">
-                    <label class="form-label small fw-semibold">Output Action</label>
+                    <label class="form-label small fw-semibold" for="dtOutputAction">Output Action</label>
                     <div class="row g-2">
                         <div class="col-md-4">
-                            <select class="form-select form-select-sm" id="dtOutputProperty">
-                                <option value="">Output property&hellip;</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <select class="form-select form-select-sm" id="dtOutputAction">
+                            <select class="form-select form-select-sm" id="dtOutputAction" aria-describedby="dtOutputHelp">
                                 <option value="set_value">Set value</option>
                                 <option value="assign_class">Assign entity</option>
                             </select>
                         </div>
+                        <div class="col-md-4" id="dtOutputPropertyGroup">
+                            <select class="form-select form-select-sm" id="dtOutputProperty" aria-label="Output property"
+                                    aria-describedby="dtOutputHelp">
+                                <option value="">Output property&hellip;</option>
+                            </select>
+                        </div>
                         <div class="col-md-4" id="dtOutputValueGroup">
                             <input type="text" class="form-control form-control-sm" id="dtOutputValue"
-                                   placeholder="Value to set&hellip;">
+                                   placeholder="Value to set&hellip;" aria-label="Output value"
+                                   aria-describedby="dtOutputHelp">
+                        </div>
+                        <div class="col-md-4 d-none" id="dtOutputClassGroup">
+                            <select class="form-select form-select-sm" id="dtOutputClass" aria-label="Entity to assign"
+                                    aria-describedby="dtOutputHelp">
+                                <option value="">Entity to assign&hellip;</option>
+                            </select>
                         </div>
                     </div>
+                    <div class="form-text small" id="dtOutputHelp">
+                        Optional, applied when reasoning materializes inferences. <em>Set value</em> writes the attribute
+                        on each matching instance (e.g. <em>riskTier = high</em>); <em>Assign entity</em> also types it
+                        as the chosen entity (e.g. <em>HighRiskCustomer</em>). Leave empty to only report matches.
+                    </div>
+                </div>
+                <div class="alert alert-light border small mt-3 mb-0" id="dtPreview" aria-live="polite">
+                    <div class="fw-semibold mb-1"><i class="bi bi-lightbulb me-1"></i>What this table does</div>
+                    <div id="dtPreviewText"></div>
+                    <ul class="text-warning-emphasis mt-1 mb-0 ps-3 d-none" id="dtPreviewWarning"></ul>
                 </div>
             </div>
             <div class="modal-footer">
@@ -441,43 +482,65 @@
             </div>
             <div class="modal-body">
                 <input type="hidden" id="aggEditIndex" value="-1">
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    An aggregate rule checks every instance of the <strong>target entity</strong>: it computes one
+                    number per instance (a count, sum, average, minimum or maximum over related values) and
+                    <strong>flags</strong> the instances where that number meets the condition. Flagged instances are
+                    reported as violations in Data Quality and Reasoning; with a <strong>Result entity</strong>,
+                    reasoning can also classify them.
+                </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold">Name <span class="text-danger">*</span></label>
+                    <label class="form-label small fw-semibold" for="aggName">Name <span class="text-danger">*</span></label>
                     <input type="text" class="form-control form-control-sm" id="aggName" placeholder="e.g., HighOrderCountCheck">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold">Target Entity <span class="text-danger">*</span></label>
-                    <select class="form-select form-select-sm" id="aggTargetClass">
+                    <label class="form-label small fw-semibold" for="aggTargetClass">Target Entity <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm" id="aggTargetClass" aria-describedby="aggTargetClassHelp">
                         <option value="">Select entity&hellip;</option>
                     </select>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Group-by Property</label>
-                        <select class="form-select form-select-sm" id="aggGroupBy">
-                            <option value="">(none)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Aggregate Property</label>
-                        <select class="form-select form-select-sm" id="aggAggProp">
-                            <option value="">(none)</option>
-                        </select>
+                    <div class="form-text small" id="aggTargetClassHelp">
+                        The entity whose instances are evaluated one by one, e.g. <em>Customer</em>.
                     </div>
                 </div>
-                <div class="row mb-3">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold" for="aggGroupBy">Group-by Property</label>
+                        <select class="form-select form-select-sm" id="aggGroupBy" aria-describedby="aggGroupByHelp">
+                            <option value="">(none)</option>
+                        </select>
+                        <div class="form-text small" id="aggGroupByHelp">
+                            Relationship followed from each instance to the values being aggregated, e.g.
+                            <em>hasOrder</em>. Alone, it counts these links. Results are always grouped per instance.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold" for="aggAggProp">Aggregate Property</label>
+                        <select class="form-select form-select-sm" id="aggAggProp" aria-describedby="aggAggPropHelp">
+                            <option value="">(none)</option>
+                        </select>
+                        <div class="form-text small" id="aggAggPropHelp">
+                            Numeric attribute to aggregate, e.g. <em>amount</em>. With a Group-by property it is read on
+                            the linked entities; without one, on the instance itself.
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
                     <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Function <span class="text-danger">*</span></label>
-                        <select class="form-select form-select-sm" id="aggFunction">
+                        <label class="form-label small fw-semibold" for="aggFunction">Function <span class="text-danger">*</span></label>
+                        <select class="form-select form-select-sm" id="aggFunction" aria-describedby="aggFunctionHelp">
                             <option value="count">COUNT</option>
                             <option value="sum">SUM</option>
                             <option value="avg">AVG</option>
                             <option value="min">MIN</option>
                             <option value="max">MAX</option>
                         </select>
+                        <div class="form-text small" id="aggFunctionHelp">
+                            COUNT counts values; SUM, AVG, MIN and MAX read them as numbers and ignore non-numeric ones.
+                        </div>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Operator <span class="text-danger">*</span></label>
+                        <label class="form-label small fw-semibold" for="aggOperator">Operator <span class="text-danger">*</span></label>
                         <select class="form-select form-select-sm" id="aggOperator">
                             <option value="gt">&gt; Greater than</option>
                             <option value="gte">&ge; Greater or equal</option>
@@ -488,15 +551,28 @@
                         </select>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small fw-semibold">Threshold <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control form-control-sm" id="aggThreshold" placeholder="e.g., 5">
+                        <label class="form-label small fw-semibold" for="aggThreshold">Threshold <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control form-control-sm" id="aggThreshold" placeholder="e.g., 5"
+                               aria-describedby="aggThresholdHelp">
+                        <div class="form-text small" id="aggThresholdHelp">
+                            Value the computed number is compared to. Empty means 0.
+                        </div>
                     </div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-semibold">Result Entity <small class="text-muted">(optional)</small></label>
-                    <select class="form-select form-select-sm" id="aggResultClass">
+                    <label class="form-label small fw-semibold" for="aggResultClass">Result Entity <small class="text-muted">(optional)</small></label>
+                    <select class="form-select form-select-sm" id="aggResultClass" aria-describedby="aggResultClassHelp">
                         <option value="">(none &mdash; violation only)</option>
                     </select>
+                    <div class="form-text small" id="aggResultClassHelp">
+                        When reasoning materializes inferences, each flagged instance is also typed as this entity
+                        (e.g. <em>VipCustomer</em>). Leave empty to only report violations.
+                    </div>
+                </div>
+                <div class="alert alert-light border small mb-0" id="aggPreview" aria-live="polite">
+                    <div class="fw-semibold mb-1"><i class="bi bi-lightbulb me-1"></i>What this rule does</div>
+                    <div id="aggPreviewText"></div>
+                    <div class="text-warning-emphasis mt-1 d-none" id="aggPreviewWarning"></div>
                 </div>
             </div>
             <div class="modal-footer">
