@@ -1,0 +1,40 @@
+## Group graph-index companions in Lakehouse Delete and grant warehouse CAN_USE
+
+Context: After switching ontobricks-09x to the Serverless Starter warehouse,
+Knowledge Graph builds failed with "not authorized to use this SQL Endpoint"
+because the app SP had no CAN_USE on the new warehouse. Settings → Lakehouse
+Delete also left adjacency/search/props companions behind: object_base() did
+not strip those suffixes, so they were not in the domain purge group.
+
+Changes:
+
+1. src/back/core/graphdb/delta/objects.py
+   object_base() uses strip_graph_leaf_suffix() so adj/search/props tables
+   group with the gateway view.
+2. tests/units/settings/test_delta_objects.py
+   Cover suffix stripping and grouping of graph-index companions.
+3. scripts/bootstrap/app-permissions.sh
+   Grant CAN_USE on the app-bound SQL warehouse to both app SPs.
+4. tests/units/scripts/test_app_permissions_warehouse_grant.py
+   Source contract for the warehouse grant.
+5. docs/deployment.md
+   Document leftover companions and the warehouse CAN_USE pitfall.
+6. scripts/deploy.config.sh
+   Strip a leftover "#oldid" WAREHOUSE_ID export so it is not treated as a warehouse id.
+7. scripts/deploy.sh
+   Reject warehouse ids that start with # or are not hex.
+8. Makefile
+   Unset WAREHOUSE_ID before deploy so a stale shell export cannot win.
+
+Modified files:
+- src/back/core/graphdb/delta/objects.py
+- tests/units/settings/test_delta_objects.py
+- scripts/bootstrap/app-permissions.sh
+- tests/units/scripts/test_app_permissions_warehouse_grant.py
+- docs/deployment.md
+- scripts/deploy.config.sh
+- scripts/deploy.sh
+- Makefile
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7305 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.41s

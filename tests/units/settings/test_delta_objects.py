@@ -32,6 +32,43 @@ class TestDeltaObjectHelpers:
         # grouping it is what surfaces the leftover for purging.
         assert object_base("triplestore_foo_V1_analytics") == "triplestore_foo_V1"
 
+    def test_object_base_strips_graph_index_companions(self):
+        """Adjacency / search / props tables belong to the same domain group.
+
+        Settings → Lakehouse Delete uses object_base() as the group key. If
+        these suffixes are not stripped, a purge of triplestore_foo_V1 leaves
+        the index tables behind and the next Knowledge Graph build collides.
+        """
+        for suffix in (
+            "_adj_out",
+            "_adj_in",
+            "_entity_search",
+            "_entity_search_asserted",
+            "_props",
+        ):
+            assert object_base(f"triplestore_foo_V1{suffix}") == "triplestore_foo_V1"
+
+    def test_group_includes_graph_index_companions(self):
+        raw = [
+            {"name": "triplestore_a_V1", "table_type": "VIEW"},
+            {"name": "triplestore_a_V1_adj_out", "table_type": "MANAGED"},
+            {"name": "triplestore_a_V1_adj_in", "table_type": "MANAGED"},
+            {"name": "triplestore_a_V1_entity_search", "table_type": "MANAGED"},
+            {"name": "triplestore_a_V1_entity_search_asserted", "table_type": "MANAGED"},
+            {"name": "triplestore_a_V1_props", "table_type": "MANAGED"},
+        ]
+        groups = group_triplestore_objects(raw, "reg_cat", "reg_sch")
+        assert set(groups) == {"triplestore_a_V1"}
+        names = [i["name"] for i in groups["triplestore_a_V1"]["sorted_items"]]
+        assert names[0] == "triplestore_a_V1"
+        assert set(names[1:]) == {
+            "triplestore_a_V1_adj_out",
+            "triplestore_a_V1_adj_in",
+            "triplestore_a_V1_entity_search",
+            "triplestore_a_V1_entity_search_asserted",
+            "triplestore_a_V1_props",
+        }
+
     def test_uc_object_kind(self):
         assert uc_object_kind("VIEW") == "view"
         assert uc_object_kind("MANAGED") == "table"

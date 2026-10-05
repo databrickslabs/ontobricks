@@ -53,7 +53,7 @@ DEFAULT_DATABRICKS_PROFILE="${DEFAULT_DATABRICKS_PROFILE-DEFAULT}"
 
 # SQL Warehouse. Leave empty to use the workspace Serverless Starter Warehouse
 # (resolved at deploy time). A set id is never replaced.
-DEFAULT_WAREHOUSE_ID="" #d2096aa075ad44a3
+DEFAULT_WAREHOUSE_ID="d2096aa075ad44a3"
 
 # Unity Catalog
 DEFAULT_REGISTRY_CATALOG="benoit_cayla"
@@ -114,6 +114,10 @@ export MCP_APP_RESOURCE_KEY="${MCP_APP_RESOURCE_KEY:-$DEFAULT_MCP_APP_RESOURCE_K
 export DAB_TARGET="${DAB_TARGET:-$DEFAULT_DAB_TARGET}"
 
 # ── 3. DAB variable overrides (databricks.yml > variables:) ─────────
+# A quoted "#oldid" leftover is not a warehouse id — treat it as unset.
+if [[ "${WAREHOUSE_ID:-}" == \#* ]]; then
+    unset WAREHOUSE_ID
+fi
 export WAREHOUSE_ID="${WAREHOUSE_ID:-$DEFAULT_WAREHOUSE_ID}"
 
 # Unity Catalog registry catalog/schema (Delta objects for KG builds).

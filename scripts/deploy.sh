@@ -307,6 +307,9 @@ else
     export APP_SQL_WAREHOUSE_FALLBACK="${APP_SQL_WAREHOUSE_FALLBACK:-$WAREHOUSE_ID}"
     ok "SQL warehouse → ${WAREHOUSE_ID} (${_wh_name})"
 fi
+if [[ "$WAREHOUSE_ID" == \#* || ! "$WAREHOUSE_ID" =~ ^[0-9a-fA-F]+$ ]]; then
+    die "WAREHOUSE_ID='${WAREHOUSE_ID}' is not a SQL warehouse id. Leave DEFAULT_WAREHOUSE_ID empty (Serverless Starter) or set a hex id — do not quote a # comment into the value."
+fi
 for _i in "${!_dab_var_overrides[@]}"; do
     if [[ "${_dab_var_overrides[$_i]}" == --var=warehouse_id=* ]]; then
         _dab_var_overrides[$_i]="--var=warehouse_id=${WAREHOUSE_ID}"

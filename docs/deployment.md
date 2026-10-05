@@ -1022,6 +1022,30 @@ DROP TABLE IF EXISTS `<registry_catalog>`.`<registry_schema>`.`triplestore_<doma
 
 Once dropped, the app SP recreates the object as a VIEW and owns it from then on.
 
+Settings → Lakehouse Delete must also drop graph-index companions
+(`_adj_out`, `_adj_in`, `_entity_search`, `_entity_search_asserted`, `_props`).
+Those tables are grouped with the domain gateway view; a purge that leaves them
+behind will show leftover `triplestore_<domain>_v<n>_*` objects in Catalog.
+
+### 3.5a — Known pitfall: app SP not authorized on the SQL warehouse
+
+Knowledge Graph builds connect as the **app service principal**, not the
+signed-in user. After switching the bound warehouse (for example an empty
+`DEFAULT_WAREHOUSE_ID` resolving to Serverless Starter), DAB may not replay
+`CAN_USE` onto the new endpoint. The build fails in ~200ms with:
+
+```
+PERMISSION_DENIED: <app-sp> is not authorized to use this SQL Endpoint.
+```
+
+`make bootstrap-perms` (also run by `make deploy`) grants `CAN_USE` on the
+warehouse bound to the app. To repair an existing sandbox without redeploying:
+
+```bash
+databricks warehouses update-permissions <warehouse_id> \
+  --json '{"access_control_list":[{"service_principal_name":"<app-sp>","permission_level":"CAN_USE"}]}'
+```
+
 ### 3.6 — Granting when the SP ID is unknown yet
 
 If `databricks apps get` reports the SP client-id as `None` (app not fully provisioned), bind it by email-alias instead. Apps expose a dedicated SP user with the form `<app-name>@<account-id>.iam.databricks.com`, visible under **Admin → Service principals** after the first deploy. You can grant against that principal with the same SQL, substituting its identifier in the `TO` clause.
