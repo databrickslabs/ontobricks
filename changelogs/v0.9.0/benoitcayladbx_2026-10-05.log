@@ -38,3 +38,100 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 7305 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.41s
+
+## Add Filter-tab highlight icon next to Search Value
+
+Context: Graph Explorer's Filter tab Search Value could only drive a full
+graph search. The canvas Find popup already highlights matching labels;
+users needed the same highlight from the Search Value field.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Icon-only highlighter button in an input group next to Search Value.
+2. src/front/static/query/js/query-sigmagraph.js
+   Shared _applyHighlightQuery(); Filter button uses sgFilterValue.
+3. tests/units/front/test_explorer_highlight_search_value.py
+   Contract that the button is icon-only and reads Search Value.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- src/front/static/query/js/query-sigmagraph.js
+- tests/units/front/test_explorer_highlight_search_value.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7307 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 50.72s
+
+## Use a loop icon on the Search Value highlight button
+
+Context: The Filter-tab highlight control used the highlighter glyph, which
+reads as a pencil. Switch it to the Bootstrap loop (arrow-repeat).
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Replace bi-highlighter with bi-arrow-repeat.
+2. tests/units/front/test_explorer_highlight_search_value.py
+   Expect the loop icon.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- tests/units/front/test_explorer_highlight_search_value.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7307 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 49.07s
+
+## Use a magnifying-glass icon on the Search Value highlight button
+
+Context: The Filter-tab highlight control should use a magnify (search)
+glyph, not a highlighter pencil and not a loop.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Use bi-search on the Search Value highlight button.
+2. tests/units/front/test_explorer_highlight_search_value.py
+   Expect bi-search.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- tests/units/front/test_explorer_highlight_search_value.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+## Use a location pin on the Search Value highlight button
+
+Context: The Filter-tab control locates matching entities on the graph.
+A geo pin reads as localization better than a magnifier, loop, or pencil.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Use bi-geo-alt; title/aria-label "Locate matching entities".
+2. tests/units/front/test_explorer_highlight_search_value.py
+   Expect bi-geo-alt.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- tests/units/front/test_explorer_highlight_search_value.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+## Align Find-in-graph with the location pin
+
+Context: Right-click Find in graph still used a search glyph. Match the
+Filter-tab locate control with bi-geo-alt on the context menu, popup
+header, and Highlight button.
+
+Changes:
+
+1. src/front/templates/partials/dtwin/_query_sigmagraph.html
+   Use bi-geo-alt for Find in graph menu, popup, and Highlight.
+2. tests/units/front/test_explorer_highlight_search_value.py
+   Contract for those three Find-in-graph icons.
+
+Modified files:
+- src/front/templates/partials/dtwin/_query_sigmagraph.html
+- tests/units/front/test_explorer_highlight_search_value.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-05.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7308 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 48.03s
+

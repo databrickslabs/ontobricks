@@ -2608,6 +2608,55 @@ var SigmaGraph = (function () {
         if (popup) popup.classList.add('d-none');
     }
 
+    function _applyHighlightQuery(query) {
+        if (!_graph) return;
+        var typeFilter = '';
+
+        if (!query) {
+            SigmaGraph.clearSearch();
+            return;
+        }
+
+        _searchMatched = new Set();
+        _searchNeighbors = new Set();
+        _graph.forEachNode(function (node, attrs) {
+            var matchType = !typeFilter || attrs.entityType === typeFilter;
+            var rawLabel = (attrs._data && attrs._data.label) ? attrs._data.label : (attrs.label || '');
+            var matchQuery = !query || rawLabel.toLowerCase().includes(query);
+            if (matchType && matchQuery) _searchMatched.add(node);
+        });
+
+        _searchMatched.forEach(function (node) {
+            _graph.forEachNeighbor(node, function (neighbor) {
+                if (!_searchMatched.has(neighbor)) _searchNeighbors.add(neighbor);
+            });
+        });
+
+        var info = document.getElementById('sgSearchInfo');
+        var infoText = document.getElementById('sgSearchInfoText');
+        if (info && infoText) {
+            info.classList.remove('d-none');
+            infoText.textContent = 'Found ' + _searchMatched.size + ' entit' + (_searchMatched.size === 1 ? 'y' : 'ies');
+        }
+        var clearBtn = document.getElementById('sgClearSearchBtn');
+        if (clearBtn) {
+            clearBtn.classList.remove('d-none');
+            clearBtn.classList.add('d-inline-block');
+        }
+
+        _selectedNode = null;
+        _hoveredNode = null;
+
+        _closeFindPopup();
+
+        if (_renderer) {
+            _renderer.refresh();
+            var allVisible = new Set(_searchMatched);
+            if (_searchNeighbors) _searchNeighbors.forEach(function (n) { allVisible.add(n); });
+            _focusCameraOnNodes(allVisible);
+        }
+    }
+
     // -----------------------------------------------------------
     // Public API
     // -----------------------------------------------------------
@@ -2953,56 +3002,11 @@ var SigmaGraph = (function () {
         },
 
         applySearch: function () {
-            if (!_graph) return;
-            var typeFilter = '';
-            var query = (document.getElementById('sgSearchValue')?.value || '').toLowerCase().trim();
+            _applyHighlightQuery((document.getElementById('sgSearchValue')?.value || '').toLowerCase().trim());
+        },
 
-            if (!query) {
-                SigmaGraph.clearSearch();
-                return;
-            }
-
-            // Find directly matched nodes
-            _searchMatched = new Set();
-            _searchNeighbors = new Set();
-            _graph.forEachNode(function (node, attrs) {
-                var matchType = !typeFilter || attrs.entityType === typeFilter;
-                var rawLabel = (attrs._data && attrs._data.label) ? attrs._data.label : (attrs.label || '');
-                var matchQuery = !query || rawLabel.toLowerCase().includes(query);
-                if (matchType && matchQuery) _searchMatched.add(node);
-            });
-
-            // Expand to neighbors of matched nodes
-            _searchMatched.forEach(function (node) {
-                _graph.forEachNeighbor(node, function (neighbor) {
-                    if (!_searchMatched.has(neighbor)) _searchNeighbors.add(neighbor);
-                });
-            });
-
-            var info = document.getElementById('sgSearchInfo');
-            var infoText = document.getElementById('sgSearchInfoText');
-            if (info && infoText) {
-                info.classList.remove('d-none');
-                infoText.textContent = 'Found ' + _searchMatched.size + ' entit' + (_searchMatched.size === 1 ? 'y' : 'ies');
-            }
-            var clearBtn = document.getElementById('sgClearSearchBtn');
-            if (clearBtn) {
-                clearBtn.classList.remove('d-none');
-                clearBtn.classList.add('d-inline-block');
-            }
-
-            // Clear click/hover selection so search focus takes over
-            _selectedNode = null;
-            _hoveredNode = null;
-
-            _closeFindPopup();
-
-            if (_renderer) {
-                _renderer.refresh();
-                var allVisible = new Set(_searchMatched);
-                if (_searchNeighbors) _searchNeighbors.forEach(function (n) { allVisible.add(n); });
-                _focusCameraOnNodes(allVisible);
-            }
+        highlightFilterValue: function () {
+            _applyHighlightQuery((document.getElementById('sgFilterValue')?.value || '').toLowerCase().trim());
         },
 
         clearSearch: function () {
