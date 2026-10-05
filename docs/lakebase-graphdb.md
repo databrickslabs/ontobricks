@@ -230,8 +230,8 @@ global warehouse).
 |-----|------|---------|-------------|
 | `schema` | string | `ontobricks_graph` | Postgres schema for graph triple tables. Overridden by the Registry Volume schema when Settings → Registry resolves a non-empty triplet. |
 | `database` | string | injected `PGDATABASE` | Postgres database name — overrides the Apps-injected value. |
-| `sync_mode` | string | `app_managed` | Write mode: `app_managed` (direct COPY) or `managed_synced` (Lakeflow pipeline). |
-| `sync_table_mode` | string | `snapshot` | Lakeflow pipeline type: `snapshot`, `triggered`, or `continuous`. Only used in `managed_synced`. |
+| `sync_mode` | string | omitted → `app_managed` at runtime; Settings proposes `managed_synced` | Write mode: `managed_synced` (Lakeflow, Settings default) or `app_managed` (direct COPY). Workspaces that never save the key keep `app_managed`. |
+| `sync_table_mode` | string | `snapshot` | Lakeflow schedule. Only `snapshot` is valid: the source is an R2RML view (no CDF). Legacy `triggered` / `continuous` values are coerced to `snapshot`. |
 | `sync_timeout_s` | int | `600` | Max seconds to wait for a Lakeflow sync run to complete. |
 | `sync_uc_catalog` | string | *(auto-detected)* | UC catalog for synced table registration. Auto-detected from Registry settings / `ONTOBRICKS_SYNC_UC_CATALOG` / `domain.delta.catalog`. |
 
@@ -280,7 +280,7 @@ These drive the DAB deployment (edit before `make deploy`):
 
 ## 5. Write modes
 
-### 5.1 — `app_managed` (default)
+### 5.1 — `app_managed` (runtime fallback when `sync_mode` is omitted)
 
 The FastAPI process streams R2RML rows from the SQL Warehouse and writes them
 directly into the `*_sync` table via `COPY FROM STDIN`. The same 3-object
@@ -302,7 +302,7 @@ g_<domain>_v<n>  (UNION VIEW over _sync + __app)
 - Reasoning / cohort writes always go to `*__app` (consistent with `managed_synced`).
 - Suitable for most use cases.
 
-### 5.2 — `managed_synced` (Lakeflow)
+### 5.2 — `managed_synced` (Lakeflow; Settings proposal)
 
 A **Databricks Lakeflow snapshot pipeline** keeps a Postgres **synced table** in
 lock-step with the R2RML Delta view. The app only orchestrates; bulk movement

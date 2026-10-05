@@ -1217,7 +1217,7 @@ Short version:
 
 **Performance:**
 - **Delta** materialises the R2RML VIEW into `_data` with **Liquid Clustering** (`CLUSTER BY (predicate, subject)`), co-locating rows by predicate and subject for faster filtering. After each build, an `OPTIMIZE` runs on `_data` to compact files and apply the clustering layout. Interactive reads typically hit the `_graph` union VIEW. Under `Views only` materialization there is nothing to cluster or optimise, and that read cost moves from a single Delta scan to a full re-execution of the mapping SQL.
-- **Lakebase** stores triples in Postgres flat tables. Two modes are available: `app_managed` (the app streams batches via `COPY FROM STDIN`, idempotent on `(subject, predicate, object)`) and `managed_synced` (Databricks Lakeflow keeps a synced table in lock-step with the mapped Delta snapshot, while a writable companion table absorbs reasoning/cohort writes — the read view UNIONs both).
+- **Lakebase** stores triples in Postgres flat tables. Two modes are available: `managed_synced` (what Settings → Lakebase proposes: Databricks Lakeflow Snapshot-syncs a table from the mapped view; Triggered/Continuous need CDF and cannot run on a view) and `app_managed` (the app streams batches via `COPY FROM STDIN`, used at runtime when `sync_mode` was never saved).
 
 #### Materialization modes (Lakehouse)
 

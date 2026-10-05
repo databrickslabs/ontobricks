@@ -547,17 +547,18 @@ pushed to the Volume.
 
 ## 9. Lakebase managed-synced mode (data plane only)
 
-The default Lakebase mode (`sync_mode = "app_managed"`) still flows R2RML
-triples through the FastAPI process via `iter_rows` + `COPY FROM STDIN`.
-Bounded memory, but the app is on the hot path.
+The factory still treats omitted ``sync_mode`` as ``app_managed`` (COPY
+through the FastAPI process via ``iter_rows`` + ``COPY FROM STDIN``) so
+workspaces that never saved Settings keep that path.
 
-`sync_mode = "managed_synced"` moves the bulk movement out of the app
-entirely: a Databricks **Lakeflow snapshot pipeline** keeps a Postgres
-**synced table** in lock-step with the R2RML view, and the app only
-orchestrates. Reasoning + cohort writes (small volumes) keep their direct
-PG path through a writable **companion table**; readers see both via a
-**UNION view** with the legacy table name, so SPARQL / KG search code is
-unchanged.
+**Settings → Lakebase** proposes ``managed_synced``: bulk movement leaves
+the app entirely. A Databricks **Lakeflow snapshot pipeline** keeps a
+Postgres **synced table** in lock-step with the R2RML view, and the app
+only orchestrates. Reasoning + cohort writes (small volumes) keep their
+direct PG path through a writable **companion table**; readers see both
+via a **UNION view** with the legacy table name, so SPARQL / KG search
+code is unchanged. Triggered and Continuous Lakeflow schedules are not
+offered: the source is a view and has no Change Data Feed.
 
 ### Postgres layout per graph version
 
@@ -579,8 +580,8 @@ uniform 5-column shape.
 {
   "schema": "ontobricks_graph",         // fallback PG schema only when Registry has no Volume schema
   "database": "appdb",                   // PG database (overrides PGDATABASE)
-  "sync_mode": "managed_synced",         // default: "app_managed"
-  "sync_table_mode": "snapshot",         // snapshot | triggered | continuous
+  "sync_mode": "managed_synced",         // Settings proposes this; omitted still means app_managed at runtime
+  "sync_table_mode": "snapshot",         // snapshot only (views have no CDF; triggered/continuous are coerced)
   "sync_timeout_s": 600,                  // wait deadline for a sync run
   "sync_uc_catalog": "main"              // UC catalog for synced table registration (optional override)
 }

@@ -404,6 +404,7 @@ class GraphDBFactory:
         try:
             from back.core.graphdb.lakebase import LAKEBASE_AVAILABLE
             from back.core.graphdb.lakebase.LakebaseBase import (
+                normalize_sync_table_mode,
                 resolve_postgres_database_override,
             )
             from back.core.graphdb.lakebase.LakebaseFlatStore import (
@@ -435,7 +436,14 @@ class GraphDBFactory:
                 SYNC_MODE_APP,
             )
             sync_mode = SYNC_MODE_APP
-        sync_table_mode = str(cfg.get("sync_table_mode") or "snapshot").strip() or "snapshot"
+        try:
+            sync_table_mode = normalize_sync_table_mode(cfg.get("sync_table_mode"))
+        except ValueError:
+            logger.warning(
+                "Unknown sync_table_mode %r in graph_engine_config — using snapshot",
+                cfg.get("sync_table_mode"),
+            )
+            sync_table_mode = "snapshot"
         sync_timeout_s = int(cfg.get("sync_timeout_s") or _SYNC_DEFAULT_TIMEOUT_S)
         sync_uc_catalog = str(cfg.get("sync_uc_catalog") or "").strip()
         sync_uc_schema_override = str(cfg.get("sync_uc_schema") or "").strip()

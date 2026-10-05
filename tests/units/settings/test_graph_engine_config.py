@@ -368,7 +368,7 @@ class TestBulkLoadingSyncModeRegistryRoundTrip:
             assert ok
             lb = svc.get_graph_engine_config("h", "t", REGISTRY_CFG)["lakebase"]
             assert lb["sync_mode"] == "managed_synced"
-            assert lb["sync_table_mode"] == "triggered"
+            assert lb["sync_table_mode"] == "snapshot"
             assert lb["sync_timeout_s"] == 600
             assert lb["sync_uc_catalog"] == "main"
 

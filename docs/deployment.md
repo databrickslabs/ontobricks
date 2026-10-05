@@ -1316,10 +1316,10 @@ The Delta view is created by R2RML on a Databricks SQL Warehouse and persists tr
 
 ### Lakebase Postgres (`graph`, engine `lakebase`) — Bound by `databricks.yml`
 
-The Graph DB layer runs on the App-bound Lakebase Postgres instance. The Apps runtime injects `PGHOST` / `PGPORT` / `PGDATABASE` / `PGUSER` and OntoBricks mints a short-lived OAuth token via `WorkspaceClient().config.authenticate()`. Two write modes are available:
+Two write modes are available. **Settings → Lakebase** proposes Managed sync; omitted `sync_mode` still means `app_managed` at runtime:
 
-- `app_managed` (default): the FastAPI app streams R2RML rows in `fetchmany` batches and ingests via `COPY FROM STDIN` + `INSERT … ON CONFLICT DO NOTHING`.
-- `managed_synced`: Databricks Lakeflow keeps a Postgres synced table in lock-step with the Delta view; OntoBricks orchestrates `SyncedTableManager.ensure` + `trigger_and_wait`. A writable companion table absorbs reasoning / cohort writes; readers see both via a UNION view.
+- `managed_synced` (Settings proposal): Databricks Lakeflow Snapshot-syncs a Postgres table from the R2RML view (`SyncedTableManager.ensure` + `trigger_and_wait`). Triggered/Continuous are not available (the view has no CDF). A writable companion table absorbs reasoning / cohort writes; readers see both via a UNION view.
+- `app_managed` (runtime fallback when the key is omitted): the FastAPI app streams R2RML rows in `fetchmany` batches and ingests via `COPY FROM STDIN` + `INSERT … ON CONFLICT DO NOTHING`.
 
 The `scripts/bootstrap/lakebase-perms.sh` script grants the app SP the required Lakebase / Postgres privileges (`CREATE` on the schema, `INSERT/SELECT/DELETE` on the per-domain tables). Run it once after the bundle is deployed.
 

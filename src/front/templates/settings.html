@@ -421,34 +421,36 @@
                             <!-- ── TAB 2 · Bulk loading ── -->
                             <div class="tab-pane fade" id="lkpane-bulk" role="tabpanel" aria-labelledby="lktab-bulk">
                                 <p class="small text-muted mb-3">
-                                    Choose how R2RML triples reach Postgres. Most workspaces start with <strong>App-managed</strong>.
-                                    <strong>Managed sync</strong> delegates bulk copy to Databricks Lakeflow (needs UC registration).
+                                    Choose how R2RML triples reach Postgres.
+                                    <strong>Managed sync</strong> is the recommended path: Databricks Lakeflow copies the mapped view into Postgres (needs UC registration).
+                                    <strong>App-managed</strong> streams rows through the app when you need the COPY path.
                                 </p>
                                 <div class="row g-3 align-items-start mb-0">
                                     <div class="col-12">
                                         <label for="lakebaseSyncMode" class="form-label small fw-semibold mb-1">Mode</label>
                                         <select class="form-select form-select-sm" id="lakebaseSyncMode" aria-describedby="lakebaseSyncModeHelp">
-                                            <option value="app_managed">App-managed — stream from SQL warehouse into Postgres (default)</option>
-                                            <option value="managed_synced">Managed sync — Lakeflow syncs the Delta view to Postgres (data plane)</option>
+                                            <option value="managed_synced" selected>Managed sync — Lakeflow syncs the Delta view to Postgres (recommended)</option>
+                                            <option value="app_managed">App-managed — stream from SQL warehouse into Postgres</option>
                                         </select>
                                         <div id="lakebaseSyncModeHelp" class="form-text small mt-2 mb-0">
-                                            <span data-lk-mode="app_managed">The app runs the warehouse query and COPYs rows; no Unity Catalog object is required for the load.</span>
-                                            <span data-lk-mode="managed_synced" class="d-none">Lakeflow keeps a synced table; the app only orchestrates. Requires a valid <code>catalog.schema</code> in Unity Catalog for registration.</span>
+                                            <span data-lk-mode="app_managed" class="d-none">The app runs the warehouse query and COPYs rows; no Unity Catalog object is required for the load.</span>
+                                            <span data-lk-mode="managed_synced">Lakeflow keeps a synced table; the app only orchestrates. Requires a valid <code>catalog.schema</code> in Unity Catalog for registration.</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div id="lakebaseManagedSyncPanel" class="border rounded p-3 mt-3 bg-body-tertiary d-none">
+                                <div id="lakebaseManagedSyncPanel" class="border rounded p-3 mt-3 bg-body-tertiary">
                                     <div class="fw-semibold small mb-2">Managed sync options</div>
                                     <div class="row g-3">
                                         <div class="col-12 col-lg-6">
                                             <label for="lakebaseSyncTableMode" class="form-label small fw-semibold mb-1">Lakeflow schedule</label>
                                             <select class="form-select form-select-sm" id="lakebaseSyncTableMode">
-                                                <option value="snapshot">Snapshot — full refresh on trigger (good default)</option>
-                                                <option value="triggered">Triggered — refresh when you trigger</option>
-                                                <option value="continuous">Continuous — keep near real-time</option>
+                                                <option value="snapshot" selected>Snapshot — full refresh on each Knowledge Graph build</option>
                                             </select>
-                                            <div class="form-text small mt-1 mb-0 text-muted">How often Lakeflow updates the Postgres mirror.</div>
+                                            <div class="form-text small mt-1 mb-0 text-muted">
+                                                Snapshot is the only schedule that works here: the Lakeflow source is an R2RML view, which has no Change Data Feed.
+                                                Triggered and Continuous need CDF on a Delta table.
+                                            </div>
                                         </div>
                                         <div class="col-12 col-lg-6">
                                             <label for="lakebaseSyncTimeout" class="form-label small fw-semibold mb-1">Sync wait (seconds)</label>

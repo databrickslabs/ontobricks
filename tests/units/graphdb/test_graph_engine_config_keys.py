@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from back.core.graphdb.engine_config import (
     is_nested_graph_engine_config,
     lakebase_section,
@@ -13,7 +15,11 @@ from back.core.graphdb.engine_config import (
     resolve_lakehouse_warehouse_id,
     resolve_neo4j_connection,
 )
-from back.core.graphdb.lakebase.LakebaseBase import resolve_postgres_database_override
+from back.core.graphdb.lakebase.LakebaseBase import (
+    normalize_sync_table_mode,
+    resolve_postgres_database_override,
+    validate_engine_config_keys,
+)
 from back.core.graphdb.neo4j.Neo4jConnection import resolve_neo4j_database
 
 
@@ -211,3 +217,27 @@ class TestNeo4jNamedConnections:
         out = normalize_graph_engine_config(raw)
         assert out["neo4j"]["connections"][0]["name"] == "X"
         assert out["neo4j"]["connections"][0]["database"] == "db1"
+
+
+class TestNormalizeSyncTableMode:
+    def test_none_and_snapshot(self):
+        assert normalize_sync_table_mode(None) == "snapshot"
+        assert normalize_sync_table_mode("snapshot") == "snapshot"
+        assert normalize_sync_table_mode(" SNAPSHOT ") == "snapshot"
+
+    def test_legacy_triggered_and_continuous_coerce(self):
+        assert normalize_sync_table_mode("triggered") == "snapshot"
+        assert normalize_sync_table_mode("continuous") == "snapshot"
+        cfg = {"sync_table_mode": "triggered"}
+        ok, msg = validate_engine_config_keys(cfg)
+        assert ok
+        assert msg == ""
+        assert cfg["sync_table_mode"] == "snapshot"
+
+    def test_unknown_rejected(self):
+        with pytest.raises(ValueError, match="snapshot"):
+            normalize_sync_table_mode("yearly")
+        ok, msg = validate_engine_config_keys({"sync_table_mode": "yearly"})
+        assert not ok
+        assert "sync_table_mode" in msg
+        assert "snapshot" in msg
