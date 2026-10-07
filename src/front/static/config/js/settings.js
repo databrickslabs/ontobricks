@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function () {
     loadRegistryCacheTtl();
     loadEditLockTtl();
     loadGraphLimits();
+    loadDataAssetsImportLimit();
     loadAnalyticsJobEnabled();
     // Preload the Delta warehouse selection + registry location so the Delta
     // panel reflects the saved SQL warehouse. Also preload graph_engine_config
@@ -2507,6 +2508,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    async function loadDataAssetsImportLimit() {
+        const el = document.getElementById('dataAssetsImportLimit');
+        if (!el) return;
+        try {
+            const resp = await fetch('/settings/data-assets-import-limit', { credentials: 'same-origin' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && data.success && typeof data.data_assets_import_limit === 'number') {
+                el.value = String(data.data_assets_import_limit);
+            }
+        } catch (e) {
+            console.log('Data assets import limit load failed', e);
+        }
+    }
+
     async function loadDeltaTripleStoreHealth(options) {
         const opts = options || {};
         const healthPanel = opts.healthPanel !== false;
@@ -4739,6 +4755,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 const r = await resp.json();
                 if (!r.success) errors.push('Graph limits: ' + (r.message || 'save failed'));
             } catch (e) { errors.push('Graph limits: ' + e.message); }
+        }
+
+        const importLimitInput = document.getElementById('dataAssetsImportLimit');
+        if (importLimitInput) {
+            const v = parseInt(importLimitInput.value, 10);
+            const limit = isNaN(v) ? 40 : Math.max(1, Math.min(500, v));
+            try {
+                const resp = await fetch('/settings/save-data-assets-import-limit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ data_assets_import_limit: limit })
+                });
+                const r = await resp.json();
+                if (!r.success) errors.push('Data assets import limit: ' + (r.message || 'save failed'));
+                else if (typeof r.data_assets_import_limit === 'number') {
+                    importLimitInput.value = String(r.data_assets_import_limit);
+                }
+            } catch (e) { errors.push('Data assets import limit: ' + e.message); }
         }
 
         // 3d. Save the Databricks graph-analytics job toggle. An explicit "off"

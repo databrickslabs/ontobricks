@@ -584,6 +584,33 @@ class SettingsService:
 
 
     @staticmethod
+    def get_data_assets_import_limit_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        from back.objects.domain.WorkspaceUiSettings import WorkspaceUiSettings
+
+        return WorkspaceUiSettings.get_data_assets_import_limit_result(
+            session_mgr, settings
+        )
+
+
+    @staticmethod
+    def save_data_assets_import_limit_result(
+        limit: int,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        from back.objects.domain.WorkspaceUiSettings import WorkspaceUiSettings
+
+        return WorkspaceUiSettings.save_data_assets_import_limit_result(
+            limit, email, user_token, session_mgr, settings
+        )
+
+
+    @staticmethod
     def get_edit_lock_ttl_result(
         session_mgr: SessionManager,
         settings: Settings,

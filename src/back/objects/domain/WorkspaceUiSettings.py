@@ -341,6 +341,45 @@ class WorkspaceUiSettings:
         return SettingsService.get_graph_limits_result(session_mgr, settings)
 
     @staticmethod
+    def get_data_assets_import_limit_result(
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Return the Settings → Global data-assets import cap (default 40)."""
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        limit = _ss.global_config_service.get_data_assets_import_limit(
+            host, token, registry_cfg
+        )
+        return {"success": True, "data_assets_import_limit": limit}
+
+    @staticmethod
+    def save_data_assets_import_limit_result(
+        limit: int,
+        email: str,
+        user_token: str,
+        session_mgr: SessionManager,
+        settings: Settings,
+    ) -> Dict[str, Any]:
+        """Persist the data-assets import cap (admin only)."""
+        SettingsService.require_admin_error(email, user_token, session_mgr, settings)
+
+        _, host, token, registry_cfg = SettingsService._resolve_context(
+            session_mgr, settings
+        )
+        ok, msg = _ss.global_config_service.set_data_assets_import_limit(
+            host, token, registry_cfg, int(limit)
+        )
+        if not ok:
+            raise InfrastructureError(
+                "Failed to save data assets import limit", detail=msg
+            )
+        return WorkspaceUiSettings.get_data_assets_import_limit_result(
+            session_mgr, settings
+        )
+
+    @staticmethod
     def get_edit_lock_ttl_result(
         session_mgr: SessionManager,
         settings: Settings,

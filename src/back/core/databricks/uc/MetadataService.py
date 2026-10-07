@@ -21,6 +21,54 @@ class MetadataService:
     compatibility with existing call sites.
     """
 
+    DEFAULT_DATA_ASSETS_IMPORT_LIMIT = 40
+    MIN_DATA_ASSETS_IMPORT_LIMIT = 1
+    MAX_DATA_ASSETS_IMPORT_LIMIT = 500
+
+    @staticmethod
+    def clamp_import_limit(raw: Any) -> int:
+        """Clamp a data-assets import cap (default 40, range 1–500)."""
+        if raw is None or raw == "":
+            return MetadataService.DEFAULT_DATA_ASSETS_IMPORT_LIMIT
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return MetadataService.DEFAULT_DATA_ASSETS_IMPORT_LIMIT
+        return max(
+            MetadataService.MIN_DATA_ASSETS_IMPORT_LIMIT,
+            min(value, MetadataService.MAX_DATA_ASSETS_IMPORT_LIMIT),
+        )
+
+    @staticmethod
+    def remaining_import_slots(
+        existing_count: int, limit: Optional[int] = None
+    ) -> int:
+        cap = MetadataService.clamp_import_limit(limit)
+        return max(0, cap - max(0, int(existing_count or 0)))
+
+    @staticmethod
+    def cap_new_import_names(
+        new_names: List[str],
+        existing_count: int,
+        import_limit: Optional[int] = None,
+    ) -> Tuple[List[str], int, int, str]:
+        """Return ``(names_to_fetch, skipped, limit, error_if_blocked)``."""
+        limit = MetadataService.clamp_import_limit(import_limit)
+        remaining = MetadataService.remaining_import_slots(existing_count, limit)
+        if remaining <= 0 and new_names:
+            return (
+                [],
+                len(new_names),
+                limit,
+                (
+                    f"Data assets import limit of {limit} reached. "
+                    "Raise it in Settings → Global or remove existing assets."
+                ),
+            )
+        capped = list(new_names[:remaining])
+        skipped = len(new_names) - len(capped)
+        return capped, skipped, limit, ""
+
     @staticmethod
     def build_metadata_dict(tables: List[Dict[str, Any]]) -> Dict[str, Any]:
         return {"tables": tables, "table_count": len(tables)}
@@ -75,6 +123,7 @@ class MetadataService:
         catalog: str,
         schema: str,
         existing_metadata: Optional[Dict[str, Any]] = None,
+        import_limit: Optional[int] = None,
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """Load metadata for all tables in a schema, merging with *existing_metadata*."""
         try:
@@ -94,14 +143,26 @@ class MetadataService:
                 return False, f"No tables found in {catalog}.{schema}", {}
 
             new_names = [t for t in uc_tables if t not in existing_names]
+            capped, skipped, limit, blocked = self.cap_new_import_names(
+                new_names, len(existing_tables), import_limit
+            )
+            if blocked:
+                meta = existing_metadata or {"tables": existing_tables, "table_count": len(existing_tables)}
+                return False, blocked, meta
             new_tables = self._fetch_tables_metadata(
-                catalog, schema, new_names, type_by_name
+                catalog, schema, capped, type_by_name
             )
             merged = existing_tables + new_tables
 
             metadata = {"tables": merged, "table_count": len(merged)}
             if not new_tables:
                 msg = f"No new tables found. All {len(uc_tables)} tables already in metadata."
+            elif skipped:
+                msg = (
+                    f"Added {len(new_tables)} new table(s) ({skipped} skipped — "
+                    f"Settings → Global import limit is {limit}). "
+                    f"Total: {len(merged)} tables."
+                )
             else:
                 msg = f"Added {len(new_tables)} new table(s). Total: {len(merged)} tables."
             return True, msg, metadata
@@ -115,6 +176,7 @@ class MetadataService:
         schema: str,
         table_names: List[str],
         existing_metadata: Optional[Dict[str, Any]] = None,
+        import_limit: Optional[int] = None,
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """Load metadata for specific *table_names*, merging with existing."""
         try:
@@ -136,14 +198,31 @@ class MetadataService:
                     {"tables": existing_tables, "table_count": len(existing_tables)},
                 )
 
+            capped, skipped, limit, blocked = self.cap_new_import_names(
+                new_names, len(existing_tables), import_limit
+            )
+            if blocked:
+                return (
+                    False,
+                    blocked,
+                    {"tables": existing_tables, "table_count": len(existing_tables)},
+                )
+
             listing = self._catalog.list_tables_and_views(catalog, schema)
             type_by_name = {t["name"]: t.get("table_type", "") for t in listing}
             new_tables = self._fetch_tables_metadata(
-                catalog, schema, new_names, type_by_name
+                catalog, schema, capped, type_by_name
             )
             merged = existing_tables + new_tables
             metadata = {"tables": merged, "table_count": len(merged)}
-            msg = f"Added {len(new_tables)} new table(s). Total: {len(merged)} tables."
+            if skipped:
+                msg = (
+                    f"Added {len(new_tables)} new table(s) ({skipped} skipped — "
+                    f"Settings → Global import limit is {limit}). "
+                    f"Total: {len(merged)} tables."
+                )
+            else:
+                msg = f"Added {len(new_tables)} new table(s). Total: {len(merged)} tables."
             return True, msg, metadata
         except Exception as exc:
             logger.exception("Failed to load schema metadata: %s", exc)

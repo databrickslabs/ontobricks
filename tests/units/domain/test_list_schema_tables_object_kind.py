@@ -59,3 +59,4 @@ def test_list_schema_tables_tags_object_kind(monkeypatch):
         "rev_mv": "metric_view",
         "cust_v": "view",
     }
+    assert result["import_limit"] == 40

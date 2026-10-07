@@ -561,6 +561,32 @@ class GlobalConfigService:
             host, token, registry_cfg, {"graph_chat_result_cap": to_save}
         )
 
+    def get_data_assets_import_limit(
+        self, host: str, token: str, registry_cfg: Dict[str, str]
+    ) -> int:
+        """Return the max number of data assets a domain may import (default 40)."""
+        from back.core.databricks.uc.MetadataService import MetadataService
+
+        val = self.get(host, token, registry_cfg, "data_assets_import_limit", "")
+        if val is None or str(val).strip() == "":
+            return MetadataService.DEFAULT_DATA_ASSETS_IMPORT_LIMIT
+        return MetadataService.clamp_import_limit(val)
+
+    def set_data_assets_import_limit(
+        self,
+        host: str,
+        token: str,
+        registry_cfg: Dict[str, str],
+        limit: int,
+    ) -> Tuple[bool, str]:
+        """Persist the data-assets import cap (clamped 1–500)."""
+        from back.core.databricks.uc.MetadataService import MetadataService
+
+        to_save = MetadataService.clamp_import_limit(limit)
+        return self._save(
+            host, token, registry_cfg, {"data_assets_import_limit": to_save}
+        )
+
     def get_edit_lock_ttl_s(
         self, host: str, token: str, registry_cfg: Dict[str, str]
     ) -> Optional[int]:
@@ -655,6 +681,7 @@ class GlobalConfigService:
             # 0 = unset → env var / built-in default from back.core.query_limits.
             "graph_query_timeout_s": 0,
             "graph_chat_result_cap": 0,
+            "data_assets_import_limit": 40,
             "graph_engine_config": {},
         }
 

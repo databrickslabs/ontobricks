@@ -40,6 +40,7 @@ from back.core.databricks import (
 from back.core.helpers import (
     build_auto_base_uri,
     get_databricks_host_and_token,
+    resolve_app_registry_context,
     resolve_default_base_uri,
     resolve_warehouse_id,
     run_blocking,
@@ -59,7 +60,11 @@ from back.objects.registry.version_lifecycle import (
     transition_capabilities,
     version_deletion_capability,
 )
-from back.objects.session import is_valid_domain_name, sanitize_domain_folder
+from back.objects.session import (
+    global_config_service,
+    is_valid_domain_name,
+    sanitize_domain_folder,
+)
 from back.core.task_manager import get_task_manager
 from back.objects.domain._metadata_tasks import (
     run_metadata_load_task,
@@ -1785,6 +1790,18 @@ class Domain:
     # Unity Catalog metadata
     # -------------------------------------------------------------------
 
+    def _data_assets_import_limit(self) -> int:
+        """Effective Settings → Global data-assets import cap (default 40)."""
+        try:
+            st = self._require_settings()
+            host, token, registry_cfg = resolve_app_registry_context(st)
+            return global_config_service.get_data_assets_import_limit(
+                host, token, registry_cfg
+            )
+        except Exception:
+            logger.debug("Falling back to default data-assets import limit", exc_info=True)
+            return MetadataService.DEFAULT_DATA_ASSETS_IMPORT_LIMIT
+
     def get_metadata_response(self) -> Dict[str, Any]:
         metadata = self._s.catalog_metadata
         has_meta = check_has_metadata(metadata)
@@ -1887,6 +1904,7 @@ class Domain:
                 "tables": table_list,
                 "total_count": len(tables),
                 "existing_count": len(existing_table_names),
+                "import_limit": self._data_assets_import_limit(),
                 "permissions": permissions,
             }
         except OntoBricksError:
@@ -1913,16 +1931,21 @@ class Domain:
                 )
             service = MetadataService(host=host, token=token, warehouse_id=warehouse_id)
             existing_metadata = self._s.catalog_metadata
+            import_limit = self._data_assets_import_limit()
             if selected_tables is not None:
                 success, message, metadata = service.load_selected_tables(
                     catalog=catalog,
                     schema=schema,
                     table_names=selected_tables,
                     existing_metadata=existing_metadata,
+                    import_limit=import_limit,
                 )
             else:
                 success, message, metadata = service.load_schema_metadata(
-                    catalog=catalog, schema=schema, existing_metadata=existing_metadata
+                    catalog=catalog,
+                    schema=schema,
+                    existing_metadata=existing_metadata,
+                    import_limit=import_limit,
                 )
             if not success:
                 raise InfrastructureError(
@@ -2244,6 +2267,7 @@ class Domain:
                     schema,
                     selected_tables,
                     existing_metadata,
+                    self._data_assets_import_limit(),
                 ),
                 daemon=True,
             )

@@ -926,6 +926,20 @@
                     </div>
 
                     <div class="mb-4">
+                        <label for="dataAssetsImportLimit" class="form-label fw-semibold">
+                            Data assets import limit
+                            <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">
+                                <i class="bi bi-shield-lock me-1"></i>Admin only &ndash; applies to all users
+                            </span>
+                        </label>
+                        <input type="number" class="form-control" id="dataAssetsImportLimit"
+                               min="1" max="500" step="1" value="40">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> Maximum Unity Catalog tables, views and metric views a domain may import. Default <strong>40</strong> (range 1–500). Extra assets in a schema are skipped until you raise the limit or remove existing assets.
+                        </small>
+                    </div>
+
+                    <div class="mb-4">
                         <label class="form-label fw-semibold">
                             Graph read limits
                             <span class="badge bg-warning-subtle text-warning-emphasis border ms-2 settings-badge-admin-note">

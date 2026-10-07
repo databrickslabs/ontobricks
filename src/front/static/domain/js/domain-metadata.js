@@ -11,6 +11,7 @@ let loadMetadataModal = null; // Bootstrap modal instance
 let loadMetadataWidgetInitialized = false; // Track if widget is initialized
 let pendingLoadCatalog = ''; // Catalog selected in the load metadata modal
 let pendingLoadSchema = ''; // Schema selected in the load metadata modal
+let dataAssetsImportLimit = 40;
 
 // Visual metadata for a data-source object kind (table | view | metric_view).
 // Returns the row icon, its color class, and an optional inline badge.
@@ -250,6 +251,9 @@ async function loadMetadataFromUC() {
         if (data.success) {
             // Store available tables and permission info
             allAvailableTables = data.tables || [];
+            if (typeof data.import_limit === 'number' && data.import_limit > 0) {
+                dataAssetsImportLimit = data.import_limit;
+            }
             const perms = data.permissions || {};
 
             if (allAvailableTables.length === 0) {
@@ -269,10 +273,13 @@ async function loadMetadataFromUC() {
                 showNotification(perms.permission_warning, 'warning');
             }
 
-            // Initialize import selections (select all new tables by default)
+            // Initialize import selections (select new tables up to the import limit)
             importTableSelections = {};
+            let remaining = _remainingImportSlots();
             allAvailableTables.forEach(table => {
-                importTableSelections[table.name] = !table.already_loaded;
+                const take = !table.already_loaded && remaining > 0;
+                importTableSelections[table.name] = take;
+                if (take) remaining -= 1;
             });
 
             // Show the selection modal, pass permissions for the status banner
@@ -299,6 +306,11 @@ function showTableSelectionModal(catalog, schema, perms) {
     infoSpan.innerHTML = `<code>${catalog}.${schema}</code> - ${allAvailableTables.length} table(s) found`;
     if (existingCount > 0) {
         infoSpan.innerHTML += ` <span class="badge bg-info">${existingCount} already loaded</span>`;
+    }
+    const remaining = _remainingImportSlots();
+    infoSpan.innerHTML += ` <span class="badge bg-secondary">Import limit ${dataAssetsImportLimit} (${remaining} slot${remaining !== 1 ? 's' : ''} left)</span>`;
+    if (newCount > remaining) {
+        infoSpan.innerHTML += ` <span class="badge bg-warning text-dark">${newCount - remaining} new asset(s) skipped</span>`;
     }
 
     // Permission status banner
@@ -369,20 +381,53 @@ function showTableSelectionModal(catalog, schema, perms) {
     modal.show();
 }
 
+function _alreadyLoadedCount() {
+    return allAvailableTables.filter(t => t.already_loaded).length;
+}
+
+function _remainingImportSlots() {
+    return Math.max(0, dataAssetsImportLimit - _alreadyLoadedCount());
+}
+
+function _selectedNewCount() {
+    return allAvailableTables.filter(t => !t.already_loaded && importTableSelections[t.name]).length;
+}
+
 function toggleImportTableSelection(tableName, isSelected) {
+    const table = allAvailableTables.find(t => t.name === tableName);
+    if (isSelected && table && !table.already_loaded && _selectedNewCount() >= _remainingImportSlots()) {
+        importTableSelections[tableName] = false;
+        const checkbox = document.querySelector(`.import-table-checkbox[data-table="${tableName}"]`);
+        if (checkbox) checkbox.checked = false;
+        showNotification(
+            `Import limit is ${dataAssetsImportLimit} data assets (Settings → Global). Deselect another asset first.`,
+            'warning'
+        );
+        updateImportSelectionCount();
+        updateSelectAllImportCheckbox();
+        return;
+    }
     importTableSelections[tableName] = isSelected;
     updateImportSelectionCount();
     updateSelectAllImportCheckbox();
 }
 
 function selectAllImportTables(isSelected) {
-    // Only affect visible (non-filtered) rows
+    // Only affect visible (non-filtered) rows; never exceed remaining slots.
     const visibleRows = document.querySelectorAll('.import-table-row:not(.d-none)');
+    let remaining = _remainingImportSlots();
     visibleRows.forEach(row => {
         const tableName = row.dataset.table;
-        importTableSelections[tableName] = isSelected;
+        const table = allAvailableTables.find(t => t.name === tableName);
+        let take = isSelected;
+        if (take && table && !table.already_loaded) {
+            if (remaining <= 0) take = false;
+            else remaining -= 1;
+        }
+        if (take && table && table.already_loaded) take = false;
+        importTableSelections[tableName] = take;
         const checkbox = row.querySelector('.import-table-checkbox');
-        if (checkbox) checkbox.checked = isSelected;
+        if (checkbox) checkbox.checked = take;
     });
     
     updateImportSelectionCount();
@@ -390,9 +435,11 @@ function selectAllImportTables(isSelected) {
 }
 
 function selectNewTablesOnly() {
-    // Select only tables that are not already loaded
+    let remaining = _remainingImportSlots();
     allAvailableTables.forEach(table => {
-        importTableSelections[table.name] = !table.already_loaded;
+        const take = !table.already_loaded && remaining > 0;
+        importTableSelections[table.name] = take;
+        if (take) remaining -= 1;
     });
     
     // Update checkboxes
@@ -457,6 +504,22 @@ async function importSelectedTables() {
     
     if (selectedTables.length === 0) {
         showNotification('No tables selected for import', 'warning');
+        return;
+    }
+
+    const remaining = _remainingImportSlots();
+    if (selectedTables.length > remaining) {
+        showNotification(
+            `Import limit is ${dataAssetsImportLimit}. Only the first ${remaining} selected asset(s) will be imported.`,
+            'warning'
+        );
+        selectedTables = selectedTables.slice(0, remaining);
+    }
+    if (selectedTables.length === 0) {
+        showNotification(
+            `Data assets import limit of ${dataAssetsImportLimit} reached. Raise it in Settings → Global or remove existing assets.`,
+            'warning'
+        );
         return;
     }
     

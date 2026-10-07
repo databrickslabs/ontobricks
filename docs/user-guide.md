@@ -836,7 +836,7 @@ select seed entities and returns after you choose **Explore selected**.
 - **Edges**: Relationships between entities
 - **Labels**: Entity labels from rdfs:label or mapped label column
 - **Hover**: Highlights the hovered entity and its neighbors; dims unrelated nodes
-- **Click**: Selects an entity and locks the highlight until another entity or the background is clicked
+- **Click**: Selects an entity, locks the highlight, and zooms so the entity and its neighbors fit on the canvas (not a tight single-node zoom)
 - **Zoom**: Scroll to zoom in/out
 - **Pan**: Click and drag background
 - **Fit to View**: Click the fullscreen button to fit all entities in view
@@ -2039,6 +2039,8 @@ This step tells OntoBricks about the Databricks tables you want to model in your
 3. Click **List Tables** to see all available tables.
 4. **Check the tables** you want to include in your ontology (or use "Select All").
 5. Click **Initialize Metadata**.
+
+Imports are capped at **40 data assets** by default (tables, views, and metric views combined). Admins change the cap under **Settings → Global → Data assets import limit** (1–500). If the schema has more assets than remaining slots, extras are skipped until you raise the limit or remove existing assets.
 
 OntoBricks fetches column names, types, and comments from Unity Catalog for each selected table. This metadata is used by the Wizard and Auto-Map features to understand your data structure.
 

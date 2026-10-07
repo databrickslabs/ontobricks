@@ -20,6 +20,7 @@ def run_metadata_load_task(
     schema: str,
     selected_tables: Optional[List[str]],
     existing_metadata: Dict[str, Any],
+    import_limit: Optional[int] = None,
 ) -> None:
     tm = get_task_manager()
     try:
@@ -33,12 +34,14 @@ def run_metadata_load_task(
                 schema=schema,
                 table_names=selected_tables,
                 existing_metadata=existing_metadata,
+                import_limit=import_limit,
             )
         else:
             success, message, metadata = service.load_schema_metadata(
                 catalog=catalog,
                 schema=schema,
                 existing_metadata=existing_metadata,
+                import_limit=import_limit,
             )
         if not success:
             tm.fail_task(task_id, message)

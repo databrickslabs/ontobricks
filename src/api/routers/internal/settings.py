@@ -765,6 +765,35 @@ async def save_graph_limits(
     )
 
 
+@router.get("/data-assets-import-limit")
+async def get_data_assets_import_limit(
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Get the max number of Unity Catalog data assets a domain may import."""
+    return config_service.get_data_assets_import_limit_result(session_mgr, settings)
+
+
+@router.post("/save-data-assets-import-limit")
+async def save_data_assets_import_limit(
+    request: Request,
+    session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
+):
+    """Save the data-assets import cap (admin only, stored globally). Default 40."""
+    data = await request.json()
+    try:
+        limit = int(data.get("data_assets_import_limit", 40))
+    except (TypeError, ValueError) as exc:
+        raise ValidationError("data_assets_import_limit must be an integer") from exc
+    email, _display_name, user_token, _user_role, _user_domain_role = (
+        _settings_request_identity(request)
+    )
+    return config_service.save_data_assets_import_limit_result(
+        limit, email, user_token, session_mgr, settings
+    )
+
+
 @router.get("/edit-lock-ttl")
 async def get_edit_lock_ttl(
     session_mgr: SessionManager = Depends(get_session_manager),

@@ -938,6 +938,7 @@ var SigmaGraph = (function () {
             _switchToTab('sgTabDetails');
             _showNodeDetails(e.node);
             _renderer.refresh();
+            _focusCameraOnNodes(_nodeSetWithNeighbors(new Set([e.node])));
         });
 
         _renderer.on('doubleClickNode', function (e) {
@@ -1122,6 +1123,25 @@ var SigmaGraph = (function () {
     // -----------------------------------------------------------
     // Camera helpers
     // -----------------------------------------------------------
+    // Sigma camera `ratio` is inverse zoom (1 = full graph). Tight values
+    // make a single node fill the canvas and hide its neighbourhood.
+    var CAMERA_FIT_PADDING = 2.4;
+    var CAMERA_MIN_RATIO = 0.22;
+    var CAMERA_MAX_RATIO = 1;
+
+    function _nodeSetWithNeighbors(nodeSet) {
+        var expanded = new Set();
+        if (!_graph || !nodeSet) return expanded;
+        nodeSet.forEach(function (nodeId) {
+            if (!_graph.hasNode(nodeId)) return;
+            expanded.add(nodeId);
+            _graph.forEachNeighbor(nodeId, function (neighbor) {
+                expanded.add(neighbor);
+            });
+        });
+        return expanded;
+    }
+
     function _focusCameraOnNodes(nodeSet) {
         if (!_renderer || !_graph || !nodeSet || nodeSet.size === 0) return;
 
@@ -1144,7 +1164,10 @@ var SigmaGraph = (function () {
         var cam = _renderer.getCamera();
 
         if (fgPositions.length === 1) {
-            cam.animate({ x: fgPositions[0].x, y: fgPositions[0].y, ratio: 0.08 }, { duration: 400 });
+            cam.animate(
+                { x: fgPositions[0].x, y: fgPositions[0].y, ratio: CAMERA_MIN_RATIO },
+                { duration: 400 }
+            );
             return;
         }
 
@@ -1160,8 +1183,8 @@ var SigmaGraph = (function () {
         var centerY = (minY + maxY) / 2;
         var spanX = (maxX - minX) || 0.001;
         var spanY = (maxY - minY) || 0.001;
-        var ratio = Math.max(spanX, spanY) * 1.5;
-        ratio = Math.min(1, Math.max(0.02, ratio));
+        var ratio = Math.max(spanX, spanY) * CAMERA_FIT_PADDING;
+        ratio = Math.min(CAMERA_MAX_RATIO, Math.max(CAMERA_MIN_RATIO, ratio));
 
         cam.animate({ x: centerX, y: centerY, ratio: ratio }, { duration: 400 });
     }
@@ -2930,7 +2953,7 @@ var SigmaGraph = (function () {
             _showNodeDetails(entityId);
             if (_renderer) {
                 _renderer.refresh();
-                _focusCameraOnNodes(new Set([entityId]));
+                _focusCameraOnNodes(_nodeSetWithNeighbors(new Set([entityId])));
             }
         },
 

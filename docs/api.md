@@ -1365,6 +1365,22 @@ POST /settings/save-registry-cache-ttl
 How long (seconds, min 10) the registry domain list is cached before refreshing.
 Admin only; stored globally. Save body: `{ "registry_cache_ttl": 300 }`.
 
+#### Get/Save Data Assets Import Limit
+
+```http
+GET /settings/data-assets-import-limit
+POST /settings/save-data-assets-import-limit
+```
+
+Maximum Unity Catalog tables, views, and metric views a domain may import
+(default **40**, range 1–500). Admin only; stored globally. Save body:
+`{ "data_assets_import_limit": 40 }`.
+
+**Response (GET):**
+```json
+{ "success": true, "data_assets_import_limit": 40 }
+```
+
 #### Get/Save Edit-Lock Lease TTL
 
 ```http

@@ -216,3 +216,68 @@ class TestMetadataService:
         ok, msg, updated = svc.refresh_table_metadata("c", "s", "new_tbl", existing)
         assert ok is True
         assert updated["table_count"] == 1
+
+    def test_clamp_import_limit_defaults_to_40(self):
+        assert MetadataService.DEFAULT_DATA_ASSETS_IMPORT_LIMIT == 40
+        assert MetadataService.clamp_import_limit(None) == 40
+        assert MetadataService.clamp_import_limit("40") == 40
+        assert MetadataService.clamp_import_limit(0) == 1
+        assert MetadataService.clamp_import_limit(9999) == 500
+
+    @patch.object(_metadata_service_mod, "UnityCatalog")
+    @patch.object(_metadata_service_mod, "DatabricksAuth")
+    def test_load_schema_metadata_caps_at_import_limit(self, MockAuth, MockCatalog):
+        cat_instance = MockCatalog.return_value
+        cat_instance.list_tables_and_views.return_value = [
+            {"name": f"t{i}", "table_type": "MANAGED"} for i in range(45)
+        ]
+        cat_instance.object_kind_for_table_type.side_effect = (
+            UnityCatalog.object_kind_for_table_type
+        )
+        cat_instance.get_table_columns.return_value = []
+        cat_instance.get_table_comment.return_value = ""
+
+        svc = MetadataService(host="h", token="t", warehouse_id="w")
+        ok, msg, metadata = svc.load_schema_metadata("c", "s")
+        assert ok is True
+        assert metadata["table_count"] == 40
+        assert "40" in msg
+        assert "5" in msg
+
+    @patch.object(_metadata_service_mod, "UnityCatalog")
+    @patch.object(_metadata_service_mod, "DatabricksAuth")
+    def test_load_selected_tables_caps_new_names(self, MockAuth, MockCatalog):
+        cat_instance = MockCatalog.return_value
+        cat_instance.list_tables_and_views.return_value = []
+        cat_instance.object_kind_for_table_type.side_effect = (
+            UnityCatalog.object_kind_for_table_type
+        )
+        cat_instance.get_table_columns.return_value = []
+        cat_instance.get_table_comment.return_value = ""
+
+        existing = {
+            "tables": [{"name": f"old{i}", "full_name": f"c.s.old{i}"} for i in range(38)]
+        }
+        svc = MetadataService(host="h", token="t", warehouse_id="w")
+        ok, msg, metadata = svc.load_selected_tables(
+            "c", "s", ["n1", "n2", "n3"], existing, import_limit=40
+        )
+        assert ok is True
+        assert metadata["table_count"] == 40
+        names = {t["name"] for t in metadata["tables"]}
+        assert "n1" in names and "n2" in names
+        assert "n3" not in names
+
+    @patch.object(_metadata_service_mod, "UnityCatalog")
+    @patch.object(_metadata_service_mod, "DatabricksAuth")
+    def test_load_selected_tables_fails_when_limit_reached(self, MockAuth, MockCatalog):
+        existing = {
+            "tables": [{"name": f"t{i}", "full_name": f"c.s.t{i}"} for i in range(40)]
+        }
+        svc = MetadataService(host="h", token="t", warehouse_id="w")
+        ok, msg, metadata = svc.load_selected_tables(
+            "c", "s", ["extra"], existing, import_limit=40
+        )
+        assert ok is False
+        assert "limit" in msg.lower()
+        assert metadata["table_count"] == 40
