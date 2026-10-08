@@ -1,0 +1,41 @@
+## Fix Apps graph writes for SWRL apply and inference purge
+
+Context: On Databricks Apps the warehouse client is INLINE Statement
+Execution, which only implemented `execute_query`. Explorer Apply SWRL and
+Purge both call `execute_statement` (CREATE/INSERT/TRUNCATE plus graph-index
+rebuild). That raised `AttributeError`, shown as "Writing inferred triples
+to the graph failed" or the generic "An internal error occurred".
+
+Changes:
+
+1. src/back/core/databricks/StatementExecutionWarehouse.py
+   Add `execute_statement` (same SEA path as reads) and
+   `uses_inline_statements`.
+2. src/back/core/graphdb/delta/materialize.py
+   Route all DDL/DML through `run_sql` (statement, else query).
+3. src/back/core/graphdb/delta/DeltaFlatStore.py
+   INSERT via SEA instead of Thrift when Apps INLINE is in use; purge
+   returns 0 if the inferred companion table does not exist yet.
+4. tests/units/core/test_statement_execution_warehouse.py
+   Contract that DDL reuses `execute_query`.
+5. tests/units/graphdb/delta/test_delta_package.py
+   `run_sql` falls back to `execute_query`.
+6. tests/units/graphdb/delta/test_delta_flat_store.py
+   Apps inserts do not open a Thrift session.
+7. tests/units/graphdb/test_materialized_inference_purge.py
+   Missing inferred companion purges as a no-op.
+8. docs/data-access.md
+   Document Apps companion writes over Statement Execution.
+
+Modified files:
+- src/back/core/databricks/StatementExecutionWarehouse.py
+- src/back/core/graphdb/delta/materialize.py
+- src/back/core/graphdb/delta/DeltaFlatStore.py
+- tests/units/core/test_statement_execution_warehouse.py
+- tests/units/graphdb/delta/test_delta_package.py
+- tests/units/graphdb/delta/test_delta_flat_store.py
+- tests/units/graphdb/test_materialized_inference_purge.py
+- docs/data-access.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-07.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 7400 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 59.09s

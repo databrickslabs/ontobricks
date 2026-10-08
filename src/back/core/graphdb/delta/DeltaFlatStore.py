@@ -299,6 +299,26 @@ class DeltaFlatStore(GraphDBBackend):
         logger.info("Dropping Delta table: %s", table_name)
         self._client.execute_statement(query)
 
+    def _uses_inline_sql(self) -> bool:
+        """True when the warehouse is Apps INLINE Statement Execution."""
+        transport = getattr(self._client, "sql", self._client)
+        return getattr(type(transport), "uses_inline_statements", False) is True
+
+    @staticmethod
+    def _insert_sql(table_name: str, batch: List[Dict[str, str]]) -> str:
+        values_sql = ",\n".join(
+            "('{s}', '{p}', '{o}')".format(
+                s=_escape_sql_string(t.get("subject", "") or ""),
+                p=_escape_sql_string(t.get("predicate", "") or ""),
+                o=_escape_sql_string(t.get("object", "") or ""),
+            )
+            for t in batch
+        )
+        return (
+            f"INSERT INTO {table_name} (subject, predicate, object) VALUES\n"
+            f"{values_sql}"
+        )
+
     def _execute_insert_triples(
         self,
         table_name: str,
@@ -311,6 +331,11 @@ class DeltaFlatStore(GraphDBBackend):
         if not triples:
             return 0
 
+        if self._uses_inline_sql():
+            return self._execute_insert_triples_inline(
+                table_name, triples, batch_size, on_progress
+            )
+
         from databricks import sql
 
         total = 0
@@ -319,15 +344,7 @@ class DeltaFlatStore(GraphDBBackend):
             with connection.cursor() as cursor:
                 for i in range(0, len(triples), batch_size):
                     batch = triples[i : i + batch_size]
-                    values_list = []
-                    for t in batch:
-                        s = _escape_sql_string(t.get("subject", "") or "")
-                        p = _escape_sql_string(t.get("predicate", "") or "")
-                        o = _escape_sql_string(t.get("object", "") or "")
-                        values_list.append(f"('{s}', '{p}', '{o}')")
-                    values_sql = ",\n".join(values_list)
-                    query = f"INSERT INTO {table_name} (subject, predicate, object) VALUES\n{values_sql}"
-                    cursor.execute(query)
+                    cursor.execute(self._insert_sql(table_name, batch))
                     total += len(batch)
                     if on_progress:
                         on_progress(total, len(triples))
@@ -339,6 +356,26 @@ class DeltaFlatStore(GraphDBBackend):
                     )
 
         logger.info("Inserted %d triples into %s", total, table_name)
+        return total
+
+    def _execute_insert_triples_inline(
+        self,
+        table_name: str,
+        triples: List[Dict[str, str]],
+        batch_size: int,
+        on_progress: Optional[Callable[[int, int], None]],
+    ) -> int:
+        """INSERT via Statement Execution (no Thrift session in Databricks Apps)."""
+        total = 0
+        for i in range(0, len(triples), batch_size):
+            batch = triples[i : i + batch_size]
+            self._client.execute_statement(self._insert_sql(table_name, batch))
+            total += len(batch)
+            if on_progress:
+                on_progress(total, len(triples))
+        logger.info(
+            "Inserted %d triples into %s via Statement Execution", total, table_name
+        )
         return total
 
     def insert_triples(
@@ -372,7 +409,20 @@ class DeltaFlatStore(GraphDBBackend):
     def purge_materialized_triples(self, table_name: str) -> int:
         """Truncate the inferred companion and preserve mapped source triples."""
         inferred = self._writable_table_fqn(table_name)
-        count = self.count_triples(inferred)
+        try:
+            count = self.count_triples(inferred)
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            if (
+                "TABLE_OR_VIEW_NOT_FOUND" in msg
+                or "does not exist" in msg.lower()
+            ):
+                logger.info(
+                    "Purged 0 materialized triples; companion missing: %s",
+                    inferred,
+                )
+                return 0
+            raise
         materialize.truncate_table(self._client, inferred)
         from back.core.graphdb.search_cache import rebuild_graph_cache_if_enabled
 

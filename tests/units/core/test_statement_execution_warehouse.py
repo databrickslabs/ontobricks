@@ -215,6 +215,14 @@ def test_execute_query_cancels_statement_on_client_timeout():
     )
 
 
+def test_execute_statement_reuses_inline_query_path():
+    service = StatementExecutionWarehouse(_auth())
+    with patch.object(service, "execute_query", return_value=[]) as execute:
+        assert service.execute_statement("TRUNCATE TABLE cat.sch.g_inferred") is True
+
+    execute.assert_called_once_with("TRUNCATE TABLE cat.sch.g_inferred")
+
+
 def test_test_connection_uses_inline_query():
     service = StatementExecutionWarehouse(_auth())
     with patch.object(service, "execute_query", return_value=[{"1": 1}]) as execute:

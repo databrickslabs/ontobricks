@@ -189,6 +189,14 @@ class TestMaterializeSql:
         sql = client.execute_statement.call_args[0][0]
         assert "CREATE TABLE IF NOT EXISTS c.s.v_inferred" in sql
 
+    def test_run_sql_falls_back_to_execute_query(self):
+        client = MagicMock(spec=["execute_query"])
+        materialize.ensure_inferred_table(client, "c.s.v_inferred")
+        client.execute_query.assert_called_once()
+        assert "CREATE TABLE IF NOT EXISTS c.s.v_inferred" in (
+            client.execute_query.call_args[0][0]
+        )
+
     def test_ensure_graph_view_unions_data_and_inferred(self):
         client = MagicMock()
         materialize.ensure_graph_view(

@@ -544,3 +544,42 @@ class TestDeltaSingleStatementExpansion:
                 50,
                 100,
             )
+
+
+class _InlineSql:
+    uses_inline_statements = True
+
+    def __init__(self):
+        self.statements = []
+
+    def execute_statement(self, sql):
+        self.statements.append(sql)
+        return True
+
+
+class _AppsClient:
+    def __init__(self):
+        self.sql = _InlineSql()
+
+    def execute_statement(self, sql):
+        return self.sql.execute_statement(sql)
+
+    def get_sql_connection_params(self):
+        raise AssertionError("Apps inserts must not open a Thrift session")
+
+
+class TestDeltaFlatStoreAppsInsert:
+    def test_insert_uses_statement_execution_not_thrift(self):
+        client = _AppsClient()
+        store = DeltaFlatStore(client)
+        triples = [
+            {
+                "subject": "http://ex/s",
+                "predicate": "http://ex/p",
+                "object": "http://ex/o",
+            }
+        ]
+        count = store._execute_insert_triples("cat.sch.g_inferred", triples, 2000, None)
+        assert count == 1
+        assert client.sql.statements
+        assert "INSERT INTO cat.sch.g_inferred" in client.sql.statements[0]

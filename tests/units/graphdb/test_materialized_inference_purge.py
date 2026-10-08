@@ -49,6 +49,32 @@ def test_delta_counts_and_truncates_only_inferred_companion():
     store.rebuild_adjacency.assert_called_once_with("sales_V3")
 
 
+def test_delta_purge_returns_zero_when_inferred_companion_is_missing():
+    client = MagicMock()
+    store = DeltaFlatStore(client, domain=MagicMock(), settings=MagicMock())
+    store.rebuild_adjacency = MagicMock()
+
+    with (
+        patch.object(
+            store,
+            "_writable_table_fqn",
+            return_value="cat.sch.sales_inferred",
+        ),
+        patch.object(
+            store,
+            "count_triples",
+            side_effect=RuntimeError("TABLE_OR_VIEW_NOT_FOUND: sales_inferred"),
+        ),
+        patch(
+            "back.core.graphdb.delta.DeltaFlatStore.materialize.truncate_table"
+        ) as truncate,
+    ):
+        assert store.purge_materialized_triples("sales_V3") == 0
+
+    truncate.assert_not_called()
+    store.rebuild_adjacency.assert_not_called()
+
+
 def test_delta_purge_surfaces_adjacency_rebuild_failure():
     client = MagicMock()
     store = DeltaFlatStore(client, domain=MagicMock(), settings=MagicMock())

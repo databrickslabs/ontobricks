@@ -26,6 +26,25 @@ from back.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+def run_sql(client: Any, sql: str) -> Any:
+    """Execute DDL/DML on a warehouse client.
+
+    Classic ``SQLWarehouse`` exposes ``execute_statement``. Databricks Apps
+    use ``StatementExecutionWarehouse``, which historically only had
+    ``execute_query`` — both now implement ``execute_statement``. Fall back
+    to ``execute_query`` for older/test doubles.
+    """
+    stmt = getattr(client, "execute_statement", None)
+    if callable(stmt):
+        return stmt(sql)
+    query = getattr(client, "execute_query", None)
+    if callable(query):
+        return query(sql)
+    raise AttributeError(
+        f"{type(client).__name__} has neither execute_statement nor execute_query"
+    )
+
+
 def build_ctas_sql(view_fqn: str, table_fqn: str) -> str:
     """Spark SQL to materialize triples from a VIEW into a clustered Delta TABLE.
 
@@ -92,9 +111,10 @@ def set_bloom_filter_columns(client: Any, table_fqn: str, columns: str) -> None:
     """Best-effort Delta Bloom filters on lowercase search columns."""
     validate_table_name(table_fqn)
     try:
-        client.execute_statement(
+        run_sql(
+            client,
             f"ALTER TABLE {table_fqn} SET TBLPROPERTIES ("
-            f"'delta.bloomFilter.columns' = '{columns}')"
+            f"'delta.bloomFilter.columns' = '{columns}')",
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -145,14 +165,14 @@ def materialize_from_view(client: Any, view_fqn: str, table_fqn: str) -> None:
     """Replace *table_fqn* with rows from *view_fqn*."""
     sql = build_ctas_sql(view_fqn, table_fqn)
     logger.info("Materializing Delta triple store: %s from %s", table_fqn, view_fqn)
-    client.execute_statement(sql)
+    run_sql(client, sql)
 
 
 def create_data_view(client: Any, view_fqn: str, data_fqn: str) -> None:
     """Replace *data_fqn* with a pass-through VIEW over *view_fqn*."""
     sql = build_data_view_sql(view_fqn, data_fqn)
     logger.info("Creating pass-through Delta view: %s over %s", data_fqn, view_fqn)
-    client.execute_statement(sql)
+    run_sql(client, sql)
 
 
 def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
@@ -165,7 +185,7 @@ def drop_relation(client: Any, fqn: str, *, kind: str) -> None:
     validate_table_name(fqn)
     statement = "TABLE" if kind == "table" else "VIEW"
     try:
-        client.execute_statement(f"DROP {statement} IF EXISTS {fqn}")
+        run_sql(client, f"DROP {statement} IF EXISTS {fqn}")
     except Exception as exc:  # noqa: BLE001
         logger.debug("DROP %s %s failed (may not exist): %s", statement, fqn, exc)
 
@@ -192,7 +212,7 @@ def ensure_inferred_table(client: Any, table_fqn: str) -> None:
     """Create the writable companion TABLE if it does not exist yet."""
     sql = build_ensure_inferred_sql(table_fqn)
     logger.info("Ensuring Delta inferred companion table: %s", table_fqn)
-    client.execute_statement(sql)
+    run_sql(client, sql)
 
 
 def ensure_graph_view(
@@ -206,13 +226,13 @@ def ensure_graph_view(
         data_fqn,
         inferred_fqn,
     )
-    client.execute_statement(sql)
+    run_sql(client, sql)
 
 
 def truncate_table(client: Any, table_fqn: str) -> None:
     """Clear all rows from *table_fqn* (best-effort)."""
     try:
-        client.execute_statement(build_truncate_sql(table_fqn))
+        run_sql(client, build_truncate_sql(table_fqn))
     except Exception as exc:  # noqa: BLE001
         logger.debug("truncate_table %s failed (may not exist yet): %s", table_fqn, exc)
 
@@ -220,4 +240,4 @@ def truncate_table(client: Any, table_fqn: str) -> None:
 def optimize_table(client: Any, table_fqn: str) -> None:
     validate_table_name(table_fqn)
     logger.info("Optimizing Delta table: %s", table_fqn)
-    client.execute_statement(f"OPTIMIZE {table_fqn}")
+    run_sql(client, f"OPTIMIZE {table_fqn}")

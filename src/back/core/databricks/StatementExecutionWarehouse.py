@@ -31,7 +31,9 @@ _COMPLEX_TYPES = {"ARRAY", "MAP", "STRUCT", "VARIANT"}
 
 
 class StatementExecutionWarehouse:
-    """Execute read queries through SEA without external CloudFetch links."""
+    """Execute queries through SEA without external CloudFetch links."""
+
+    uses_inline_statements = True
 
     def __init__(self, auth: DatabricksAuth) -> None:
         self._auth = auth
@@ -222,6 +224,15 @@ class StatementExecutionWarehouse:
                 "Databricks SQL request failed",
                 detail=str(exc),
             ) from exc
+
+    def execute_statement(self, statement: str) -> bool:
+        """Run DDL/DML through the same INLINE Statement Execution path as reads.
+
+        Databricks Apps cannot open a Thrift SQL session. Graph writes
+        (CREATE/TRUNCATE/INSERT/OPTIMIZE) must reuse SEA.
+        """
+        self.execute_query(statement)
+        return True
 
     def test_connection(self) -> Tuple[bool, str]:
         """Test the Apps M2M and Lakehouse/RT Statement Execution path."""
