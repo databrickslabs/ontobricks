@@ -64,6 +64,30 @@ def _roundtrip() -> Graph:
     return g
 
 
+def test_generate_owl_reads_rdf_extras_from_config():
+    info, classes, properties, *_rest = OntologyOwl.parse_owl(
+        ISSUE_194_TTL, extract_advanced=True
+    )
+    turtle = OntologyOwl.generate_owl(
+        {
+            "base_uri": info["namespace"],
+            "name": info["label"],
+            "label_lang": info.get("label_lang"),
+            "classes": classes,
+            "properties": properties,
+            "rdf_extras": info["rdf_extras"],
+        }
+    )
+    graph = Graph()
+    graph.parse(data=turtle, format="turtle")
+
+    assert (
+        EX.Customer,
+        SKOS.definition,
+        Literal("A party that buys goods.", lang="en"),
+    ) in graph
+
+
 @pytest.mark.unit
 class TestIssue194ImportFidelity:
     def test_ontology_header_and_annotations(self):
