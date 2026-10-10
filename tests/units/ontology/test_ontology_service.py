@@ -1,6 +1,7 @@
 """Tests for :class:`back.objects.ontology.Ontology` helpers used by ontology routes."""
 
 import copy
+import importlib
 
 import pytest
 from rdflib import RDFS, Graph, Literal, URIRef
@@ -8,6 +9,10 @@ from rdflib import RDFS, Graph, Literal, URIRef
 from back.core.errors import NotFoundError, ValidationError
 from back.objects.ontology import Ontology
 from back.objects.ontology.OntologyImport import OntologyImport
+
+ontology_import_module = importlib.import_module(
+    "back.objects.ontology.OntologyImport"
+)
 
 
 class TestEnsureUris:
@@ -804,6 +809,61 @@ class TestApplyParsedRdfs:
         r = Ontology(domain_session).apply_parsed_rdfs_to_domain(rdfs)
         assert r["success"]
         assert r["stats"]["classes"] >= 1
+
+    def test_clears_owl_import_fidelity_metadata(self, domain_session):
+        domain_session.ontology.update(
+            {
+                "rdf_extras": {"triples": [{"s": "stale"}]},
+                "label_lang": "en",
+                "comment_lang": "fr",
+            }
+        )
+        rdfs = """@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix : <http://example.org/> .
+<http://example.org/> a owl:Ontology ; rdfs:label "Vocabulary" .
+:Foo a owl:Class .
+"""
+
+        Ontology(domain_session).apply_parsed_rdfs_to_domain(rdfs)
+
+        assert domain_session.ontology["rdf_extras"] == {}
+        assert domain_session.ontology["label_lang"] is None
+        assert domain_session.ontology["comment_lang"] is None
+
+
+class TestImportIndustryOntology:
+    def test_clears_owl_import_fidelity_metadata(self, domain_session, monkeypatch):
+        domain_session.ontology.update(
+            {
+                "rdf_extras": {"triples": [{"s": "stale"}]},
+                "label_lang": "en",
+                "comment_lang": "fr",
+            }
+        )
+        result = {
+            "ontology_info": {"name": "FIBO", "uri": "http://example.org/fibo/"},
+            "classes": [],
+            "properties": [],
+            "constraints": [],
+            "swrl_rules": [],
+            "axioms": [],
+            "expressions": [],
+            "message": "Imported",
+            "stats": {},
+            "failed": [],
+        }
+        monkeypatch.setitem(
+            ontology_import_module._INDUSTRY_FETCH,
+            "fibo",
+            lambda _keys: result,
+        )
+
+        Ontology(domain_session).import_industry_ontology("fibo", ["core"])
+
+        assert domain_session.ontology["rdf_extras"] == {}
+        assert domain_session.ontology["label_lang"] is None
+        assert domain_session.ontology["comment_lang"] is None
 
 
 class TestRenameRelationshipReferences:

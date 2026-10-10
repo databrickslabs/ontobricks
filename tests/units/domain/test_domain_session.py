@@ -356,6 +356,21 @@ class TestGenerateDraftIntegration:
         domain_session.reset_ontology()
         assert domain_session.generate_draft_store.load() is None
 
+    def test_reset_ontology_clears_import_fidelity_metadata(self, domain_session):
+        domain_session.ontology.update(
+            {
+                "rdf_extras": {"triples": [{"s": "stale"}]},
+                "label_lang": "en",
+                "comment_lang": "fr",
+            }
+        )
+
+        domain_session.reset_ontology()
+
+        assert domain_session.ontology["rdf_extras"] == {}
+        assert domain_session.ontology["label_lang"] is None
+        assert domain_session.ontology["comment_lang"] is None
+
     def test_import_from_file_clears_persisted_draft(self, domain_session):
         """Loading a different domain/version into the current session must
         not resurrect a draft detected against the *previous* domain's

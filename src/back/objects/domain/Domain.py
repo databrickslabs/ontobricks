@@ -376,6 +376,7 @@ class Domain:
         Returns:
             dict: Updated project info
         """
+        previous_domain_name = (self._s.info.get("name") or "").strip()
         if "name" in data:
             domain_name = (data.get("name") or "").strip()
             # New domains (not yet registered) must use CamelCase alphanumeric
@@ -470,7 +471,9 @@ class Domain:
                 "Select a Neo4j connection (Settings → Neo4j) when Graph Backend is Neo4j."
             )
 
-        self._s.ontology["name"] = domain_name.lower()
+        ontology_name = (self._s.ontology.get("name") or "").strip()
+        if not ontology_name or ontology_name.lower() == previous_domain_name.lower():
+            self._s.ontology["name"] = domain_name.lower()
 
         # Resolve the ontology base URI. In auto mode (the default for a new
         # domain) it is generated server-side from the configured default base

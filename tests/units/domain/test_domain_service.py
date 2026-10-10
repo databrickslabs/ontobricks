@@ -90,6 +90,17 @@ class TestSaveDomainInfo:
         assert result["name"] == "New Name"
         domain.save.assert_called_once()
 
+    def test_save_domain_name_preserves_imported_ontology_label_and_language(self):
+        domain = _mock_domain(name="ImportedProject")
+        domain.ontology.update(
+            {"name": "Imported Ontology", "label_lang": "en"}
+        )
+
+        Domain(domain).save_domain_info({"name": "ImportedProject"})
+
+        assert domain.ontology["name"] == "Imported Ontology"
+        assert domain.ontology["label_lang"] == "en"
+
     def test_save_llm_endpoint_kind(self):
         domain = _mock_domain()
         result = Domain(domain).save_domain_info(

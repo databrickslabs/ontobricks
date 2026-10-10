@@ -849,6 +849,9 @@ class DomainSession:
                 "axioms": [],
                 "expressions": [],
                 "groups": [],
+                "rdf_extras": {},
+                "label_lang": None,
+                "comment_lang": None,
             }
         )
         self.assignment.update(

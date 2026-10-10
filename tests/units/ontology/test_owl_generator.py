@@ -82,6 +82,54 @@ class TestClassGeneration:
             URIRef("http://example.org/other-onto#Party"),
         ) in graph
 
+    def test_renamed_class_ignores_stale_uri_and_keeps_references_aligned(self):
+        classes = [
+            {
+                "name": "Client",
+                "uri": "http://example.org/onto#Customer",
+                "parent": "Party",
+            },
+            {
+                "name": "PriorityClient",
+                "parent": "Client",
+                "parent_uri": "http://example.org/onto#Customer",
+            },
+        ]
+        graph = Graph()
+        graph.parse(data=_make_generator(classes=classes).generate(), format="turtle")
+        client_uri = URIRef("http://test.org/ontology#Client")
+        assert (client_uri, RDF.type, OWL.Class) in graph
+        assert (
+            URIRef("http://test.org/ontology#PriorityClient"),
+            RDFS.subClassOf,
+            client_uri,
+        ) in graph
+        assert (
+            URIRef("http://example.org/onto#Customer"),
+            RDF.type,
+            OWL.Class,
+        ) not in graph
+
+    def test_slash_namespace_is_preserved_for_subjects_and_references(self):
+        classes = [
+            {"name": "A", "uri": "http://ex.org/o/A"},
+            {"name": "B", "parent": "A", "parent_uri": "http://ex.org/o/A"},
+        ]
+        graph = Graph()
+        generator = OntologyGenerator(
+            base_uri="http://ex.org/o/",
+            ontology_name="Slash ontology",
+            classes=classes,
+            properties=[],
+        )
+        graph.parse(data=generator.generate(), format="turtle")
+        assert (URIRef("http://ex.org/o/A"), RDF.type, OWL.Class) in graph
+        assert (
+            URIRef("http://ex.org/o/B"),
+            RDFS.subClassOf,
+            URIRef("http://ex.org/o/A"),
+        ) in graph
+
     def test_non_http_parent_uri_falls_back_to_parent_name(self):
         classes = [
             {
@@ -343,6 +391,33 @@ class TestPropertyGeneration:
             URIRef("http://example.org/other-onto#Party"),
         ) in graph
 
+    def test_renamed_property_and_changed_endpoints_ignore_stale_uris(self):
+        props = [
+            {
+                "name": "serves",
+                "uri": "http://example.org/onto#hasParty",
+                "type": "ObjectProperty",
+                "domain": "Client",
+                "domain_uri": "http://example.org/onto#Account",
+                "range": "Organization",
+                "range_uri": "http://example.org/onto#Party",
+            }
+        ]
+        graph = Graph()
+        graph.parse(data=_make_generator(properties=props).generate(), format="turtle")
+        prop_uri = URIRef("http://test.org/ontology#serves")
+        assert (prop_uri, RDF.type, OWL.ObjectProperty) in graph
+        assert (
+            prop_uri,
+            RDFS.domain,
+            URIRef("http://test.org/ontology#Client"),
+        ) in graph
+        assert (
+            prop_uri,
+            RDFS.range,
+            URIRef("http://test.org/ontology#Organization"),
+        ) in graph
+
     def test_non_http_domain_and_range_uris_fall_back_to_local_names(self):
         props = [
             {
@@ -411,6 +486,52 @@ class TestConstraintGeneration:
         gen = _make_generator(constraints=constraints)
         owl = gen.generate()
         assert "minCardinality" in owl
+
+    def test_constraints_axioms_and_groups_follow_effective_entity_uris(self):
+        generator = OntologyGenerator(
+            base_uri="http://test.org/ontology#",
+            ontology_name="Renamed entities",
+            classes=[
+                {"name": "Client", "uri": "http://old.example#Customer"},
+                {"name": "Party"},
+            ],
+            properties=[
+                {
+                    "name": "serves",
+                    "uri": "http://old.example#hasCustomer",
+                    "type": "ObjectProperty",
+                }
+            ],
+            constraints=[
+                {
+                    "type": "minCardinality",
+                    "className": "Client",
+                    "property": "serves",
+                    "cardinalityValue": 1,
+                }
+            ],
+            axioms=[
+                {
+                    "type": "equivalentClass",
+                    "subject": "Client",
+                    "objects": ["Party"],
+                }
+            ],
+            groups=[{"name": "Actors", "members": ["Client", "Party"]}],
+        )
+        graph = Graph()
+        graph.parse(data=generator.generate(), format="turtle")
+        client_uri = URIRef("http://test.org/ontology#Client")
+        property_uri = URIRef("http://test.org/ontology#serves")
+        assert (
+            client_uri,
+            OWL.equivalentClass,
+            URIRef("http://test.org/ontology#Party"),
+        ) in graph
+        restrictions = list(graph.objects(client_uri, RDFS.subClassOf))
+        assert any((restriction, OWL.onProperty, property_uri) in graph for restriction in restrictions)
+        union_lists = list(graph.objects(None, OWL.unionOf))
+        assert any(client_uri in list(graph.items(items)) for items in union_lists)
 
 
 class TestSwrlGeneration:

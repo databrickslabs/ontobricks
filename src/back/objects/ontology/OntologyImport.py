@@ -161,6 +161,9 @@ class OntologyImport:
                 ),
                 "classes": classes,
                 "properties": properties,
+                "rdf_extras": {},
+                "label_lang": None,
+                "comment_lang": None,
             }
         )
         OntologyClassModel.sync_class_data_properties(self._domain.ontology)
@@ -665,6 +668,9 @@ class OntologyImport:
                     "swrl_rules": result["swrl_rules"],
                     "axioms": result["axioms"],
                     "expressions": result["expressions"],
+                    "rdf_extras": {},
+                    "label_lang": None,
+                    "comment_lang": None,
                 }
             )
             self._domain.save()

@@ -204,3 +204,46 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 7418 passed, 326
 skipped, 6 deselected, 1 xfailed, 32 warnings in 51.49s.
+
+## Keep renamed OWL entities graph-consistent
+
+Context: Whole-branch review found that stale imported IRIs could split renamed
+classes and properties from their references. Slash namespaces were also
+rewritten with a hash, and non-OWL import paths retained stale fidelity metadata.
+
+Changes:
+
+1. src/back/core/w3c/owl/OntologyGenerator.py
+   Preserve slash namespace separators, reject stale stored IRIs after renames,
+   and resolve constraints, axioms, groups, and relationship endpoints through
+   the effective class/property subject IRIs.
+2. src/back/objects/domain/Domain.py
+   Preserve an imported ontology label and language metadata when saving domain
+   information unless the ontology name was still derived from the domain name.
+3. src/back/objects/ontology/OntologyImport.py
+   Clear RDF extras and language metadata during RDFS and industry imports.
+4. src/back/objects/session/DomainSession.py
+   Clear RDF extras and language metadata when resetting the ontology.
+5. tests/units/ontology/test_owl_generator.py
+   Cover renamed class/property subjects, stale references, slash namespaces,
+   and effective IRIs in constraints, axioms, and groups.
+6. tests/units/ontology/test_ontology_service.py
+   Cover fidelity metadata cleanup for RDFS and industry imports.
+7. tests/units/domain/test_domain_service.py
+   Cover imported ontology label preservation during domain saves.
+8. tests/units/domain/test_domain_session.py
+   Cover fidelity metadata cleanup during ontology reset.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/objects/domain/Domain.py
+- src/back/objects/ontology/OntologyImport.py
+- src/back/objects/session/DomainSession.py
+- tests/units/ontology/test_owl_generator.py
+- tests/units/ontology/test_ontology_service.py
+- tests/units/domain/test_domain_service.py
+- tests/units/domain/test_domain_session.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7426 passed, 326
+skipped, 6 deselected, 1 xfailed, 32 warnings in 57.42s.

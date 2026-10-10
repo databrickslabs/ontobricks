@@ -46,7 +46,11 @@ class OntologyGenerator:
             label_lang: Optional language tag for the ontology label
             rdf_extras: Unmodeled RDF namespace bindings and triples
         """
-        self.base_uri = base_uri.rstrip("#") + "#"
+        self.base_uri = (
+            base_uri
+            if base_uri.endswith(("#", "/"))
+            else base_uri + "#"
+        )
         self.ontology_name = ontology_name
         self.label_lang = label_lang
         self.classes = classes or []
@@ -60,6 +64,7 @@ class OntologyGenerator:
 
         self.graph = Graph()
         self.ns = Namespace(self.base_uri)
+        self._entity_uri_index = self._build_entity_uri_index()
 
         # Index of class attributes (local name -> set of attribute local names)
         # used to drop stale domain-scoped DatatypeProperty shadows on export.
@@ -169,6 +174,37 @@ class OntologyGenerator:
                     index.setdefault(key, set()).update(attrs)
         return index
 
+    def _effective_uri(self, name: str, stored_uri: str = "") -> URIRef:
+        """Resolve an entity URI without reusing an IRI made stale by a rename."""
+        clean_name = (name or "").strip()
+        clean_stored_uri = (stored_uri or "").strip()
+        if (
+            clean_stored_uri.startswith(("http://", "https://"))
+            and self._local_name(clean_stored_uri) == clean_name
+        ):
+            return URIRef(clean_stored_uri)
+        return URIRef(self.base_uri + clean_name)
+
+    def _build_entity_uri_index(self) -> Dict[str, URIRef]:
+        """Index current class/property names to their effective subject IRIs."""
+        index: Dict[str, URIRef] = {}
+        for entity in [*self.classes, *self.properties]:
+            name = (entity.get("name") or "").strip()
+            if name:
+                index[name] = self._effective_uri(name, str(entity.get("uri") or ""))
+        for cls in self.classes:
+            for data_prop in cls.get("dataProperties", []) or []:
+                if not isinstance(data_prop, dict):
+                    continue
+                name = (
+                    data_prop.get("name") or data_prop.get("localName") or ""
+                ).strip()
+                if name:
+                    index[name] = self._effective_uri(
+                        self._sanitize_name(name), str(data_prop.get("uri") or "")
+                    )
+        return index
+
     def _is_stale_datatype_shadow(self, prop_name: str, domain: str) -> bool:
         """True when *prop_name* is a domain-scoped datatype attribute the
         owning class no longer declares.
@@ -191,7 +227,7 @@ class OntologyGenerator:
             return None
         if ref.startswith("http://") or ref.startswith("https://"):
             return URIRef(ref)
-        return URIRef(self.base_uri + ref)
+        return self._entity_uri_index.get(ref, URIRef(self.base_uri + ref))
 
     def _collect_uris(self, refs: list) -> list:
         """Resolve a list of name/URI strings to URIRefs, skipping empty values."""
@@ -525,12 +561,7 @@ class OntologyGenerator:
             "Processing class: %s, parent: %s", class_name, cls.get("parent", "NONE")
         )
 
-        stored_class_uri = str(cls.get("uri", ""))
-        class_uri = (
-            URIRef(stored_class_uri)
-            if stored_class_uri.startswith(("http://", "https://"))
-            else URIRef(self.base_uri + class_name)
-        )
+        class_uri = self._effective_uri(class_name, str(cls.get("uri") or ""))
 
         # Define as OWL Class
         self.graph.add((class_uri, RDF.type, OWL.Class))
@@ -633,7 +664,10 @@ class OntologyGenerator:
         stored_parent_uri = str(cls.get("parent_uri") or "").strip()
         parent_ref = (
             stored_parent_uri
-            if stored_parent_uri.startswith(("http://", "https://"))
+            if (
+                stored_parent_uri.startswith(("http://", "https://"))
+                and self._local_name(stored_parent_uri) == self._local_name(parent)
+            )
             else parent
         )
         if parent_ref:
@@ -699,11 +733,7 @@ class OntologyGenerator:
         stored_prop_uri = (
             str(data_prop.get("uri", "")) if isinstance(data_prop, dict) else ""
         )
-        prop_uri = (
-            URIRef(stored_prop_uri)
-            if stored_prop_uri.startswith(("http://", "https://"))
-            else URIRef(self.base_uri + prop_name)
-        )
+        prop_uri = self._effective_uri(prop_name, stored_prop_uri)
 
         if (prop_uri, RDF.type, OWL.DatatypeProperty) in self.graph:
             return
@@ -779,12 +809,7 @@ class OntologyGenerator:
             )
             return
 
-        stored_prop_uri = str(prop.get("uri", ""))
-        prop_uri = (
-            URIRef(stored_prop_uri)
-            if stored_prop_uri.startswith(("http://", "https://"))
-            else URIRef(self.base_uri + prop_name)
-        )
+        prop_uri = self._effective_uri(prop_name, str(prop.get("uri") or ""))
 
         if prop_type == "DatatypeProperty":
             self.graph.add((prop_uri, RDF.type, OWL.DatatypeProperty))
@@ -813,7 +838,10 @@ class OntologyGenerator:
         stored_domain_uri = str(prop.get("domain_uri") or "").strip()
         domain_ref = (
             stored_domain_uri
-            if stored_domain_uri.startswith(("http://", "https://"))
+            if (
+                stored_domain_uri.startswith(("http://", "https://"))
+                and self._local_name(stored_domain_uri) == self._local_name(domain)
+            )
             else domain
         )
         if domain_ref:
@@ -825,7 +853,10 @@ class OntologyGenerator:
         stored_range_uri = str(prop.get("range_uri") or "").strip()
         range_ref = (
             stored_range_uri
-            if stored_range_uri.startswith(("http://", "https://"))
+            if (
+                stored_range_uri.startswith(("http://", "https://"))
+                and self._local_name(stored_range_uri) == self._local_name(range_val)
+            )
             else range_val
         )
         if range_ref:
@@ -1066,10 +1097,7 @@ class OntologyGenerator:
 
             member_uris = []
             for m in member_names:
-                if m.startswith("http://") or m.startswith("https://"):
-                    member_uris.append(URIRef(m))
-                else:
-                    member_uris.append(URIRef(self.base_uri + m))
+                member_uris.append(self._resolve_uri(m))
 
             members_list = BNode()
             Collection(self.graph, members_list, member_uris)
