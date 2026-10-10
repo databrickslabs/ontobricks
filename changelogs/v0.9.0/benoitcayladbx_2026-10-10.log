@@ -1,0 +1,36 @@
+## Preserve OWL labels and language tags
+
+Context: OWL imports discarded language tags from consumed RDFS labels and
+comments, and imported ontology names ignored the ontology header label.
+Preserve this metadata through parsing and generation.
+
+Changes:
+
+1. src/back/core/w3c/owl/OntologyParser.py
+   Capture language tags for ontology, class, and property labels and comments.
+2. src/back/core/w3c/owl/OntologyGenerator.py
+   Emit language-tagged ontology, class, and property labels and comments.
+3. src/back/objects/ontology/OntologyOwl.py
+   Forward the ontology label language to the OWL generator.
+4. src/back/objects/ontology/OntologyImport.py
+   Prefer the ontology header label when resolving the imported ontology name.
+5. tests/units/ontology/test_owl_parser.py
+   Cover language-tag capture for consumed RDFS literals.
+6. tests/units/ontology/test_ontology_service.py
+   Cover ontology header label precedence during import.
+7. tests/units/ontology/test_owl_import_fidelity.py
+   Forward the parsed header label language in the issue #194 round trip.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/objects/ontology/OntologyOwl.py
+- src/back/objects/ontology/OntologyImport.py
+- tests/units/ontology/test_owl_parser.py
+- tests/units/ontology/test_ontology_service.py
+- tests/units/ontology/test_owl_import_fidelity.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7402 passed,
+326 skipped, 6 deselected, 1 xfailed, 3 expected issue #194 fidelity failures
+reserved for later tasks in 64.63s.

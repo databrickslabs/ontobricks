@@ -48,6 +48,7 @@ def _roundtrip() -> Graph:
         {
             "base_uri": info.get("namespace") or info.get("uri"),
             "name": info.get("label") or info.get("name") or "",
+            "label_lang": info.get("label_lang"),
             "classes": classes,
             "properties": properties,
             "rdf_extras": info.get("rdf_extras") or {},

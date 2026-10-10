@@ -231,8 +231,10 @@ class OntologyParser:
 
             # Get label
             label = None
+            label_lang = None
             for lbl in self.graph.objects(cls, RDFS.label):
                 label = str(lbl)
+                label_lang = getattr(lbl, "language", None)
                 break
 
             # Get synonyms (alternate labels) from the standard SKOS
@@ -244,8 +246,10 @@ class OntologyParser:
 
             # Get comment
             comment = None
+            comment_lang = None
             for cmt in self.graph.objects(cls, RDFS.comment):
                 comment = str(cmt)
+                comment_lang = getattr(cmt, "language", None)
                 break
 
             # Get emoji/icon from OntoBricks custom property
@@ -336,8 +340,10 @@ class OntologyParser:
                     "uri": uri,
                     "name": name,
                     "label": label or name,
+                    "label_lang": label_lang,
                     "alternate_labels": alternate_labels,
                     "comment": comment or "",
+                    "comment_lang": comment_lang,
                     "emoji": emoji or "",
                     "parent": parent or "",
                     "group": group,
@@ -531,14 +537,18 @@ class OntologyParser:
 
                 # Get label
                 label = None
+                label_lang = None
                 for lbl in self.graph.objects(prop, RDFS.label):
                     label = str(lbl)
+                    label_lang = getattr(lbl, "language", None)
                     break
 
                 # Get comment
                 comment = None
+                comment_lang = None
                 for cmt in self.graph.objects(prop, RDFS.comment):
                     comment = str(cmt)
+                    comment_lang = getattr(cmt, "language", None)
                     break
 
                 # Get domain - extract local name
@@ -558,7 +568,9 @@ class OntologyParser:
                         "uri": uri,
                         "name": name,
                         "label": label or name,
+                        "label_lang": label_lang,
                         "comment": comment or "",
+                        "comment_lang": comment_lang,
                         "type": prop_type,
                         "domain": domain or "",
                         "range": range_val or "",
@@ -579,14 +591,18 @@ class OntologyParser:
 
             # Get label
             label = None
+            label_lang = None
             for lbl in self.graph.objects(onto, RDFS.label):
                 label = str(lbl)
+                label_lang = getattr(lbl, "language", None)
                 break
 
             # Get comment
             comment = None
+            comment_lang = None
             for cmt in self.graph.objects(onto, RDFS.comment):
                 comment = str(cmt)
+                comment_lang = getattr(cmt, "language", None)
                 break
 
             # Determine namespace (add # if not present)
@@ -597,7 +613,9 @@ class OntologyParser:
             return {
                 "uri": uri,
                 "label": label or self._extract_local_name(uri) or "Ontology",
+                "label_lang": label_lang,
                 "comment": comment or "",
+                "comment_lang": comment_lang,
                 "namespace": namespace,
             }
 
@@ -608,7 +626,9 @@ class OntologyParser:
         return {
             "uri": DEFAULT_BASE_URI,
             "label": "Unknown Ontology",
+            "label_lang": None,
             "comment": "",
+            "comment_lang": None,
             "namespace": DEFAULT_BASE_URI,
         }
 

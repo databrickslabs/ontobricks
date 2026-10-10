@@ -6,6 +6,7 @@ import pytest
 
 from back.core.errors import NotFoundError, ValidationError
 from back.objects.ontology import Ontology
+from back.objects.ontology.OntologyImport import OntologyImport
 
 
 class TestEnsureUris:
@@ -286,6 +287,29 @@ class TestParseOwl:
 """
         result = Ontology.parse_owl(owl, extract_advanced=False)
         assert len(result) == 3
+
+
+class TestApplyParsedOwl:
+    def test_uses_header_label_as_imported_ontology_name(self):
+        class StubDomain:
+            def __init__(self):
+                self.info = {"name": "Existing Domain"}
+                self.ontology = {}
+
+            def save(self) -> None:
+                pass
+
+        domain = StubDomain()
+        OntologyImport(domain).apply_parsed_owl_to_domain(
+            {"label": "Test Ontology", "uri": "http://example.org/onto"},
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
+
+        assert domain.ontology["name"] == "Test Ontology"
 
 
 class TestNormalizePropertyDomainRange:

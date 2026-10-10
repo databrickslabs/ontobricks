@@ -69,6 +69,7 @@ class OntologyOwl:
             ontology_name=data.get("name", "MyOntology"),
             classes=data.get("classes", []),
             properties=data.get("properties", []),
+            label_lang=data.get("label_lang"),
             constraints=constraints,
             swrl_rules=swrl_rules,
             axioms=axioms,

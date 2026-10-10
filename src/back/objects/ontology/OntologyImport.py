@@ -698,11 +698,12 @@ class OntologyImport:
         name_fallback_to_domain: bool = True,
     ) -> str:
         """Write parse result into self._domain.ontology and save. Returns resolved ontology name."""
+        file_name = ontology_info.get("label") or ontology_info.get("name") or ""
         if name_fallback_to_domain:
             default_name = self._domain.info.get("name", "")
-            resolved_name = ontology_info.get("name", "") or default_name
+            resolved_name = file_name or default_name
         else:
-            resolved_name = ontology_info.get("name", "")
+            resolved_name = file_name
 
         self._domain.ontology.update(
             {

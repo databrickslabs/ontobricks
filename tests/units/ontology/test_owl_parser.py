@@ -259,6 +259,34 @@ class TestGetOntologyInfo:
         assert info["label"] == "TestOntology"
         assert info["comment"] == "A test ontology"
 
+    def test_consumed_literals_keep_language_tags(self):
+        ttl = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://example.org/onto#> .
+<http://example.org/onto> a owl:Ontology ;
+    rdfs:label "Test Ontology"@en ;
+    rdfs:comment "Ontologie de test"@fr .
+:Customer a owl:Class ;
+    rdfs:label "Customer"@en ;
+    rdfs:comment "Client"@fr .
+:hasCustomer a owl:ObjectProperty ;
+    rdfs:label "has customer"@en ;
+    rdfs:comment "Relie un client"@fr .
+"""
+        parser = OntologyParser(ttl)
+        info = parser.get_ontology_info()
+        assert info["label"] == "Test Ontology"
+        assert info["label_lang"] == "en"
+        assert info["comment_lang"] == "fr"
+
+        ontology_class = parser.get_classes()[0]
+        assert ontology_class["label_lang"] == "en"
+        assert ontology_class["comment_lang"] == "fr"
+
+        ontology_property = parser.get_properties()[0]
+        assert ontology_property["label_lang"] == "en"
+        assert ontology_property["comment_lang"] == "fr"
+
     def test_namespace_has_separator(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         info = parser.get_ontology_info()

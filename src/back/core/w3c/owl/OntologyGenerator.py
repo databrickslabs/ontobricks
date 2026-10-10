@@ -27,6 +27,7 @@ class OntologyGenerator:
         axioms: List[Dict] = None,
         expressions: List[Dict] = None,
         groups: List[Dict] = None,
+        label_lang: str = None,
     ):
         """Initialize the OWL generator.
 
@@ -40,9 +41,11 @@ class OntologyGenerator:
             axioms: List of OWL axioms (logical assertions)
             expressions: List of OWL class expressions (unionOf, intersectionOf, etc.)
             groups: List of entity group definitions (name, label, color, icon, members)
+            label_lang: Optional language tag for the ontology label
         """
         self.base_uri = base_uri.rstrip("#") + "#"
         self.ontology_name = ontology_name
+        self.label_lang = label_lang
         self.classes = classes or []
         self.properties = properties or []
         self.constraints = constraints or []
@@ -82,7 +85,13 @@ class OntologyGenerator:
         self.graph.add((ontology_uri, RDF.type, OWL.Ontology))
 
         if self.ontology_name:
-            self.graph.add((ontology_uri, RDFS.label, Literal(self.ontology_name)))
+            self.graph.add(
+                (
+                    ontology_uri,
+                    RDFS.label,
+                    Literal(self.ontology_name, lang=self.label_lang or None),
+                )
+            )
 
         # Add classes and their data properties (attributes)
         for cls in self.classes:
@@ -515,7 +524,8 @@ class OntologyGenerator:
         # Add label
         label = cls.get("label", class_name)
         if label:
-            self.graph.add((class_uri, RDFS.label, Literal(label)))
+            lang = cls.get("label_lang") or None
+            self.graph.add((class_uri, RDFS.label, Literal(label, lang=lang)))
 
         # Add synonyms (alternate labels) as first-class ontology data,
         # using the standard SKOS altLabel vocabulary (design:
@@ -529,7 +539,8 @@ class OntologyGenerator:
         # Add comment/description
         comment = cls.get("comment", "") or cls.get("description", "")
         if comment:
-            self.graph.add((class_uri, RDFS.comment, Literal(comment)))
+            lang = cls.get("comment_lang") or None
+            self.graph.add((class_uri, RDFS.comment, Literal(comment, lang=lang)))
 
         # Add emoji/icon using custom OntoBricks property
         emoji = cls.get("emoji", "")
@@ -755,12 +766,14 @@ class OntologyGenerator:
         # Add label
         label = prop.get("label", prop_name)
         if label:
-            self.graph.add((prop_uri, RDFS.label, Literal(label)))
+            lang = prop.get("label_lang") or None
+            self.graph.add((prop_uri, RDFS.label, Literal(label, lang=lang)))
 
         # Add comment
         comment = prop.get("comment", "")
         if comment:
-            self.graph.add((prop_uri, RDFS.comment, Literal(comment)))
+            lang = prop.get("comment_lang") or None
+            self.graph.add((prop_uri, RDFS.comment, Literal(comment, lang=lang)))
 
         # Add direction as custom property
         direction = prop.get("direction", "forward")
