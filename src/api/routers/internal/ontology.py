@@ -797,10 +797,12 @@ async def cleanup_shapes(session_mgr: SessionManager = Depends(get_session_manag
 async def suggest_shapes(session_mgr: SessionManager = Depends(get_session_manager)):
     """Auto-suggest SHACL shapes from current ontology (read-only, not persisted).
 
-    Introspects OWL classes and properties to produce:
-    - completeness rules (sh:minCount 1) for every declared data property
-    - datatype constraints (sh:datatype) from OWL range declarations
-    - relationship constraints (sh:class) from ObjectProperty domain/range
+    Introspects OWL classes, properties and ``domain.constraints`` to produce:
+    - completeness (sh:minCount) for class-listed data properties and OWL
+      minCardinality / cardinality / someValuesFrom restrictions
+    - cardinality (sh:maxCount) from owl:FunctionalProperty and max/exact cardinality
+    - uniqueness (sh:sparql) from owl:InverseFunctionalProperty
+    - datatype (sh:datatype) and relationship (sh:class) from property ranges
 
     Filters out any suggestion whose id already exists in domain.shacl_shapes.
     """
@@ -808,9 +810,12 @@ async def suggest_shapes(session_mgr: SessionManager = Depends(get_session_manag
         domain = get_domain(session_mgr)
         classes = domain.get_classes()
         properties = domain.get_properties()
+        constraints = domain.constraints
         base_uri = domain.ontology.get("base_uri", "")
         existing_ids = {s.get("id") for s in domain.shacl_shapes}
-        all_suggestions = SHACLService.suggest_from_ontology(classes, properties, base_uri)
+        all_suggestions = SHACLService.suggest_from_ontology(
+            classes, properties, base_uri, constraints=constraints
+        )
         new_suggestions = [s for s in all_suggestions if s.get("id") not in existing_ids]
         return {
             "success": True,
