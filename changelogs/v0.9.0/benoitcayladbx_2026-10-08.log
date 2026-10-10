@@ -1,0 +1,18 @@
+## Save digital-twin ECA design spec
+
+Context: Product direction to treat OntoBricks as an event–condition–action
+digital twin on Lakehouse zero-copy (view materialization), with a later
+streaming evaluator on source Delta CDF. Design agreed in planning; no
+runtime code in this change.
+
+Changes:
+
+1. docs/superpowers/specs/2026-10-08-digital-twin-eca-design.md
+   Persist the ECA twin design (sensors as UC mappings, two-clock ingest vs
+   ECA, ActionDispatcher, TwinAlert always on, phased batch then CDF).
+
+Modified files:
+- docs/superpowers/specs/2026-10-08-digital-twin-eca-design.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-08.log
+
+Tests: not run (design spec only; no application code).
