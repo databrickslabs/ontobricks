@@ -2,6 +2,24 @@
 
 The OntoBricks REST API provides stateless endpoints for external applications to query ontologies and retrieve domain metadata.
 
+<!-- toc -->
+**Contents**
+
+- [Base URL](#base-url)
+- [Interactive references](#interactive-references)
+- [Authentication](#authentication)
+- [CSRF Protection](#csrf-protection)
+- [Response Format](#response-format)
+- [Endpoints](#endpoints)
+- [GraphQL API](#graphql-api)
+- [Knowledge Graph API](#knowledge-graph-api)
+- [Example Usage](#example-usage)
+- [Error Codes](#error-codes)
+- [Notes](#notes)
+- [Internal REST API reference (merged)](#internal-rest-api-reference-merged)
+- [OntoBricks API Reference](#ontobricks-api-reference)
+<!-- /toc -->
+
 ## Base URL
 
 ```

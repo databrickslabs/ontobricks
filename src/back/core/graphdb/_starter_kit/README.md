@@ -27,7 +27,7 @@ to OntoBricks.
    needs (e.g. `host`, `port`, `credentials_path`) and document them.  For
    engines that need no configuration, an empty `{}` is fine.
 
-6. **Follow the remaining steps** in `docs/graphdb-integration.md` (register
+6. **Follow the remaining steps** in the Engine integration section of `docs/backend.md` (register
    in factory, add to allowed engines, update UI, add tests).
 
 ## Files

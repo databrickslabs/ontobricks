@@ -1,6 +1,7 @@
 # PR Review Checklist
 
-Standalone reviewer reference. Cross-linked from `.claude/skills/code-review/SKILL.md` and `.github/PULL_REQUEST_TEMPLATE.md`.
+Standalone reviewer reference (not product documentation). Cross-linked from
+`.github/PULL_REQUEST_TEMPLATE.md`.
 
 Reviewers should walk the items in order. Items 1–10 are hard gates; CI enforces most but a reviewer's job is to catch what CI misses (intent, naming, taste).
 

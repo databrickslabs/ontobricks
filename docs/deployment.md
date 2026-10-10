@@ -1,5 +1,27 @@
 # OntoBricks Deployment Guide
 
+<!-- toc -->
+**Contents**
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [1. Local Development Setup](#1-local-development-setup)
+- [2. Databricks Apps Deployment (DAB)](#2-databricks-apps-deployment-dab)
+- [3. Unity Catalog Permissions for the Service Principal](#3-unity-catalog-permissions-for-the-service-principal)
+- [4. Permission Management](#4-permission-management)
+- [5. Deploying to a New Workspace](#5-deploying-to-a-new-workspace)
+- [6. Triple Store & Graph DB Backend Configuration](#6-triple-store--graph-db-backend-configuration)
+- [7. MCP Server Deployment (Databricks Playground)](#7-mcp-server-deployment-databricks-playground)
+- [8. MLflow Agent Observability](#8-mlflow-agent-observability)
+- [9. DAB Reference](#9-dab-reference)
+- [10. Full Deployment Checklist](#10-full-deployment-checklist)
+- [11. Troubleshooting](#11-troubleshooting)
+- [12. Production Considerations](#12-production-considerations)
+- [Deployment checklist](#deployment-checklist)
+- [Asset Bundle reference](#asset-bundle-reference)
+- [Production sizing questionnaire](#production-sizing-questionnaire)
+<!-- /toc -->
+
 ## Overview
 
 This guide covers deploying OntoBricks both locally for development and to Databricks Apps for production use, including the optional MCP server for Databricks Playground integration and instructions for deploying to a new workspace.
@@ -500,7 +522,7 @@ Edit the workspace-specific defaults in `scripts/deploy.config.sh`:
 | `DEFAULT_INSTANCE_ID` | Derives `APP_NAME` / `MCP_APP_NAME` / `DAB_TARGET` | Single knob for a deploy instance (e.g. `07x` → `ontobricks-07x`, target `dev-lakebase-07x`). |
 | `DEFAULT_APP_NAME` | `databricks.yml > var.app_name` and `DATABRICKS_APP_NAME` at runtime | Usually derived as `ontobricks-${DEFAULT_INSTANCE_ID}`; override only if you must. |
 | `DEFAULT_MCP_APP_NAME` | `databricks.yml > var.mcp_app_name` | Deployed name of the MCP companion (must start with `mcp-`). |
-| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | Auto: `dev-lakebase-<INSTANCE_ID>`. Force `dev-lakebase` only when upgrading a **pre-INSTANCE_ID** (0.6.x) deploy in place — see Upgrade Notes in `releases/ReleaseNotes_V0.7.0.md` and `docs/DEPLOY_CHECKLIST.md` §5. |
+| `DEFAULT_DAB_TARGET` | `databricks bundle deploy -t <target>` | Auto: `dev-lakebase-<INSTANCE_ID>`. Force `dev-lakebase` only when upgrading a **pre-INSTANCE_ID** (0.6.x) deploy in place — see Upgrade Notes in `releases/ReleaseNotes_V0.7.0.md` and [In-place app upgrade](#5-in-place-app-upgrade-06x--070) in the deployment checklist below. |
 | `DEFAULT_WAREHOUSE_ID` | `app.yaml > DATABRICKS_SQL_WAREHOUSE_ID_DEFAULT` + the `sql-warehouse` bundle resource | **SQL Warehouses** → your warehouse → **Connection details**. |
 | `DEFAULT_REGISTRY_CATALOG` / `_SCHEMA` / `_VOLUME` | Bundle `volume` resource (`uc_securable: <cat>.<schema>.<volume>`) | UC namespace that hosts the binary-artefact volume + the triplestore VIEW. |
 | `DEFAULT_LAKEBASE_PROJECT` | `databricks.yml > var.lakebase_project` | Autoscaling **project id** (final segment of `projects/<id>`). |
@@ -1787,3 +1809,593 @@ git pull origin main
 scripts/deploy.sh -t dev-lakebase
 databricks bundle run mcp_ontobricks_app -t dev-lakebase
 ```
+
+---
+
+## Deployment checklist
+
+Operator preflight for a first deploy or a new workspace. Automate most checks
+with:
+
+```bash
+make deploy-check
+# or, equivalently:
+scripts/_internal/check-deploy-prerequisites.sh
+scripts/deploy.sh --dry-run
+```
+
+---
+
+### 1. Local workstation
+
+| Requirement | Why | How to verify |
+|-------------|-----|---------------|
+| **Python ≥ 3.10** | App + tooling | `python3 --version` |
+| **uv** | Dependency install (`make install`, `make setup`) | `uv --version` (setup.sh installs it if missing) |
+| **Databricks CLI ≥ 0.250.0** | Bundle deploy, bootstrap scripts | `databricks version` |
+| **python3** | JSON parsing, app.yaml render | `python3 --version` |
+| **psql** (libpq client) | `bootstrap-lakebase-perms.sh`, SQL upgrade scripts | `psql --version` — macOS: `brew install libpq && brew link --force libpq` |
+| **curl** | `setup-lakebase.sh` provisioning API calls | `curl --version` |
+| **Git clone + venv** | Project source | `make setup` or `make install` |
+
+Local-only check:
+
+```bash
+scripts/_internal/check-deploy-prerequisites.sh --local
+```
+
+---
+
+### 2. Databricks CLI authentication
+
+| Requirement | Why | How to verify |
+|-------------|-----|---------------|
+| **Authenticated profile** | Every deploy / bootstrap step | `databricks current-user me` |
+| **Correct workspace profile** | Avoid granting on the wrong project | Set `DEFAULT_DATABRICKS_PROFILE` inferences in `scripts/deploy.config.sh` |
+
+```bash
+databricks auth login --host https://<workspace> --profile <profile>
+```
+
+---
+
+### 3. Workspace resources (created if missing on `make deploy`)
+
+Configure in `scripts/deploy.config.sh` (single source of truth).
+`make deploy` on a Lakebase target creates missing catalog, schema,
+Lakebase project/database, and initializes the Postgres registry schema.
+
+| Resource | Config variable(s) | Permission you need |
+|----------|------------------|---------------------|
+| **SQL warehouse** | `DEFAULT_WAREHOUSE_ID` (empty → workspace Serverless Starter Warehouse) | CAN USE |
+| **Unity Catalog catalog** | `DEFAULT_REGISTRY_CATALOG` | USE CATALOG, CREATE CATALOG (first time) |
+| **UC schema** | `DEFAULT_REGISTRY_SCHEMA` | CREATE SCHEMA on the catalog (first time) |
+| **Lakebase project** | `DEFAULT_LAKEBASE_PROJECT` | CAN USE; `setup-lakebase.sh` is invoked by `make deploy` when missing |
+| **Lakebase branch** | `DEFAULT_LAKEBASE_BRANCH` | Usually `production` |
+| **Postgres database (datname)** | `DEFAULT_LAKEBASE_DATABASE` | Created by `setup-lakebase.sh` — use `status.postgres_database` from `list-databases`, **not** the hyphenated `db-…` id |
+| **Postgres registry schema** | `DEFAULT_LAKEBASE_SCHEMA` | Created by `make deploy` (`LakebaseRegistryStore.initialize()`) |
+| **Databricks Apps (sandbox)** | `DEFAULT_APP_NAME`, `DEFAULT_MCP_APP_NAME` | Created by `make deploy` on first run |
+
+Verify resources:
+
+```bash
+databricks warehouses get <WAREHOUSE_ID>
+databricks postgres list-databases "projects/<project>/branches/<branch>" -o json
+```
+
+---
+
+### 4. Lakebase bootstrap (`bootstrap-lakebase-perms.sh`)
+
+Run automatically on every `dev-lakebase` deploy (`make deploy`), or manually:
+
+```bash
+make bootstrap-lakebase
+```
+
+| Requirement | Why |
+|-------------|-----|
+| **psql on PATH** | Connects with a minted Lakebase JWT |
+| **CLI authenticated as schema owner** (or GRANT OPTION) | Applies GRANTs + idempotent DDL migrations |
+| **Active Postgres endpoint** | Project/branch must expose a host via `/api/2.0/postgres/.../endpoints` |
+| **Registry schema exists** | `make deploy` creates it. CAN_USE + `pgcrypto` are applied even before tables exist; schema GRANTs need the schema |
+| **Apps deployed** | Service principal ids are resolved from existing apps (warn-only on first deploy) |
+| **`pgcrypto` in `public`** | Companion `__app` tables need `digest(..., 'sha256')`. Step 1b installs it **in `public`** and relocates a stranded copy — an extension sitting in a graph schema is invisible once that schema changes. Applies **per database**, so the graph DB needs it too |
+
+Preflight (read-only):
+
+```bash
+scripts/_internal/check-deploy-prerequisites.sh --lakebase
+```
+
+---
+
+### 5. In-place app upgrade (0.6.x → 0.7.0)
+
+v0.7.0 derives app name + DAB target from `DEFAULT_INSTANCE_ID`
+(`ontobricks-<id>`, `dev-lakebase-<id>`). Changing the app name under the **same**
+Terraform state is a destroy-then-create (Databricks app names are immutable).
+Deploy preflight blocks that unless you confirm.
+
+| Goal | What to set | Result |
+|------|-------------|--------|
+| **Refresh the live 0.6.x app** | `DEFAULT_INSTANCE_ID=<suffix of live app>` (e.g. `060` for `ontobricks-060`) **and** `DAB_TARGET=dev-lakebase` (or `DEFAULT_DAB_TARGET="dev-lakebase"` in `deploy.config.sh`) | Same app URL; existing unsuffixed state updated |
+| **New parallel instance** | New `DEFAULT_INSTANCE_ID` only (default `07x`) | New app + new `dev-lakebase-<id>` state; old app left running |
+| **Rename under same target** | Different app name, same `DAB_TARGET` | **Destroys** the old app — confirm via preflight / `ALLOW_APP_RENAME=1` |
+
+In-place example:
+
+```bash
+DEFAULT_INSTANCE_ID=060 DAB_TARGET=dev-lakebase make deploy
+```
+
+Keep Lakebase / UC variables pointed at the same registry. Then apply registry
+DDL (§6) if you have not already via `make bootstrap-lakebase`.
+
+Full narrative: `releases/ReleaseNotes_V0.7.0.md` → Upgrade Notes → *Keep the
+existing Databricks app*.
+
+---
+
+### 6. Registry DB upgrades (0.4 → 0.5 → 0.6 → 0.7 → 0.8)
+
+For **in-place upgrades** of an existing Lakebase registry, schema DDL must be applied **as the schema owner**. OntoBricks applies the same objects in four ways (pick one):
+
+1. **`make bootstrap-lakebase`** / `scripts/bootstrap/lakebase-perms.sh` (recommended — idempotent Step 2b; runs automatically from `make deploy`)
+2. **`scripts/migrations/upgrade_0.4_to_0.5.sql`** — adds `domain_versions.status` + backfill from `mcp_enabled`
+3. **`scripts/migrations/upgrade_0.5_to_0.6.sql`** — collaborative tables, graph analytics, edit locks, change events
+4. **`scripts/migrations/upgrade_0.6_to_0.7.sql`** — generic scheduled-task columns on `schedules` / `schedule_runs` + unique-constraint swap
+5. **`scripts/migrations/upgrade_0.7_to_0.8.sql`** — `domains.mcp_policy` (per-domain MCP tool + context policy). No backfill: the `{}` default reproduces pre-0.8 behaviour
+
+Preflight reports **pending** or **stale** migration objects before deploy:
+
+```bash
+python3 scripts/_internal/_lakebase_preflight.py \
+  --project "$LAKEBASE_PROJECT" \
+  --branch "$LAKEBASE_BRANCH" \
+  --database "$LAKEBASE_DATABASE" \
+  --schema "$LAKEBASE_SCHEMA"
+```
+
+Manual upgrade example (0.7 → 0.8):
+
+```bash
+psql "host=<endpoint> dbname=<datname> sslmode=require user=<you>" \
+  -v reg_schema=<schema> \
+  -f scripts/migrations/upgrade_0.7_to_0.8.sql
+```
+
+---
+
+### 7. App permission bootstrap (`bootstrap-app-permissions.sh`)
+
+Run automatically after deploy, or manually:
+
+```bash
+make bootstrap-perms
+```
+
+| Requirement | Why |
+|-------------|-----|
+| **Apps exist** | Resolves each app's service principal |
+| **CAN_MANAGE on both apps** | Your user must grant CAN_MANAGE to each app's own SP |
+| **CAN_MANAGE_RUN on graph-analytics job** | App SP must list/trigger `${app_name}-graph-analytics` (ACL-filtered `jobs.list`) |
+| **UC schema ALL_PRIVILEGES** | SPs need CREATE OR REPLACE on registry objects |
+
+---
+
+### 8. Deploy workflow (happy path)
+
+```text
+[ ] Edit scripts/deploy.config.sh (DEFAULT_INSTANCE_ID, Lakebase coords, warehouse, UC;
+    for a pre-0.7 in-place upgrade also set DEFAULT_DAB_TARGET=dev-lakebase — see §5)
+[ ] scripts/_internal/check-deploy-prerequisites.sh          # or make deploy-check
+[ ] make deploy-dry-run                            # read-only full orchestrator check
+[ ] make deploy                                    # deploy + create-if-missing registry + bootstrap
+[ ] Databricks Apps UI: bind sql-warehouse, postgres (first time only)
+[ ] App UI: Settings → Registry → Initialize     # upgrade/repair only, not first install
+[ ] make bootstrap-lakebase                          # if grants need a refresh
+[ ] App UI: Settings → Graph DB → Create graph DB  # grants graph schema separately
+```
+
+---
+
+### 9. Optional / mode-specific
+
+| Item | When needed |
+|------|-------------|
+| **`uv sync --frozen --extra pitfalls`** | ML-based pitfalls detection panel |
+| **`managed_synced` graph mode** | UC catalog ALL_PRIVILEGES (`-c` / `UC_CATALOG` on bootstrap script) |
+| **Lakebase via UI “New project”** | **Avoid** for Synced Tables — use `scripts/bootstrap/setup-lakebase.sh` instead |
+| **Volume-only backend** | Deploy with `make deploy-volume` (`-t dev`) — skips Lakebase checks |
+
+---
+
+### Quick reference — scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/_internal/check-deploy-prerequisites.sh` | Read-only preflight (this checklist, automated) |
+| `scripts/deploy.sh --dry-run` | Full DAB validate + resource checks, no mutations |
+| `scripts/bootstrap/setup-lakebase.sh` | Create Synced-Tables-compatible Lakebase project |
+| `scripts/bootstrap/lakebase-perms.sh` | CAN_USE + schema GRANTs + registry migrations |
+| `scripts/bootstrap/app-permissions.sh` | App SP self-perms + MCP CAN_USE + UC schema grants |
+| `scripts/migrations/upgrade_0.4_to_0.5.sql` | Explicit 0.4→0.5 lifecycle migration |
+| `scripts/migrations/upgrade_0.5_to_0.6.sql` | Explicit 0.5→0.6 collaborative / analytics migration |
+| `scripts/migrations/upgrade_0.6_to_0.7.sql` | Explicit 0.6→0.7 generic scheduled-task migration |
+| `scripts/migrations/upgrade_0.7_to_0.8.sql` | Explicit 0.7→0.8 per-domain MCP policy migration |
+
+---
+
+## Asset Bundle reference
+
+The bundle configuration lives at the project root (`databricks.yml`) as required by the Databricks CLI.
+
+See also: [Databricks Asset Bundles docs](https://docs.databricks.com/dev-tools/bundles/)
+
+### What Gets Deployed
+
+| App | Bundle Key | Name | Description |
+|-----|------------|------|-------------|
+| **OntoBricks** | `ontobricks_app` | `ontobricks` | Main FastAPI application — ontology editor, mapping, Knowledge Graph builder |
+| **MCP Server** | `mcp_ontobricks_app` | `mcp-ontobricks` | Model Context Protocol companion — exposes knowledge-graph tools to the Databricks Playground |
+
+### Quick Start
+
+```bash
+# From the project root:
+
+# 1. Validate
+databricks bundle validate
+
+# 2. Deploy both apps (configured Lakebase target)
+make deploy
+
+# Or deploy/run explicitly:
+databricks bundle deploy -t <DAB_TARGET>
+databricks bundle run ontobricks_dev_app -t <DAB_TARGET>
+databricks bundle run mcp_ontobricks_app -t <DAB_TARGET>
+
+# DAB_TARGET normally comes from scripts/deploy.config.sh.
+```
+
+### Convenience Script (`scripts/deploy.sh`)
+
+```bash
+scripts/deploy.sh                  # validate + deploy + run both apps
+scripts/deploy.sh -t dev           # explicit Volume-only target
+scripts/deploy.sh -t dev-lakebase  # legacy unsuffixed Lakebase target
+scripts/deploy.sh --no-run         # deploy without starting either app
+scripts/deploy.sh --bind           # bind existing apps during deployment
+scripts/deploy.sh --dry-run        # preflight and validate without changes
+```
+
+### Targets
+
+| Target | Mode | Description |
+|--------|------|-------------|
+| `dev` | development | Volume-only registry backend. |
+| `dev-lakebase` | development | Legacy unsuffixed Lakebase target. |
+| `dev-lakebase-<INSTANCE_ID>` | development | Generated per-instance Lakebase target used by `make deploy`. |
+
+### Variables
+
+Override defaults with `--var` flags or in a target-specific `variables:` block:
+
+| Variable | Description |
+|----------|-------------|
+| `app_name` / `mcp_app_name` | Main and MCP Databricks App names |
+| `warehouse_id` | SQL Warehouse bound to both apps |
+| `registry_catalog` / `registry_schema` / `registry_volume` | Unity Catalog registry Volume |
+| `lakebase_project` / `lakebase_branch` / `lakebase_database_resource_segment` | Lakebase Autoscaling binding |
+| `lakebase_registry_schema` | Postgres schema used by the registry |
+
+```bash
+databricks bundle deploy --var warehouse_id=abc123def456
+```
+
+### Binding Existing Apps
+
+If the apps already exist from a previous manual deployment:
+
+```bash
+databricks bundle deployment bind ontobricks_app ontobricks
+databricks bundle deployment bind mcp_ontobricks_app mcp-ontobricks
+databricks bundle deploy
+```
+
+### Post-Deploy Steps (First Time Only)
+
+1. **Bind resources** — In the Databricks Apps UI, bind `sql-warehouse` (and postgres on Lakebase targets) for both apps
+2. **Registry** — `make deploy` initializes the registry. Use Settings > Registry > Initialize only for upgrade/repair.
+3. **Set MCP URL** — Update `ONTOBRICKS_URL` in `src/mcp-server/app.yaml` with the main app URL
+
+Resource bindings persist across redeployments.
+
+### File Sync
+
+DAB sync = git-tracked files − `.gitignore` + `sync.include` − `sync.exclude`
+in `databricks.yml`. `.databricksignore` is a human/test mirror only.
+
+**Shipped:** `src/` (including MCP + `src/jobs/`), `run.py`, `app.yaml`,
+lockfiles, `LICENSE.txt` / `NOTICE.txt`, and the Help Center set
+(`docs/*.md` catalogued in `help.py`, plus `docs/images/` and
+`docs/screenshots/`).
+
+**Not shipped:** tests, CI, scripts, changelogs, `.github/`, `.planning/`,
+third-party `licenses/`, Sphinx/demo docs, DAB YAML under `resources/`.
+
+Do not exclude `README.md` or `/README.md`: CLI 0.298 applies both recursively
+and drops Help Center Overview (`docs/README.md`). Both README files ship.
+
+Do not exclude `src/mcp-server/`; both apps share one files tree. Keep both
+`app.yaml.template` files too: this CLI matches an anchored root-template
+exclude recursively, and the deploy guard requires the MCP template.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `databricks.yml` | Bundle definition — apps, permissions, targets, **sync.exclude** |
+| `app.yaml` | Main app runtime config (command, env vars, resources) |
+| `src/mcp-server/app.yaml` | MCP server runtime config |
+| `.databricksignore` | Mirror of `sync.exclude` (CLI does not read it) |
+| `scripts/deploy.sh` | Convenience wrapper around DAB commands |
+
+---
+
+## Production sizing questionnaire
+
+Use this questionnaire to collect the information needed to size a production
+OntoBricks deployment on Databricks. Complete all **Required** fields. Complete
+the **Optional** fields when the information is available; otherwise, state
+`Unknown`.
+
+This questionnaire gathers workload characteristics. It does not constitute a
+price quote or capacity commitment. The resulting estimate should document all
+assumptions and include expected growth.
+
+### 1. Customer and Databricks Environment
+
+- **Required — Customer or project name:** ______________________________
+- **Required — Target go-live date:** ______________________________
+- **Required — Cloud provider:** [ ] AWS  [ ] Azure  [ ] GCP
+- **Required — Databricks region:** ______________________________
+- **Required — Databricks platform tier:** ______________________________
+- **Required — Unity Catalog enabled:** [ ] Yes  [ ] No
+- **Required — Databricks Apps enabled:** [ ] Yes  [ ] No  [ ] To confirm
+- **Required — Lakebase Autoscaling available in the target region:**
+  [ ] Yes  [ ] No  [ ] To confirm
+- **Optional — Compliance requirements:** [ ] None  [ ] HIPAA  [ ] PCI
+  [ ] Other: ______________________________
+- **Optional — Enhanced Security and Compliance add-on required:**
+  [ ] Yes  [ ] No  [ ] To confirm
+
+### 2. Users and Concurrency
+
+- **Required — Total named OntoBricks users:** ______________________________
+- **Required — Expected concurrent users at peak:** __________________________
+- **Required — User distribution:**
+  - Viewers: ______________________________
+  - Ontology editors: ______________________________
+  - Graph builders or operators: ______________________________
+  - Administrators: ______________________________
+- **Required — Typical production usage window:** ______ hours/day,
+  ______ days/week
+- **Optional — Expected concurrent API or MCP clients:** _____________________
+- **Optional — Expected annual user growth:** ______________________________ %
+
+### 3. Source Data
+
+Repeat this section for each materially different source or workload.
+
+#### Source or workload: ______________________________
+
+- **Required — Source type:** [ ] Unity Catalog table/view  [ ] File
+  [ ] External database  [ ] SaaS application  [ ] Other: ________________
+- **Required — Current data volume:** __________________ [ ] GB  [ ] TB
+- **Required — Number of tables or views:** ______________________________
+- **Required — Total row count:** ______________________________
+- **Required — Daily data change:** __________________ [ ] GB  [ ] TB
+  [ ] rows
+- **Required — Update pattern:** [ ] Full refresh  [ ] Incremental
+  [ ] Change Data Capture  [ ] Append-only
+- **Required — Refresh frequency:** ______________________________
+- **Optional — Largest table:** __________________ [ ] GB  [ ] TB;
+  __________________ rows
+- **Optional — Average row width, if known:** __________________ bytes
+- **Optional — Data retention period:** ______________________________
+- **Optional — Existing ingestion service:** ______________________________
+
+Add another copy of this subsection for each additional source or workload.
+
+### 4. Ontology and Mapping Complexity
+
+- **Required — Number of business domains:** ______________________________
+- **Required — Number of production ontology versions retained per domain:**
+  `______________________________`
+- **Required — Estimated ontology size per domain:**
+  - Entity or class types: ______________________________
+  - Relationship types: ______________________________
+  - Attributes or properties: ______________________________
+- **Required — Estimated number of source-to-ontology mappings:**
+  `______________________________`
+- **Required — Typical mapping complexity:** [ ] Simple column mapping
+  [ ] Joins across tables  [ ] Complex SQL transformations  [ ] Mixed
+- **Optional — Maximum tables joined by one mapping:** _______________________
+- **Optional — Reasoning features used:** [ ] None  [ ] OWL 2 RL
+  [ ] SWRL rules  [ ] SHACL validation
+- **Optional — Estimated number of SWRL rules:** ____________________________
+- **Optional — Estimated number of SHACL shapes:** __________________________
+- **Optional — Documents or binary artifacts stored per domain:**
+  __________________ [ ] GB  [ ] TB
+
+### 5. Knowledge Graph Builds
+
+- **Required — Number of graph builds per day:** ____________________________
+- **Required — Build schedule:** [ ] On demand  [ ] Scheduled  [ ] Both
+- **Required — Maximum simultaneous builds:** ______________________________
+- **Required — Expected triples generated by a full build:**
+  __________________ [ ] million  [ ] billion  [ ] Unknown
+- **Required — Maximum acceptable full-build duration:** _____________________
+- **Required — Build mode:** [ ] Full rebuild  [ ] Incremental
+  [ ] Both  [ ] To confirm
+- **Optional — Expected triples changed per incremental build:**
+  __________________ [ ] million  [ ] billion
+- **Optional — Largest expected graph:** __________________ [ ] million
+  [ ] billion triples
+- **Optional — Reasoning or validation executed during each build:**
+  [ ] None  [ ] OWL 2 RL  [ ] SWRL  [ ] SHACL
+- **Optional — Build-time availability requirement:** [ ] Queries may pause
+  [ ] Existing graph must remain queryable
+
+If triple counts are unknown, provide representative source row counts and the
+expected number of entities, relationships, and attributes generated per row.
+
+### 6. Graph Consumption
+
+- **Required — Consumption methods:** [ ] OntoBricks Graph Viewer
+  [ ] GraphQL API  [ ] MCP  [ ] SQL  [ ] Other: __________________________
+- **Required — Peak interactive query rate:** __________________ queries/second
+- **Required — Typical query rate:** __________________ queries/second
+- **Required — Expected peak concurrent queries:** __________________________
+- **Required — Typical query complexity:** [ ] Point lookup
+  [ ] One-hop traversal  [ ] Multi-hop traversal  [ ] Aggregation
+  [ ] Mixed
+- **Required — Maximum acceptable interactive response time:**
+  `______________________________`
+- **Optional — Typical result size:** __________________ rows or objects
+- **Optional — Maximum traversal depth:** __________________ hops
+- **Optional — Bulk exports:** ______ exports/day of approximately
+  __________________ [ ] MB  [ ] GB each
+- **Optional — API traffic growth expected during the next 12 months:**
+  __________________ %
+
+### 7. Lakebase Workload
+
+OntoBricks uses Lakebase Autoscaling for its registry and graph storage.
+
+- **Required — Estimated graph storage at go-live:** __________________
+  [ ] GB  [ ] TB  [ ] Unknown
+- **Required — Estimated graph storage after 12 months:** __________________
+  [ ] GB  [ ] TB  [ ] Unknown
+- **Required — Peak Lakebase query rate:** __________________ queries/second
+  [ ] Unknown
+- **Required — Workload balance:** ______ % reads / ______ % writes
+- **Required — Required daily availability:** __________________ hours/day
+- **Optional — Required rollback or recovery retention:**
+  __________________ days
+- **Optional — Largest expected write burst:** __________________ rows/second
+- **Optional — Known connection limit or connection-pooling constraints:**
+  `______________________________`
+
+### 8. SQL Warehouse Workload
+
+OntoBricks uses a Databricks SQL Warehouse for Unity Catalog queries and
+Delta-backed operations.
+
+- **Required — Existing SQL Warehouse available:** [ ] Yes  [ ] No
+  [ ] To be provisioned
+- **Required — Warehouse may be shared with other workloads:** [ ] Yes  [ ] No
+- **Required — Expected OntoBricks warehouse activity:**
+  ______ hours/day, ______ days/week
+- **Required — Maximum concurrent OntoBricks SQL statements:**
+  `______________________________`
+- **Required — Largest data volume scanned by one operation:**
+  __________________ [ ] GB  [ ] TB  [ ] Unknown
+- **Optional — Preferred warehouse type:** [ ] Serverless  [ ] Pro
+  [ ] Classic  [ ] No preference
+- **Optional — Existing warehouse size and scaling range:**
+  `______________________________`
+- **Optional — Auto-stop requirement:** __________________ minutes
+
+### 9. Databricks Apps and MCP
+
+A standard deployment contains the OntoBricks application and an optional MCP
+companion application.
+
+- **Required — MCP server required:** [ ] Yes  [ ] No  [ ] To confirm
+- **Required — Expected app usage:** ______ hours/day, ______ days/week
+- **Required — Peak simultaneous browser sessions:** ________________________
+- **Optional — Peak simultaneous MCP sessions:** ____________________________
+- **Optional — App compute preference:** [ ] Medium  [ ] Large
+  [ ] Let the sizing team recommend
+- **Optional — High availability or minimum replica requirement:**
+  `______________________________`
+- **Optional — External systems calling OntoBricks APIs:**
+  `______________________________`
+
+### 10. AI-Assisted Features
+
+Complete this section only if OntoBricks AI-assisted design or automation
+features will be enabled. Foundation Model API consumption must be estimated
+separately from the core Databricks compute estimate.
+
+- **Required — AI-assisted features enabled:** [ ] Yes  [ ] No
+- **If yes — Features used:** [ ] Ontology generation  [ ] Mapping generation
+  [ ] Automated assignment  [ ] Other: ______________________________
+- **If yes — Expected requests per day:** ______________________________
+- **If yes — Peak simultaneous requests:** ______________________________
+- **Optional — Typical input size:** __________________ tokens or
+  __________________ characters
+- **Optional — Typical output size:** __________________ tokens
+- **Optional — Required model or serving endpoint:** ________________________
+- **Optional — Data residency or model governance constraints:**
+  `______________________________`
+
+### 11. Service Levels, Security, and Growth
+
+- **Required — Production availability target:** ____________________________
+- **Required — Recovery time objective (RTO):** _____________________________
+- **Required — Recovery point objective (RPO):** ____________________________
+- **Required — Expected data growth over 12 months:** _____________________ %
+- **Required — Expected query growth over 12 months:** ____________________ %
+- **Required — Expected graph-build growth over 12 months:** ______________ %
+- **Optional — Network requirements:** [ ] Public workspace connectivity
+  [ ] Private Link  [ ] IP access lists  [ ] Other: ______________________
+- **Optional — Customer-managed keys required:** [ ] Yes  [ ] No
+- **Optional — Audit-log retention requirement:** ___________________________
+- **Optional — Planned traffic peaks or seasonal events:**
+  `______________________________`
+
+### 12. Representative Performance Sample
+
+When possible, provide a representative production sample or benchmark:
+
+- Source data volume: ______________________________
+- Source row count: ______________________________
+- Ontology and mapping used: ______________________________
+- Generated triple count: ______________________________
+- Full-build duration: ______________________________
+- Incremental-build duration: ______________________________
+- Peak memory or compute observed: ______________________________
+- Typical query and measured latency: ______________________________
+- Environment where the measurement was taken: ____________________________
+
+### 13. Additional Context
+
+- Current solution being replaced or complemented:
+  `______________________________`
+- Known bottlenecks or performance concerns:
+  `______________________________`
+- Constraints not covered above:
+  `______________________________`
+- Additional comments:
+  `______________________________`
+
+### 14. Sizing Summary — For the Sizing Team
+
+The customer may leave this section blank.
+
+- Recommended Databricks App compute: ______________________________
+- Recommended MCP App compute: ______________________________
+- Recommended Lakebase capacity and storage: _____________________________
+- Recommended SQL Warehouse type, size, and scaling range:
+  `______________________________`
+- Estimated monthly workload by component: ______________________________
+- Foundation Model API estimate, if applicable: __________________________
+- Growth headroom applied: ______________________________ %
+- Key assumptions: ______________________________
+- Exclusions: ______________________________
+- Confidence level: [ ] Low  [ ] Moderate  [ ] High
+- Reassessment trigger: ______________________________

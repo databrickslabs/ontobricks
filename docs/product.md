@@ -1,5 +1,26 @@
 # Product & go-to-market
 
+<!-- toc -->
+**Contents**
+
+- [OntoBricks -- Value Proposition Deck](#ontobricks----value-proposition-deck)
+  - [Agenda](#agenda)
+  - [Slide 1: The Data Semantics Gap](#slide-1-the-data-semantics-gap)
+  - [Slide 2: Where OntoBricks Fits](#slide-2-where-ontobricks-fits)
+  - [Slide 3: The 4-Click Pipeline](#slide-3-the-4-click-pipeline)
+  - [Slide 4: Key Features and Capabilities](#slide-4-key-features-and-capabilities)
+  - [Slide 5: Competitive Landscape](#slide-5-competitive-landscape)
+  - [Slide 6: Value Proposition](#slide-6-value-proposition)
+  - [Slide 7: Conclusion and Next Steps](#slide-7-conclusion-and-next-steps)
+- [OntoBricks — Field Engineering Innovation Project](#ontobricks--field-engineering-innovation-project)
+  - [Summary](#summary)
+  - [Problem Statement](#problem-statement)
+  - [Proposed Solution](#proposed-solution)
+  - [What Solutions Exist Today](#what-solutions-exist-today)
+  - [Final Deliverable and Impact](#final-deliverable-and-impact)
+  - [Additional Information for Support Requested](#additional-information-for-support-requested)
+<!-- /toc -->
+
 ## OntoBricks -- Value Proposition Deck
 
 > Slide-ready content for presenting OntoBricks to enterprise stakeholders.

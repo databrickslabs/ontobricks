@@ -104,5 +104,5 @@ A copy-paste template for new engines lives at
 :class:`back.core.graphdb.GraphDBBackend` contract, register the engine in
 :class:`back.core.graphdb.GraphDBFactory`, and add it to
 ``ALLOWED_GRAPH_ENGINES`` in
-:mod:`back.objects.session.GlobalConfigService`. See ``docs/graphdb-integration.md``
+:mod:`back.objects.session.GlobalConfigService`. See ``docs/backend.md`` (Engine integration)
 for the full integration walkthrough.

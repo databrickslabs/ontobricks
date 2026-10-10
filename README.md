@@ -115,8 +115,8 @@ everything through an auto-generated **GraphQL** API or open **Knowledge Graph
 → Query → SPARQL** for read-only SELECT queries, sample queries, CSV export,
 generated SQL inspection, and triple-shaped results that open in Explorer.
 See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
-[Get Started](docs/get-started.md), and
-[Cohort Discovery](docs/cohort_discovery.md).
+[Get Started](docs/getting-started.md), and
+[Cohort Discovery](docs/advanced_features.md#cohort-discovery).
 
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks
@@ -136,7 +136,7 @@ atomically rechecks Draft status before attempting permanent removal of that
 version's Knowledge Store content. Cleanup failures are reported as errors
 rather than false success. Move
 domains between environments with the **OBX** export/import (UI or
-[CLI](docs/import-export.md)).
+[CLI](docs/advanced_features.md#registry-import-and-export)).
 
 ### Pluggable graph engine
 Pick a backend **per domain**: **Lakebase (Postgres)** by default,
@@ -147,9 +147,9 @@ serves only ontology information).
 Connection config stays workspace-global. Lakehouse and Lakebase Build also
 materialise Explorer indexes (`_adj_out` / `_adj_in`, `_entity_search`,
 `_entity_search_asserted`, `_props`); Neo4j keeps native traversal. Full reference:
-[Lakebase Graph DB](docs/lakebase-graphdb.md) ·
-[Graph DB Integration](docs/graphdb-integration.md) ·
-[Graph Query Optimizations](docs/optimizations.md).
+[Lakebase Graph DB](docs/backend.md#lakebase-graph-store) ·
+[Graph DB Integration](docs/backend.md#engine-integration) ·
+[Graph Query Optimizations](docs/backend.md#graph-query-optimizations).
 
 ## Runs entirely on your Databricks
 
@@ -187,7 +187,7 @@ Prerequisites (Databricks workspace with Apps enabled, a SQL Warehouse, a
 **Lakebase Autoscaling** database, and a Unity Catalog Volume) and the full,
 idempotent deploy checklist — including one-click graph-DB provisioning and
 permission bootstrap — are in the
-**[Get Started](docs/get-started.md)** and
+**[Get Started](docs/getting-started.md)** and
 **[Deployment Guide](docs/deployment.md)**.
 
 The bundle syncs only runtime source, the MCP and graph-job files, dependency
@@ -197,11 +197,13 @@ by the Databricks CLI.
 
 ## Documentation
 
-- **[Documentation hub](docs/README.md)** — start here
-- **[Value proposition](docs/product.md)** — the business case &amp; go-to-market
-- **[User Guide](docs/user-guide.md)** · **[Features](docs/features.md)** · **[Architecture](docs/architecture.md)** · **[API](docs/api.md)**
-- **[MCP](docs/mcp.md)** · **[Graph DB](docs/lakebase-graphdb.md)** · **[Import / Export](docs/import-export.md)**
-- **[Developing OntoBricks](docs/development.md)** — build, test, contribute
+The [documentation hub](docs/README.md) groups pages the same way as in-app Help:
+
+- **Start here** — [Get Started](docs/getting-started.md) · [Examples](docs/examples.md) · [Feature inventory](docs/user-guide.md#feature-inventory)
+- **Using OntoBricks** — [User Guide](docs/user-guide.md) · [Advanced features](docs/advanced_features.md) · [MCP](docs/mcp.md)
+- **Platform** — [Graph backends](docs/backend.md) · [Architecture](docs/architecture.md) · [API](docs/api.md)
+- **Deploy & develop** — [Deployment](docs/deployment.md) · [Development](docs/development.md)
+- **About** — [Product / value proposition](docs/product.md)
 
 Product overview, screenshots and videos:
 [ontobricks.org](https://ontobricks.org/).

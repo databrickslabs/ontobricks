@@ -15,7 +15,7 @@ CONFIG := scripts/deploy.config.sh
         deploy deploy-dry-run deploy-volume deploy-no-run \
         bootstrap-perms bootstrap-lakebase \
         bundle-validate bundle-summary deploy-check \
-        render-app-yaml
+        render-app-yaml docs-toc
 
 # Output dir for the live scenario campaign reports (JUnit + HTML).
 SCENARIO_ARTIFACTS := artifacts/scenarios
@@ -55,9 +55,10 @@ help:
 	@echo "    make bootstrap-lakebase  - Grant the app SP USAGE/DML on the Lakebase registry schema"
 	@echo "    make bundle-validate     - Validate the bundle config (target from deploy.config.sh)"
 	@echo "    make bundle-summary      - Preview what will deploy (target from deploy.config.sh)"
-	@echo "    make deploy-check        - Read-only deploy prerequisite check (see docs/DEPLOY_CHECKLIST.md)"
+	@echo "    make deploy-check        - Read-only deploy prerequisite check (see docs/deployment.md#deployment-checklist)"
 	@echo ""
 	@echo "  Maintenance:"
+	@echo "    make docs-toc     - Regenerate the table of contents of docs/*.md guides"
 	@echo "    make clean        - Remove generated files"
 	@echo ""
 
@@ -177,6 +178,9 @@ deploy-no-run:
 render-app-yaml:
 	@echo "Rendering app.yaml from app.yaml.template + $(CONFIG)..."
 	@. ./$(CONFIG) && python3 scripts/_internal/_render-app-yaml.py
+
+docs-toc:
+	python3 scripts/_internal/_docs-toc.py docs
 
 bootstrap-perms:
 	@echo "Bootstrapping app self-permissions (config: $(CONFIG))..."

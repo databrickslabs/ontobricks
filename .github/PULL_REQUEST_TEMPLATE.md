@@ -1,6 +1,6 @@
 <!--
 PR Template — Cursor-Native Superpowers (CNS) methodology
-See docs/PR_REVIEW_CHECKLIST.md for the reviewer's pass.
+See .github/PR_REVIEW_CHECKLIST.md for the reviewer's pass.
 -->
 
 ## Summary
@@ -56,4 +56,4 @@ Closes #<issue-number>. Part of `M<n>.<phase>` in `.planning/ROADMAP.md`.
 
 ## Reviewer hint
 
-See `docs/PR_REVIEW_CHECKLIST.md`. Numbered items map 1:1 to comments — `#3: missing OntoBricksError subclass for new condition` is more useful than "fix error handling".
+See `.github/PR_REVIEW_CHECKLIST.md`. Numbered items map 1:1 to comments — `#3: missing OntoBricksError subclass for new condition` is more useful than "fix error handling".

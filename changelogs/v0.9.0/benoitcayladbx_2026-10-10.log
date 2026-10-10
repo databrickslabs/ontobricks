@@ -283,3 +283,245 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 7429 passed, 326
 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.18s.
+
+## Document ontology product conventions
+
+Context: Studio is a class/property OWL editor with a Databricks annotation
+layer, not a general RDF editor. Capture identifiers, node types, the
+ontobricks: vocabulary, instance URIs, and consumed vs leftover RDF in one
+reference page.
+
+Changes:
+
+1. docs/ontology_specifics.md
+   New catalog of OntoBricks ontology conventions (name vs label, URI minting,
+   Studio types, ontobricks: predicates, ABox {Class}/{id}, parser consume set).
+2. docs/sphinx/guides/ontology_specifics.md
+   MyST include stub so Sphinx pulls the Markdown source.
+3. docs/sphinx/index.rst
+   Add the new topic guide to the Topic guides toctree.
+4. docs/README.md
+   Link Ontology specifics in the topic index.
+5. docs/user-guide.md
+   Point Step 1 (Design Ontology) at the new catalog.
+
+Modified files:
+- docs/ontology_specifics.md
+- docs/sphinx/guides/ontology_specifics.md
+- docs/sphinx/index.rst
+- docs/README.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7460 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 67.17s.
+
+## Recategorize documentation hub and Help Center
+
+Context: Docs, Help, and Sphinx listed every page in one Guides dump, mixing
+how-to, engine internals, GTM slides, and deploy notes. Group the same files
+by audience without renaming slugs.
+
+Changes:
+
+1. docs/README.md
+   Replace the flat topic table with Start here / Using / Graph engines /
+   Reference / Deploy & develop / About, plus operator notes.
+2. src/api/routers/internal/help.py
+   Same six Help Center categories; add optimizations.md to Graph engines.
+3. docs/sphinx/index.rst
+   Split the Topic guides toctree into matching captions; add Neo4j.
+4. docs/sphinx/guides/neo4j-requirements.md
+   MyST include stub for the Neo4j guide.
+5. src/front/templates/partials/layout/help_modal.html
+   Group Resources links by the same categories.
+6. README.md
+   Point at the hub categories instead of a flat link dump.
+7. tests/units/api/test_help_api.py
+   Assert Help category ids are start/using/engines/reference/ops/about.
+
+Modified files:
+- docs/README.md
+- src/api/routers/internal/help.py
+- docs/sphinx/index.rst
+- docs/sphinx/guides/neo4j-requirements.md
+- src/front/templates/partials/layout/help_modal.html
+- README.md
+- tests/units/api/test_help_api.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7460 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.82s.
+
+
+## Fold satellite docs into their host guides
+
+Context: docs/ had 24 top-level pages, many of them thin satellites of a larger
+guide (feature list, engine map, code map, deploy checklist, sizing, Genie
+note). One file per category would create 4,000+ line pages, so satellites are
+folded as sections of their natural host instead: 24 -> 16 files. Headings are
+demoted one level and inbound links rewritten; no new broken links.
+
+Changes:
+
+1. docs/user-guide.md
+   Append features.md as "Feature inventory".
+2. docs/architecture.md
+   Append data-access.md as "Data access engine map"; link the GraphQL/MCP
+   companion note to its new graphdb-integration.md anchor.
+3. docs/development.md
+   Append code_organization.md as "Code map".
+4. docs/graphdb-integration.md
+   Append optimizations.md as "Graph query optimizations".
+5. docs/deployment.md
+   Append deploy-checklist.md, dab-reference.md and sizing.md as
+   "Deployment checklist", "Asset Bundle reference", "Production sizing
+   questionnaire"; drop their stale cross-file intros.
+6. docs/mcp.md
+   Append uc-mcp-connection-genie-one.md as "Register the MCP in Unity
+   Catalog and Genie One"; point the in-guide reference at the anchor.
+7. docs/features.md, docs/data-access.md, docs/code_organization.md,
+   docs/optimizations.md, docs/deploy-checklist.md, docs/dab-reference.md,
+   docs/sizing.md, docs/uc-mcp-connection-genie-one.md and their
+   docs/sphinx/guides/*.md stubs
+   Removed after merge.
+8. docs/README.md
+   Rewrite the hub for the 16-guide layout with deep links to merged sections.
+9. docs/sphinx/index.rst
+   Drop the removed guides and the Operator notes toctree.
+10. src/api/routers/internal/help.py
+    Drop the features, optimizations, data-access and code-organization slugs.
+11. src/front/templates/partials/layout/help_modal.html
+    Replace Data Access / Code Map links with Development.
+12. databricks.yml, .databricksignore
+    Drop excludes for the removed operator files.
+13. scripts/_internal/_deploy-preflight.sh
+    Point at the Deployment checklist section of docs/deployment.md.
+14. README.md
+    Repoint Feature inventory and Graph Query Optimizations links.
+15. tests/units/api/test_help_api.py
+    Update non-runtime docs set and contributor slug; assert satellites are
+    folded into their host guides.
+
+Modified files:
+- docs/user-guide.md
+- docs/architecture.md
+- docs/development.md
+- docs/graphdb-integration.md
+- docs/deployment.md
+- docs/mcp.md
+- docs/README.md
+- docs/sphinx/index.rst
+- docs/features.md (deleted)
+- docs/data-access.md (deleted)
+- docs/code_organization.md (deleted)
+- docs/optimizations.md (deleted)
+- docs/deploy-checklist.md (deleted)
+- docs/dab-reference.md (deleted)
+- docs/sizing.md (deleted)
+- docs/uc-mcp-connection-genie-one.md (deleted)
+- docs/sphinx/guides/{features,data-access,code_organization,optimizations,sizing,uc-mcp-connection-genie-one}.md (deleted)
+- src/api/routers/internal/help.py
+- src/front/templates/partials/layout/help_modal.html
+- databricks.yml
+- .databricksignore
+- scripts/_internal/_deploy-preflight.sh
+- README.md
+- tests/units/api/test_help_api.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7459 passed, 326 skipped, 6 deselected, 1 xfailed, 32 warnings in 54.88s (test_catalogued_slug_returns_200 no longer runs for the four removed Help slugs; the category and folding tests are new).
+
+================================================================================
+## Docs: group small guides into Graph backends / Advanced features + guide TOCs
+================================================================================
+
+Context:
+Six small guides (lakebase-graphdb, neo4j-requirements, graphdb-integration,
+ontology_specifics, import-export, cohort_discovery) were not real categories.
+They are now sections of two category guides, backend.md and
+advanced_features.md, and every guide opens with a generated table of contents.
+The in-app Help viewer now resolves heading anchors, so TOC and section deep
+links work there too (recent marked.js no longer emits heading ids, and same-page
+anchors used to clash with the hash-based Help routing).
+
+Changes:
+1. docs/backend.md (new)
+   "Graph backends": Lakebase graph store, Neo4j backend, Engine integration
+   (incl. Graph query optimizations). Source H1s dropped, headings demoted.
+2. docs/advanced_features.md (new)
+   "Advanced features": Ontology specifics, Registry import and export,
+   Cohort discovery.
+3. docs/*.md, README.md
+   Links to the removed guides rewritten to the exact new section anchors.
+   Hub and root README regrouped: Start here / Using OntoBricks / Platform /
+   Deploy & develop / About.
+4. scripts/_internal/_docs-toc.py (new), Makefile
+   Idempotent TOC generator between <!-- toc --> markers before the first
+   section (## sections; ### too when a guide has at most four ## sections).
+   `--check` mode for CI. New `make docs-toc` target. Makefile help no longer
+   points at the removed docs/DEPLOY_CHECKLIST.md.
+5. docs/{advanced_features,api,architecture,backend,deployment,development,
+   examples,getting-started,mcp,product,user-guide}.md
+   Generated TOC added at the top (docs/README.md is the hub index, skipped).
+6. src/front/static/global/js/help-docs.js
+   Assign GitHub-compatible heading ids, scroll same-page anchors inside the
+   viewer without touching the URL hash, carry anchors on cross-doc links and
+   #help-docs/{slug}#{anchor} deep links, and map underscore filenames
+   (advanced_features.md) to hyphenated slugs.
+7. src/front/static/global/js/help-modal.js
+   Pass optional data-help-anchor to HelpDocs.activate.
+8. src/api/routers/internal/help.py
+   Replace the six slugs with advanced-features and backend; categories are
+   now start / using / platform / ops / about.
+9. src/front/templates/partials/layout/help_modal.html
+   Resources list and inline guide links point at the new slugs and sections.
+10. src/front/templates/settings.html
+    Neo4j guide link -> docs/backend.md#neo4j-backend.
+11. docs/sphinx/guides/{backend,advanced_features}.md (new), docs/sphinx/index.rst
+    New include stubs and Platform toctree; old stubs removed.
+12. src/back/core/graphdb/_starter_kit/{ExampleStore.py,README.md,__init__.py},
+    src/back/core/graphdb/lakebase/SyncedTableManager.py,
+    src/agents/agent_cohort/__init__.py, docs/sphinx/api/app.core.graphdb.rst
+    Doc references updated to the new guides (comments/docstrings only).
+13. tests/units/api/test_help_api.py, tests/units/front/test_help_center_neo4j.py
+    New categories, grouped-guide and catalogue assertions, TOC freshness test
+    (runs the generator with --check), Neo4j links via backend#neo4j-backend.
+14. docs/getting-started.md (renamed from docs/get-started.md), docs/sphinx/guides/getting-started.md
+    Follow the rename everywhere: Help slug getting-started, help modal link,
+    Sphinx stub/toctree/overview, hub, root README, architecture and
+    user-guide links.
+
+Modified files:
+- docs/backend.md (new)
+- docs/advanced_features.md (new)
+- docs/{lakebase-graphdb,neo4j-requirements,graphdb-integration,ontology_specifics,import-export,cohort_discovery}.md (deleted)
+- docs/sphinx/guides/{lakebase-graphdb,neo4j-requirements,graphdb-integration,ontology_specifics,import-export,cohort_discovery}.md (deleted)
+- docs/sphinx/guides/backend.md (new)
+- docs/sphinx/guides/advanced_features.md (new)
+- docs/sphinx/index.rst
+- docs/sphinx/api/app.core.graphdb.rst
+- docs/README.md
+- docs/api.md, docs/architecture.md, docs/deployment.md, docs/development.md,
+  docs/examples.md, docs/getting-started.md, docs/mcp.md, docs/product.md,
+  docs/user-guide.md
+- README.md
+- Makefile
+- scripts/_internal/_docs-toc.py (new)
+- src/api/routers/internal/help.py
+- src/front/static/global/js/help-docs.js
+- src/front/static/global/js/help-modal.js
+- src/front/templates/partials/layout/help_modal.html
+- src/front/templates/settings.html
+- src/back/core/graphdb/_starter_kit/ExampleStore.py
+- src/back/core/graphdb/_starter_kit/README.md
+- src/back/core/graphdb/_starter_kit/__init__.py
+- src/back/core/graphdb/lakebase/SyncedTableManager.py
+- src/agents/agent_cohort/__init__.py
+- tests/units/api/test_help_api.py
+- tests/units/front/test_help_center_neo4j.py
+- docs/sphinx/guides/getting-started.md (renamed from get-started.md)
+- docs/sphinx/overview/getting-started.rst
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7456 passed, 326 skipped,
+6 deselected, 1 xfailed, 32 warnings in 54.36s (the TOC freshness test is new;
+four parametrized Help slugs were replaced by two).

@@ -183,7 +183,7 @@
                                                 <li><strong>Browse</strong> &mdash; list and open existing domains</li>
                                                 <li><strong>New Domain</strong> (Admin only) &mdash; create a fresh domain</li>
                                                 <li><strong>Load Domain</strong> (navbar) &mdash; open an existing domain from UC</li>
-                                                <li><strong>Export / Import</strong> &mdash; move domains between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/import-export" data-help-jump="docs" data-help-doc="import-export">Import / Export</a> guide)</li>
+                                                <li><strong>Export / Import</strong> &mdash; move domains between environments as a portable <code>.obx</code> file (see the <a href="#help-docs/advanced-features#registry-import-and-export" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="registry-import-and-export">Registry import and export</a> guide)</li>
                                                 <li><strong>Bridges</strong> &mdash; cross-domain links that allow navigating from one graph viewer to another</li>
                                             </ul>
                                             <p class="text-muted small mb-0">Automation (<em>Settings &rarr; Automation &rarr; Scheduler</em>), the REST <em>API</em> reference (<em>Settings &rarr; Developer</em>) and the <em>Registry Location</em> volume (<em>Settings &rarr; Registry</em>) are configured from Settings, not the Registry modal.</p>
@@ -237,7 +237,7 @@
                                             <ul>
                                                 <li><strong>Data Quality (SHACL)</strong> &mdash; define shapes for completeness, cardinality, pattern, consistency...</li>
                                                 <li><strong>Business Rules (SWRL)</strong> &mdash; author inference rules using the graphical D3 editor</li>
-                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;); run &amp; preview them from <strong>Knowledge Graph &rarr; Cohorts</strong>. See the <a href="#help-docs/cohort-discovery" data-help-jump="docs" data-help-doc="cohort-discovery">Cohort Discovery</a> guide.</li>
+                                                <li><strong>Cohorts</strong> &mdash; design constraint-based grouping rules (&ldquo;which entities travel together?&rdquo;); run &amp; preview them from <strong>Knowledge Graph &rarr; Cohorts</strong>. See the <a href="#help-docs/advanced-features#cohort-discovery" data-help-jump="docs" data-help-doc="advanced-features" data-help-anchor="cohort-discovery">Cohort discovery</a> guide.</li>
                                                 <li><strong>Expr. &amp; Axioms</strong> &mdash; equivalent, disjoint, union, inverse, property chains...</li>
                                                 <li><strong>Pitfalls</strong> &mdash; detect structural, logical and semantic modeling issues, with a precision score</li>
                                             </ul>
@@ -389,7 +389,7 @@
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">Which triple store backends are supported?</button></h2>
-                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each domain also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Domain &rarr; Information &rarr; Knowledge Graph</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/neo4j-requirements" data-help-jump="docs" data-help-doc="neo4j-requirements">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
+                                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#helpFaqAccordion"><div class="accordion-body">OntoBricks always materializes a <strong>Delta</strong> view in Unity Catalog (governance + lineage). Each domain also picks a <strong>Graph DB</strong> engine &mdash; <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta triples), or <strong>Neo4j</strong> (typed property graph over Bolt) &mdash; under <em>Domain &rarr; Information &rarr; Knowledge Graph</em>. Engine connection settings live under <em>Settings &rarr; Back end</em>. See the in-app <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a> guide for Aura / Community / Enterprise requirements.</div></div>
                                 </div>
                                 <div class="accordion-item">
                                     <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">Why do I see grey/disabled menu items?</button></h2>
@@ -510,21 +510,28 @@
                                 <div class="col-md-6">
                                     <div class="help-card">
                                         <h5><i class="bi bi-book me-2"></i>OntoBricks documentation</h5>
-                                        <p class="text-muted small mb-2">Read the full docs directly in-app:</p>
+                                        <p class="text-muted small mb-2">Same categories as the docs hub:</p>
+                                        <p class="small text-muted mb-1">Start here</p>
                                         <ul class="list-unstyled mb-2">
-                                            <li><a href="#help-docs/get-started" data-help-jump="docs" data-help-doc="get-started"><i class="bi bi-rocket-takeoff me-1"></i>Get Started</a></li>
-                                            <li><a href="#help-docs/user-guide" data-help-jump="docs" data-help-doc="user-guide"><i class="bi bi-journal-text me-1"></i>User Guide</a></li>
+                                            <li><a href="#help-docs/getting-started" data-help-jump="docs" data-help-doc="getting-started"><i class="bi bi-rocket-takeoff me-1"></i>Get Started</a></li>
                                             <li><a href="#help-docs/examples" data-help-jump="docs" data-help-doc="examples"><i class="bi bi-lightbulb me-1"></i>Examples</a></li>
+                                        </ul>
+                                        <p class="small text-muted mb-1">Using OntoBricks</p>
+                                        <ul class="list-unstyled mb-2">
+                                            <li><a href="#help-docs/user-guide" data-help-jump="docs" data-help-doc="user-guide"><i class="bi bi-journal-text me-1"></i>User Guide</a></li>
+                                            <li><a href="#help-docs/advanced-features" data-help-jump="docs" data-help-doc="advanced-features"><i class="bi bi-stars me-1"></i>Advanced features</a></li>
+                                            <li><a href="#help-docs/mcp" data-help-jump="docs" data-help-doc="mcp"><i class="bi bi-plug me-1"></i>MCP</a></li>
+                                        </ul>
+                                        <p class="small text-muted mb-1">Platform</p>
+                                        <ul class="list-unstyled mb-2">
+                                            <li><a href="#help-docs/backend" data-help-jump="docs" data-help-doc="backend"><i class="bi bi-database me-1"></i>Graph backends</a> &mdash; <a href="#help-docs/backend#lakebase-graph-store" data-help-jump="docs" data-help-doc="backend" data-help-anchor="lakebase-graph-store">Lakebase</a> &middot; <a href="#help-docs/backend#neo4j-backend" data-help-jump="docs" data-help-doc="backend" data-help-anchor="neo4j-backend">Neo4j Backend</a></li>
                                             <li><a href="#help-docs/architecture" data-help-jump="docs" data-help-doc="architecture"><i class="bi bi-diagram-3 me-1"></i>Architecture</a></li>
-                                            <li><a href="#help-docs/deployment" data-help-jump="docs" data-help-doc="deployment"><i class="bi bi-cloud-arrow-up me-1"></i>Deployment</a></li>
                                             <li><a href="#help-docs/api" data-help-jump="docs" data-help-doc="api"><i class="bi bi-braces me-1"></i>API Reference</a></li>
-                                            <li><a href="#help-docs/graphdb-integration" data-help-jump="docs" data-help-doc="graphdb-integration"><i class="bi bi-diagram-3 me-1"></i>GraphDB Integration</a></li>
-                                            <li><a href="#help-docs/neo4j-requirements" data-help-jump="docs" data-help-doc="neo4j-requirements"><i class="bi bi-bezier2 me-1"></i>Neo4j Backend</a></li>
-                                            <li><a href="#help-docs/lakebase-graphdb" data-help-jump="docs" data-help-doc="lakebase-graphdb"><i class="bi bi-database me-1"></i>Lakebase GraphDB</a></li>
-                                            <li><a href="#help-docs/cohort-discovery" data-help-jump="docs" data-help-doc="cohort-discovery"><i class="bi bi-people-fill me-1"></i>Cohort Discovery</a></li>
-                                            <li><a href="#help-docs/import-export" data-help-jump="docs" data-help-doc="import-export"><i class="bi bi-box-arrow-in-down me-1"></i>Import / Export</a></li>
-                                            <li><a href="#help-docs/data-access" data-help-jump="docs" data-help-doc="data-access"><i class="bi bi-hdd-network me-1"></i>Data Access</a></li>
-                                            <li><a href="#help-docs/code-organization" data-help-jump="docs" data-help-doc="code-organization"><i class="bi bi-diagram-3 me-1"></i>Code Map</a></li>
+                                        </ul>
+                                        <p class="small text-muted mb-1">Deploy &amp; develop</p>
+                                        <ul class="list-unstyled mb-2">
+                                            <li><a href="#help-docs/deployment" data-help-jump="docs" data-help-doc="deployment"><i class="bi bi-cloud-arrow-up me-1"></i>Deployment</a></li>
+                                            <li><a href="#help-docs/development" data-help-jump="docs" data-help-doc="development"><i class="bi bi-code-slash me-1"></i>Development</a></li>
                                             <li><a href="#help-docs" data-help-jump="docs"><i class="bi bi-collection me-1"></i>Browse all docs</a></li>
                                         </ul>
                                         <hr class="my-2">

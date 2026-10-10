@@ -3,7 +3,7 @@
 Copy this file, rename it to ``<EngineName>Store.py``, and replace every
 ``TODO`` marker with your engine's native API calls.
 
-See ``docs/graphdb-integration.md`` for the full integration guide.
+See ``docs/backend.md`` (Engine integration) for the full integration guide.
 
 Triples are stored as ``(subject, predicate, object)`` rows.  If your engine
 speaks SQL, the inherited named-query defaults from ``GraphDBBackend``

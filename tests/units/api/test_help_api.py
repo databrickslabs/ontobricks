@@ -20,6 +20,8 @@ The suite exercises the happy path plus the hardening:
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -94,6 +96,33 @@ class TestHelpDocsIndex:
             for doc in cat["docs"]:
                 assert {"slug", "title"}.issubset(doc.keys())
 
+    def test_index_uses_audience_categories(self, client):
+        """Help sidebar groups pages by audience, not a flat Guides dump."""
+        response = client.get("/api/help/docs")
+        assert response.status_code == 200
+        ids = [cat["id"] for cat in response.json()["categories"]]
+        assert ids == ["start", "using", "platform", "ops", "about"]
+
+    def test_satellite_docs_are_folded_into_host_guides(self):
+        """Thin satellite pages live as sections of their host guide, not as files."""
+        docs_dir = Path(_docs_dir())
+        folded = {
+            "features.md": ("user-guide.md", "## Feature inventory"),
+            "data-access.md": ("architecture.md", "## Data access engine map"),
+            "code_organization.md": ("development.md", "## Code map"),
+            "optimizations.md": ("backend.md", "### Graph query optimizations"),
+            "deploy-checklist.md": ("deployment.md", "## Deployment checklist"),
+            "dab-reference.md": ("deployment.md", "## Asset Bundle reference"),
+            "sizing.md": ("deployment.md", "## Production sizing questionnaire"),
+            "uc-mcp-connection-genie-one.md": (
+                "mcp.md",
+                "## Register the MCP in Unity Catalog and Genie One",
+            ),
+        }
+        for satellite, (host, heading) in folded.items():
+            assert not (docs_dir / satellite).exists(), satellite
+            assert heading in (docs_dir / host).read_text(encoding="utf-8"), host
+
     def test_index_slugs_are_unique(self, client):
         response = client.get("/api/help/docs")
         slugs = [
@@ -115,43 +144,65 @@ class TestHelpDocsIndex:
         expected = {slug: meta["title"] for slug, meta in _DOC_INDEX.items()}
         assert indexed == expected
 
-    def test_graph_backend_guides_are_catalogued(self, client):
-        """Lakebase and Neo4j backend guides must be reachable from Help Center."""
+    def test_small_guides_are_grouped_into_category_files(self):
+        """Backend and advanced-feature topics live as sections of category guides."""
+        docs_dir = Path(_docs_dir())
+        grouped = {
+            "lakebase-graphdb.md": ("backend.md", "## Lakebase graph store"),
+            "neo4j-requirements.md": ("backend.md", "## Neo4j backend"),
+            "graphdb-integration.md": ("backend.md", "## Engine integration"),
+            "ontology_specifics.md": ("advanced_features.md", "## Ontology specifics"),
+            "import-export.md": (
+                "advanced_features.md",
+                "## Registry import and export",
+            ),
+            "cohort_discovery.md": ("advanced_features.md", "## Cohort discovery"),
+        }
+        for old, (host, heading) in grouped.items():
+            assert not (docs_dir / old).exists(), old
+            assert heading in (docs_dir / host).read_text(encoding="utf-8"), host
+
+    def test_category_guides_are_catalogued(self, client):
+        """Backend and advanced-feature guides must be reachable from Help Center."""
         response = client.get("/api/help/docs")
         slugs = {
             doc["slug"]
             for cat in response.json()["categories"]
             for doc in cat["docs"]
         }
-        assert "graphdb-integration" in slugs
-        assert "lakebase-graphdb" in slugs
-        assert "neo4j-requirements" in slugs
+        assert {"backend", "advanced-features", "development"} <= slugs
 
-        neo = client.get("/api/help/docs/neo4j-requirements")
-        assert neo.status_code == 200
-        body = neo.json()["markdown"]
-        assert "Neo4j" in body
-        assert "Aura" in body
-
-    def test_cohort_and_import_export_guides_are_catalogued(self, client):
-        """Cohort Discovery, Import/Export and the contributor Code Map must be reachable."""
-        response = client.get("/api/help/docs")
-        slugs = {
-            doc["slug"]
-            for cat in response.json()["categories"]
-            for doc in cat["docs"]
-        }
-        assert "cohort-discovery" in slugs
-        assert "import-export" in slugs
-        assert "code-organization" in slugs
-
-        for slug in ("cohort-discovery", "import-export", "code-organization"):
-            resp = client.get(f"/api/help/docs/{slug}")
-            assert resp.status_code == 200
-            assert resp.json()["markdown"].strip()
+        backend = client.get("/api/help/docs/backend").json()["markdown"]
+        assert "Neo4j" in backend and "Aura" in backend and "Lakebase" in backend
+        advanced = client.get("/api/help/docs/advanced-features").json()["markdown"]
+        assert "Cohort" in advanced and "registry_transfer" in advanced
 
 
 class TestHelpCatalogIntegrity:
+    def test_guides_start_with_current_table_of_contents(self):
+        """Every guide opens with a generated TOC; regenerate with `make docs-toc`."""
+        docs_dir = Path(_docs_dir())
+        for slug, path in _iter_catalogued_markdown_paths():
+            if path.name == "README.md":
+                continue
+            text = path.read_text(encoding="utf-8")
+            toc_at = text.find("<!-- toc -->")
+            first_h2 = re.search(r"^## ", text, re.MULTILINE)
+            assert toc_at != -1, f"{slug}: missing table of contents"
+            assert first_h2 and toc_at < first_h2.start(), f"{slug}: TOC must come first"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(_REPO_ROOT / "scripts" / "_internal" / "_docs-toc.py"),
+                "--check",
+                str(docs_dir),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert completed.returncode == 0, "Stale TOC, run `make docs-toc`:\n" + completed.stdout
+
     def test_docs_directory_exists(self):
         docs_dir = Path(_docs_dir())
         assert docs_dir.is_dir(), f"Help Center docs directory missing: {docs_dir}"
@@ -243,11 +294,6 @@ class TestHelpDeployBundle:
         "docs/superpowers/",
         "docs/diagrams/",
         "docs/pr47-neo4j-demo/",
-        "docs/DEPLOY_CHECKLIST.md",
-        "docs/PR_REVIEW_CHECKLIST.md",
-        "docs/dab-reference.md",
-        "docs/sizing.md",
-        "docs/uc-mcp-connection-genie-one.md",
     }
 
     def test_bundle_excludes_non_runtime_docs(self):

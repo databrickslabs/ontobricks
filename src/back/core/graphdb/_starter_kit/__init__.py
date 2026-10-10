@@ -1,7 +1,7 @@
 """Example graph database backend — STARTER KIT.
 
 Copy this directory, rename it, and replace the placeholders.
-See docs/graphdb-integration.md for the full guide.
+See the Engine integration section of docs/backend.md for the full guide.
 """
 
 # TODO: Rename ExampleStore to your engine class name

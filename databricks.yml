@@ -131,11 +131,6 @@ sync:
     - docs/superpowers/
     - docs/diagrams/
     - docs/pr47-neo4j-demo/
-    - docs/DEPLOY_CHECKLIST.md
-    - docs/PR_REVIEW_CHECKLIST.md
-    - docs/dab-reference.md
-    - docs/sizing.md
-    - docs/uc-mcp-connection-genie-one.md
 
 variables:
   # ── App names ──────────────────────────────────────────────────────

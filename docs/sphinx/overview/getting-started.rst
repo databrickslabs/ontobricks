@@ -4,7 +4,7 @@ Getting Started
 .. seealso::
 
    Full installation, environment variables, and troubleshooting:
-   :doc:`../guides/get-started` (from ``docs/get-started.md``).
+   :doc:`../guides/getting-started` (from ``docs/getting-started.md``).
 
 Prerequisites
 -------------

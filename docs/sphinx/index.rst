@@ -10,33 +10,45 @@ Delta-backed triple store mirrored on Lakebase Postgres, query them through a ty
 explore your graph viewer visually.
 
 **Topic guides** (Markdown in ``docs/``, included here via MyST) are the
-canonical narrative documentation. **Developer overviews** below are short
-RST summaries; see the architecture guide for the full design document.
+canonical narrative documentation. Categories match the docs hub and the
+in-app Help Center. **Developer overviews** below are short RST summaries.
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Topic guides
+   :maxdepth: 1
+   :caption: Start here
 
    guides/documentation
-   guides/get-started
-   guides/features
-   guides/deployment
-   guides/architecture
-   guides/code_organization
-   guides/user-guide
-   guides/import-export
-   guides/api
-   guides/data-access
-   guides/graphdb-integration
-   guides/optimizations
-   guides/lakebase-graphdb
-   guides/cohort_discovery
-   guides/mcp
-   guides/uc-mcp-connection-genie-one
-   guides/development
-   guides/sizing
-   guides/product
+   guides/getting-started
    guides/examples
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Using OntoBricks
+
+   guides/user-guide
+   guides/advanced_features
+   guides/mcp
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Platform
+
+   guides/backend
+   guides/architecture
+   guides/api
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Deploy & develop
+
+   guides/deployment
+   guides/development
+
+.. toctree::
+   :maxdepth: 1
+   :caption: About
+
+   guides/product
 
 .. toctree::
    :maxdepth: 2

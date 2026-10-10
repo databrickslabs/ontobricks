@@ -2,6 +2,24 @@
 
 By the end of this guide you will have OntoBricks running locally and connected to your Databricks workspace, ready to design your first ontology and explore a graph viewer.
 
+<!-- toc -->
+**Contents**
+
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running the Application](#running-the-application)
+- [Permission Management (Databricks App Only)](#permission-management-databricks-app-only)
+- [First Steps in OntoBricks](#first-steps-in-ontobricks)
+- [Common Commands](#common-commands)
+- [Understanding the Navigation](#understanding-the-navigation)
+- [SQL warehouses and Explorer timing](#sql-warehouses-and-explorer-timing)
+- [Ontology Sidebar Navigation](#ontology-sidebar-navigation)
+- [Troubleshooting](#troubleshooting)
+- [Next Steps](#next-steps)
+- [Environment variables (full reference)](#environment-variables-full-reference)
+<!-- /toc -->
+
 ## Prerequisites
 
 Before you begin, ensure you have:

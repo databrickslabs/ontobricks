@@ -7,6 +7,30 @@ These walkthroughs take you from raw tables to an explorable graph viewer. Each 
 | [Family Tree](#example-family-tree-ontology-mapping) | Beginner | One entity, two relationships — the simplest end-to-end flow |
 | [Customer Journey](#example-customer-journey-ontology-energy-provider) | Intermediate | 10 tables, complex relationships, visual Designer, advanced SPARQL |
 
+<!-- toc -->
+**Contents**
+
+- [Example: Family Tree Ontology Mapping](#example-family-tree-ontology-mapping)
+  - [What you'll build](#what-youll-build)
+  - [Dataset](#dataset)
+  - [Target Ontology](#target-ontology)
+  - [Mapping Steps](#mapping-steps)
+  - [Generated R2RML](#generated-r2rml)
+  - [Generated RDF Triples](#generated-rdf-triples)
+  - [SPARQL Queries (External API)](#sparql-queries-external-api)
+  - [Using the R2RML Mapping](#using-the-r2rml-mapping)
+  - [Next Steps](#next-steps)
+  - [Summary](#summary)
+- [Example: Customer Journey Ontology (Energy Provider)](#example-customer-journey-ontology-energy-provider)
+  - [What you'll build](#what-youll-build-1)
+  - [Dataset](#dataset-1)
+  - [Step 1: Design the Ontology](#step-1-design-the-ontology)
+  - [Step 2: Map Data Assets](#step-2-map-data-assets)
+  - [Step 3: Explore the Data (Knowledge Graph)](#step-3-explore-the-data-knowledge-graph)
+  - [Graph Viewer](#graph-viewer)
+  - [Reference](#reference)
+<!-- /toc -->
+
 ---
 
 ## Example: Family Tree Ontology Mapping
