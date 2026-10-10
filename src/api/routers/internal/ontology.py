@@ -200,6 +200,10 @@ async def generate_owl_endpoint(
 
     with map_route_errors("OWL generation failed", logger):
         domain = get_domain(session_mgr)
+        ontology_data = dict(data)
+        for key in ("rdf_extras", "label_lang"):
+            if key not in ontology_data and key in domain.ontology:
+                ontology_data[key] = domain.ontology[key]
         constraints = data.get("constraints") or domain.constraints
         swrl_rules = data.get("swrl_rules") or domain.swrl_rules
         axioms = data.get("axioms") or domain.axioms
@@ -207,7 +211,7 @@ async def generate_owl_endpoint(
         groups = data.get("groups") or domain.groups
 
         owl_content = Ontology.generate_owl(
-            data, constraints, swrl_rules, axioms, expressions, groups
+            ontology_data, constraints, swrl_rules, axioms, expressions, groups
         )
         domain.generated["owl"] = owl_content
         domain.save()

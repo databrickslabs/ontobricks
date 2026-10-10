@@ -64,6 +64,7 @@ def _roundtrip() -> Graph:
     return g
 
 
+@pytest.mark.unit
 def test_generate_owl_reads_rdf_extras_from_config():
     info, classes, properties, *_rest = OntologyOwl.parse_owl(
         ISSUE_194_TTL, extract_advanced=True
