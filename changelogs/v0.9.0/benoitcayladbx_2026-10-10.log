@@ -13,11 +13,13 @@ Changes:
 3. src/back/objects/ontology/OntologyOwl.py
    Forward the ontology label language to the OWL generator.
 4. src/back/objects/ontology/OntologyImport.py
-   Prefer the ontology header label when resolving the imported ontology name.
+   Prefer the ontology header label when resolving the imported ontology name
+   and persist ontology-level label/comment language tags in the domain config.
 5. tests/units/ontology/test_owl_parser.py
    Cover language-tag capture for consumed RDFS literals.
 6. tests/units/ontology/test_ontology_service.py
-   Cover ontology header label precedence during import.
+   Cover ontology header label precedence and import-to-generation language
+   tag persistence.
 7. tests/units/ontology/test_owl_import_fidelity.py
    Forward the parsed header label language in the issue #194 round trip.
 
@@ -31,6 +33,8 @@ Modified files:
 - tests/units/ontology/test_owl_import_fidelity.py
 - changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
 
-Tests: `uv run --frozen pytest -q -m "not scenario"` → 7402 passed,
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7403 passed,
 326 skipped, 6 deselected, 1 xfailed, 3 expected issue #194 fidelity failures
-reserved for later tasks in 64.63s.
+reserved for later tasks in 55.78s. Focused Task 2 regression test:
+`uv run --frozen pytest tests/units/ontology/test_ontology_service.py::TestApplyParsedOwl::test_persists_header_language_for_generated_owl -q`
+→ 1 passed.

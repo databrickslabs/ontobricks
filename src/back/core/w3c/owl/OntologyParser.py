@@ -3,7 +3,7 @@
 import json
 from rdflib import Graph, RDF, RDFS, OWL, BNode
 from rdflib.namespace import SKOS
-from typing import List, Dict
+from typing import Any, Dict, List
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
@@ -579,7 +579,7 @@ class OntologyParser:
 
         return sorted(properties, key=lambda x: x["name"])
 
-    def get_ontology_info(self) -> Dict[str, str]:
+    def get_ontology_info(self) -> Dict[str, Any]:
         """Get basic ontology information.
 
         Returns:

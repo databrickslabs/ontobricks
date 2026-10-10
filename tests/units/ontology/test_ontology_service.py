@@ -3,6 +3,7 @@
 import copy
 
 import pytest
+from rdflib import RDFS, Graph, Literal, URIRef
 
 from back.core.errors import NotFoundError, ValidationError
 from back.objects.ontology import Ontology
@@ -310,6 +311,41 @@ class TestApplyParsedOwl:
         )
 
         assert domain.ontology["name"] == "Test Ontology"
+
+    def test_persists_header_language_for_generated_owl(self):
+        class StubDomain:
+            def __init__(self):
+                self.info = {"name": "Existing Domain"}
+                self.ontology = {}
+
+            def save(self) -> None:
+                pass
+
+        domain = StubDomain()
+        OntologyImport(domain).apply_parsed_owl_to_domain(
+            {
+                "label": "Test Ontology",
+                "label_lang": "en",
+                "comment_lang": "fr",
+                "namespace": "http://example.org/onto#",
+            },
+            [],
+            [],
+            [],
+            [],
+            [],
+        )
+
+        assert domain.ontology["label_lang"] == "en"
+        assert domain.ontology["comment_lang"] == "fr"
+
+        generated = Graph()
+        generated.parse(data=Ontology.generate_owl(domain.ontology), format="turtle")
+        assert (
+            URIRef("http://example.org/onto"),
+            RDFS.label,
+            Literal("Test Ontology", lang="en"),
+        ) in generated
 
 
 class TestNormalizePropertyDomainRange:

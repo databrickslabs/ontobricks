@@ -717,6 +717,8 @@ class OntologyImport:
                     or ontology_info.get("uri")
                     or DEFAULT_BASE_URI
                 ),
+                "label_lang": ontology_info.get("label_lang"),
+                "comment_lang": ontology_info.get("comment_lang"),
                 "classes": classes,
                 "properties": properties,
                 "constraints": constraints,
