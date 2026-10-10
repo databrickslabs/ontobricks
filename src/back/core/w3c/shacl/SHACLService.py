@@ -783,17 +783,50 @@ class SHACLService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _suggest_prop_matches(prop: Dict, constraint: Dict) -> bool:
+        """Match a property to an OWL constraint, preferring ``propertyUri``."""
+        constraint_uri = constraint.get("propertyUri") or ""
+        constraint_name = constraint.get("property") or ""
+        prop_uri = prop.get("uri") or ""
+        prop_name = prop.get("name") or ""
+        if constraint_uri:
+            if prop_uri:
+                return prop_uri == constraint_uri
+            local = uri_local_name(constraint_uri)
+            return bool(prop_name) and prop_name == local
+        if not constraint_name:
+            return False
+        if prop_name and prop_name == constraint_name:
+            return True
+        return bool(prop_uri) and uri_local_name(prop_uri) == uri_local_name(
+            constraint_name
+        )
+
+    @staticmethod
     def suggest_from_ontology(
         classes: List[Dict],
         properties: List[Dict],
         base_uri: str = "",
+        constraints: Optional[List[Dict]] = None,
     ) -> List[Dict]:
         """Suggest SHACL shapes derived from OWL class/property declarations.
 
-        Produces three rule categories:
-        - **Completeness** (``sh:minCount 1``): every data property listed on a class
+        Structural categories (no extra argument):
+        - **Completeness** (``sh:minCount 1``): data properties listed on a class
         - **Consistency / datatype** (``sh:datatype``): data properties with an XSD range
         - **Consistency / relationship** (``sh:class``): object properties with domain+range
+
+        When ``constraints`` is the list stored on ``DomainSession.constraints``
+        (from ``OntologyParser.get_constraints()``), additional OWL-only tiers:
+        - **Completeness**: ``owl:minCardinality`` / ``owl:cardinality`` (>= 1)
+          and ``owl:someValuesFrom`` — including object properties
+        - **Cardinality** (``sh:maxCount``): ``owl:FunctionalProperty``,
+          ``owl:maxCardinality``, ``owl:cardinality``
+        - **Uniqueness** (``sh:sparql``): ``owl:InverseFunctionalProperty``
+
+        Completeness is **not** invented for every declared property. Requiredness
+        comes from class ``dataProperties[]`` (existing) or an explicit OWL
+        restriction / characteristic.
 
         Returns a list of shape dicts (not persisted).  Each dict carries an extra
         ``"source": "auto"`` field so the UI can distinguish suggestions from manual rules.
@@ -819,6 +852,24 @@ class SHACLService:
             safe = _re.sub(r"[^a-zA-Z0-9_]", "_", key)[:40]
             return f"auto_{safe}_{digest}"
 
+        def _lookup_prop(constraint: Dict) -> Optional[Dict]:
+            for prop in properties:
+                if SHACLService._suggest_prop_matches(prop, constraint):
+                    return prop
+            return None
+
+        def _resolve_target(constraint: Dict, prop: Optional[Dict]) -> Tuple[str, str, str, str]:
+            matched = prop if prop is not None else _lookup_prop(constraint)
+            prop_name = (matched or {}).get("name") or constraint.get("property") or ""
+            prop_uri = (
+                (matched or {}).get("uri")
+                or constraint.get("propertyUri")
+                or _prop_uri_fallback(prop_name)
+            )
+            cls_name = constraint.get("className") or (matched or {}).get("domain") or ""
+            cls_uri = constraint.get("classUri") or (_cls_uri(cls_name) if cls_name else "")
+            return cls_name, cls_uri, prop_name, prop_uri
+
         _XSD_TYPES = {
             "xsd:string", "xsd:integer", "xsd:int", "xsd:long", "xsd:short",
             "xsd:decimal", "xsd:float", "xsd:double", "xsd:boolean",
@@ -841,6 +892,61 @@ class SHACLService:
             shape["source"] = "auto"
             suggestions.append(shape)
 
+        def _add_min_count(
+            cls_name: str,
+            cls_uri: str,
+            prop_name: str,
+            prop_uri: str,
+            min_val: int = 1,
+        ) -> None:
+            if not cls_name or not prop_name or min_val < 1:
+                return
+            extra = str(min_val) if min_val != 1 else ""
+            sid = _stable_id("completeness", cls_name, prop_name, extra)
+            _add(
+                SHACLService.create_shape(
+                    category="completeness",
+                    target_class=cls_name,
+                    target_class_uri=cls_uri,
+                    property_path=prop_name,
+                    property_uri=prop_uri,
+                    shacl_type="sh:minCount",
+                    parameters={"sh:minCount": min_val},
+                    message=f"{cls_name}.{prop_name} must not be empty"
+                    if min_val == 1
+                    else f"{cls_name}.{prop_name} must have at least {min_val} value(s)",
+                    shape_id=sid,
+                )
+            )
+
+        def _add_max_count(
+            cls_name: str,
+            cls_uri: str,
+            prop_name: str,
+            prop_uri: str,
+            max_val: int,
+        ) -> None:
+            if not prop_name or max_val < 1:
+                return
+            sid = _stable_id("cardinality", cls_name, prop_name, str(max_val))
+            _add(
+                SHACLService.create_shape(
+                    category="cardinality",
+                    target_class=cls_name,
+                    target_class_uri=cls_uri,
+                    property_path=prop_name,
+                    property_uri=prop_uri,
+                    shacl_type="sh:maxCount",
+                    parameters={"sh:maxCount": max_val},
+                    message=(
+                        f"{cls_name}.{prop_name} must have at most {max_val} value(s)"
+                        if cls_name
+                        else f"{prop_name} must have at most {max_val} value(s)"
+                    ),
+                    shape_id=sid,
+                )
+            )
+
         # ── 1. Completeness: data properties listed directly on each class ──
         for cls in classes:
             cls_name = cls.get("name", "")
@@ -848,22 +954,7 @@ class SHACLService:
             for dp in cls.get("dataProperties", []):
                 prop_name = dp.get("name") or dp.get("localName", "")
                 prop_uri = dp.get("uri") or _prop_uri_fallback(prop_name)
-                if not cls_name or not prop_name:
-                    continue
-                sid = _stable_id("completeness", cls_name, prop_name)
-                _add(
-                    SHACLService.create_shape(
-                        category="completeness",
-                        target_class=cls_name,
-                        target_class_uri=cls_uri,
-                        property_path=prop_name,
-                        property_uri=prop_uri,
-                        shacl_type="sh:minCount",
-                        parameters={"sh:minCount": 1},
-                        message=f"{cls_name}.{prop_name} must not be empty",
-                        shape_id=sid,
-                    )
-                )
+                _add_min_count(cls_name, cls_uri, prop_name, prop_uri)
 
         # ── 2. Datatype: DatatypeProperty with XSD range ──
         for prop in properties:
@@ -923,6 +1014,114 @@ class SHACLService:
                     shape_id=sid,
                 )
             )
+
+        # ── 4–6. OWL constraints: completeness / cardinality / uniqueness ──
+        for constraint in constraints or []:
+            ctype = constraint.get("type", "")
+            matched = _lookup_prop(constraint)
+
+            min_val: Optional[int] = None
+            if ctype == "minCardinality":
+                min_val = int(constraint.get("cardinalityValue") or 0)
+            elif ctype == "exactCardinality":
+                min_val = int(constraint.get("cardinalityValue") or 0)
+            elif ctype == "someValuesFrom":
+                min_val = 1
+            if min_val:
+                cls_name, cls_uri, prop_name, prop_uri = _resolve_target(
+                    constraint, matched
+                )
+                _add_min_count(cls_name, cls_uri, prop_name, prop_uri, min_val)
+
+            max_val: Optional[int] = None
+            if ctype == "functional":
+                max_val = 1
+            elif ctype == "maxCardinality":
+                max_val = int(constraint.get("cardinalityValue") or 0)
+            elif ctype == "exactCardinality":
+                max_val = int(constraint.get("cardinalityValue") or 0)
+            if max_val:
+                if ctype == "functional" and not constraint.get("className"):
+                    targets = [
+                        p
+                        for p in properties
+                        if SHACLService._suggest_prop_matches(p, constraint)
+                    ]
+                    if not targets and matched is None:
+                        cls_name, cls_uri, prop_name, prop_uri = _resolve_target(
+                            constraint, None
+                        )
+                        _add_max_count(cls_name, cls_uri, prop_name, prop_uri, max_val)
+                    for prop in targets or ([matched] if matched else []):
+                        domain_name = prop.get("domain") or ""
+                        prop_name = prop.get("name") or constraint.get("property") or ""
+                        prop_uri = (
+                            prop.get("uri")
+                            or constraint.get("propertyUri")
+                            or _prop_uri_fallback(prop_name)
+                        )
+                        _add_max_count(
+                            domain_name,
+                            _cls_uri(domain_name) if domain_name else "",
+                            prop_name,
+                            prop_uri,
+                            max_val,
+                        )
+                else:
+                    cls_name, cls_uri, prop_name, prop_uri = _resolve_target(
+                        constraint, matched
+                    )
+                    _add_max_count(cls_name, cls_uri, prop_name, prop_uri, max_val)
+
+            if ctype != "inverseFunctional":
+                continue
+            ifp_targets = [
+                p
+                for p in properties
+                if SHACLService._suggest_prop_matches(p, constraint)
+            ]
+            if not ifp_targets:
+                cls_name, cls_uri, prop_name, prop_uri = _resolve_target(constraint, None)
+                ifp_targets = [
+                    {
+                        "name": prop_name,
+                        "uri": prop_uri,
+                        "domain": cls_name,
+                    }
+                ]
+            for prop in ifp_targets:
+                prop_name = prop.get("name") or ""
+                domain_name = prop.get("domain") or constraint.get("className") or ""
+                if not prop_name:
+                    continue
+                prop_uri = prop.get("uri") or constraint.get("propertyUri") or _prop_uri_fallback(
+                    prop_name
+                )
+                safe_uri = prop_uri.replace("\\", "").replace(">", "")
+                sid = _stable_id("uniqueness", domain_name, prop_name)
+                select = (
+                    "SELECT $this WHERE { "
+                    f"$this <{safe_uri}> ?v . "
+                    f"?other <{safe_uri}> ?v . "
+                    "FILTER($this != ?other) }"
+                )
+                _add(
+                    SHACLService.create_shape(
+                        category="uniqueness",
+                        target_class=domain_name,
+                        target_class_uri=_cls_uri(domain_name) if domain_name else "",
+                        property_path=prop_name,
+                        property_uri=prop_uri,
+                        shacl_type="sh:sparql",
+                        parameters={"sh:select": select},
+                        message=(
+                            f"{domain_name}.{prop_name} must be unique"
+                            if domain_name
+                            else f"{prop_name} must be unique"
+                        ),
+                        shape_id=sid,
+                    )
+                )
 
         return suggestions
 

@@ -86,3 +86,42 @@ class TestIdAgreement:
         assert DigitalTwin._rule_check_id("swrl", rule, 0) == rule_check_id(
             "swrl", rule, 0
         )
+
+
+class _SuggestDomain:
+    shacl_shapes: list = []
+    constraints = [
+        {
+            "type": "functional",
+            "property": "bookedIn",
+            "propertyUri": "http://t.org/ontology/bookedIn",
+        }
+    ]
+    ontology = {"base_uri": "http://t.org/ontology#"}
+
+    def get_classes(self):
+        return []
+
+    def get_properties(self):
+        return [
+            {
+                "name": "bookedIn",
+                "type": "ObjectProperty",
+                "domain": "Trade",
+                "range": "Book",
+                "uri": "http://t.org/ontology/bookedIn",
+            }
+        ]
+
+
+class TestSuggestShapesUsesSessionConstraints:
+    async def test_route_reads_domain_constraints_not_get_constraints(self, monkeypatch):
+        from api.routers.internal import ontology
+
+        monkeypatch.setattr(ontology, "get_domain", lambda _mgr: _SuggestDomain())
+        response = await ontology.suggest_shapes(session_mgr=object())
+        card = [
+            s for s in response["suggestions"] if s.get("shacl_type") == "sh:maxCount"
+        ]
+        assert len(card) == 1
+        assert card[0]["property_path"] == "bookedIn"

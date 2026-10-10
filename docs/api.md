@@ -1876,6 +1876,48 @@ POST /ontology/dataquality/migrate
 
 Converts legacy ontology constraints to SHACL shapes.
 
+#### Suggest Shapes from the Ontology
+
+```http
+GET /ontology/dataquality/suggest
+```
+
+Read-only. Builds candidate SHACL shapes from the current session ontology and
+`domain.constraints` (the list produced by `OntologyParser.get_constraints()`).
+Does not persist anything. Suggestions whose `id` already exists in
+`domain.shacl_shapes` are filtered out.
+
+**Example — what is generated**
+
+- Completeness (`sh:minCount`) for data properties listed on a class, plus
+  `owl:minCardinality` / `owl:cardinality` / `owl:someValuesFrom` (including
+  object properties). A bare object property with no restriction is **not**
+  treated as required.
+- Cardinality (`sh:maxCount`) from `owl:FunctionalProperty` and
+  `owl:maxCardinality` / `owl:cardinality`.
+- Uniqueness (`sh:sparql` duplicate-value select) from
+  `owl:InverseFunctionalProperty`.
+- Datatype (`sh:datatype`) and relationship (`sh:class`) from property ranges.
+
+**Response:**
+```json
+{
+  "success": true,
+  "suggestions": [
+    {
+      "id": "auto_completeness_Trade_status_ab12cd34",
+      "category": "completeness",
+      "target_class": "Trade",
+      "property_path": "status",
+      "shacl_type": "sh:minCount",
+      "parameters": {"sh:minCount": 1},
+      "source": "auto"
+    }
+  ],
+  "total": 1
+}
+```
+
 ---
 
 ### OWL Axioms Endpoints

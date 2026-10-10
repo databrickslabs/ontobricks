@@ -152,3 +152,189 @@ class TestValidateGraph:
         # No shapes → conforming by definition.
         assert isinstance(result, dict)
         assert result.get("conforms") in {True, "True", None}
+
+
+@pytest.mark.unit
+class TestSuggestFromOntology:
+    """Gap closure for suggest_from_ontology — signals come from OWL structure.
+
+    Completeness for object properties is gated on minCardinality / someValuesFrom,
+    not invented for every declared property.
+    """
+
+    _BASE = "http://t.org/ontology#"
+
+    def _obj_prop(self, name: str, domain: str, range_cls: str, ns: str = "") -> dict:
+        prefix = ns or "http://t.org/ontology/"
+        return {
+            "name": name,
+            "type": "ObjectProperty",
+            "domain": domain,
+            "range": range_cls,
+            "uri": f"{prefix}{name}",
+        }
+
+    def _dat_prop(self, name: str, domain: str, range_xsd: str = "xsd:string") -> dict:
+        return {
+            "name": name,
+            "type": "DatatypeProperty",
+            "domain": domain,
+            "range": range_xsd,
+            "uri": f"http://t.org/ontology/{name}",
+        }
+
+    def _constraint(self, ctype: str, prop_name: str, **extra) -> dict:
+        return {
+            "type": ctype,
+            "property": prop_name,
+            "propertyUri": extra.pop("propertyUri", f"http://t.org/ontology/{prop_name}"),
+            **extra,
+        }
+
+    def test_class_listed_data_property_still_suggests_completeness(self):
+        classes = [
+            {
+                "name": "Trade",
+                "uri": f"{self._BASE}Trade",
+                "dataProperties": [
+                    {"name": "status", "uri": "http://t.org/ontology/status"}
+                ],
+            }
+        ]
+        result = SHACLService.suggest_from_ontology(classes, [], self._BASE)
+        comp = [
+            s
+            for s in result
+            if s["shacl_type"] == "sh:minCount" and s["property_path"] == "status"
+        ]
+        assert len(comp) == 1
+        assert comp[0]["category"] == "completeness"
+
+    def test_no_completeness_for_bare_object_property(self):
+        props = [self._obj_prop("bookedIn", "Trade", "Book")]
+        result = SHACLService.suggest_from_ontology([], props, self._BASE)
+        assert [s for s in result if s["shacl_type"] == "sh:minCount"] == []
+
+    def test_completeness_from_min_cardinality(self):
+        props = [self._obj_prop("bookedIn", "Trade", "Book")]
+        constraints = [
+            self._constraint(
+                "minCardinality",
+                "bookedIn",
+                className="Trade",
+                cardinalityValue=1,
+            )
+        ]
+        result = SHACLService.suggest_from_ontology(
+            [], props, self._BASE, constraints=constraints
+        )
+        comp = [
+            s
+            for s in result
+            if s["shacl_type"] == "sh:minCount" and s["property_path"] == "bookedIn"
+        ]
+        assert len(comp) == 1
+        assert comp[0]["category"] == "completeness"
+        assert comp[0]["parameters"]["sh:minCount"] == 1
+
+    def test_no_duplicate_when_class_list_and_min_cardinality(self):
+        classes = [
+            {
+                "name": "Trade",
+                "uri": f"{self._BASE}Trade",
+                "dataProperties": [
+                    {"name": "status", "uri": "http://t.org/ontology/status"}
+                ],
+            }
+        ]
+        constraints = [
+            self._constraint(
+                "minCardinality",
+                "status",
+                className="Trade",
+                cardinalityValue=1,
+            )
+        ]
+        result = SHACLService.suggest_from_ontology(
+            classes, [self._dat_prop("status", "Trade")], self._BASE, constraints=constraints
+        )
+        comp = [
+            s
+            for s in result
+            if s["property_path"] == "status" and s["shacl_type"] == "sh:minCount"
+        ]
+        assert len(comp) == 1
+
+    def test_no_cardinality_without_functional_constraint(self):
+        props = [self._obj_prop("bookedIn", "Trade", "Book")]
+        result = SHACLService.suggest_from_ontology([], props, self._BASE)
+        assert [s for s in result if s["shacl_type"] == "sh:maxCount"] == []
+
+    def test_cardinality_with_functional_constraint_matches_uri(self):
+        props = [self._obj_prop("bookedIn", "Trade", "Book")]
+        constraints = [self._constraint("functional", "bookedIn")]
+        result = SHACLService.suggest_from_ontology(
+            [], props, self._BASE, constraints=constraints
+        )
+        card = [
+            s
+            for s in result
+            if s["shacl_type"] == "sh:maxCount" and s["property_path"] == "bookedIn"
+        ]
+        assert len(card) == 1
+        assert card[0]["category"] == "cardinality"
+        assert card[0]["parameters"]["sh:maxCount"] == 1
+        assert "at most" in card[0]["message"]
+
+    def test_functional_does_not_match_same_local_name_other_namespace(self):
+        props = [
+            self._obj_prop("bookedIn", "Trade", "Book", ns="http://t.org/ontology/"),
+            self._obj_prop("bookedIn", "Deal", "Book", ns="http://other.org/"),
+        ]
+        constraints = [
+            {
+                "type": "functional",
+                "property": "bookedIn",
+                "propertyUri": "http://t.org/ontology/bookedIn",
+            }
+        ]
+        result = SHACLService.suggest_from_ontology(
+            [], props, self._BASE, constraints=constraints
+        )
+        card = [s for s in result if s["shacl_type"] == "sh:maxCount"]
+        assert {s["target_class"] for s in card} == {"Trade"}
+
+    def test_no_uniqueness_without_inverse_functional_constraint(self):
+        props = [self._dat_prop("record_id", "Entity")]
+        result = SHACLService.suggest_from_ontology([], props, self._BASE)
+        assert [s for s in result if s["category"] == "uniqueness"] == []
+
+    def test_uniqueness_with_inverse_functional_on_data_and_object_props(self):
+        props = [
+            self._dat_prop("record_id", "Entity"),
+            self._obj_prop("identifiedBy", "Entity", "Id"),
+        ]
+        constraints = [
+            self._constraint("inverseFunctional", "record_id"),
+            self._constraint("inverseFunctional", "identifiedBy"),
+        ]
+        result = SHACLService.suggest_from_ontology(
+            [], props, self._BASE, constraints=constraints
+        )
+        uniq = [s for s in result if s["category"] == "uniqueness"]
+        assert {s["property_path"] for s in uniq} == {"record_id", "identifiedBy"}
+        assert all("FILTER($this != ?other)" in s["parameters"]["sh:select"] for s in uniq)
+
+    def test_idempotent_ids(self):
+        props = [self._obj_prop("bookedIn", "Trade", "Book")]
+        constraints = [self._constraint("functional", "bookedIn")]
+        r1 = SHACLService.suggest_from_ontology(
+            [], props, self._BASE, constraints=constraints
+        )
+        r2 = SHACLService.suggest_from_ontology(
+            [], props, self._BASE, constraints=constraints
+        )
+        assert {s["id"] for s in r1} == {s["id"] for s in r2}
+
+    def test_empty_inputs_return_empty(self):
+        assert SHACLService.suggest_from_ontology([], [], self._BASE) == []
