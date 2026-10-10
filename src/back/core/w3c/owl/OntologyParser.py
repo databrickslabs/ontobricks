@@ -320,12 +320,14 @@ class OntologyParser:
 
             # Get parent class (subClassOf)
             parent = None
+            parent_uri = ""
             for parent_cls in self.graph.objects(cls, RDFS.subClassOf):
-                parent_uri = str(parent_cls)
+                candidate_parent_uri = str(parent_cls)
                 # Skip blank nodes and Thing
-                if not isinstance(parent_cls, BNode) and not parent_uri.endswith(
-                    "Thing"
-                ):
+                if not isinstance(
+                    parent_cls, BNode
+                ) and not candidate_parent_uri.endswith("Thing"):
+                    parent_uri = candidate_parent_uri
                     parent = self._extract_local_name(parent_uri)
                     break
 
@@ -346,6 +348,7 @@ class OntologyParser:
                     "comment_lang": comment_lang,
                     "emoji": emoji or "",
                     "parent": parent or "",
+                    "parent_uri": parent_uri,
                     "group": group,
                     "dashboard": dashboard or "",
                     "dashboardParams": dashboard_params,
@@ -553,14 +556,18 @@ class OntologyParser:
 
                 # Get domain - extract local name
                 domain = None
+                domain_uri = ""
                 for dom in self.graph.objects(prop, RDFS.domain):
-                    domain = self._extract_local_name(str(dom))
+                    domain_uri = str(dom)
+                    domain = self._extract_local_name(domain_uri)
                     break
 
                 # Get range - extract local name
                 range_val = None
+                range_uri = ""
                 for rng in self.graph.objects(prop, RDFS.range):
-                    range_val = self._extract_local_name(str(rng))
+                    range_uri = str(rng)
+                    range_val = self._extract_local_name(range_uri)
                     break
 
                 properties.append(
@@ -573,7 +580,9 @@ class OntologyParser:
                         "comment_lang": comment_lang,
                         "type": prop_type,
                         "domain": domain or "",
+                        "domain_uri": domain_uri,
                         "range": range_val or "",
+                        "range_uri": range_uri,
                     }
                 )
 

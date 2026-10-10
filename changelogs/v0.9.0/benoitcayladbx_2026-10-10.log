@@ -38,3 +38,29 @@ Tests: `uv run --frozen pytest -q -m "not scenario"` → 7403 passed,
 reserved for later tasks in 55.78s. Focused Task 2 regression test:
 `uv run --frozen pytest tests/units/ontology/test_ontology_service.py::TestApplyParsedOwl::test_persists_header_language_for_generated_owl -q`
 → 1 passed.
+
+## Preserve imported OWL resource IRIs
+
+Context: OWL round-trips rebuilt class, property, parent, domain, and range
+resources from local names. This rewrote external ontology references into the
+active ontology namespace.
+
+Changes:
+
+1. src/back/core/w3c/owl/OntologyParser.py
+   Preserve full parent, domain, and range IRIs alongside Studio local names.
+2. src/back/core/w3c/owl/OntologyGenerator.py
+   Prefer valid stored class, property, parent, domain, and range IRIs during export.
+3. tests/units/ontology/test_owl_parser.py
+   Cover external parent, domain, and range parsing plus empty parent IRIs.
+4. tests/units/ontology/test_owl_generator.py
+   Cover preserved class, property, parent, domain, range, and class attribute IRIs.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- tests/units/ontology/test_owl_parser.py
+- tests/units/ontology/test_owl_generator.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest tests/units/ontology/test_owl_parser.py tests/units/ontology/test_owl_generator.py -q` → 69 passed; `uv run --frozen pytest -q -m "not scenario"` → 7409 passed, 3 expected Task 4 fidelity failures, 326 skipped, 6 deselected, 1 xfailed.

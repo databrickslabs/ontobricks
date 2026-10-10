@@ -187,6 +187,24 @@ class TestGetClasses:
         assert classes["VIPCustomer"]["parent"] == "Customer"
         assert classes["Customer"]["parent"] == ""
 
+    def test_external_subclass_keeps_full_uri(self):
+        ttl = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://example.org/onto#> .
+:Customer a owl:Class ;
+    rdfs:subClassOf <http://example.org/other-onto#Party> .
+"""
+        classes = {c["name"]: c for c in OntologyParser(ttl).get_classes()}
+        assert classes["Customer"]["parent"] == "Party"
+        assert (
+            classes["Customer"]["parent_uri"]
+            == "http://example.org/other-onto#Party"
+        )
+
+    def test_class_without_parent_has_empty_parent_uri(self):
+        classes = {c["name"]: c for c in OntologyParser(SAMPLE_TURTLE).get_classes()}
+        assert classes["Customer"]["parent_uri"] == ""
+
     def test_data_properties_assigned(self):
         parser = OntologyParser(SAMPLE_TURTLE)
         classes = {c["name"]: c for c in parser.get_classes()}
@@ -249,6 +267,22 @@ class TestGetProperties:
         props = {p["name"]: p for p in parser.get_properties()}
         assert props["hasOrder"]["domain"] == "Customer"
         assert props["hasOrder"]["range"] == "Order"
+
+    def test_external_domain_and_range_keep_full_uris(self):
+        ttl = """@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix : <http://example.org/onto#> .
+:hasParty a owl:ObjectProperty ;
+    rdfs:domain <http://example.org/domain-onto#Account> ;
+    rdfs:range <http://example.org/other-onto#Party> .
+"""
+        props = {p["name"]: p for p in OntologyParser(ttl).get_properties()}
+        assert props["hasParty"]["domain"] == "Account"
+        assert props["hasParty"]["domain_uri"] == (
+            "http://example.org/domain-onto#Account"
+        )
+        assert props["hasParty"]["range"] == "Party"
+        assert props["hasParty"]["range_uri"] == "http://example.org/other-onto#Party"
 
 
 class TestGetOntologyInfo:

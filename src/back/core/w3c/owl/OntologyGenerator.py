@@ -516,7 +516,12 @@ class OntologyGenerator:
             "Processing class: %s, parent: %s", class_name, cls.get("parent", "NONE")
         )
 
-        class_uri = URIRef(self.base_uri + class_name)
+        stored_class_uri = str(cls.get("uri", ""))
+        class_uri = (
+            URIRef(stored_class_uri)
+            if stored_class_uri.startswith(("http://", "https://"))
+            else URIRef(self.base_uri + class_name)
+        )
 
         # Define as OWL Class
         self.graph.add((class_uri, RDF.type, OWL.Class))
@@ -616,18 +621,16 @@ class OntologyGenerator:
 
         # Add parent class (subClassOf)
         parent = cls.get("parent", "").strip() if cls.get("parent") else ""
-        if parent:
-            logger.debug("Adding subClassOf: %s -> %s", class_name, parent)
-            if parent.startswith("http://") or parent.startswith("https://"):
-                parent_uri = URIRef(parent)
-            else:
-                parent_uri = URIRef(self.base_uri + parent)
+        parent_ref = str(cls.get("parent_uri") or parent).strip()
+        if parent_ref:
+            logger.debug("Adding subClassOf: %s -> %s", class_name, parent_ref)
+            parent_uri = self._resolve_uri(parent_ref)
             self.graph.add((class_uri, RDFS.subClassOf, parent_uri))
 
         # Add data properties (attributes) for this class
         data_props = cls.get("dataProperties", [])
         for data_prop in data_props:
-            self._add_data_property_for_class(data_prop, class_name)
+            self._add_data_property_for_class(data_prop, class_uri)
 
     def _sanitize_name(self, name: str) -> str:
         """Sanitize a name to be URI-safe.
@@ -651,12 +654,12 @@ class OntologyGenerator:
         sanitized = sanitized.strip("_")
         return sanitized
 
-    def _add_data_property_for_class(self, data_prop: Dict, class_name: str):
+    def _add_data_property_for_class(self, data_prop: Dict, class_uri: URIRef):
         """Add a data property (attribute) for a specific class.
 
         Args:
             data_prop: Data property definition with 'name', 'type', etc.
-            class_name: Name of the class this property belongs to
+            class_uri: URI of the class this property belongs to
         """
         # Handle different formats - can be string or dict
         if isinstance(data_prop, str):
@@ -679,7 +682,14 @@ class OntologyGenerator:
 
         # Create a unique property name to avoid conflicts
         # Use format: className_propertyName or just propertyName
-        prop_uri = URIRef(self.base_uri + prop_name)
+        stored_prop_uri = (
+            str(data_prop.get("uri", "")) if isinstance(data_prop, dict) else ""
+        )
+        prop_uri = (
+            URIRef(stored_prop_uri)
+            if stored_prop_uri.startswith(("http://", "https://"))
+            else URIRef(self.base_uri + prop_name)
+        )
 
         if (prop_uri, RDF.type, OWL.DatatypeProperty) in self.graph:
             return
@@ -691,8 +701,7 @@ class OntologyGenerator:
         self.graph.add((prop_uri, RDFS.label, Literal(original_name)))
 
         # Add domain (the class this property belongs to)
-        domain_uri = URIRef(self.base_uri + class_name)
-        self.graph.add((prop_uri, RDFS.domain, domain_uri))
+        self.graph.add((prop_uri, RDFS.domain, class_uri))
 
         # Add range (default to xsd:string)
         prop_type = (
@@ -756,7 +765,12 @@ class OntologyGenerator:
             )
             return
 
-        prop_uri = URIRef(self.base_uri + prop_name)
+        stored_prop_uri = str(prop.get("uri", ""))
+        prop_uri = (
+            URIRef(stored_prop_uri)
+            if stored_prop_uri.startswith(("http://", "https://"))
+            else URIRef(self.base_uri + prop_name)
+        )
 
         if prop_type == "DatatypeProperty":
             self.graph.add((prop_uri, RDF.type, OWL.DatatypeProperty))
@@ -782,26 +796,21 @@ class OntologyGenerator:
 
         # Add domain
         domain = prop.get("domain", "")
-        if domain:
-            domain = domain.strip()
-            if domain.startswith("http://") or domain.startswith("https://"):
-                domain_uri = URIRef(domain)
-            else:
-                domain_uri = URIRef(self.base_uri + domain)
+        domain_ref = str(prop.get("domain_uri") or domain).strip()
+        if domain_ref:
+            domain_uri = self._resolve_uri(domain_ref)
             self.graph.add((prop_uri, RDFS.domain, domain_uri))
 
         # Add range
         range_val = prop.get("range", "")
-        if range_val:
-            range_val = range_val.strip()
-            if range_val.startswith("http://") or range_val.startswith("https://"):
-                range_uri = URIRef(range_val)
-            elif range_val.startswith("xsd:"):
+        range_ref = str(prop.get("range_uri") or range_val).strip()
+        if range_ref:
+            if range_ref.startswith("xsd:"):
                 # Handle XSD datatypes
-                datatype = range_val.replace("xsd:", "")
+                datatype = range_ref.replace("xsd:", "")
                 range_uri = self._get_xsd_type(datatype)
             else:
-                range_uri = URIRef(self.base_uri + range_val)
+                range_uri = self._resolve_uri(range_ref)
             self.graph.add((prop_uri, RDFS.range, range_uri))
 
         # Note: Relationship attributes are not supported - relationships are simple ObjectProperties

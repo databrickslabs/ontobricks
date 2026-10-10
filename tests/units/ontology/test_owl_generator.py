@@ -1,6 +1,8 @@
 """Tests for OWL ontology generator."""
 
 import pytest
+from rdflib import Graph, RDF, RDFS, OWL, URIRef
+
 from back.core.w3c.owl.OntologyGenerator import OntologyGenerator
 from back.core.w3c.owl.OntologyParser import OntologyParser
 
@@ -54,6 +56,31 @@ class TestClassGeneration:
         gen = _make_generator(classes=classes)
         owl = gen.generate()
         assert "subClassOf" in owl
+
+    def test_generate_emits_external_class_and_parent_uris(self):
+        gen = OntologyGenerator(
+            base_uri="http://example.org/onto#",
+            ontology_name="Test Ontology",
+            classes=[
+                {
+                    "name": "Customer",
+                    "uri": "http://classes.example/Customer",
+                    "label": "Customer",
+                    "parent": "Party",
+                    "parent_uri": "http://example.org/other-onto#Party",
+                }
+            ],
+            properties=[],
+        )
+        graph = Graph()
+        graph.parse(data=gen.generate(), format="turtle")
+        class_uri = URIRef("http://classes.example/Customer")
+        assert (class_uri, RDF.type, OWL.Class) in graph
+        assert (
+            class_uri,
+            RDFS.subClassOf,
+            URIRef("http://example.org/other-onto#Party"),
+        ) in graph
 
     def test_class_with_emoji(self):
         classes = [{"name": "Customer", "label": "Customer", "emoji": "👤"}]
@@ -272,6 +299,56 @@ class TestPropertyGeneration:
         gen = _make_generator(properties=props)
         owl = gen.generate()
         assert "DatatypeProperty" in owl
+
+    def test_generate_emits_external_property_domain_and_range_uris(self):
+        props = [
+            {
+                "name": "hasParty",
+                "uri": "http://properties.example/hasParty",
+                "type": "ObjectProperty",
+                "domain": "Account",
+                "domain_uri": "http://example.org/domain-onto#Account",
+                "range": "Party",
+                "range_uri": "http://example.org/other-onto#Party",
+            }
+        ]
+        graph = Graph()
+        graph.parse(data=_make_generator(properties=props).generate(), format="turtle")
+        prop_uri = URIRef("http://properties.example/hasParty")
+        assert (prop_uri, RDF.type, OWL.ObjectProperty) in graph
+        assert (
+            prop_uri,
+            RDFS.domain,
+            URIRef("http://example.org/domain-onto#Account"),
+        ) in graph
+        assert (
+            prop_uri,
+            RDFS.range,
+            URIRef("http://example.org/other-onto#Party"),
+        ) in graph
+
+    def test_class_data_property_keeps_its_uri_and_class_domain_uri(self):
+        classes = [
+            {
+                "name": "Customer",
+                "uri": "http://classes.example/Customer",
+                "dataProperties": [
+                    {
+                        "name": "legalName",
+                        "uri": "http://properties.example/legalName",
+                    }
+                ],
+            }
+        ]
+        graph = Graph()
+        graph.parse(data=_make_generator(classes=classes).generate(), format="turtle")
+        prop_uri = URIRef("http://properties.example/legalName")
+        assert (prop_uri, RDF.type, OWL.DatatypeProperty) in graph
+        assert (
+            prop_uri,
+            RDFS.domain,
+            URIRef("http://classes.example/Customer"),
+        ) in graph
 
 
 class TestConstraintGeneration:
