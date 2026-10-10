@@ -158,3 +158,49 @@ Tests: `uv run --frozen pytest tests/units/api/test_ontology_generate_route.py
 tests/units/ontology/test_owl_import_fidelity.py -q` → 5 passed;
 `uv run --frozen pytest -q -m "not scenario"` → 7418 passed, 326 skipped,
 6 deselected, 1 xfailed in 53.93s.
+
+## Preserve non-OWL triples and external IRIs on OWL import
+
+Context: GitHub #194 reported that OWL import rebuilt ontologies from the
+Studio model, dropping SKOS, DCTERMS, PROV, and other annotations while
+rewriting external parent references and replacing the ontology label.
+Preserve graph metadata through the editable model without claiming
+bit-exact Turtle text.
+
+Changes:
+
+1. src/back/core/w3c/owl/OntologyParser.py
+   Preserve ontology metadata, language tags, full external references, and
+   non-consumed triples during parsing.
+2. src/back/core/w3c/owl/OntologyGenerator.py
+   Restore preserved IRIs, namespaces, language tags, and RDF extras during
+   OWL generation.
+3. src/back/core/w3c/owl/OntologyRdfExtras.py
+   Extract and safely reapply leftover ontology, class, and property triples.
+4. src/back/objects/ontology/OntologyImport.py
+   Persist parsed ontology identity, language metadata, and RDF extras in the
+   active domain.
+5. src/api/routers/internal/ontology.py
+   Merge missing session RDF extras into Studio generate-OWL requests while
+   retaining explicit request values.
+6. docs/user-guide.md
+   Document preserved OWL import metadata, deletion behavior, Studio limits,
+   and the lack of bit-exact Turtle text preservation.
+7. .planning/owl-import-fidelity/SPEC.md
+   Define the fidelity scope, success criteria, and non-goals for GitHub #194.
+8. .planning/owl-import-fidelity/PLAN.md
+   Record the task-by-task implementation and verification plan.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/OntologyRdfExtras.py
+- src/back/objects/ontology/OntologyImport.py
+- src/api/routers/internal/ontology.py
+- docs/user-guide.md
+- .planning/owl-import-fidelity/SPEC.md
+- .planning/owl-import-fidelity/PLAN.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7418 passed, 326
+skipped, 6 deselected, 1 xfailed, 32 warnings in 51.49s.

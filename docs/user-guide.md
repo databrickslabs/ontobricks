@@ -2402,6 +2402,18 @@ Import an ontology written in the **Web Ontology Language (OWL)**.
 3. Click **Import**.
 4. OntoBricks parses the file and loads all classes, properties, constraints, SWRL rules, and axioms.
 
+OntoBricks keeps the ontology IRI and label from the file, full IRIs for
+external `rdfs:subClassOf`, domain, and range references, language tags on
+labels, and extra annotations on the ontology, classes, and properties. These
+annotations include SKOS, DCTERMS, PROV, `owl:versionInfo`, and any other
+non-consumed predicate. The extra triples are restored on OWL export, but they
+are not shown or edited in Studio. Deleting a class drops its leftover
+triples.
+
+The exported ontology preserves the RDF meaning of this metadata, but the
+original Turtle text is not bit-preserved: comment layout, whitespace, and
+prefix order may change.
+
 #### From Unity Catalog
 
 1. In the same OWL tab, switch to the **Unity Catalog** sub-tab.
