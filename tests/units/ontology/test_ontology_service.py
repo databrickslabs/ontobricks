@@ -409,6 +409,36 @@ class TestPruneMappingsToOntologyUris:
 
 
 class TestSaveOntologyConfigFromEditor:
+    def test_save_preserves_imported_ontology_label_and_language(
+        self, domain_session, sample_ontology_config
+    ):
+        domain_session.info["name"] = "ImportedProject"
+        domain_session.ontology.update(
+            {"name": "Test Ontology", "label_lang": "en"}
+        )
+
+        Ontology(domain_session).save_ontology_config_from_editor(
+            {"config": sample_ontology_config}
+        )
+
+        assert domain_session.ontology["name"] == "Test Ontology"
+        assert domain_session.ontology["label_lang"] == "en"
+
+    def test_save_rederives_default_ontology_name_and_clears_language(
+        self, domain_session, sample_ontology_config
+    ):
+        domain_session.info["name"] = "ImportedProject"
+        domain_session.ontology.update(
+            {"name": "ImportedProject", "label_lang": "en"}
+        )
+
+        Ontology(domain_session).save_ontology_config_from_editor(
+            {"config": sample_ontology_config}
+        )
+
+        assert domain_session.ontology["name"] == "importedproject"
+        assert domain_session.ontology["label_lang"] is None
+
     def test_save_and_prune_orphans(
         self, domain_session, sample_ontology_config, sample_mapping_config
     ):

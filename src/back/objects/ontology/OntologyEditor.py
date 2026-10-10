@@ -186,9 +186,18 @@ class OntologyEditor:
             )
 
         s.clear_generated_content()
-        canonical_name = s.info.get("name", "").lower() or ontology_config.get(
-            "name", ""
+        domain_name = (s.info.get("name") or "").strip()
+        ontology_name = (s.ontology.get("name") or "").strip()
+        rederive_name = bool(domain_name) and (
+            not ontology_name or ontology_name.lower() == domain_name.lower()
         )
+        canonical_name = (
+            domain_name.lower()
+            if rederive_name
+            else ontology_name or ontology_config.get("name", "")
+        )
+        if rederive_name:
+            s.ontology["label_lang"] = None
         s.ontology.update(
             {
                 "name": canonical_name,

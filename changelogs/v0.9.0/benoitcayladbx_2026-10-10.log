@@ -247,3 +247,39 @@ Modified files:
 
 Tests: `uv run --frozen pytest -q -m "not scenario"` → 7426 passed, 326
 skipped, 6 deselected, 1 xfailed, 32 warnings in 57.42s.
+
+## Preserve OWL fidelity metadata across saves
+
+Context: Whole-branch review found that registry export omitted imported RDF
+extras and ontology language tags, while Studio saves replaced imported
+ontology labels with the domain name. Preserve imported metadata through both
+save paths and document rename behavior.
+
+Changes:
+
+1. src/back/objects/session/DomainSession.py
+   Include RDF extras and ontology label/comment languages in version exports.
+2. src/back/objects/ontology/OntologyEditor.py
+   Preserve imported ontology labels on Studio saves and clear label language
+   only when re-deriving the ontology name from the domain name.
+3. tests/units/domain/test_domain_session.py
+   Cover RDF extras and ontology label language export/import round-trips.
+4. tests/units/ontology/test_ontology_service.py
+   Cover imported label preservation and default-name re-derivation.
+5. .planning/owl-import-fidelity/SPEC.md
+   State that extras tied to an old class IRI are dropped after an IRI-changing
+   local-name rename.
+6. docs/user-guide.md
+   Document the same OWL export limitation for users.
+
+Modified files:
+- src/back/objects/session/DomainSession.py
+- src/back/objects/ontology/OntologyEditor.py
+- tests/units/domain/test_domain_session.py
+- tests/units/ontology/test_ontology_service.py
+- .planning/owl-import-fidelity/SPEC.md
+- docs/user-guide.md
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 7429 passed, 326
+skipped, 6 deselected, 1 xfailed, 32 warnings in 54.18s.

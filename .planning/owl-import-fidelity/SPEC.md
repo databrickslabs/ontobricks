@@ -141,7 +141,8 @@ Turtle → OntologyParser (info, classes, properties, constraints, …, rdf_extr
   whose predicate is consumed.
 - User deletes a class: extras for that subject are omitted (not an error).
 - User changes a class local name but URI stays: extras still attach (URI key).
-- User changes URI in designer: extras on the old URI are dropped. Acceptable
+- User renames a class local name so that its IRI changes, or changes the IRI
+  directly in Designer: extras on the old IRI are dropped on export. Acceptable
   in this slice (no UI to retarget extras).
 
 ## 6. Testing

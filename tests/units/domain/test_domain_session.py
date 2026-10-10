@@ -413,6 +413,35 @@ class TestExportImport:
         assert export["info"]["name"] == "Export Test"
         assert "versions" in export
 
+    def test_imported_rdf_metadata_round_trip(self, domain_session):
+        extras = {
+            "prefixes": {"dcterms": "http://purl.org/dc/terms/"},
+            "triples": [
+                {
+                    "subject": "http://test.org/ontology",
+                    "predicate": "http://purl.org/dc/terms/source",
+                    "object": {
+                        "type": "uri",
+                        "value": "http://example.org/source",
+                    },
+                }
+            ],
+        }
+        domain_session.ontology.update(
+            {
+                "name": "Test Ontology",
+                "label_lang": "en",
+                "rdf_extras": extras,
+            }
+        )
+
+        export = domain_session.export_for_save()
+        domain_session.reset()
+        domain_session.import_from_file(export)
+
+        assert domain_session.ontology["label_lang"] == "en"
+        assert domain_session.ontology["rdf_extras"] == extras
+
     def test_export_includes_graph_backend(self, domain_session):
         """Per-domain graph backend must survive UC export (Domain → Information)."""
         domain_session.info["graph_backend"] = "neo4j"

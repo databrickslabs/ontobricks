@@ -2408,7 +2408,8 @@ labels, and extra annotations on the ontology, classes, and properties. These
 annotations include SKOS, DCTERMS, PROV, `owl:versionInfo`, and any other
 non-consumed predicate. The extra triples are restored on OWL export, but they
 are not shown or edited in Studio. Deleting a class drops its leftover
-triples.
+triples. Renaming a class local name so that its IRI changes also drops extras
+stored against the old IRI on export.
 
 The exported ontology preserves the RDF meaning of this metadata, but the
 original Turtle text is not bit-preserved: comment layout, whitespace, and
