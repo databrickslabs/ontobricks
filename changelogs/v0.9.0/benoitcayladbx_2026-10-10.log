@@ -87,3 +87,48 @@ Tests: focused regressions passed (2 tests); generator/parser coverage passed
 71 tests before reaching the expected deferred Task 4 SKOS fidelity assertion.
 `uv run --frozen pytest -q -m "not scenario"` → 7411 passed, 3 expected Task 4
 fidelity failures, 326 skipped, 6 deselected, 1 xfailed.
+
+## Preserve leftover RDF annotations
+
+Context: OWL imports modeled core ontology fields but discarded unmodeled
+SKOS, DCTERMS, PROV, and other RDF annotations. Preserve these triples and
+their namespace, language, datatype, and IRI metadata through parse and export.
+
+Changes:
+
+1. src/back/core/w3c/owl/OntologyRdfExtras.py
+   Add extraction and safe reapplication of RDF triples for live ontology,
+   class, and property subjects.
+2. src/back/core/w3c/owl/OntologyParser.py
+   Extract leftover triples from already parsed ontology entities.
+3. src/back/core/w3c/owl/OntologyGenerator.py
+   Restore leftover namespace bindings and triples before Turtle serialization.
+4. src/back/core/w3c/owl/__init__.py
+   Export the new public `OntologyRdfExtras` class.
+5. src/back/objects/ontology/OntologyOwl.py
+   Attach parsed extras to ontology metadata and forward them to generation.
+6. src/back/objects/ontology/OntologyImport.py
+   Persist parsed RDF extras in the domain ontology configuration.
+7. tests/units/ontology/test_owl_rdf_extras.py
+   Cover consumed-predicate filtering and deletion-safe emission.
+8. docs/sphinx/api/app.core.w3c.rst
+   Add the public RDF extras class to the generated API reference.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyRdfExtras.py
+- src/back/core/w3c/owl/OntologyParser.py
+- src/back/core/w3c/owl/OntologyGenerator.py
+- src/back/core/w3c/owl/__init__.py
+- src/back/objects/ontology/OntologyOwl.py
+- src/back/objects/ontology/OntologyImport.py
+- tests/units/ontology/test_owl_rdf_extras.py
+- docs/sphinx/api/app.core.w3c.rst
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: `uv run --frozen pytest tests/units/ontology/test_owl_import_fidelity.py
+tests/units/ontology/test_owl_rdf_extras.py tests/units/ontology/test_owl_parser.py
+tests/units/ontology/test_owl_generator.py
+tests/units/ontology/test_workflow_owl_roundtrip.py -q` → 80 passed;
+`uv run --frozen pytest -q -m "not scenario"` → 7416 passed, 326 skipped,
+6 deselected, 1 xfailed in 55.75s. `ci/build_docs.sh` completed with existing
+cross-reference warnings.

@@ -14,6 +14,11 @@ OWL (Web Ontology Language)
    :undoc-members:
    :show-inheritance:
 
+.. automodule:: back.core.w3c.owl.OntologyRdfExtras
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 RDFS (RDF Schema)
 -----------------
 

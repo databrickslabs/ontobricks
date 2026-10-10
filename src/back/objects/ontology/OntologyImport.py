@@ -719,6 +719,7 @@ class OntologyImport:
                 ),
                 "label_lang": ontology_info.get("label_lang"),
                 "comment_lang": ontology_info.get("comment_lang"),
+                "rdf_extras": ontology_info.get("rdf_extras") or {},
                 "classes": classes,
                 "properties": properties,
                 "constraints": constraints,

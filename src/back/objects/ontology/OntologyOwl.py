@@ -75,6 +75,7 @@ class OntologyOwl:
             axioms=axioms,
             expressions=expressions,
             groups=groups,
+            rdf_extras=data.get("rdf_extras"),
         )
         return generator.generate()
 
@@ -95,6 +96,9 @@ class OntologyOwl:
         ontology_info = parser.get_ontology_info()
         classes = parser.get_classes()
         properties = parser.get_properties()
+        ontology_info["rdf_extras"] = parser.get_rdf_extras(
+            ontology_info, classes, properties
+        )
 
         if extract_advanced:
             constraints = parser.get_constraints()

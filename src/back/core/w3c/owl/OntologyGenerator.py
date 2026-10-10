@@ -8,6 +8,7 @@ from rdflib.namespace import RDF, RDFS, OWL, SKOS, XSD
 from typing import List, Dict
 
 from back.core.logging import get_logger
+from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
 from shared.config.constants import ONTOBRICKS_NS
 
 logger = get_logger(__name__)
@@ -28,6 +29,7 @@ class OntologyGenerator:
         expressions: List[Dict] = None,
         groups: List[Dict] = None,
         label_lang: str = None,
+        rdf_extras: dict = None,
     ):
         """Initialize the OWL generator.
 
@@ -42,6 +44,7 @@ class OntologyGenerator:
             expressions: List of OWL class expressions (unionOf, intersectionOf, etc.)
             groups: List of entity group definitions (name, label, color, icon, members)
             label_lang: Optional language tag for the ontology label
+            rdf_extras: Unmodeled RDF namespace bindings and triples
         """
         self.base_uri = base_uri.rstrip("#") + "#"
         self.ontology_name = ontology_name
@@ -53,6 +56,7 @@ class OntologyGenerator:
         self.axioms = axioms or []
         self.expressions = expressions or []
         self.groups = groups or []
+        self.rdf_extras = rdf_extras or {}
 
         self.graph = Graph()
         self.ns = Namespace(self.base_uri)
@@ -117,6 +121,11 @@ class OntologyGenerator:
 
         # Add entity groups (defined classes with owl:unionOf)
         self._add_groups()
+
+        live_subjects = {str(subject) for subject in self.graph.subjects()}
+        OntologyRdfExtras().apply(
+            self.graph, self.rdf_extras, live_subjects=live_subjects
+        )
 
         # Serialize to Turtle format
         return self.graph.serialize(format="turtle")

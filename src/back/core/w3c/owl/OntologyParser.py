@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 from back.core.logging import get_logger
 from back.core.errors import ValidationError
+from back.core.w3c.owl.OntologyRdfExtras import OntologyRdfExtras
 from shared.config.constants import DEFAULT_BASE_URI, ONTOBRICKS_NS
 
 logger = get_logger(__name__)
@@ -640,6 +641,23 @@ class OntologyParser:
             "comment_lang": None,
             "namespace": DEFAULT_BASE_URI,
         }
+
+    def get_rdf_extras(
+        self,
+        ontology_info: Dict[str, Any] = None,
+        classes: List[Dict] = None,
+        properties: List[Dict] = None,
+    ) -> dict:
+        """Extract unmodeled RDF triples without repeating supplied parse work."""
+        ontology_info = ontology_info or self.get_ontology_info()
+        classes = classes if classes is not None else self.get_classes()
+        properties = properties if properties is not None else self.get_properties()
+        return OntologyRdfExtras().extract(
+            self.graph,
+            ontology_uri=ontology_info["uri"],
+            class_uris={item["uri"] for item in classes if item.get("uri")},
+            property_uris={item["uri"] for item in properties if item.get("uri")},
+        )
 
     def get_constraints(self) -> List[Dict]:
         """Extract property constraints from the ontology.
