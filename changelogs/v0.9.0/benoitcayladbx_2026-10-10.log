@@ -64,3 +64,26 @@ Modified files:
 - changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
 
 Tests: `uv run --frozen pytest tests/units/ontology/test_owl_parser.py tests/units/ontology/test_owl_generator.py -q` → 69 passed; `uv run --frozen pytest -q -m "not scenario"` → 7409 passed, 3 expected Task 4 fidelity failures, 326 skipped, 6 deselected, 1 xfailed.
+
+## Fall back from non-HTTP stored OWL references
+
+Context: Stored parent, domain, and range values using non-HTTP schemes were
+incorrectly prefixed with the active ontology base URI. Use their Studio local
+names unless the stored reference is an HTTP(S) IRI.
+
+Changes:
+
+1. src/back/core/w3c/owl/OntologyGenerator.py
+   Restrict stored parent, domain, and range IRI preference to HTTP(S) values.
+2. tests/units/ontology/test_owl_generator.py
+   Cover local-name fallback for non-HTTP stored parent, domain, and range URIs.
+
+Modified files:
+- src/back/core/w3c/owl/OntologyGenerator.py
+- tests/units/ontology/test_owl_generator.py
+- changelogs/v0.9.0/benoitcayladbx_2026-10-10.log
+
+Tests: focused regressions passed (2 tests); generator/parser coverage passed
+71 tests before reaching the expected deferred Task 4 SKOS fidelity assertion.
+`uv run --frozen pytest -q -m "not scenario"` → 7411 passed, 3 expected Task 4
+fidelity failures, 326 skipped, 6 deselected, 1 xfailed.

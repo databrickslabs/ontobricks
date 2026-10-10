@@ -621,7 +621,12 @@ class OntologyGenerator:
 
         # Add parent class (subClassOf)
         parent = cls.get("parent", "").strip() if cls.get("parent") else ""
-        parent_ref = str(cls.get("parent_uri") or parent).strip()
+        stored_parent_uri = str(cls.get("parent_uri") or "").strip()
+        parent_ref = (
+            stored_parent_uri
+            if stored_parent_uri.startswith(("http://", "https://"))
+            else parent
+        )
         if parent_ref:
             logger.debug("Adding subClassOf: %s -> %s", class_name, parent_ref)
             parent_uri = self._resolve_uri(parent_ref)
@@ -796,14 +801,24 @@ class OntologyGenerator:
 
         # Add domain
         domain = prop.get("domain", "")
-        domain_ref = str(prop.get("domain_uri") or domain).strip()
+        stored_domain_uri = str(prop.get("domain_uri") or "").strip()
+        domain_ref = (
+            stored_domain_uri
+            if stored_domain_uri.startswith(("http://", "https://"))
+            else domain
+        )
         if domain_ref:
             domain_uri = self._resolve_uri(domain_ref)
             self.graph.add((prop_uri, RDFS.domain, domain_uri))
 
         # Add range
         range_val = prop.get("range", "")
-        range_ref = str(prop.get("range_uri") or range_val).strip()
+        stored_range_uri = str(prop.get("range_uri") or "").strip()
+        range_ref = (
+            stored_range_uri
+            if stored_range_uri.startswith(("http://", "https://"))
+            else range_val
+        )
         if range_ref:
             if range_ref.startswith("xsd:"):
                 # Handle XSD datatypes

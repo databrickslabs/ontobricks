@@ -82,6 +82,22 @@ class TestClassGeneration:
             URIRef("http://example.org/other-onto#Party"),
         ) in graph
 
+    def test_non_http_parent_uri_falls_back_to_parent_name(self):
+        classes = [
+            {
+                "name": "Customer",
+                "parent": "Party",
+                "parent_uri": "urn:example:Party",
+            }
+        ]
+        graph = Graph()
+        graph.parse(data=_make_generator(classes=classes).generate(), format="turtle")
+        assert (
+            URIRef("http://test.org/ontology#Customer"),
+            RDFS.subClassOf,
+            URIRef("http://test.org/ontology#Party"),
+        ) in graph
+
     def test_class_with_emoji(self):
         classes = [{"name": "Customer", "label": "Customer", "emoji": "👤"}]
         gen = _make_generator(classes=classes)
@@ -325,6 +341,31 @@ class TestPropertyGeneration:
             prop_uri,
             RDFS.range,
             URIRef("http://example.org/other-onto#Party"),
+        ) in graph
+
+    def test_non_http_domain_and_range_uris_fall_back_to_local_names(self):
+        props = [
+            {
+                "name": "hasParty",
+                "type": "ObjectProperty",
+                "domain": "Account",
+                "domain_uri": "urn:example:Account",
+                "range": "Party",
+                "range_uri": "urn:example:Party",
+            }
+        ]
+        graph = Graph()
+        graph.parse(data=_make_generator(properties=props).generate(), format="turtle")
+        prop_uri = URIRef("http://test.org/ontology#hasParty")
+        assert (
+            prop_uri,
+            RDFS.domain,
+            URIRef("http://test.org/ontology#Account"),
+        ) in graph
+        assert (
+            prop_uri,
+            RDFS.range,
+            URIRef("http://test.org/ontology#Party"),
         ) in graph
 
     def test_class_data_property_keeps_its_uri_and_class_domain_uri(self):
