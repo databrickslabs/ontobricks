@@ -1,0 +1,29 @@
+/*
+ * UI internationalisation (see global/js/i18n.js).
+ *
+ * Non-English pages stay hidden until i18n.js has translated the server
+ * markup, so users never see the English flash. The reveal animation is a
+ * fail-safe: if the script cannot run, the page still appears after 1.5s.
+ */
+html:not([lang="en"]):not(.ob-i18n-ready) body {
+    visibility: hidden;
+    animation: ob-i18n-reveal 0s linear 1.5s forwards;
+}
+
+@keyframes ob-i18n-reveal {
+    to { visibility: visible; }
+}
+
+/* Language switch in the user menu: only the active language shows a check. */
+[data-ob-lang] .ob-lang-check {
+    visibility: hidden;
+}
+
+[data-ob-lang].active .ob-lang-check {
+    visibility: visible;
+}
+
+[data-ob-lang].active {
+    color: var(--db-primary);
+    background-color: var(--db-primary-light);
+}

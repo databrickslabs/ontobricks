@@ -141,6 +141,34 @@ def brand_page_title(context: dict, page_label: str = "") -> str:
     return _brand_page_title(get_request_ui_branding(request), page_label)
 
 
+# Keep UI_LANG_COOKIE / SUPPORTED_UI_LANGS in sync with COOKIE / SUPPORTED in
+# src/front/static/global/js/i18n.js.
+UI_LANG_COOKIE = "ob_lang"
+SUPPORTED_UI_LANGS = ("en", "ko")
+FALLBACK_UI_LANG = "en"
+
+
+def default_ui_lang() -> str:
+    """Return the deploy-wide default language (``ONTOBRICKS_UI_LANG``), read per call."""
+    env_lang = os.getenv("ONTOBRICKS_UI_LANG", FALLBACK_UI_LANG)
+    return env_lang if env_lang in SUPPORTED_UI_LANGS else FALLBACK_UI_LANG
+
+
+def resolve_ui_lang(cookie_value) -> str:
+    """Return the UI language for a cookie value, falling back to the deploy default."""
+    if cookie_value in SUPPORTED_UI_LANGS:
+        return cookie_value
+    return default_ui_lang()
+
+
+@pass_context
+def get_ui_lang(context: dict) -> str:
+    """Return the UI language from the ``ob_lang`` cookie (``en`` or ``ko``)."""
+    request: Request = context.get("request")
+    cookie_value = request.cookies.get(UI_LANG_COOKIE) if request else None
+    return resolve_ui_lang(cookie_value)
+
+
 @pass_context
 def ui_branding_css_vars(context: dict) -> str:
     """Render runtime brand CSS custom properties for first paint."""
@@ -158,6 +186,7 @@ templates.env.globals["is_app_mode"] = is_app_mode
 templates.env.globals["ui_branding_for"] = ui_branding_for
 templates.env.globals["brand_page_title"] = brand_page_title
 templates.env.globals["ui_branding_css_vars"] = ui_branding_css_vars
+templates.env.globals["get_ui_lang"] = get_ui_lang
 
 # Menu configuration available in all templates as {{ menu_config }}
 from front.config import get_menu_config, get_menu_by_id

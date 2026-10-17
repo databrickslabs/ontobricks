@@ -50,7 +50,7 @@
     <div class="card-body p-0 position-relative">
         <div id="ontology-map-wrapper" class="ontology-map-wrapper">
             <!-- Main map container -->
-            <div id="ontology-map-container" class="ob-split-pane map-grid-visible">
+            <div data-i18n-skip id="ontology-map-container" class="ob-split-pane map-grid-visible">
                 <!-- Loading Overlay -->
                 <div id="ontologyMapLoading" class="designer-loading-overlay">
                     <div class="ob-loading-spinner">
@@ -104,7 +104,7 @@
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
-            <div class="assistant-messages" id="assistantMessages">
+            <div data-i18n-skip class="assistant-messages" id="assistantMessages">
                 <div class="assistant-welcome">
                     <div class="assistant-welcome-icon"><img data-brand-icon src="{{ ui_branding_for().logo_url }}" alt="{{ ui_branding_for().app_title }}" width="40" height="40"></div>
                     <p>Modify your ontology with natural language:</p>

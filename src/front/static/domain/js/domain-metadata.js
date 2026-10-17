@@ -1035,7 +1035,9 @@ function showTableDetails(tableIndex) {
     const fullName = table.full_name || table.name;
     const parts = fullName.split('.');
     const displayName = parts.length === 3 ? parts[2] : fullName;
-    document.getElementById('tableDetailsName').textContent = displayName;
+    const tableNameEl = document.getElementById('tableDetailsName');
+    tableNameEl.setAttribute('data-i18n-skip', '');
+    tableNameEl.textContent = displayName;
     document.getElementById('tableDescriptionInput').value = table.comment || table.description || '';
     
     const tbody = document.getElementById('tableDetailsBody');

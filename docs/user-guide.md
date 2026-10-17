@@ -1451,6 +1451,26 @@ See the [MCP tab](#mcp-tab) for the full description of each control, and the
 
 ## Settings Reference
 
+### Interface language
+
+> **Who can switch:** every user, from the **user menu** in the navbar
+> (**Language → English / 한국어**). Administrators also see a **Language**
+> card in **Settings → Configuration → UI**; it is the same per-browser
+> control, not an instance-wide setting.
+
+- The choice is stored in the `ob_lang` cookie of **this browser only** and
+  applies immediately (the page reloads). It does not change other users'
+  language and is not saved in the registry.
+- Browsers that have not picked a language use the deploy default
+  `ONTOBRICKS_UI_LANG` (set through `APP_UI_LANG` in
+  `scripts/deploy.config.sh`; `en` when unset). See
+  [Deployment](deployment.md).
+- Only the application chrome is translated: menus, buttons, labels, help
+  text and notifications. Ontology, mapping, graph and registry content —
+  entity, attribute and domain names, descriptions, query results, comments,
+  chat messages — is always shown exactly as authored.
+- English pages do not download the Korean dictionary.
+
 ### Configuration → UI (Application Branding)
 
 > **Required role:** Administrator. All users see the active branding; only

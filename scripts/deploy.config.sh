@@ -166,3 +166,6 @@ export APP_SYNC_UC_CATALOG=""
 
 # MLflow tracking URI.
 export APP_MLFLOW_TRACKING_URI="${APP_MLFLOW_TRACKING_URI:-$DEFAULT_APP_MLFLOW_TRACKING_URI}"
+
+# Default UI language (en | ko). Users can switch per browser in the app.
+export APP_UI_LANG="${APP_UI_LANG:-en}"

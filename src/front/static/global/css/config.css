@@ -191,6 +191,17 @@
     --ui-preview-selected-text: var(--db-primary-selected-text, var(--db-primary-dark));
 }
 
+/* Settings → UI cards size to their content and the section itself scrolls,
+   instead of splitting the viewport height and scrolling inside each card. */
+#ui-section > .content-section > .card {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+#ui-section > .content-section > .card > .card-body {
+    overflow: visible;
+}
+
 .ui-branding-swatches .ui-branding-swatch {
     border: 1px solid var(--db-border-light);
     border-radius: var(--db-radius-control);

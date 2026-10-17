@@ -529,7 +529,7 @@ async function openEntityPanelForEdit(idx, options = {}) {
     }
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
-    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> ${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
+    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> ${emoji} <span id="sharedPanelItemName" data-i18n-skip>${cls.name}</span>`;
     await renderEntityForm(panel, cls);
     attachDirtyTracking();
 }
@@ -565,7 +565,7 @@ async function openEntityPanelForView(idx, options = {}) {
     if (!panel) return;
     
     const emoji = cls.emoji || OntologyState.defaultClassEmoji || '📦';
-    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> ${emoji} <span id="sharedPanelItemName">${cls.name}</span>`;
+    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> ${emoji} <span id="sharedPanelItemName" data-i18n-skip>${cls.name}</span>`;
     await renderEntityForm(panel, cls, true);
 }
 
@@ -1442,7 +1442,7 @@ function _renderDatasetAssetList(assets) {
                     onclick='_datasetSelectAsset(${JSON.stringify(a).replace(/'/g, "&#39;")})'>
                 <i class="bi ${icon} text-primary"></i>
                 <div class="flex-grow-1">
-                    <div class="fw-semibold">${escapeHtml(a.name)} ${badge}</div>
+                    <div class="fw-semibold"><span data-i18n-skip>${escapeHtml(a.name)}</span> ${badge}</div>
                     ${a.comment ? `<small class="text-muted">${escapeHtml(String(a.comment).substring(0, 80))}</small>` : ''}
                 </div>
                 <i class="bi bi-chevron-right text-muted"></i>
@@ -2323,7 +2323,7 @@ async function openBridgeSelectorModal() {
                     onclick="_bridgeSelectDomain('${escapeHtml(p.name)}')">
                 <i class="bi bi-box text-primary"></i>
                 <div class="flex-grow-1">
-                    <div class="fw-semibold">${escapeHtml(p.name)}</div>
+                    <div class="fw-semibold" data-i18n-skip>${escapeHtml(p.name)}</div>
                     ${p.description ? `<small class="text-muted">${escapeHtml(p.description)}</small>` : ''}
                 </div>
                 <i class="bi bi-chevron-right text-muted"></i>
@@ -2372,7 +2372,7 @@ function _renderBridgeClassList(classes) {
                 onclick='_bridgeSelectClass(${JSON.stringify(c).replace(/'/g, "&#39;")})'>
             <span>${c.emoji || '📦'}</span>
             <div class="flex-grow-1">
-                <div class="fw-semibold">${escapeHtml(c.name)}</div>
+                <div class="fw-semibold" data-i18n-skip>${escapeHtml(c.name)}</div>
                 ${c.description ? `<small class="text-muted">${escapeHtml(c.description.substring(0, 80))}</small>` : ''}
             </div>
             <i class="bi bi-chevron-right text-muted"></i>
@@ -3072,7 +3072,7 @@ async function openRelationshipPanelForEdit(idx, options = {}) {
         return;
     }
     
-    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> <span id="sharedPanelItemName">${prop.name}</span>`;
+    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-pencil"></i> <span id="sharedPanelItemName" data-i18n-skip>${prop.name}</span>`;
     await renderRelationshipForm(panel, prop);
     attachDirtyTracking();
 }
@@ -3095,7 +3095,7 @@ async function openRelationshipPanelForView(idx, options = {}) {
     const panel = sharedPanelCurrentSection?.querySelector('.shared-detail-panel');
     if (!panel) return;
     
-    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> <span id="sharedPanelItemName">${prop.name}</span>`;
+    panel.querySelector('#sharedPanelTitle').innerHTML = `<i class="bi bi-eye"></i> <span id="sharedPanelItemName" data-i18n-skip>${prop.name}</span>`;
     await renderRelationshipForm(panel, prop, true);
 }
 

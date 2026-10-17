@@ -88,6 +88,13 @@ body[data-app-role="admin"] .dropdown-item[data-requires-app="admin"] {
     display: block !important;
 }
 
+/* Navbar / subnav dropdown items are flex rows (icon + label); keep that
+   layout for admin-only items so their icon spacing matches the others. */
+body[data-app-role="admin"] .navbar .dropdown-menu .dropdown-item[data-requires-app="admin"],
+body[data-app-role="admin"] .ob-subnav .dropdown-menu .dropdown-item[data-requires-app="admin"] {
+    display: flex !important;
+}
+
 body[data-app-role="admin"] .ob-domain-empty-cta[data-requires-app="admin"] {
     display: inline-flex !important;
 }

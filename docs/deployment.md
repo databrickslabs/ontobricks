@@ -477,6 +477,7 @@ Edit the workspace-specific defaults in `scripts/deploy.config.sh`:
 | `DEFAULT_LAKEBASE_SCHEMA` | `databricks.yml > var.lakebase_registry_schema` + `LAKEBASE_SCHEMA` at runtime | Postgres schema for the registry (e.g. `ontobricks_registry`). |
 | `DEFAULT_APP_TRIPLESTORE_TABLE` | `app.yaml > DATABRICKS_TRIPLESTORE_TABLE` | Fully-qualified `catalog.schema.table` fallback for MCP/session-less paths. |
 | `DEFAULT_APP_MLFLOW_TRACKING_URI` | `app.yaml > MLFLOW_TRACKING_URI` | `databricks` (persists traces to the workspace) or empty for local-only. |
+| `APP_UI_LANG` | `app.yaml > ONTOBRICKS_UI_LANG` | Default interface language for browsers that have not picked one: `en` (default) or `ko`. Any other value falls back to `en`. Users can still switch per browser from the navbar user menu (stored in the `ob_lang` cookie). |
 
 Each `DEFAULT_*` is consumed via `export FOO="${FOO:-$DEFAULT_FOO}"`,
 so you can override any value for a single run without editing the

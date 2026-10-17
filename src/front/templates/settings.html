@@ -694,7 +694,7 @@
                                     <i class="bi bi-plus-lg me-1"></i> Add
                                 </button>
                             </div>
-                            <div id="neo4jConnectionList" class="neo4j-connection-list list-group list-group-flush border rounded">
+                            <div data-i18n-skip id="neo4jConnectionList" class="neo4j-connection-list list-group list-group-flush border rounded">
                                 <div class="list-group-item text-muted small" id="neo4jConnectionEmpty">
                                     No Neo4j connections yet — click Add.
                                 </div>
@@ -1051,6 +1051,24 @@
                                 <small class="text-muted d-block">Default icon used for new entities in the ontology. Stored globally for all users.</small>
                                 <div id="defaultEmojiPickerMount"></div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mb-4" id="uiLanguageCard">
+                        <div class="card-body">
+                            <h5 class="card-title mb-3">Language</h5>
+                            <label for="uiLanguageSelect" class="form-label fw-semibold">
+                                Interface language
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis border ms-2">
+                                    <i class="bi bi-person me-1"></i>Per user &ndash; this browser only
+                                </span>
+                            </label>
+                            <select class="form-select form-select-sm" id="uiLanguageSelect"
+                                    data-ob-lang-select aria-describedby="uiLanguageHelp">
+                                <option value="en" translate="no">English</option>
+                                <option value="ko" translate="no">한국어</option>
+                            </select>
+                            <div id="uiLanguageHelp" class="form-text">Applies immediately and is remembered in this browser. Also available from the user menu in the navbar.</div>
                         </div>
                     </div>
 

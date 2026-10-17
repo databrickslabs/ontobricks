@@ -126,7 +126,7 @@
 
     function tagsHtml(tags) {
         if (!tags || !tags.length) return '';
-        return '<div class="oc-bubble-tags mt-1">' + tags.map((t) =>
+        return '<div class="oc-bubble-tags mt-1" data-i18n-skip>' + tags.map((t) =>
             '<span class="badge oc-tag-chip border me-1"><i class="bi bi-tag me-1"></i>' +
             esc(t.label || t.ref) + '</span>').join('') + '</div>';
     }
@@ -308,11 +308,11 @@
             '<div class="oc-avatar">' + esc(initials) + '</div>' +
             '<div class="oc-bubble-body">' +
             '<div class="oc-bubble-head">' +
-            '<span class="oc-author">' + esc(actor) + '</span>' +
+            '<span class="oc-author" data-i18n-skip>' + esc(actor) + '</span>' +
             '<span class="oc-time">' + formatTime(c.created_at) + '</span>' +
             (c.resolved && !isReply ? '<span class="badge bg-success-subtle text-success border ms-2">Resolved</span>' : '') +
             '</div>' +
-            '<div class="oc-text oc-md">' + renderMarkdown(parsed.text) + '</div>' +
+            '<div class="oc-text oc-md" data-i18n-skip>' + renderMarkdown(parsed.text) + '</div>' +
             tagsHtml(parsed.tags) +
             '</div></div>';
     }

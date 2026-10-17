@@ -1,0 +1,104 @@
+# i18n readability follow-up (named constants, worked examples)
+
+Context: A readability review of the English/Korean UI internationalisation
+found raw DOM node-type numbers, an unnamed cookie lifetime, a fallback chain
+in translateWith without examples, an implicit else branch in the mutation
+observer, and an environment variable read twice. No behaviour change.
+
+Changes:
+
+1. src/front/static/global/js/i18n.js
+   Node.ELEMENT_NODE / TEXT_NODE / DOCUMENT_NODE / DOCUMENT_FRAGMENT_NODE
+   instead of raw numbers (read only inside DOM functions, so the node test
+   harness still works); ONE_YEAR_SECONDS for the ob_lang cookie max-age;
+   one input -> output example per translateWith fallback branch; explicit
+   characterData / attributes branch in observe(); keep-in-sync comment
+   pointing to dependencies.py.
+2. src/front/fastapi/dependencies.py
+   ONTOBRICKS_UI_LANG read once into _ENV_UI_LANG; keep-in-sync comment
+   pointing to i18n.js.
+
+Modified files:
+- src/front/static/global/js/i18n.js
+- src/front/fastapi/dependencies.py
+
+Tests: `uv run --frozen pytest -q -p no:cacheprovider tests/units/front`
+-> 1074 passed; node --check i18n.js OK.
+
+# i18n review fixes (PR #196): skip regions, lazy dictionary, docs, tests
+
+Context: Maintainer review of the English/Korean UI internationalisation asked
+that user-authored content never be matched against the dictionary, that the
+~281 KB Korean dictionary not load on English pages, that native dialogs not
+be wrapped, that the deploy default be resolved per call, and that tests and
+docs cover these contracts and the template/script strings. Uses only the
+existing [data-i18n-skip] marker; no new translation concepts.
+
+Changes:
+
+1. src/front/static/global/js/i18n.js
+   Removed the alert / confirm / prompt wrappers (showNotification /
+   showConfirmDialog output is already covered by the MutationObserver).
+   Language cookie gets Secure on https. createTranslator exposed on
+   OB_I18N_CORE for the DOM tests. Header comment documents data-i18n-skip.
+2. src/front/fastapi/dependencies.py
+   default_ui_lang() reads ONTOBRICKS_UI_LANG per call (was bound at import
+   as DEFAULT_UI_LANG); resolve_ui_lang() falls back to it.
+3. src/front/templates/base.html
+   The i18n-<lang>.js dictionary is only emitted when the resolved language
+   is not English.
+4. src/front/templates/** (34 templates)
+   data-i18n-skip on 53 user-content containers: ontology tree / lists / map,
+   mapping lists and map, graph explorer panels, chat transcripts, result
+   tables, registry lists, domain versions / discussions / documents /
+   metadata / tasks, Neo4j connections, UC file lists, lock / table names.
+   Static loading / empty-state text inside these containers is now left in
+   English as well.
+5. src/front/static/{ontology,mapping,query,domain}/js/*,
+   global/js/comments-panel.js
+   data-i18n-skip on script-rendered user names: entity / relationship panel
+   titles (static titles like "Select Item" stay translatable), attribute
+   names, bridge targets, graph switcher, comment author / body / tags. The
+   manual-mapping title and table-details title get the marker from JS only
+   while they show a name.
+6. src/front/static/global/js/i18n-ko.js
+   190 new entries for template and script strings found by the new coverage
+   test (confirm dialogs, audit events, review workflow, analytics metrics,
+   About / Help copy).
+7. tests/units/front/test_i18n.py, tests/fixtures/i18n_mini_dom.js,
+   tests/units/front/i18n_untranslated_baseline.json
+   pytestmark unit; env-monkeypatched default-language tests; rendered-page
+   tests that English pages omit i18n-ko.js and Korean pages load it; DOM
+   tests on the real translator (mini DOM, no jsdom) proving a "Save" label
+   and its title inside a skip region stay English, including nodes added
+   later; contract that every listed user-content root carries
+   data-i18n-skip; a coverage ratchet over template text / attributes and
+   showNotification / showConfirmDialog / title / message / label literals
+   against a committed baseline (product names, code tokens, fragments), with
+   a stale-entry check.
+8. docs/user-guide.md, docs/deployment.md, README.md
+   Interface language section (navbar for every user, Settings card for
+   admins, per-browser cookie, what is never translated); APP_UI_LANG ->
+   ONTOBRICKS_UI_LANG row in the deploy config table; README note.
+
+Modified files:
+- src/front/static/global/js/i18n.js
+- src/front/static/global/js/i18n-ko.js
+- src/front/static/global/js/comments-panel.js
+- src/front/static/mapping/js/mapping-design.js
+- src/front/static/mapping/js/mapping-manual.js
+- src/front/static/domain/js/domain-metadata.js
+- src/front/static/ontology/js/ontology-shared-panels.js
+- src/front/static/query/js/query-sigmagraph.js
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html and 34 other templates (see item 4)
+- tests/units/front/test_i18n.py
+- tests/fixtures/i18n_mini_dom.js (new)
+- tests/units/front/i18n_untranslated_baseline.json (new)
+- docs/user-guide.md, docs/deployment.md, README.md
+
+Tests: `uv run --frozen pytest -q -m "not scenario" -p no:cacheprovider
+--deselect tests/units/core/test_health.py::TestRunReadinessChecks
+--ignore tests/units/api/test_routes.py` -> 5952 passed, 316 skipped,
+8 deselected (the two exclusions wait on network in this environment).
+tests/units/front -> 1147 passed. flake8 / black clean on test_i18n.py.

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en" data-max-notifications="{{ max_notifications }}">
+{% set _ui_lang = get_ui_lang() -%}
+<html lang="{{ _ui_lang }}" data-max-notifications="{{ max_notifications }}">
 <head>
     {% set _branding = ui_branding_for() %}
     <meta charset="UTF-8">
@@ -25,6 +26,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/registry-modal.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='registry/css/registry.css') }}?v={{ asset_version }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='global/css/review-modals.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='global/css/i18n.css') }}?v={{ asset_version }}">
     <!-- permissions.css must load LAST so its !important gates win over
          any per-component rule that might set display/pointer-events on
          the same selectors. -->
@@ -35,6 +37,12 @@
     <!-- permissions.js MUST stay first so window.OB.permissions exists before
          every other script (navbar, version-check, ...) reads it. -->
     <script defer src="{{ url_for('static', filename='global/js/permissions.js') }}?v={{ asset_version }}"></script>
+    <!-- i18n runs right after permissions.js so every later script's DOM output is observed.
+         The dictionary is only fetched for a non-English page. -->
+    {% if _ui_lang != 'en' %}
+    <script defer src="{{ url_for('static', filename='global/js/i18n-' ~ _ui_lang ~ '.js') }}?v={{ asset_version }}"></script>
+    {% endif %}
+    <script defer src="{{ url_for('static', filename='global/js/i18n.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/utils.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/review-modals.js') }}?v={{ asset_version }}"></script>
     <script defer src="{{ url_for('static', filename='global/js/comments-panel.js') }}?v={{ asset_version }}"></script>
@@ -241,6 +249,10 @@
                                     {% endif %}
                                 </div>
                             </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header"><i class="bi bi-translate"></i> Language</h6></li>
+                            <li><a class="dropdown-item" href="#" data-ob-lang="en" translate="no"><i class="bi bi-check2 ob-lang-check"></i> English</a></li>
+                            <li><a class="dropdown-item" href="#" data-ob-lang="ko" translate="no"><i class="bi bi-check2 ob-lang-check"></i> 한국어</a></li>
                         </ul>
                     </li>
                 </ul>

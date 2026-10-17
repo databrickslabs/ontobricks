@@ -1051,7 +1051,7 @@ function openEntityMappingFromDesign(entity) {
     currentPanelUri = ontologyClass.uri;
     
     const panelTitle = document.getElementById('panelTitle');
-    panelTitle.innerHTML = `<i class="bi bi-box"></i> <span id="panelItemName">${ontologyClass.label || ontologyClass.name}</span>`;
+    panelTitle.innerHTML = `<i class="bi bi-box"></i> <span id="panelItemName" data-i18n-skip>${ontologyClass.label || ontologyClass.name}</span>`;
     
     loadEntityPanelContent(ontologyClass.uri, ontologyClass.label || ontologyClass.name);
     openMappingPanel();
@@ -1079,7 +1079,7 @@ function openRelationshipMappingFromDesign(rel) {
     currentPanelUri = ontologyProperty.uri;
     
     const panelTitle = document.getElementById('panelTitle');
-    panelTitle.innerHTML = `<i class="bi bi-arrow-left-right"></i> <span id="panelItemName">${ontologyProperty.label || ontologyProperty.name}</span>`;
+    panelTitle.innerHTML = `<i class="bi bi-arrow-left-right"></i> <span id="panelItemName" data-i18n-skip>${ontologyProperty.label || ontologyProperty.name}</span>`;
     
     loadRelationshipPanelContent(ontologyProperty);
     openMappingPanel();

@@ -118,6 +118,10 @@ env:
   # MLflow — ensure traces are persisted to the workspace tracking server.
   - name: MLFLOW_TRACKING_URI
     value: "${APP_MLFLOW_TRACKING_URI}"
+  # Default UI language when the user has not picked one (``en`` or ``ko``).
+  # Users can still switch from the user menu or Settings > UI.
+  - name: ONTOBRICKS_UI_LANG
+    value: "${APP_UI_LANG}"
   # ── Knowledge-graph analytics ─────────────────────────────────
   # These mirror the defaults in src/shared/config/settings.py. They are
   # spelled out here so an admin can retune a deployed app without a code

@@ -381,7 +381,8 @@ window.ManualModule = {
         const titleIcon = document.querySelector('#manualPanelTitle i');
         const panelBody = document.getElementById('manualPanelBody');
         
-        // Update title
+        // Update title (an entity / relationship name: keep it out of i18n)
+        titleSpan.setAttribute('data-i18n-skip', '');
         titleSpan.textContent = label || name;
         titleIcon.className = type === 'entity' ? 'bi bi-box' : 'bi bi-arrow-left-right';
         
@@ -480,7 +481,10 @@ window.ManualModule = {
             `;
         }
         const titleSpan = document.getElementById('manualPanelItemName');
-        if (titleSpan) titleSpan.textContent = 'Select an item above';
+        if (titleSpan) {
+            titleSpan.removeAttribute('data-i18n-skip');
+            titleSpan.textContent = 'Select an item above';
+        }
     },
     
     /**

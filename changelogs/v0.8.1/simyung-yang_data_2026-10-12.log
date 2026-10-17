@@ -1,0 +1,70 @@
+# Add UI internationalisation (English / Korean)
+
+Context: The UI was English-only, with menu, button and help text hard-coded
+across Jinja templates and page scripts. This change adds a client-side i18n
+layer and a Korean dictionary, so users can switch the interface language
+from the navbar user menu or from Settings > UI without touching the
+templates. English remains the authoring language and the default. Two
+pre-existing layout issues surfaced while testing are also fixed: uneven icon
+spacing on admin-only navbar dropdown items, and inner scrollbars on the
+Settings > UI cards.
+
+Changes:
+
+1. `src/front/static/global/js/i18n.js`
+   New translator: walks text nodes and the placeholder / title / aria-label
+   attributes, follows script-generated DOM through a MutationObserver, and
+   wraps alert / confirm / prompt. Lookup order is exact match, `{n}` number
+   template, "known prefix: dynamic detail", then the text without trailing
+   punctuation. Code, editors, SVG, form values and `translate="no"` /
+   `.notranslate` / `[data-i18n-skip]` regions are never translated, so user
+   data stays verbatim. The language is stored in the `ob_lang` cookie.
+2. `src/front/static/global/js/i18n-ko.js`
+   Korean dictionary (about 3,200 UI strings from templates, menu_config.json
+   and page scripts). Product and standard names (OWL, SHACL, Lakebase, ...)
+   are left in English.
+3. `src/front/static/global/css/i18n.css`
+   Hides non-English pages until translation is applied (1.5s reveal
+   fail-safe) and styles the active language item.
+4. `src/front/fastapi/dependencies.py`
+   Added `resolve_ui_lang` and the `get_ui_lang` Jinja global (cookie
+   `ob_lang`, default from `ONTOBRICKS_UI_LANG`, fallback `en`).
+5. `src/front/templates/base.html`
+   `<html lang>` rendered from the cookie, i18n assets wired right after
+   permissions.js, and a Language switch added to the user menu.
+6. `src/front/templates/settings.html`, `src/front/static/global/css/config.css`
+   Settings > UI: new Language card below Branding (per-user, applies
+   immediately). UI-section cards now size to content and the section
+   scrolls, instead of each card scrolling internally.
+7. `src/front/static/global/css/permissions.css`
+   Admin-only navbar / subnav dropdown items keep the flex row layout, so
+   their icon spacing matches the other items.
+8. `app.yaml.template`
+   New `ONTOBRICKS_UI_LANG` env (from `APP_UI_LANG`) sets the default UI
+   language for users who have not picked one.
+9. `scripts/deploy.config.sh`
+   Exports `APP_UI_LANG` (default `en`) so the app.yaml renderer can fill
+   the new template variable.
+10. `tests/units/front/test_i18n.py`
+   Coverage for language resolution, translation core (via node), dictionary
+   integrity and menu coverage, asset wiring order, the language switches,
+   and both layout fixes.
+
+Modified files:
+- src/front/static/global/js/i18n.js (new)
+- src/front/static/global/js/i18n-ko.js (new)
+- src/front/static/global/css/i18n.css (new)
+- src/front/fastapi/dependencies.py
+- src/front/templates/base.html
+- src/front/templates/settings.html
+- src/front/static/global/css/config.css
+- src/front/static/global/css/permissions.css
+- app.yaml.template
+- scripts/deploy.config.sh
+- tests/units/front/test_i18n.py (new)
+
+Tests: `uv run --frozen pytest -q -m "not scenario"`
+→ 5879 passed, 0 failed, 316 skipped in 42.96s (run with
+`--deselect tests/units/core/test_health.py::TestRunReadinessChecks --ignore tests/units/api/test_routes.py`,
+which block on live network calls in this local environment).
+`tests/units/front/test_i18n.py` → 33 passed.
