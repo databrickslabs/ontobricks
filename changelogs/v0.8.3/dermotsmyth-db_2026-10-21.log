@@ -1,0 +1,22 @@
+## Set the project version to 0.8.3
+
+Context: Open the 0.8.3 line from 0.8.2, which now includes the Knowledge
+Graph build fix (#201) and the table-description fix (#202), by aligning the
+package metadata, the version displayed in the README, and the lockfile.
+
+Changes:
+
+1. pyproject.toml
+   Updated the package version from 0.8.2 to 0.8.3.
+2. README.md
+   Updated the displayed OntoBricks version from 0.8.2 to 0.8.3.
+3. uv.lock
+   Updated the recorded package version from 0.8.2 to 0.8.3 (one line), so the lockfile stays in sync with pyproject.toml. No other entry changed.
+
+Modified files:
+- pyproject.toml
+- README.md
+- uv.lock
+- changelogs/v0.8.3/dermotsmyth-db_2026-10-21.log
+
+Tests: `uv run --frozen pytest -q -m "not scenario"` → 5941 passed, 316 skipped, 9 deselected, 0 failed in 45.15s. Deselected: 6 by the `not scenario` marker and the 3 health tests that open a live SQL warehouse connection (see changelogs/v0.8.2/dermotsmyth-db_2026-10-19.log).
