@@ -1,0 +1,22 @@
+================================================================================
+## Bump package and README version to 0.9.1
+================================================================================
+
+Context: Open the 0.9.1 line after 0.9.0. Product metadata and the README
+title must match the worktree / branch version.
+
+Changes:
+
+1. pyproject.toml
+   Set project.version to 0.9.1.
+2. uv.lock
+   Record the editable ontobricks package as 0.9.1.
+3. README.md
+   Set the centered heading to OntoBricks 0.9.1.
+
+Modified files:
+- pyproject.toml
+- uv.lock
+- README.md
+
+Tests: not run — version metadata only; no product code changed.
