@@ -159,10 +159,24 @@ class SQLWarehouse:
                 "Warehouse rejected Thrift; reconnecting with native Kernel SEA: %s",
                 exc,
             )
-            params = {**params, "use_kernel": True}
+            params = self._kernel_reconnect_params(params)
             conn = sql.connect(**params)
             self._auth.use_kernel = True
             return conn
+
+    def _kernel_reconnect_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Kernel connect kwargs after a Thrift rejection.
+
+        ``use_kernel=True`` cannot take a custom ``credentials_provider``. Apps
+        M2M OAuth must pass ``oauth_client_id`` / ``oauth_client_secret`` so the
+        kernel owns the token lifecycle.
+        """
+        reconnect = {**params, "use_kernel": True}
+        reconnect.pop("credentials_provider", None)
+        if self._auth.is_app_mode and self._auth.client_id and self._auth.client_secret:
+            reconnect["oauth_client_id"] = self._auth.client_id
+            reconnect["oauth_client_secret"] = self._auth.client_secret
+        return reconnect
 
     @contextmanager
     def _borrow(self):

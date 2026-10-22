@@ -320,6 +320,9 @@ Without an RT query override, `resolve_delta_warehouse_id()` intentionally
 falls back to the Build SQL Warehouse. The Settings UI represents this by
 disabling Query and mirroring Build. RT mode requires a distinct query
 warehouse; disabling it persists an empty Lakehouse warehouse ID.
+Quality checks and `engine="view"` always call `resolve_build_warehouse_id()`
+so a Lakehouse//RT query warehouse never serves UC-view SQL, including on
+Lakebase domains.
 In Databricks Apps, RT reads bypass the SQL connector's Kernel adapter and use
 Statement Execution directly with `JSON_ARRAY` / `INLINE`. Internal chunk links
 stay on the workspace host, external CloudFetch links are rejected, and a
