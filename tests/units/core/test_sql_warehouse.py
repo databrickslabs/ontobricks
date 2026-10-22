@@ -262,6 +262,39 @@ class TestExecuteQueryRetry:
         executed = [c.args[0] for c in mock_cursor.execute.call_args_list]
         assert not any("STATEMENT_TIMEOUT" in q for q in executed)
 
+    @patch("databricks.sql.connect")
+    def test_app_mode_thrift_retry_does_not_keep_credentials_provider(
+        self, mock_connect, monkeypatch
+    ):
+        """Kernel cannot take a custom credentials_provider (Apps OAuth)."""
+        monkeypatch.setenv("DATABRICKS_APP_PORT", "8080")
+        monkeypatch.setenv("DATABRICKS_CLIENT_ID", "cid")
+        monkeypatch.setenv("DATABRICKS_CLIENT_SECRET", "csec")
+        good_conn, _ = _make_connect_mock(
+            description=[("x",)], fetchall_rows=[(1,)]
+        )
+        mock_connect.side_effect = [
+            Exception(
+                "Lakehouse/RT is not supported for Thrift protocol. "
+                "Please update your Databricks SQL Driver version"
+            ),
+            good_conn,
+        ]
+        auth = DatabricksAuth(
+            host="https://h.databricks.com",
+            token="",
+            warehouse_id="wh-rt",
+            use_sea=False,
+        )
+        sw = SQLWarehouse(auth)
+        rows = sw.execute_query("SELECT 1")
+        assert rows == [{"x": 1}]
+        retry_kwargs = mock_connect.call_args_list[1].kwargs
+        assert retry_kwargs.get("use_kernel") is True
+        assert "credentials_provider" not in retry_kwargs
+        assert retry_kwargs.get("oauth_client_id") == "cid"
+        assert retry_kwargs.get("oauth_client_secret") == "csec"
+
     @patch("back.core.databricks.SQLWarehouse.time.sleep", return_value=None)
     @patch("databricks.sql.connect")
     def test_gives_up_after_max_attempts(self, mock_connect, _sleep, monkeypatch):

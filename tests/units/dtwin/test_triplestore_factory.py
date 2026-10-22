@@ -86,7 +86,7 @@ class TestGetGraphdb:
                 "back.core.helpers.get_databricks_host_and_token",
                 return_value=("", ""),
             ),
-            patch("back.core.helpers.resolve_delta_warehouse_id", return_value="wh"),
+            patch("back.core.helpers.resolve_build_warehouse_id", return_value="wh"),
             patch("back.core.databricks.is_databricks_app", return_value=False),
         ):
             result = get_graphdb(
@@ -105,7 +105,11 @@ class TestGetGraphdb:
                 "back.core.helpers.get_databricks_host_and_token",
                 return_value=("https://h", "tok"),
             ),
-            patch("back.core.helpers.resolve_delta_warehouse_id", return_value="wh"),
+            patch("back.core.helpers.resolve_build_warehouse_id", return_value="wh-build"),
+            patch("back.core.helpers.resolve_delta_warehouse_id", return_value="wh-rt"),
+            patch(
+                "back.core.helpers.resolve_use_cloud_fetch", return_value=False
+            ),
             patch("back.core.databricks.DatabricksClient") as mock_client_cls,
             patch(
                 "back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore"
@@ -115,3 +119,44 @@ class TestGetGraphdb:
             mock_delta_cls.return_value = MagicMock()
             result = get_graphdb(domain, settings=settings, engine="view")
             assert result is not None
+            kwargs = mock_client_cls.call_args.kwargs
+            assert kwargs["warehouse_id"] == "wh-build"
+            assert kwargs["use_sea"] is False
+
+    def test_view_store_ignores_lakehouse_rt_warehouse(self):
+        """DQ / UC-view reads must not follow the Lakehouse//RT query warehouse.
+
+        Lakebase domains still compile quality SQL against the Unity Catalog
+        view; that view is served by the Build SQL Warehouse (Thrift), not by
+        a read-only RT warehouse.
+        """
+        domain = _mock_domain()
+        settings = MagicMock()
+        with (
+            patch(
+                "back.core.helpers.get_databricks_host_and_token",
+                return_value=("https://h", "tok"),
+            ),
+            patch(
+                "back.core.helpers.resolve_build_warehouse_id",
+                return_value="wh-classic",
+            ),
+            patch(
+                "back.core.helpers.resolve_delta_warehouse_id",
+                return_value="wh-rt",
+            ),
+            patch(
+                "back.core.helpers.resolve_use_cloud_fetch", return_value=True
+            ),
+            patch("back.core.databricks.DatabricksClient") as mock_client_cls,
+            patch(
+                "back.core.graphdb.delta.DeltaFlatStore.DeltaFlatStore"
+            ) as mock_delta_cls,
+        ):
+            mock_client_cls.return_value = MagicMock()
+            mock_delta_cls.return_value = MagicMock()
+            assert get_graphdb(domain, settings=settings, engine="view") is not None
+            kwargs = mock_client_cls.call_args.kwargs
+            assert kwargs["warehouse_id"] == "wh-classic"
+            assert kwargs["use_sea"] is False
+            assert kwargs["use_cloud_fetch"] is True

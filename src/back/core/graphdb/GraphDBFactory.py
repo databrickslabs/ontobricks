@@ -8,8 +8,9 @@ constructs the graph DB backend for a domain:
   ``databricks``).  This is the common path callers use.
 * ``engine="lakebase"`` — flat triple tables on Lakebase Postgres.
 * ``engine="delta"`` — materialized Delta triple tables in Unity Catalog.
-* ``engine="view"`` — a raw, read-only Delta store bound to a SQL warehouse
-  (health probes against a UC view/table).
+* ``engine="view"`` — a raw, read-only Delta store bound to the **Build**
+  SQL warehouse (health probes and quality SQL against a UC view/table;
+  never the Lakehouse//RT query warehouse).
 
 New engines are pluggable — copy ``_starter_kit/`` into
 ``back/core/graphdb/<engine>/`` and register a ``_create_<engine>`` branch.
@@ -349,24 +350,32 @@ class GraphDBFactory:
         """Instantiate a raw, read-only :class:`DeltaFlatStore` on a SQL warehouse.
 
         Bound with ``domain=None`` so it operates directly on the FQNs passed in
-        (health probes against a UC view/table).  Formerly ``backend="view"``.
+        (health probes against a UC view/table, SHACL/DQ SQL). Uses the Build
+        SQL Warehouse — never the Lakehouse//RT query warehouse.
         """
         try:
             from back.core.databricks import DatabricksClient, is_databricks_app
             from back.core.helpers import (
                 get_databricks_host_and_token,
-                resolve_delta_warehouse_id,
+                resolve_build_warehouse_id,
+                resolve_use_cloud_fetch,
             )
             from back.core.graphdb.delta.DeltaFlatStore import DeltaFlatStore
 
             if settings is not None:
                 host, token = get_databricks_host_and_token(domain, settings)
-                warehouse_id = resolve_delta_warehouse_id(domain, settings)
+                # Quality SQL and UC-view health probes always hit the Build
+                # SQL Warehouse over Thrift. The Lakehouse query warehouse may
+                # be Lakehouse//RT (read-only Kernel/SEA) and is wrong for
+                # Lakebase domains that still compile DQ against the UC view.
+                warehouse_id = resolve_build_warehouse_id(domain, settings)
+                use_cloud_fetch = resolve_use_cloud_fetch(domain, settings)
             else:
                 db = domain.databricks or {}
                 host = db.get("host", "")
                 token = db.get("token", "")
                 warehouse_id = ""
+                use_cloud_fetch = True
             if not host and not is_databricks_app():
                 logger.warning("Delta view store: missing host")
                 return None
@@ -380,6 +389,8 @@ class GraphDBFactory:
                 host=host,
                 token=token,
                 warehouse_id=warehouse_id,
+                use_sea=False,
+                use_cloud_fetch=use_cloud_fetch,
             )
             return DeltaFlatStore(client)
         except Exception as e:
