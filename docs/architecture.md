@@ -1960,9 +1960,10 @@ In addition to the UI-driven agents, OntoBricks provides an **MCP server** (`mcp
 
 **Workflow**:
 1. Calls `get_ontology` to see entities, relationships, and their attributes
-2. Calls `get_metadata` to understand available tables and columns
+2. Calls `get_metadata` to understand available tables, views, and metric views (`object_kind` + column `role`)
 3. For each entity/relationship:
    - Writes a SQL query using `execute_sql` to validate it
+   - Metric-view sources must project dimensions, wrap measures in `MEASURE()`, and `GROUP BY` those dimensions (`SELECT *` is rejected on submit)
    - Iterates on SQL errors until the query succeeds
    - Calls `submit_entity_mapping` or `submit_relationship_mapping` to finalize
 4. Repeats until all items are mapped or iteration limit is reached

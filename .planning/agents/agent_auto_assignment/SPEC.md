@@ -87,6 +87,7 @@ _TBD._
 | `cost_per_call` | USD | `<= 0.01` | `0.10` | MLflow usage |
 | `trace_step_order` | streamed step sequence matches the golden order, append-only | `1.00` | n/a | rule-based |
 | `audit_report_parity` | `meta.steps` equals the last published `task.result["agent_steps"]` | `1.00` | n/a | rule-based |
+| `metric_view_sql_correctness` | metric-view mappings use `MEASURE()` + `GROUP BY` and never `SELECT *` | `0.95` | contract | rule-based (`evaluator/deterministic.py::check_metric_view_sql`) |
 
 **Aggregate threshold:** ≥ `0.90`.
 
@@ -103,12 +104,14 @@ on the mapping-quality dimensions above.
 | Live overlay stays empty during a long run | `trace_step_order` finds no `tool_call` before the terminal event | republish `task.result["agent_steps"]` per chunk, not only at completion |
 | Audit trail shows mapping chips but no agent report | `audit_report_parity` = 0 (no `agent_auto_map_run` row) | append the event on all three terminal paths, not just success |
 | Cancel leaves the agent running and the report missing | cancel case in `observability.jsonl` ends without a `cancelled` report | `is_cancelled` check at the top of each chunk |
+| Flat SELECT on a metric view | `metric_view_sql_correctness` / submit-tool rejection | prompt rule + `check_metric_view_sql` in `submit_*_mapping` |
 | _TBD_ | _TBD_ | _TBD_ |
 
 ## 7. Eval dataset
 
 - **Baseline:** `tests/eval/datasets/agent_auto_assignment/baseline.jsonl` — ≥ 20 examples covering small, medium, and large ontologies.
 - **Observability:** `tests/eval/datasets/agent_auto_assignment/observability.jsonl` — golden step/report sequences for the v0.8.0 live-trace change (happy, error, cancel). Mirrored at `.planning/agents/agent_auto_assignment/eval/dataset.jsonl`.
+- **Metric-view set:** `tests/eval/datasets/agent_auto_assignment/metric_view.jsonl` (mirrored at `.planning/agents/agent_auto_assignment/eval/metric_view.jsonl`) — 10 cases asserting `MEASURE()` + `GROUP BY`, no `SELECT *`, and measures never used as ids. Scored by `tests/eval/run_agent_auto_assignment_metric.py`.
 - **Regression:** `tests/eval/datasets/agent_auto_assignment/regression.jsonl`.
 
 ## 8. MLflow tracing

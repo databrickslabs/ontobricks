@@ -122,3 +122,40 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9538 passed, 326 skipped, 8 deselected, 40 warnings in 48.44s
 
+================================================================================
+## Teach Auto-Map to emit Unity Catalog metric-view SQL
+================================================================================
+
+Context: Mapping → Auto-Map already received metric views from get_metadata
+(object_kind + column roles) but the agent prompt never mentioned MEASURE()
+or GROUP BY, so the LLM treated them as tables. Align Auto-Map with the PGE
+generator: prompt rules plus a submit-time check_metric_view_sql guard.
+
+Changes:
+
+1. src/agents/agent_auto_assignment/engine.py
+   METRIC VIEW SOURCES rule: dimensions, MEASURE(measure), GROUP BY; ID is a dimension.
+2. src/agents/tools/mapping.py
+   Reject SELECT * / unwrapped measures / missing GROUP BY when the SQL hits a metric view.
+3. tests/eval/datasets/agent_auto_assignment/metric_view.jsonl
+   10-row contract dataset (happy / ambiguous / adversarial).
+4. tests/eval/run_agent_auto_assignment_metric.py
+   Dry-run judge (aggregate 1.000 vs threshold 0.95).
+5. .planning/agents/agent_auto_assignment/SPEC.md
+   metric_view_sql_correctness dimension, failure mode, dataset pointer.
+
+Modified files:
+- src/agents/agent_auto_assignment/engine.py
+- src/agents/tools/mapping.py
+- tests/units/agents/test_auto_assignment_metric_views.py
+- tests/units/agents/test_metric_view_eval_contract.py
+- tests/eval/datasets/agent_auto_assignment/metric_view.jsonl
+- tests/eval/run_agent_auto_assignment_metric.py
+- tests/eval/thresholds.yaml
+- .planning/agents/agent_auto_assignment/SPEC.md
+- .planning/agents/agent_auto_assignment/eval/metric_view.jsonl
+- docs/architecture.md
+- docs/user-guide.md
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9543 passed, 326 skipped, 8 deselected, 40 warnings in 56.51s
+

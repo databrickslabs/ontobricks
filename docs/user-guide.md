@@ -761,7 +761,7 @@ Click **Auto-Map** in the sidebar to batch-assign all unmapped entities and rela
 
 1. The page shows counts of unassigned entities and relationships, including how many are excluded (`· N excl.`).
 2. If tables or columns are missing `COMMENT` descriptions, a **metadata quality warning** is displayed with a collapsible list and a link to the Domain → Metadata editor. Poor descriptions reduce LLM mapping accuracy.
-3. Click **Start Auto-Map** to launch an asynchronous task.
+3. Click **Start Auto-Map** to launch an asynchronous task. Loaded **Unity Catalog metric views** are mapped with metric-aware SQL (dimensions projected, measures wrapped in `MEASURE()`, `GROUP BY` the dimensions — never `SELECT *`).
 4. Progress is tracked with a progress bar — you can navigate away and return later.
 5. Results are displayed in a report table showing success/failure per item.
 

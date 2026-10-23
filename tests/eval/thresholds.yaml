@@ -36,6 +36,9 @@ auto_assignment:
   # Pass/fail, excluded from the weighted aggregate below.
   trace_step_order: 1.0
   audit_report_parity: 1.0
+  # Metric-view SQL-generation contract (SPEC §5). Scored by
+  # run_agent_auto_assignment_metric.py against datasets/.../metric_view.jsonl.
+  metric_view_sql_correctness: 0.95
   aggregate: 0.90
 
 auto_icon_assign:
