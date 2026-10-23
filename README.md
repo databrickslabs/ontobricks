@@ -149,6 +149,15 @@ See the [SPARQL Playground guide](docs/user-guide.md#sparql-playground),
 [Get Started](docs/getting-started.md), and
 [Cohort Discovery](docs/advanced_features.md#cohort-discovery).
 
+### Simulate what-if scenarios
+The **Simulation** workspace copies an entity neighbourhood, a cohort or a class
+population into a private sandbox, applies hypothetical facts ("what if this
+customer's credit score drops to 300?"), re-runs your SWRL, graph and business
+rules there, and shows exactly which triples would be added or removed — the
+live knowledge graph is never modified. Start from the Workbench or from
+**Simulate from here** on any Explorer entity (Lakebase backend). See the
+[Simulation guide](docs/user-guide.md#step-4-simulation-what-if-sandboxes).
+
 ### Publish to AI agents (MCP)
 Expose your knowledge graph to Cursor, Claude Desktop or the Databricks
 Playground over the [Model Context Protocol](https://modelcontextprotocol.io/).

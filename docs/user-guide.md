@@ -11,6 +11,7 @@
 - [Step 1: Design Ontology](#step-1-design-ontology)
 - [Step 2: Map Data Assets (Mapping)](#step-2-map-data-assets-mapping)
 - [Step 3: Knowledge Graph (Sync & Explore)](#step-3-knowledge-graph-sync--explore)
+- [Step 4: Simulation (What-if Sandboxes)](#step-4-simulation-what-if-sandboxes)
 - [Domain Management & Version Control](#domain-management--version-control)
 - [Best Practices](#best-practices)
 - [GraphQL API](#graphql-api)
@@ -1183,6 +1184,106 @@ triples, saved rules, standalone Inference Delta targets, and cohort Unity
 Catalog output tables. Neo4j reports the count as unavailable and does not
 offer this operation because it cannot yet distinguish generated triples from
 source triples safely.
+
+---
+
+## Step 4: Simulation (What-if Sandboxes)
+
+**Simulation** is the fifth workspace in the top navigation. It lets you assert
+hypothetical facts on a copy of part of the graph, re-run reasoning, and see
+what would change — the live knowledge graph is never modified. Simulations are
+available on domains that use the **Lakebase** graph backend and have been
+saved to the registry.
+
+### How it works
+
+A simulation never edits your knowledge graph. Each run works on a private
+copy of a slice of the graph, called a **sandbox**:
+
+```
+Live knowledge graph ──(read only)──▶ 1. Scope ──▶ 2. Copy into sandbox
+                                                          │
+                     5. Compare ◀── 4. Reason ◀── 3. Apply your facts
+```
+
+1. **Scope**: OntoBricks works out which entities are involved. That is an
+   entity and its neighbours up to *N* hops, the members of a cohort rule, or
+   every instance of a class. The live graph is only read in this step.
+2. **Copy into sandbox**: every triple whose subject is one of those entities
+   (its attributes and its outgoing relationships) is copied into a separate
+   table named `<graph>__sim_<scenario id>`. This copy is the **before**
+   picture.
+3. **Apply your facts**: your hypothetical facts are applied in the order you
+   listed them, inside the sandbox only.
+   - **Set** replaces a value.
+   - **Add** asserts a new triple.
+   - **Remove** retracts one.
+4. **Reason**: the reasoning phases you ticked run against the sandbox, so your
+   rules react to the new facts. These are the same engines as Knowledge Graph
+   → Inference (SWRL, graph reasoning, decision tables, SPARQL and aggregate
+   rules, OWL 2 RL). Their conclusions are written into the sandbox too.
+5. **Compare**: the final sandbox is the **after** picture. OntoBricks compares
+   it with the before picture.
+   - Every triple that appeared is listed as **Added**. It is tagged *your
+     fact* if you asserted it, or *inferred* if a rule derived it; hovering
+     an inferred triple shows the rule that produced it.
+   - Every triple that disappeared is listed as **Removed**.
+
+**Isolation.** The sandbox store refuses to write to any table that is not a
+simulation sandbox, so a run cannot touch the built graph, its inferences or
+its caches. Re-running a scenario rebuilds its sandbox from the current live
+graph. Deleting a scenario drops its sandbox.
+
+**Limits.**
+- The scope is capped at 5000 entities and 250,000 copied triples. A larger
+  class or cohort fails the run with a message instead of being silently cut;
+  narrow the scope and run again.
+- Result lists keep the first 2000 rows, but the counts are always exact.
+
+**What a slice means for rules.** Rules only see what was copied. A rule that
+needs data about entities outside the scope will not fire. For example, an
+aggregate over all customers will not fire when you simulate a 2-hop
+neighbourhood. Widen the hops or use a cohort or class scope in that case.
+
+### Scenarios (Sidebar)
+
+Lists the saved scenarios of the active domain version with their scope,
+number of facts, status (`draft`, `running`, `ready`, `failed`) and the
+added / removed counts of the last run. Open, run, view results or delete a
+scenario from its row. **New scenario** opens an empty Workbench.
+
+### Workbench (Sidebar)
+
+1. **Scenario** — give it a name and an optional description.
+2. **Scope** — choose the slice of the graph to copy into the sandbox:
+   - *Entity neighbourhood*: an entity URI and a number of hops (default 2);
+   - *Cohort*: one of the saved Cohort Discovery rules;
+   - *Class population*: every instance of a class, up to the entity cap
+     (5000). A larger population fails the run — narrow the scope instead.
+3. **Hypothetical facts** — add rows of *subject / predicate / value*:
+   **Set** replaces every value of the predicate on the subject (e.g. a new
+   credit score), **Add** asserts an extra triple, **Remove** retracts one.
+4. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
+   decision tables, SPARQL rules, aggregate rules and OWL 2 RL are optional.
+5. **Run** saves the scenario and starts it as a background task; the progress
+   bar follows the phases (scope, seed, facts, reasoning, diff).
+
+Tip: in the Knowledge Graph Explorer, the entity details panel has a
+**Simulate from here** button that opens the Workbench pre-filled with that
+entity's neighbourhood and an empty *Set* fact.
+
+### Results (Sidebar)
+
+Pick a scenario to see KPIs (entities in scope, triples before / after, new
+inferences, removed triples, affected entities) and two paged, searchable
+tables: **Added** — each row tagged *your fact* or *inferred* (hover for the
+rule that produced it) — and **Removed**. Lists show the first 2000 rows; the
+counts are always exact. A warning lists reasoning phases that failed.
+
+### Runs (Sidebar)
+
+History of every simulation run on the domain version: start time, scenario,
+status, outcome, duration and who ran it.
 
 ---
 

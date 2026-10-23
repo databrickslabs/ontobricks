@@ -195,6 +195,7 @@ _DOMAIN_SCOPED_PREFIXES = (
     "/ontology/",
     "/mapping/",
     "/dtwin/",
+    "/simulation/",
 )
 
 # Routes that live under a domain-scoped prefix but enumerate

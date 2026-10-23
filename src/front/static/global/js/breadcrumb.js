@@ -13,6 +13,7 @@ const Breadcrumb = {
         '/ontology/': { label: 'Ontology',     icon: 'bi-bezier2' },
         '/mapping/':  { label: 'Mapping',      icon: 'bi-shuffle' },
         '/dtwin/':    { label: 'Knowledge Graph', icon: 'bi-radar' },
+        '/simulation/': { label: 'Simulation', icon: 'bi-sliders2-vertical' },
         '/settings':  { label: 'Settings',     icon: 'bi-gear-fill' },
     },
 

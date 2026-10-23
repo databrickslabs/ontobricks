@@ -8,6 +8,14 @@
 // ENTITY DETAILS PANEL
 // =====================================================
 
+/** Simulations run on Lakebase graphs only (see back/objects/simulation). */
+function _simulationAvailable() {
+    const cfg = window.__TRIPLESTORE_CONFIG || {};
+    const backend = String(cfg.triple_store_backend || 'lakebase').toLowerCase();
+    const engine = String(cfg.graph_engine || 'lakebase').toLowerCase();
+    return backend === 'lakebase' && engine === 'lakebase';
+}
+
 async function showEntityDetails(entity) {
     const container = document.getElementById('entityDetailsContent');
     if (!container) return;
@@ -493,6 +501,21 @@ async function showEntityDetails(entity) {
             <div class="entity-detail-section">
                 <h6><i class="bi bi-lightning-charge"></i> Actions</h6>
                 ${buttons}
+            </div>
+        `;
+    }
+
+    if (entity.id && _simulationAvailable()) {
+        const simUrl = `/simulation/?section=workbench&entity=${encodeURIComponent(entity.id)}`;
+        html += `
+            <div class="entity-detail-section">
+                <h6><i class="bi bi-sliders2-vertical"></i> What-if</h6>
+                <div class="entity-detail-item">
+                    <a href="${escapeHtml(simUrl)}" class="btn btn-sm btn-outline-primary w-100"
+                       title="Open a simulation sandbox seeded with this entity's neighbourhood">
+                        <i class="bi bi-sliders2-vertical me-1"></i>Simulate from here
+                    </a>
+                </div>
             </div>
         `;
     }

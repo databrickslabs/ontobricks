@@ -22,6 +22,7 @@ _COLUMN_ICONS = {
     "ontology": "bi-bezier2",
     "assignment": "bi-shuffle",
     "digitaltwin": "bi-radar",
+    "simulation": "bi-sliders2-vertical",
 }
 
 
@@ -44,7 +45,7 @@ def test_base_includes_workspace_map_modal():
     assert 'partials/layout/_workspace_map_modal.html' in _read(BASE_HTML)
 
 
-def test_modal_root_and_four_columns():
+def test_modal_root_and_five_columns():
     html = _render_modal()
     assert 'id="workspaceMapModal"' in html
     assert "modal-dialog-centered modal-xl" in html
@@ -53,6 +54,7 @@ def test_modal_root_and_four_columns():
         "ontology",
         "assignment",
         "digitaltwin",
+        "simulation",
     ]
 
 
@@ -86,9 +88,13 @@ def test_mapping_and_kg_items_carry_graph_gate():
     mapping_column = html.split('data-workspace-map-col="assignment"', 1)[1].split(
         'data-workspace-map-col="digitaltwin"', 1
     )[0]
-    kg_column = html.split('data-workspace-map-col="digitaltwin"', 1)[1]
+    kg_column = html.split('data-workspace-map-col="digitaltwin"', 1)[1].split(
+        'data-workspace-map-col="simulation"', 1
+    )[0]
+    sim_column = html.split('data-workspace-map-col="simulation"', 1)[1]
     assert "nav-requires-graph" in mapping_column
     assert "nav-requires-graph" in kg_column
+    assert "nav-requires-graph" in sim_column
 
 
 def test_workspace_map_css_uses_shell_tokens():

@@ -249,11 +249,13 @@
     {% set ontology_m = namespace(v=none) %}
     {% set mapping_m  = namespace(v=none) %}
     {% set kg_m       = namespace(v=none) %}
+    {% set sim_m      = namespace(v=none) %}
     {% set domain_m   = namespace(v=none) %}
     {% for m in menu_config.menus %}
         {% if m.id == 'ontology'   %}{% set ontology_m.v = m %}{% endif %}
         {% if m.id == 'assignment' %}{% set mapping_m.v  = m %}{% endif %}
         {% if m.id == 'digitaltwin'%}{% set kg_m.v       = m %}{% endif %}
+        {% if m.id == 'simulation' %}{% set sim_m.v      = m %}{% endif %}
         {% if m.id == 'domain'     %}{% set domain_m.v   = m %}{% endif %}
     {% endfor %}
     <nav id="obSubnav" class="ob-subnav d-none" aria-label="Section navigation">
@@ -379,6 +381,33 @@
                         <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
                         {% for item in group['items'] %}
                         <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ kg_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
+                        {% endfor %}
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                </li>
+                {% endif %}
+                {% if sim_m.v %}
+                <li class="ob-subnav-item dropdown">
+                    <a class="ob-subnav-link dropdown-toggle nav-requires-graph"
+                       href="{{ sim_m.v.route }}"
+                       id="subnavSimDropdown" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false"
+                       data-subnav-route="{{ sim_m.v.route }}"
+                       title="{{ sim_m.v.label }}">
+                        <span class="ob-subnav-ordinal" aria-hidden="true">5</span>
+                        <i class="bi {{ sim_m.v.icon }}"></i>
+                        <span class="ob-subnav-label">{{ sim_m.v.label }}</span>
+                    </a>
+                    <ul class="dropdown-menu" aria-labelledby="subnavSimDropdown">
+                        {% set vis = namespace(any=false) %}
+                        {% for group in sim_m.v.groups %}
+                        {% if not group.sidebar_only|default(false) %}
+                        {% if vis.any %}<li><hr class="dropdown-divider"></li>{% endif %}
+                        {% set vis.any = true %}
+                        <li><h6 class="dropdown-header"><i class="bi {{ group.icon }}"></i> {{ group.title }}</h6></li>
+                        {% for item in group['items'] %}
+                        <li><a class="dropdown-item{% if item.requires == 'domain_saved' %} dropdown-requires-domain{% endif %}" href="{{ sim_m.v.route }}?section={{ item.id }}"><i class="bi {{ item.icon }}"></i> {{ item.label }}</a></li>
                         {% endfor %}
                         {% endif %}
                         {% endfor %}

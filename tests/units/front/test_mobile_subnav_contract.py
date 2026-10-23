@@ -47,9 +47,9 @@ def test_mobile_subnav_keeps_controls_but_hides_their_visual_labels():
         css,
         flags=re.DOTALL,
     )
-    # Four workspace links plus Save, Versions and Close keep their accessible
+    # Five workspace links plus Save, Versions and Close keep their accessible
     # text in the DOM while CSS hides only the visual label on mobile.
-    assert html.count('class="ob-subnav-label"') == 7
+    assert html.count('class="ob-subnav-label"') == 8
 
 
 def test_mobile_subnav_compacts_padding_without_horizontal_scrolling():
@@ -77,6 +77,7 @@ def test_icon_only_mobile_subnav_controls_have_tooltips():
         "subnavOntologyDropdown",
         "subnavMappingDropdown",
         "subnavKgDropdown",
+        "subnavSimDropdown",
     ):
         tag = re.search(
             rf'<a\b[^>]*id="{element_id}"[^>]*>',

@@ -517,6 +517,7 @@ The app chrome has **two horizontal nav levels**, both provided by `base.html`.
 | Ontology | `ontology` | `bi-bezier2` |
 | Mapping | `assignment` | `bi-shuffle` |
 | Knowledge Graph | `digitaltwin` | `bi-radar` |
+| Simulation | `simulation` | `bi-sliders2-vertical` |
 | Settings | `settings` | `bi-gear` |
 
 Do not reuse Domain's `bi-box` for Knowledge Graph (or any other

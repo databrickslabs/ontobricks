@@ -73,6 +73,44 @@ def view_phy(name: str) -> str:
     return _safe(name)
 
 
+SIM_TABLE_MARKER = "__sim_"
+_PG_IDENTIFIER_MAX_BYTES = 63
+
+
+def sim_phy(name: str, sim_id: str) -> str:
+    """Postgres table name for one simulation sandbox of graph *name*.
+
+    The result is its own physical identifier (``physical_table_id`` maps it
+    to itself), so it can be passed to the store as a logical table name.
+    The graph stem is trimmed so the identifier stays within Postgres's
+    63-byte limit while the ``__sim_<id>`` suffix is always preserved.
+    """
+    if not (sim_id or "").strip():
+        raise ValueError("Simulation id is required")
+    sid = safe_identifier(sim_id.strip()).lower()
+    suffix = f"{SIM_TABLE_MARKER}{sid}"
+    budget = _PG_IDENTIFIER_MAX_BYTES - len(suffix)
+    if budget < 1:
+        raise ValueError(f"Simulation id too long: {sim_id!r}")
+    stem = _safe(name)[:budget].rstrip("_") or "g"
+    return f"{stem}{suffix}"
+
+
+def is_sim_phy(table: str) -> bool:
+    """True when *table* is a simulation sandbox table name."""
+    return SIM_TABLE_MARKER in (table or "").split(".")[-1].strip('"')
+
+
+def ensure_sim_table(cur: Any, schema: str, table: str) -> None:
+    """Create a standalone simulation triple table + standard indexes."""
+    ensure_pgcrypto(cur)
+    _create_triple_table(cur, schema, table)
+
+
+def drop_sim_table(cur: Any, table: str) -> None:
+    cur.execute(f"DROP TABLE IF EXISTS {table}")
+
+
 def _idx_name(table: str, suffix: str) -> str:
     base = f"g_{table}_{suffix}".lower()
     return base[:63]

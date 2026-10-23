@@ -14,6 +14,7 @@
 - [Registry Storage](#registry-storage)
 - [Triple Store & Graph DB Backends](#triple-store--graph-db-backends)
 - [Reasoning Engine](#reasoning-engine)
+- [Simulation — What-if Sandboxes](#simulation--what-if-sandboxes)
 - [Graph Analysis — Community Detection](#graph-analysis--community-detection)
 - [SHACL Data Quality](#shacl-data-quality)
 - [Technology Stack](#technology-stack)
@@ -1325,6 +1326,75 @@ Inferred triples from any phase can be **materialized** (written back) to the tr
 | `src/back/core/reasoning/swrl/SWRLSQLTranslator.py` | `SWRLSQLTranslator` — SWRL → Spark / Postgres SQL compilation |
 | `src/back/core/reasoning/models.py` | `InferredTriple`, `RuleViolation`, `ReasoningResult` dataclasses |
 | `src/back/core/graphdb/GraphDBBackend.py` | Graph DB primitives: `transitive_closure()`, `symmetric_expand()`, `shortest_path()` |
+
+---
+
+## Simulation — What-if Sandboxes
+
+The **Simulation** menu (5th workspace, after Knowledge Graph) answers *"what
+would the graph conclude if these facts were true?"* without touching the live
+knowledge graph. v1 supports the **Lakebase** graph backend only; graphless
+domains redirect to Domain, other backends show a disabled page.
+
+### Run pipeline
+
+1. **Scope** (`SimulationScope`) resolves an entity set on the live graph
+   (read-only): an entity neighbourhood (`expand_and_fetch_subgraph`, default 2
+   hops), a saved cohort rule (`CohortService.dry_run`), or a class population
+   (`find_subjects_by_type`, capped at 5000 entities — exceeding the cap fails
+   the run instead of truncating).
+2. **Seed** (`SimulationSandbox`) creates a standalone table
+   `<graph>__sim_<id>` and copies every live triple whose *subject* is in scope
+   with one `INSERT … SELECT … WHERE subject = ANY(…)` (datatype / lang kept).
+   Slices above 250k triples are rejected.
+3. **Patch** applies the hypothetical facts in order: `add`, `remove`, or `set`
+   (delete every `(s, p, *)` then assert the new value).
+4. **Reason** with `SimulationReasoningService`, a `ReasoningService` subclass
+   whose `_get_graph_name()` returns the sandbox table, so every phase (SWRL,
+   graph, decision tables, SPARQL, aggregate, optional T-Box) reads the
+   sandbox. Inferred triples are materialised into the sandbox only.
+5. **Diff** (`SimulationDiff`) compares the seeded slice (S0) with the final
+   sandbox (S2): added triples are tagged `patch` or `inferred` (with rule
+   provenance), removed triples come from patches. Exact counts plus the first
+   2000 rows per list are stored on the simulation row.
+
+### Isolation guarantees
+
+`LakebaseSimulationStore` (a `LakebaseFlatStore` subclass) resolves every
+table name to the sandbox itself — no `_sync` / `__app` / union-view trio — and
+raises `ValidationError` for any name without the `__sim_` marker, on reads,
+writes, DDL and generated SQL (`_sql_relation`). Purge, synced bulk load and
+adjacency rebuilds are refused. The live store is only used for the scope read
+and as the read-only source of the seed copy. Deleting a simulation drops its
+sandbox table.
+
+### Persistence and API
+
+Scenario definitions and the last diff live in the registry tables
+`simulations` (PK `(domain_id, version, id)`) and `simulation_runs`
+(append-only trace), created lazily by the `Simulations` mixin of
+`LakebaseRegistryStore`. Runs execute as `TaskManager` background tasks.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /simulation/list` | Scenarios of the active domain version |
+| `POST /simulation/create` | Create a draft (Builder) |
+| `GET / PUT / DELETE /simulation/{id}` | Read, replace spec (Builder), delete + drop sandbox (Builder) |
+| `POST /simulation/{id}/run` | Start the run; poll `GET /tasks/{task_id}` (Builder) |
+| `GET /simulation/{id}/diff?kind=added\|removed&page=&search=` | Paged diff rows + summary |
+| `GET /simulation/runs?simulation_id=` | Run history |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/back/objects/simulation/Simulation.py` | Facade: CRUD, backend gate, run launch, diff paging |
+| `src/back/objects/simulation/SimulationRunner.py` | Background run: scope → seed → patch → reason → diff → persist |
+| `src/back/objects/simulation/SimulationSandbox.py` | Sandbox lifecycle and patch semantics |
+| `src/back/core/graphdb/lakebase/LakebaseSimulationStore.py` | Sandbox-pinned Lakebase store with the write-target guard |
+| `src/back/objects/registry/store/lakebase/Simulations.py` | `simulations` / `simulation_runs` registry mixin |
+| `src/api/routers/internal/simulation.py` | Internal JSON API |
+| `src/front/templates/simulation.html` | Scenarios / Workbench / Results / Runs page |
 
 ---
 

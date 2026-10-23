@@ -534,6 +534,51 @@ class RegistryStore(ABC):
         return [], 0
 
     # ------------------------------------------------------------------
+    # Simulations (what-if sandboxes)
+    #
+    # Named scenario definitions per (folder, version) plus an
+    # append-only run trace. Reads default to empty; writes default to
+    # raising so stores without simulation support fail loudly instead
+    # of silently dropping a user's scenario.
+    # ------------------------------------------------------------------
+
+    def list_simulations(self, folder: str, version: str) -> List[Dict[str, Any]]:
+        """Summaries (no diff payload) of every simulation, newest first."""
+        return []
+
+    def load_simulation(
+        self, folder: str, version: str, sim_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Full simulation row including the capped ``diff`` payload."""
+        return None
+
+    def save_simulation(self, folder: str, version: str, entry: Dict[str, Any]) -> None:
+        """UPSERT one simulation (keyed by ``entry['id']``)."""
+        from back.core.errors import InfrastructureError
+
+        raise InfrastructureError("This registry store does not support simulations")
+
+    def delete_simulation(self, folder: str, version: str, sim_id: str) -> bool:
+        """Delete one simulation row; ``True`` when a row was removed."""
+        return False
+
+    def record_simulation_run(
+        self, folder: str, version: str, entry: Dict[str, Any]
+    ) -> None:
+        """Append a run-history row. Best-effort; must NOT raise."""
+
+    def load_simulation_runs(
+        self,
+        folder: str,
+        version: str,
+        *,
+        sim_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Newest-first simulation runs, optionally for one simulation."""
+        return []
+
+    # ------------------------------------------------------------------
     # Graph analytics cache
     #
     # The LAST computed knowledge-graph metrics per (folder, version) —

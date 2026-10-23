@@ -97,6 +97,8 @@
                                 <div class="help-step"><span class="help-step-num">4</span><div><strong>Mapping</strong><br><small>Map ontology to UC tables (R2RML)</small></div></div>
                                 <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
                                 <div class="help-step"><span class="help-step-num">5</span><div><strong>Knowledge Graph</strong><br><small>Synchronize, explore, query</small></div></div>
+                                <div class="help-step-arrow"><i class="bi bi-arrow-right"></i></div>
+                                <div class="help-step"><span class="help-step-num">6</span><div><strong>Simulation</strong><br><small>What-if sandboxes on a graph slice</small></div></div>
                             </div>
                         </section>
 
@@ -291,6 +293,26 @@
                                                 <li><strong>Cohorts</strong> &mdash; run &amp; preview the constraint-based grouping rules designed in <strong>Ontology &rarr; Advanced &rarr; Cohorts</strong></li>
                                             </ul>
                                             <p>A <em>Readiness Status</em> indicator tells you when ontology &amp; mapping are both ready to sync.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Simulation -->
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#hw6">
+                                            <i class="bi bi-sliders2-vertical me-2"></i><strong>6. Simulation</strong> &mdash; what-if sandboxes
+                                        </button>
+                                    </h2>
+                                    <div id="hw6" class="accordion-collapse collapse" data-bs-parent="#helpWorkflowAccordion">
+                                        <div class="accordion-body">
+                                            <ul>
+                                                <li><strong>Scenarios</strong> &mdash; create, duplicate and delete named what-if simulations for the loaded domain version</li>
+                                                <li><strong>Workbench</strong> &mdash; pick a scope (entity + hops, saved cohort, or class), add hypothetical triple patches, choose reasoning phases, and run</li>
+                                                <li><strong>Results</strong> &mdash; inspect the triples the patches and reasoning added or removed compared to the live graph</li>
+                                                <li><strong>Runs</strong> &mdash; history of simulation runs and their status</li>
+                                            </ul>
+                                            <p>Simulations run on an isolated copy of a graph slice; the live Knowledge Graph is never modified. Lakebase graph backend only.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -495,6 +517,7 @@
                                 <dt>Knowledge Graph</dt><dd>A materialized, queryable graph representation of your Databricks data, built from your ontology and mappings.</dd>
                                 <dt>Bridge</dt><dd>Cross-domain link between entities of two different domains.</dd>
                                 <dt>Cohort Discovery</dt><dd>Deterministic, explainable rules that group entities which &ldquo;travel together&rdquo; &mdash; designed under <em>Ontology &rarr; Advanced &rarr; Cohorts</em>, run under <em>Knowledge Graph &rarr; Cohorts</em>.</dd>
+                                <dt>Simulation</dt><dd>A named what-if sandbox: a slice of the Knowledge Graph copied into an isolated table, patched with hypothetical triples, and re-reasoned &mdash; the live graph is never modified.</dd>
                                 <dt>Triple Store</dt><dd>Backend where mapped triples are physically stored &mdash; always a Delta view in Unity Catalog, plus the domain Graph DB.</dd>
                                 <dt>Graph DB</dt><dd>Per-domain engine for graph queries and reasoning: <strong>Lakebase</strong> (Postgres), <strong>Lakehouse</strong> (Delta), or <strong>Neo4j</strong> (Bolt / Cypher).</dd>
                                 <dt>Neo4j</dt><dd>Optional Graph DB backend that stores the Knowledge Graph as a typed property graph (nodes, labels, relationships) instead of flat triples. Requires Neo4j 5.x (Aura recommended).</dd>

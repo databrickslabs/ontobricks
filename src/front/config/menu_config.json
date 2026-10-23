@@ -632,6 +632,61 @@
                     ]
                 }
             ]
+        },
+
+        {
+            "id": "simulation",
+            "label": "Simulation",
+            "icon": "bi-sliders2-vertical",
+            "route": "/simulation/",
+            "requires_domain_saved": true,
+            "navbar_hidden": true,
+            "status_indicator": null,
+            "navbar_actions": [],
+            "groups": [
+                {
+                    "id": "simulation-scenarios",
+                    "title": "Scenarios",
+                    "icon": "bi-sliders2-vertical",
+                    "items": [
+                        {
+                            "id": "scenarios",
+                            "label": "Scenarios",
+                            "icon": "bi-collection",
+                            "default": true,
+                            "requires": null
+                        },
+                        {
+                            "id": "workbench",
+                            "label": "Workbench",
+                            "icon": "bi-tools",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                },
+                {
+                    "id": "simulation-results",
+                    "title": "Results",
+                    "icon": "bi-clipboard-data",
+                    "items": [
+                        {
+                            "id": "results",
+                            "label": "Results",
+                            "icon": "bi-plus-slash-minus",
+                            "default": false,
+                            "requires": null
+                        },
+                        {
+                            "id": "runs",
+                            "label": "Runs",
+                            "icon": "bi-list-check",
+                            "default": false,
+                            "requires": null
+                        }
+                    ]
+                }
+            ]
         }
     ],
 

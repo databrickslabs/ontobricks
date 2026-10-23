@@ -1,0 +1,147 @@
+<!-- Workbench Section - edit scope, patches and reasoning phases, then run -->
+<div class="content-section">
+    <div class="section-header d-flex justify-content-between align-items-center mb-4">
+        <div class="me-auto">
+            <h4 class="mb-1"><i class="bi bi-tools me-2"></i>Workbench <span class="text-muted fs-6" id="simWbTitle"></span></h4>
+            <p class="text-muted mb-0 small">Pick a graph slice, add hypothetical facts, choose the reasoning phases, then run.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="simWbResetBtn" title="New blank scenario">
+                <i class="bi bi-file-earmark-plus"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="simWbSaveBtn"
+                    {% if not simulation_ctx.supported %}disabled{% endif %}>
+                <i class="bi bi-save me-1"></i>Save
+            </button>
+            <button type="button" class="btn btn-sm btn-primary" id="simWbRunBtn"
+                    {% if not simulation_ctx.supported %}disabled{% endif %}>
+                <i class="bi bi-play-fill me-1"></i>Run
+            </button>
+        </div>
+    </div>
+
+    <div id="simWbProgress" class="card mb-3 d-none">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between small mb-1">
+                <strong id="simWbProgressMsg">Starting simulation…</strong>
+                <span id="simWbProgressPct">0%</span>
+            </div>
+            <div class="progress sim-progress-track">
+                <div class="progress-bar" id="simWbProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-5">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-info-circle me-1"></i>Scenario</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="simWbLabel" class="form-label small">Name</label>
+                        <input type="text" class="form-control form-control-sm" id="simWbLabel" maxlength="200" placeholder="e.g. Credit score drops for ACME">
+                    </div>
+                    <div class="mb-0">
+                        <label for="simWbDescription" class="form-label small">Description</label>
+                        <textarea class="form-control form-control-sm" id="simWbDescription" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-7">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-bullseye me-1"></i>Scope</div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-12 col-md-4">
+                            <label for="simWbScopeType" class="form-label small">Slice</label>
+                            <select class="form-select form-select-sm" id="simWbScopeType">
+                                <option value="entity">Entity neighbourhood</option>
+                                <option value="cohort" {% if not simulation_ctx.cohort_rules_count %}disabled{% endif %}>Cohort</option>
+                                <option value="class">Class population</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label for="simWbFocus" class="form-label small" id="simWbFocusLabel">Entity URI</label>
+                            <input type="text" class="form-control form-control-sm" id="simWbFocus" placeholder="https://…">
+                            <select class="form-select form-select-sm d-none" id="simWbCohort"></select>
+                        </div>
+                        <div class="col-6 col-md-4" id="simWbHopsGroup">
+                            <label for="simWbHops" class="form-label small">Hops</label>
+                            <input type="number" class="form-control form-control-sm" id="simWbHops" min="0" max="4" value="{{ simulation_ctx.default_hops }}">
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label for="simWbCap" class="form-label small">Entity cap</label>
+                            <input type="number" class="form-control form-control-sm" id="simWbCap" min="1" max="{{ simulation_ctx.class_cap }}" value="{{ simulation_ctx.class_cap }}">
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0 mt-2">The slice copies every triple whose subject is in scope into a private sandbox table.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-pencil-square me-1"></i>Hypothetical facts <span class="badge bg-secondary ms-1" id="simWbPatchCount">0</span></span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="simWbAddPatchBtn">
+                        <i class="bi bi-plus-lg me-1"></i>Add fact
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0 sim-table">
+                            <thead>
+                                <tr>
+                                    <th class="sim-col-op">Operation</th>
+                                    <th>Subject</th>
+                                    <th>Predicate</th>
+                                    <th>Object / value</th>
+                                    <th class="sim-col-action"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="simWbPatchesBody"></tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small px-3 py-2 mb-0">
+                        <strong>Add</strong> asserts a triple, <strong>Remove</strong> retracts it,
+                        <strong>Set</strong> replaces every value of the predicate on the subject.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header"><i class="bi bi-lightning me-1"></i>Reasoning phases</div>
+                <div class="card-body d-flex flex-wrap gap-4" id="simWbPhases">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="simPhaseSwrl" data-phase="swrl" checked>
+                        <label class="form-check-label small" for="simPhaseSwrl">SWRL rules <span class="text-muted">({{ simulation_ctx.swrl_rules_count }})</span></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="simPhaseGraph" data-phase="graph" checked>
+                        <label class="form-check-label small" for="simPhaseGraph">Graph reasoning</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="simPhaseDt" data-phase="decision_tables">
+                        <label class="form-check-label small" for="simPhaseDt">Decision tables <span class="text-muted">({{ simulation_ctx.decision_tables_count }})</span></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="simPhaseSparql" data-phase="sparql_rules">
+                        <label class="form-check-label small" for="simPhaseSparql">SPARQL rules <span class="text-muted">({{ simulation_ctx.sparql_rules_count }})</span></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="simPhaseAgg" data-phase="aggregate_rules">
+                        <label class="form-check-label small" for="simPhaseAgg">Aggregate rules <span class="text-muted">({{ simulation_ctx.aggregate_rules_count }})</span></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="simPhaseTbox" data-phase="tbox" {% if not simulation_ctx.owlrl_available %}disabled{% endif %}>
+                        <label class="form-check-label small" for="simPhaseTbox">OWL 2 RL (T-Box)</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

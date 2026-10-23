@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ brand_page_title('Simulation') }}{% endblock %}
+
+{% block page_id %}simulation{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='simulation/css/simulation.css') }}?v={{ asset_version }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="sidebar-layout">
+        <div class="sidebar-nav">
+            {% set sidebar_menu = get_menu('simulation') %}
+            {% include "partials/layout/_sidebar_nav.html" %}
+        </div>
+
+        <div class="sidebar-content">
+            <div id="scenarios-section" class="sidebar-section active">
+                {% include "partials/simulation/_sim_scenarios.html" %}
+            </div>
+
+            <div id="workbench-section" class="sidebar-section">
+                {% include "partials/simulation/_sim_workbench.html" %}
+            </div>
+
+            <div id="results-section" class="sidebar-section">
+                {% include "partials/simulation/_sim_results.html" %}
+            </div>
+
+            <div id="runs-section" class="sidebar-section">
+                {% include "partials/simulation/_sim_runs.html" %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="simulation-config" type="application/json">{{ simulation_ctx|tojson }}</script>
+
+<script defer src="{{ url_for('static', filename='simulation/js/simulation.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-workbench.js') }}?v={{ asset_version }}"></script>
+<script defer src="{{ url_for('static', filename='simulation/js/simulation-results.js') }}?v={{ asset_version }}"></script>
+{% endblock %}
