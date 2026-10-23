@@ -52,8 +52,24 @@ def test_module_exports_its_three_entry_points():
 
 def test_module_calls_the_internal_endpoint():
     js = _read(SHACL_JS)
-    assert "/dtwin/nodes/shacl?entity_uri=" in js
-    assert "encodeURIComponent(entityUri)" in js
+    assert "/dtwin/nodes/shacl/start" in js
+    assert "JSON.stringify({ entity_uri: entityUri })" in js
+    assert "/tasks/" in js
+    assert "log_entries" in js
+    assert "TaskProgressUI.renderActivityLog" in js
+
+
+def test_loading_state_shows_a_scrollable_activity_log():
+    html = _read(MODAL_HTML)
+    assert 'id="shaclFacetsProgressLog"' in html
+    assert "task-activity-log" in html
+    css = _read(SHACL_CSS)
+    assert "#shaclFacetsProgressLog" in css
+    assert "overflow-y: auto" in css
+    assert "max-height: 9.5rem" in css
+    js = _read(SHACL_JS)
+    assert "_shaclRenderProgressLog" in js
+    assert "tick()" in js
 
 
 def test_completed_checks_are_broadcast_not_pushed():

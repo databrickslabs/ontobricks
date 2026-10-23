@@ -449,3 +449,52 @@ class TestEvaluate:
 
         with pytest.raises(InfrastructureError, match="TABLE_OR_VIEW_NOT_FOUND"):
             await svc.evaluate(domain, None, entity_uri=ENTITY)
+
+    async def test_progress_runs_one_query_per_shape(self, svc, domain, install_store):
+        store = install_store(FakeStore())
+        messages = []
+
+        await svc.evaluate(
+            domain, None, entity_uri=ENTITY,
+            progress=lambda _pct, msg: messages.append(msg),
+        )
+
+        assert "Reading entity triples..." in messages
+        assert any(m.startswith("Checking ") for m in messages)
+        assert len(store.facet_queries) > 1
+        translatable = ["s_email", "s_name", "s_phone", "s_label", "s_guard"]
+        for query in store.facet_queries:
+            named = {sid for sid in translatable if f"'{sid}'" in query}
+            assert len(named) == 1
+
+    async def test_snapshot_task_queries_the_snapshot_table(
+        self, svc, domain, install_store, monkeypatch
+    ):
+        store = install_store(FakeStore())
+
+        class _Snap:
+            table = "cat.sch.dq_snap_t1"
+            parallel = True
+
+            def __init__(self, *_a, **_k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_a):
+                return False
+
+        snap_mod = import_module("back.objects.digitaltwin.quality.DataQualitySnapshot")
+        monkeypatch.setattr(snap_mod, "DataQualitySnapshot", _Snap)
+        messages = []
+
+        await svc.evaluate(
+            domain, None, entity_uri=ENTITY,
+            progress=lambda _pct, msg: messages.append(msg),
+            snapshot_task_id="t1",
+        )
+
+        assert "Materializing DQ snapshot..." in messages
+        assert store.facet_queries
+        assert all("cat.sch.dq_snap_t1" in q for q in store.facet_queries)

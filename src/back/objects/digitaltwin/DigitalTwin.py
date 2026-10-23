@@ -257,10 +257,25 @@ class DigitalTwin:
         decision_tables=None,
         aggregate_rules=None,
         violation_limit=None,
+        parallel=False,
     ):
         from back.objects.digitaltwin.quality.SqlQualityChecks import SqlQualityChecks
 
-        return SqlQualityChecks.run_sql_checks(tm, task, shapes, triplestore_table, store, t0, total, swrl_rules, ontology, decision_tables, aggregate_rules, violation_limit)
+        return SqlQualityChecks.run_sql_checks(
+            tm,
+            task,
+            shapes,
+            triplestore_table,
+            store,
+            t0,
+            total,
+            swrl_rules,
+            ontology,
+            decision_tables,
+            aggregate_rules,
+            violation_limit,
+            parallel=parallel,
+        )
 
 
     # ------------------------------------------------------------------
@@ -360,6 +375,19 @@ class DigitalTwin:
             violation_limit=violation_limit,
             failure_message=failure_message,
             use_exception_message_on_failure=use_exception_message_on_failure,
+        )
+
+    @staticmethod
+    def run_node_shacl_task(
+        tm,
+        task_id: str,
+        settings,
+        domain_snap: DomainSnapshot,
+        entity_uri: str,
+        triplestore_table: str,
+    ) -> None:
+        return TwinBackgroundTasks.run_node_shacl_task(
+            tm, task_id, settings, domain_snap, entity_uri, triplestore_table
         )
 
     @staticmethod
