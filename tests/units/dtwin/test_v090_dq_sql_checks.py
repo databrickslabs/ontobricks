@@ -1,6 +1,7 @@
 """SqlQualityChecks: SHACL / SWRL / decision-table / aggregate SQL data-quality runs (0.9.0 extract)."""
 
 import re
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -34,9 +35,11 @@ class FakeStore:
         self.handlers = list(handlers or [])
         self.default = default if default is not None else []
         self.sql = []
+        self._lock = threading.Lock()
 
     def execute_query(self, sql):
-        self.sql.append(sql)
+        with self._lock:
+            self.sql.append(sql)
         for match, answer in self.handlers:
             if match(sql):
                 if isinstance(answer, Exception):
@@ -50,9 +53,11 @@ class FakeTaskManager:
         self.progress = []
         self.failed = []
         self.completed = []
+        self._lock = threading.Lock()
 
     def update_progress(self, task_id, progress, message):
-        self.progress.append((task_id, progress, message))
+        with self._lock:
+            self.progress.append((task_id, progress, message))
 
     def fail_task(self, task_id, message):
         self.failed.append((task_id, message))
@@ -708,6 +713,28 @@ def test_mixed_run_progress_increases_monotonically_per_check():
         ontology=ONTOLOGY,
     )
     assert [p for _, p, _ in tm.progress] == [0, 25, 50, 75]
+
+
+def test_parallel_mixed_run_keeps_input_order():
+    tm = run(
+        [min_count_shape()],
+        FakeStore(default=[]),
+        swrl_rules=[VIP_RULE],
+        decision_tables=[TIER_DT],
+        aggregate_rules=[ORDER_COUNT],
+        ontology=ONTOLOGY,
+        parallel=True,
+    )
+    res = results_of(tm)
+    assert [r["shape_id"] for r in res] == [
+        "shape-email",
+        "swrl:VipCustomer",
+        "dt:Tier",
+        "agg:TooManyOrders",
+    ]
+    assert tm.completed[0][1]["summary"]["total"] == 4
+    assert len(tm.progress) == 4
+    assert all(msg.startswith("Check ") for _, _, msg in tm.progress)
 
 
 def test_digitaltwin_delegators_reach_sql_quality_checks():

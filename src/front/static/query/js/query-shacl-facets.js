@@ -2,9 +2,9 @@
  * Data Quality Checks of one entity in the Graph Explorer (its SHACL facets).
  *
  * Every enabled shape targeting the entity's class, one of its ancestors, or
- * no class is checked against that entity only (``/dtwin/nodes/shacl``). The
- * result opens in a popup, summarises in the node detail panel, and rings the
- * node on the canvas.
+ * no class is checked against that entity only (``POST /dtwin/nodes/shacl/start``,
+ * then ``/tasks/{id}``). The result opens in a popup, summarises in the node
+ * detail panel, and rings the node on the canvas.
  *
  * Results are cached per entity for the lifetime of the page and only
  * recomputed on an explicit Re-check. Each completed check is broadcast as a
@@ -15,6 +15,7 @@
 const _shaclCache = {};
 let _shaclCurrentUri = null;
 let _shaclFilter = 'all';
+let _shaclPollTimer = null;
 
 const SHACL_STATUS = {
     fail:           { icon: 'bi-x-circle-fill',             label: 'failed',         tone: 'danger' },
@@ -110,13 +111,86 @@ function shaclStatusColor(status) {
  *
  * @returns {Promise<object|null>} The response, or null when it failed.
  */
+function _shaclStopPoll() {
+    if (_shaclPollTimer) {
+        clearInterval(_shaclPollTimer);
+        _shaclPollTimer = null;
+    }
+}
+
+function _shaclRenderProgressLog(task) {
+    const step = document.getElementById('shaclFacetsProgressStep');
+    if (step && task && task.message) {
+        const running = task.status === 'running' || task.status === 'pending';
+        step.innerHTML = (running
+            ? '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>'
+            : '') + _shaclEsc(task.message);
+    }
+    const el = document.getElementById('shaclFacetsProgressLog');
+    if (!el) return;
+    if (window.TaskProgressUI && typeof TaskProgressUI.renderActivityLog === 'function') {
+        TaskProgressUI.renderActivityLog(el, task || { log_entries: [], status: 'pending' });
+        return;
+    }
+    const entries = (task && task.log_entries) || [];
+    if (!entries.length) {
+        el.innerHTML = '<div class="small text-muted">Waiting for activity…</div>';
+        return;
+    }
+    const active = task.status === 'running' || task.status === 'pending';
+    el.innerHTML = entries.map(function (entry, idx) {
+        const running = active && idx === entries.length - 1;
+        const icon = running
+            ? '<span class="spinner-border spinner-border-sm text-primary flex-shrink-0" role="status"></span>'
+            : '<i class="bi bi-check-circle-fill text-success flex-shrink-0 mt-1"></i>';
+        return '<div class="task-activity-row d-flex align-items-start gap-2 mb-1 small">' +
+            icon + '<span class="flex-grow-1">' + _shaclEsc((entry && entry.message) || '') + '</span></div>';
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+}
+
+function _pollShaclTask(taskId) {
+    return new Promise(function (resolve, reject) {
+        _shaclStopPoll();
+        const tick = async function () {
+            try {
+                const resp = await fetch('/tasks/' + encodeURIComponent(taskId),
+                    { credentials: 'same-origin' });
+                const data = await resp.json();
+                const task = data.task;
+                if (!task) return;
+                _shaclRenderProgressLog(task);
+                if (task.status === 'completed') {
+                    _shaclStopPoll();
+                    resolve(task.result || {});
+                } else if (task.status === 'failed') {
+                    _shaclStopPoll();
+                    reject(new Error(task.message || 'Checks failed'));
+                }
+            } catch (err) {
+                console.error('[SHACL facets] Poll error:', err);
+            }
+        };
+        tick();
+        _shaclPollTimer = setInterval(tick, 1500);
+    });
+}
+
 async function checkShaclFacets(entityUri) {
     try {
-        const resp = await fetch('/dtwin/nodes/shacl?entity_uri=' + encodeURIComponent(entityUri),
-            { credentials: 'same-origin' });
-        const data = await resp.json();
-        if (!resp.ok || !data.success) {
-            throw new Error(data.message || data.detail || ('HTTP ' + resp.status));
+        const resp = await fetch('/dtwin/nodes/shacl/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ entity_uri: entityUri }),
+        });
+        const started = await resp.json();
+        if (!resp.ok || !started.success || !started.task_id) {
+            throw new Error(started.message || started.detail || ('HTTP ' + resp.status));
+        }
+        const data = await _pollShaclTask(started.task_id);
+        if (!data || data.success === false) {
+            throw new Error((data && (data.message || data.detail)) || 'Checks failed');
         }
         _shaclCache[entityUri] = { data: data, checkedAt: new Date() };
         document.dispatchEvent(new CustomEvent('shacl-facets:updated', { detail: { entityUri: entityUri } }));
@@ -147,6 +221,7 @@ async function openShaclFacetsModal(entityUri, recheck) {
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
 
     if (_shaclCache[entityUri] && !recheck) {
+        _shaclStopPoll();
         _shaclRenderModal(entityUri);
         return;
     }
@@ -155,15 +230,20 @@ async function openShaclFacetsModal(entityUri, recheck) {
     if (_shaclCurrentUri === entityUri) _shaclRenderModal(entityUri);
 }
 
+function _shaclSetProgressVisible(visible) {
+    const el = document.getElementById('shaclFacetsProgress');
+    if (el) el.classList.toggle('d-none', !visible);
+}
+
 function _shaclRenderLoading(entityUri) {
     _shaclSetText('shaclFacetsEntity', _shaclLocalName(entityUri));
     _shaclSetText('shaclFacetsSubtitle', entityUri);
     _shaclSetText('shaclFacetsCheckedAt', '');
     _shaclSetHtml('shaclFacetsSummary', '');
     _shaclSetHtml('shaclFacetsGauges', '');
-    _shaclSetHtml('shaclFacetsBody', '<div class="text-center text-muted py-4">' +
-        '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>' +
-        'Running data quality checks…</div>');
+    _shaclSetHtml('shaclFacetsBody', '');
+    _shaclSetProgressVisible(true);
+    _shaclRenderProgressLog({ log_entries: [], status: 'pending', message: 'Running data quality checks…' });
     const btn = document.getElementById('shaclFacetsRecheck');
     if (btn) btn.disabled = true;
 }
@@ -172,6 +252,7 @@ function _shaclRenderModal(entityUri) {
     const entry = _shaclCache[entityUri];
     const btn = document.getElementById('shaclFacetsRecheck');
     if (btn) btn.disabled = false;
+    _shaclSetProgressVisible(false);
     const body = document.getElementById('shaclFacetsBody');
     if (!body) return;
     if (!entry) {

@@ -6,7 +6,9 @@ Extracted from :class:`DigitalTwin` (Fowler Extract Class).
 
 from __future__ import annotations
 
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
 from back.core.helpers import sql_escape as escape_sql_value
@@ -35,6 +37,8 @@ class SqlQualityChecks:
     #: no way to tell a broken rule from a warehouse problem without the server
     #: log. Long enough for the engine's error code and its first sentence.
     _SQL_ERROR_MAX_CHARS = 300
+    _DQ_PARALLEL_WORKERS = 4
+    _MISSING_VIEW = object()
 
     def __init__(self, domain) -> None:
         self._domain = domain
@@ -284,404 +288,464 @@ class SqlQualityChecks:
         decision_tables=None,
         aggregate_rules=None,
         violation_limit=None,
+        parallel=False,
     ):
         """Execute SHACL shapes, SWRL, decision tables and aggregate rules as SQL against the VIEW backend."""
-        from back.core.w3c import SHACLService
-
         available_predicates = SqlQualityChecks._load_predicates_from_table(
             store, triplestore_table
         )
-
         pop_cache = {}
-        results = []
-        for idx, shape in enumerate(shapes):
-            label = shape.get("label", shape.get("id", f"Shape {idx + 1}"))
-            cat = shape.get("category", "unknown")
-            progress = int((idx / total) * 100)
-            tm.update_progress(task.id, progress, f"Check {idx + 1}/{total}: {label}")
-
-            resolved_shape = SqlQualityChecks._resolve_shape_uri_for_sql(
-                shape, available_predicates
-            )
-            sql = SHACLService.shape_to_sql(resolved_shape, triplestore_table)
-            if not sql:
-                results.append(
-                    {
-                        "name": label,
-                        "category": cat,
-                        "shape_id": shape.get("id"),
-                        "status": "info",
-                        "message": "Cannot translate to SQL",
-                        "violations": [],
-                        "sql": "",
-                    }
-                )
-                continue
-
-            try:
-                violations, violation_total, status, msg = (
-                    SqlQualityChecks._apply_sql_violation_limit(
-                        store,
-                        sql,
-                        violation_limit,
-                    )
-                )
-                result = {
-                    "name": label,
-                    "category": cat,
-                    "shape_id": shape.get("id"),
-                    "status": status,
-                    "message": msg,
-                    "violations": violations,
-                    "sql": sql,
-                    "violation_total": violation_total,
-                    "severity": shape.get("severity", "sh:Violation"),
-                }
-                class_uri = shape.get("target_class_uri", "")
-                pop = SqlQualityChecks._count_class_population_sql(
-                    store, triplestore_table, class_uri, pop_cache
-                )
-                SqlQualityChecks._enrich_with_population(result, pop)
-                results.append(result)
-            except Exception as exc:
-                err = str(exc)
-                if "TABLE_OR_VIEW_NOT_FOUND" in err or "does not exist" in err.lower():
-                    tm.fail_task(
-                        task.id, f"View {triplestore_table} not found. Build first."
-                    )
-                    return
-                logger.exception("SQL DQ check '%s' failed: %s", label, exc)
-                results.append(
-                    SqlQualityChecks._failed_check_result(
-                        label, cat, shape.get("id"), sql, exc
-                    )
-                )
-
-        SqlQualityChecks._run_swrl_sql_checks(
-            tm,
-            task,
-            results,
+        pop_lock = threading.Lock()
+        jobs = SqlQualityChecks._build_check_jobs(
+            shapes,
             swrl_rules,
-            ontology,
-            triplestore_table,
-            store,
-            total,
-            violation_limit=violation_limit,
-            offset=len(shapes),
-        )
-
-        swrl_count = len(swrl_rules) if swrl_rules else 0
-        dt_count = len(decision_tables) if decision_tables else 0
-        dt_offset = len(shapes) + swrl_count
-        SqlQualityChecks._run_dt_sql_checks(
-            tm,
-            task,
-            results,
             decision_tables,
-            ontology,
-            triplestore_table,
-            store,
-            total,
-            dt_offset,
-            violation_limit=violation_limit,
-        )
-
-        agg_offset = dt_offset + dt_count
-        SqlQualityChecks._run_agg_sql_checks(
-            tm,
-            task,
-            results,
             aggregate_rules,
             ontology,
             triplestore_table,
             store,
-            total,
-            agg_offset,
-            violation_limit=violation_limit,
+            available_predicates,
+            pop_cache,
+            pop_lock,
+            violation_limit,
         )
-
+        if parallel and len(jobs) >= 2:
+            results = SqlQualityChecks._run_jobs_parallel(
+                tm, task, jobs, total, triplestore_table
+            )
+        else:
+            results = SqlQualityChecks._run_jobs_serial(
+                tm,
+                task,
+                jobs,
+                total,
+                triplestore_table,
+                n_shapes=len(shapes or []),
+                n_swrl=len(swrl_rules or []),
+                n_dt=len(decision_tables or []),
+                n_agg=len(aggregate_rules or []),
+            )
+        if results is None:
+            return
         _dt().complete_dq_task(tm, task, results, time.time() - t0)
 
     @staticmethod
-    def _run_swrl_sql_checks(
-        tm,
-        task,
-        results,
+    def _missing_view_message(table: str) -> str:
+        return f"View {table} not found. Build first."
+
+    @staticmethod
+    def _is_missing_view_error(exc: Exception) -> bool:
+        err = str(exc)
+        return "TABLE_OR_VIEW_NOT_FOUND" in err or "does not exist" in err.lower()
+
+    @staticmethod
+    def _build_check_jobs(
+        shapes,
         swrl_rules,
-        ontology,
-        triplestore_table,
-        store,
-        total,
-        violation_limit=None,
-        offset=0,
-    ):
-        if not swrl_rules:
-            return
-        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
-        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
-
-        translator = SWRLSQLTranslator()
-        ontology = ontology or {}
-        base_uri = ontology.get("base_uri", "")
-        engine = SWRLEngine(ontology=ontology)
-        uri_map = engine._build_uri_map()
-        for idx, rule in enumerate(swrl_rules):
-            if not rule.get("enabled", True):
-                continue
-            label = rule.get("name", f"SWRL Rule {idx + 1}")
-            check_id = SqlQualityChecks._rule_check_id(SWRL_ID_PREFIX, rule, idx)
-            progress = int(((offset + idx) / total) * 100)
-            tm.update_progress(
-                task.id, progress, f"SWRL {idx + 1}/{len(swrl_rules)}: {label}"
-            )
-            params = {
-                "antecedent": rule.get("antecedent", ""),
-                "consequent": rule.get("consequent", ""),
-                "base_uri": base_uri,
-                "uri_map": uri_map,
-            }
-            sql = translator.build_violation_sql(triplestore_table, params)
-            if not sql:
-                results.append(
-                    {
-                        "name": label,
-                        "category": "structural",
-                        "shape_id": check_id,
-                        "status": "info",
-                        "message": "Cannot translate to SQL",
-                        "violations": [],
-                        "sql": "",
-                    }
-                )
-                continue
-            _s_mapper = lambda r: {"s": r.get("s", "")}
-            try:
-                t_rule = time.time()
-                violations, violation_total, status, msg = (
-                    SqlQualityChecks._apply_sql_violation_limit(
-                        store,
-                        sql,
-                        violation_limit,
-                        row_mapper=_s_mapper,
-                    )
-                )
-                elapsed_rule = time.time() - t_rule
-                result = {
-                    "name": label,
-                    "category": "structural",
-                    "shape_id": check_id,
-                    "status": status,
-                    "message": msg,
-                    "violations": violations,
-                    "sql": "",
-                    "severity": "sh:Violation",
-                    "violation_total": violation_total,
-                }
-                pop = None
-                if violations:
-                    pop = SqlQualityChecks._swrl_antecedent_population_sql(
-                        translator, store, triplestore_table, params
-                    )
-                SqlQualityChecks._enrich_with_population(result, pop)
-                logger.info(
-                    "SWRL rule '%s': %d violations (%.2fs)",
-                    label,
-                    violation_total,
-                    elapsed_rule,
-                )
-                results.append(result)
-            except Exception as exc:
-                logger.exception("SWRL DQ check '%s' SQL failed: %s", label, exc)
-                results.append(
-                    SqlQualityChecks._failed_check_result(
-                        label, "structural", check_id, sql, exc
-                    )
-                )
-
-    @staticmethod
-    def _run_dt_sql_checks(
-        tm,
-        task,
-        results,
         decision_tables,
-        ontology,
-        triplestore_table,
-        store,
-        total,
-        shape_count,
-        violation_limit=None,
-    ):
-        if not decision_tables:
-            return
-        from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
-
-        engine = DecisionTableEngine()
-        ontology = ontology or {}
-        base_uri = ontology.get("base_uri", "")
-        uri_map = engine._build_uri_map(ontology)
-        for idx, dt in enumerate(decision_tables):
-            if not dt.get("enabled", True):
-                continue
-            dt_name = dt.get("name", f"Decision Table {idx + 1}")
-            check_id = SqlQualityChecks._rule_check_id(DECISION_TABLE_ID_PREFIX, dt, idx)
-            progress = int(((shape_count + idx) / total) * 100)
-            tm.update_progress(
-                task.id, progress, f"DT {idx + 1}/{len(decision_tables)}: {dt_name}"
-            )
-            resolved = engine._resolve_dt(dt, uri_map, base_uri)
-            sql = engine.build_violation_sql(resolved, triplestore_table, base_uri)
-            if not sql:
-                results.append(
-                    {
-                        "name": dt_name,
-                        "category": "conformance",
-                        "shape_id": check_id,
-                        "status": "info",
-                        "message": "Cannot translate to SQL",
-                        "violations": [],
-                        "sql": "",
-                    }
-                )
-                continue
-            _s_mapper = lambda r: {"s": r.get("s", "")}
-            try:
-                t_rule = time.time()
-                violations, violation_total, status, msg = (
-                    SqlQualityChecks._apply_sql_violation_limit(
-                        store,
-                        sql,
-                        violation_limit,
-                        row_mapper=_s_mapper,
-                    )
-                )
-                elapsed_rule = time.time() - t_rule
-                result = {
-                    "name": dt_name,
-                    "category": "conformance",
-                    "shape_id": check_id,
-                    "status": status,
-                    "message": msg,
-                    "violations": violations,
-                    "sql": sql,
-                    "severity": "sh:Violation",
-                    "violation_total": violation_total,
-                }
-                pop = None
-                if violations:
-                    class_uri = resolved.get("target_class_uri", "")
-                    pop_cache: dict = {}
-                    pop = SqlQualityChecks._count_class_population_sql(
-                        store, triplestore_table, class_uri, pop_cache
-                    )
-                SqlQualityChecks._enrich_with_population(result, pop)
-                logger.info(
-                    "DT rule '%s': %d violations (%.2fs)",
-                    dt_name,
-                    violation_total,
-                    elapsed_rule,
-                )
-                results.append(result)
-            except Exception as exc:
-                logger.exception(
-                    "Decision table DQ check '%s' SQL failed: %s", dt_name, exc
-                )
-                results.append(
-                    SqlQualityChecks._failed_check_result(
-                        dt_name, "conformance", check_id, sql, exc
-                    )
-                )
-
-    @staticmethod
-    def _run_agg_sql_checks(
-        tm,
-        task,
-        results,
         aggregate_rules,
         ontology,
-        triplestore_table,
+        table,
         store,
-        total,
-        shape_count,
-        violation_limit=None,
+        available_predicates,
+        pop_cache,
+        pop_lock,
+        violation_limit,
     ):
-        if not aggregate_rules:
-            return
-        from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
-
-        engine = AggregateRuleEngine()
-        ontology = ontology or {}
-        base_uri = ontology.get("base_uri", "")
-        pop_cache: dict = {}
-        for idx, rule in enumerate(aggregate_rules):
+        jobs = []
+        for idx, shape in enumerate(shapes or []):
+            jobs.append(
+                (
+                    shape.get("label", shape.get("id", f"Shape {idx + 1}")),
+                    "shacl",
+                    idx,
+                    lambda s=shape, i=idx: SqlQualityChecks._eval_shacl_shape(
+                        s,
+                        i,
+                        table,
+                        store,
+                        available_predicates,
+                        pop_cache,
+                        pop_lock,
+                        violation_limit,
+                    ),
+                )
+            )
+        for idx, rule in enumerate(swrl_rules or []):
             if not rule.get("enabled", True):
                 continue
-            agg_name = rule.get("name", f"Aggregate Rule {idx + 1}")
-            check_id = SqlQualityChecks._rule_check_id(AGGREGATE_ID_PREFIX, rule, idx)
-            progress = int(((shape_count + idx) / total) * 100)
-            tm.update_progress(
-                task.id, progress, f"Agg {idx + 1}/{len(aggregate_rules)}: {agg_name}"
+            jobs.append(
+                (
+                    rule.get("name", f"SWRL Rule {idx + 1}"),
+                    "swrl",
+                    idx,
+                    lambda r=rule, i=idx: SqlQualityChecks._eval_swrl_rule(
+                        r, i, table, store, ontology, violation_limit
+                    ),
+                )
             )
-            resolved = engine._resolve_rule(dict(rule), ontology)
-            sql = engine.build_sql(resolved, triplestore_table, base_uri)
-            if not sql:
-                results.append(
-                    {
-                        "name": agg_name,
-                        "category": "conformance",
-                        "shape_id": check_id,
-                        "status": "info",
-                        "message": "Cannot translate to SQL",
-                        "violations": [],
-                        "sql": "",
-                    }
-                )
+        for idx, dt in enumerate(decision_tables or []):
+            if not dt.get("enabled", True):
                 continue
-            _agg_mapper = lambda r: {
-                "s": r.get("s", ""),
-                "agg_val": r.get("agg_val", ""),
-            }
-            try:
-                t_rule = time.time()
-                violations, violation_total, status, msg = (
-                    SqlQualityChecks._apply_sql_violation_limit(
+            jobs.append(
+                (
+                    dt.get("name", f"Decision Table {idx + 1}"),
+                    "dt",
+                    idx,
+                    lambda d=dt, i=idx: SqlQualityChecks._eval_dt_rule(
+                        d,
+                        i,
+                        table,
                         store,
-                        sql,
+                        ontology,
+                        pop_cache,
+                        pop_lock,
                         violation_limit,
-                        row_mapper=_agg_mapper,
-                    )
+                    ),
                 )
-                elapsed_rule = time.time() - t_rule
-                result = {
-                    "name": agg_name,
-                    "category": "conformance",
-                    "shape_id": check_id,
-                    "status": status,
-                    "message": msg,
-                    "violations": violations,
-                    "sql": sql,
-                    "severity": "sh:Violation",
-                    "violation_total": violation_total,
-                }
-                pop = None
-                if violations:
-                    class_uri = resolved.get("target_class_uri", "")
+            )
+        for idx, rule in enumerate(aggregate_rules or []):
+            if not rule.get("enabled", True):
+                continue
+            jobs.append(
+                (
+                    rule.get("name", f"Aggregate Rule {idx + 1}"),
+                    "agg",
+                    idx,
+                    lambda r=rule, i=idx: SqlQualityChecks._eval_agg_rule(
+                        r,
+                        i,
+                        table,
+                        store,
+                        ontology,
+                        pop_cache,
+                        pop_lock,
+                        violation_limit,
+                    ),
+                )
+            )
+        return jobs
+
+    @staticmethod
+    def _run_jobs_serial(
+        tm, task, jobs, total, table, *, n_shapes, n_swrl, n_dt, n_agg
+    ):
+        results = []
+        for label, kind, idx, fn in jobs:
+            if kind == "shacl":
+                progress = int((idx / total) * 100) if total else 0
+                message = f"Check {idx + 1}/{total}: {label}"
+            elif kind == "swrl":
+                progress = int(((n_shapes + idx) / total) * 100) if total else 0
+                message = f"SWRL {idx + 1}/{n_swrl}: {label}"
+            elif kind == "dt":
+                progress = int(((n_shapes + n_swrl + idx) / total) * 100) if total else 0
+                message = f"DT {idx + 1}/{n_dt}: {label}"
+            else:
+                progress = (
+                    int(((n_shapes + n_swrl + n_dt + idx) / total) * 100) if total else 0
+                )
+                message = f"Agg {idx + 1}/{n_agg}: {label}"
+            tm.update_progress(task.id, progress, message)
+            result = fn()
+            if result is SqlQualityChecks._MISSING_VIEW:
+                tm.fail_task(task.id, SqlQualityChecks._missing_view_message(table))
+                return None
+            results.append(result)
+        return results
+
+    @staticmethod
+    def _run_jobs_parallel(tm, task, jobs, total, table):
+        workers = min(SqlQualityChecks._DQ_PARALLEL_WORKERS, len(jobs))
+        ordered = [None] * len(jobs)
+        done = 0
+        lock = threading.Lock()
+        missing = False
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(fn): i
+                for i, (_label, _kind, _idx, fn) in enumerate(jobs)
+            }
+            for fut in as_completed(futures):
+                i = futures[fut]
+                label = jobs[i][0]
+                try:
+                    result = fut.result()
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("Parallel DQ check '%s' failed: %s", label, exc)
+                    result = SqlQualityChecks._failed_check_result(
+                        label, "unknown", None, "", exc
+                    )
+                if result is SqlQualityChecks._MISSING_VIEW:
+                    missing = True
+                    continue
+                ordered[i] = result
+                with lock:
+                    done += 1
+                    progress = int((done / total) * 100) if total else 100
+                    tm.update_progress(
+                        task.id, progress, f"Check {done}/{total}: {label}"
+                    )
+        if missing:
+            tm.fail_task(task.id, SqlQualityChecks._missing_view_message(table))
+            return None
+        return ordered
+
+    @staticmethod
+    def _eval_shacl_shape(
+        shape,
+        idx,
+        table,
+        store,
+        available_predicates,
+        pop_cache,
+        pop_lock,
+        violation_limit,
+    ):
+        from back.core.w3c import SHACLService
+
+        label = shape.get("label", shape.get("id", f"Shape {idx + 1}"))
+        cat = shape.get("category", "unknown")
+        resolved_shape = SqlQualityChecks._resolve_shape_uri_for_sql(
+            shape, available_predicates
+        )
+        sql = SHACLService.shape_to_sql(resolved_shape, table)
+        if not sql:
+            return {
+                "name": label,
+                "category": cat,
+                "shape_id": shape.get("id"),
+                "status": "info",
+                "message": "Cannot translate to SQL",
+                "violations": [],
+                "sql": "",
+            }
+        try:
+            violations, violation_total, status, msg = (
+                SqlQualityChecks._apply_sql_violation_limit(
+                    store,
+                    sql,
+                    violation_limit,
+                )
+            )
+            result = {
+                "name": label,
+                "category": cat,
+                "shape_id": shape.get("id"),
+                "status": status,
+                "message": msg,
+                "violations": violations,
+                "sql": sql,
+                "violation_total": violation_total,
+                "severity": shape.get("severity", "sh:Violation"),
+            }
+            class_uri = shape.get("target_class_uri", "")
+            with pop_lock:
+                pop = SqlQualityChecks._count_class_population_sql(
+                    store, table, class_uri, pop_cache
+                )
+            SqlQualityChecks._enrich_with_population(result, pop)
+            return result
+        except Exception as exc:
+            if SqlQualityChecks._is_missing_view_error(exc):
+                return SqlQualityChecks._MISSING_VIEW
+            logger.exception("SQL DQ check '%s' failed: %s", label, exc)
+            return SqlQualityChecks._failed_check_result(
+                label, cat, shape.get("id"), sql, exc
+            )
+
+    def _eval_swrl_rule(rule, idx, table, store, ontology, violation_limit):
+        from back.core.reasoning.swrl.SWRLEngine import SWRLEngine
+        from back.core.reasoning.swrl.SWRLSQLTranslator import SWRLSQLTranslator
+
+        label = rule.get("name", f"SWRL Rule {idx + 1}")
+        check_id = SqlQualityChecks._rule_check_id(SWRL_ID_PREFIX, rule, idx)
+        ontology = ontology or {}
+        translator = SWRLSQLTranslator()
+        params = {
+            "antecedent": rule.get("antecedent", ""),
+            "consequent": rule.get("consequent", ""),
+            "base_uri": ontology.get("base_uri", ""),
+            "uri_map": SWRLEngine(ontology=ontology)._build_uri_map(),
+        }
+        sql = translator.build_violation_sql(table, params)
+        if not sql:
+            return {
+                "name": label,
+                "category": "structural",
+                "shape_id": check_id,
+                "status": "info",
+                "message": "Cannot translate to SQL",
+                "violations": [],
+                "sql": "",
+            }
+        try:
+            t_rule = time.time()
+            violations, violation_total, status, msg = (
+                SqlQualityChecks._apply_sql_violation_limit(
+                    store,
+                    sql,
+                    violation_limit,
+                    row_mapper=lambda r: {"s": r.get("s", "")},
+                )
+            )
+            result = {
+                "name": label,
+                "category": "structural",
+                "shape_id": check_id,
+                "status": status,
+                "message": msg,
+                "violations": violations,
+                "sql": "",
+                "severity": "sh:Violation",
+                "violation_total": violation_total,
+            }
+            pop = None
+            if violations:
+                pop = SqlQualityChecks._swrl_antecedent_population_sql(
+                    translator, store, table, params
+                )
+            SqlQualityChecks._enrich_with_population(result, pop)
+            logger.info(
+                "SWRL rule '%s': %d violations (%.2fs)",
+                label,
+                violation_total,
+                time.time() - t_rule,
+            )
+            return result
+        except Exception as exc:
+            logger.exception("SWRL DQ check '%s' SQL failed: %s", label, exc)
+            return SqlQualityChecks._failed_check_result(
+                label, "structural", check_id, sql, exc
+            )
+
+    @staticmethod
+    def _eval_dt_rule(
+        dt, idx, table, store, ontology, pop_cache, pop_lock, violation_limit
+    ):
+        from back.core.reasoning.rules.DecisionTableEngine import DecisionTableEngine
+
+        dt_name = dt.get("name", f"Decision Table {idx + 1}")
+        check_id = SqlQualityChecks._rule_check_id(DECISION_TABLE_ID_PREFIX, dt, idx)
+        ontology = ontology or {}
+        engine = DecisionTableEngine()
+        base_uri = ontology.get("base_uri", "")
+        resolved = engine._resolve_dt(dt, engine._build_uri_map(ontology), base_uri)
+        sql = engine.build_violation_sql(resolved, table, base_uri)
+        if not sql:
+            return {
+                "name": dt_name,
+                "category": "conformance",
+                "shape_id": check_id,
+                "status": "info",
+                "message": "Cannot translate to SQL",
+                "violations": [],
+                "sql": "",
+            }
+        try:
+            t_rule = time.time()
+            violations, violation_total, status, msg = (
+                SqlQualityChecks._apply_sql_violation_limit(
+                    store,
+                    sql,
+                    violation_limit,
+                    row_mapper=lambda r: {"s": r.get("s", "")},
+                )
+            )
+            result = {
+                "name": dt_name,
+                "category": "conformance",
+                "shape_id": check_id,
+                "status": status,
+                "message": msg,
+                "violations": violations,
+                "sql": sql,
+                "severity": "sh:Violation",
+                "violation_total": violation_total,
+            }
+            if violations:
+                with pop_lock:
                     pop = SqlQualityChecks._count_class_population_sql(
-                        store, triplestore_table, class_uri, pop_cache
+                        store, table, resolved.get("target_class_uri", ""), pop_cache
                     )
                 SqlQualityChecks._enrich_with_population(result, pop)
-                logger.info(
-                    "Agg rule '%s': %d violations (%.2fs)",
-                    agg_name,
-                    violation_total,
-                    elapsed_rule,
+            logger.info(
+                "DT rule '%s': %d violations (%.2fs)",
+                dt_name,
+                violation_total,
+                time.time() - t_rule,
+            )
+            return result
+        except Exception as exc:
+            logger.exception("Decision table DQ check '%s' SQL failed: %s", dt_name, exc)
+            return SqlQualityChecks._failed_check_result(
+                dt_name, "conformance", check_id, sql, exc
+            )
+
+    @staticmethod
+    def _eval_agg_rule(
+        rule, idx, table, store, ontology, pop_cache, pop_lock, violation_limit
+    ):
+        from back.core.reasoning.rules.AggregateRuleEngine import AggregateRuleEngine
+
+        agg_name = rule.get("name", f"Aggregate Rule {idx + 1}")
+        check_id = SqlQualityChecks._rule_check_id(AGGREGATE_ID_PREFIX, rule, idx)
+        ontology = ontology or {}
+        engine = AggregateRuleEngine()
+        base_uri = ontology.get("base_uri", "")
+        resolved = engine._resolve_rule(dict(rule), ontology)
+        sql = engine.build_sql(resolved, table, base_uri)
+        if not sql:
+            return {
+                "name": agg_name,
+                "category": "conformance",
+                "shape_id": check_id,
+                "status": "info",
+                "message": "Cannot translate to SQL",
+                "violations": [],
+                "sql": "",
+            }
+        try:
+            t_rule = time.time()
+            violations, violation_total, status, msg = (
+                SqlQualityChecks._apply_sql_violation_limit(
+                    store,
+                    sql,
+                    violation_limit,
+                    row_mapper=lambda r: {
+                        "s": r.get("s", ""),
+                        "agg_val": r.get("agg_val", ""),
+                    },
                 )
-                results.append(result)
-            except Exception as exc:
-                logger.exception(
-                    "Aggregate rule DQ check '%s' SQL failed: %s", agg_name, exc
-                )
-                results.append(
-                    SqlQualityChecks._failed_check_result(
-                        agg_name, "conformance", check_id, sql, exc
+            )
+            result = {
+                "name": agg_name,
+                "category": "conformance",
+                "shape_id": check_id,
+                "status": status,
+                "message": msg,
+                "violations": violations,
+                "sql": sql,
+                "severity": "sh:Violation",
+                "violation_total": violation_total,
+            }
+            if violations:
+                with pop_lock:
+                    pop = SqlQualityChecks._count_class_population_sql(
+                        store, table, resolved.get("target_class_uri", ""), pop_cache
                     )
-                )
+                SqlQualityChecks._enrich_with_population(result, pop)
+            logger.info(
+                "Agg rule '%s': %d violations (%.2fs)",
+                agg_name,
+                violation_total,
+                time.time() - t_rule,
+            )
+            return result
+        except Exception as exc:
+            logger.exception(
+                "Aggregate rule DQ check '%s' SQL failed: %s", agg_name, exc
+            )
+            return SqlQualityChecks._failed_check_result(
+                agg_name, "conformance", check_id, sql, exc
+            )

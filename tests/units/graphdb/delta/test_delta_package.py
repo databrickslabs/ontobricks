@@ -83,6 +83,19 @@ class TestTableNaming:
         snapshot = _table_naming.analytics_snapshot_fqn(domain)
         assert "_data" not in snapshot
 
+    def test_dq_snapshot_is_named_off_the_gateway_plus_task_id(self):
+        domain = _domain()
+        view = _table_naming.view_fqn(domain)
+        snapshot = _table_naming.dq_snapshot_fqn(domain, task_id="Ab-12")
+        assert snapshot == view + "_dq_ab_12"
+        assert "_data" not in snapshot
+
+    def test_dq_snapshot_needs_a_task_id_and_a_qualified_view(self):
+        domain = _domain()
+        assert _table_naming.dq_snapshot_fqn(domain, task_id="") == ""
+        blank = _domain(catalog="", schema="")
+        assert _table_naming.dq_snapshot_fqn(blank, task_id="t1") == ""
+
 
 class TestMaterializeSql:
     def test_ctas_includes_cluster_by(self):
