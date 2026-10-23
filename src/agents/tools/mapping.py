@@ -27,6 +27,39 @@ def _strip_backticks(value: str) -> str:
     return value
 
 
+def _metric_view_sql_error(ctx: ToolContext, sql: str) -> Optional[str]:
+    """Reject SELECT * / unwrapped measures / missing GROUP BY on metric views."""
+    compact = (sql or "").replace("`", "")
+    hits = [
+        table
+        for table in (ctx.metadata or {}).get("tables") or []
+        if table.get("object_kind") == "metric_view"
+        and (table.get("full_name") or table.get("name") or "") in compact
+    ]
+    if not hits:
+        return None
+    from agents.agent_mapping_pge.evaluator.deterministic import check_metric_view_sql
+
+    for table in hits:
+        failure = check_metric_view_sql(sql, table.get("columns") or [])
+        if failure is not None:
+            return failure.hint or failure.observed
+    return None
+
+
+def _prepare_mapping_sql(ctx: ToolContext, sql: str, mapping_type: str):
+    """Strip LIMIT, dedupe select-list aliases, then reject illegal metric SQL."""
+    clean_sql = (
+        re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql, flags=re.IGNORECASE)
+        .strip()
+        .rstrip(";")
+    )
+    clean_sql = SQLWizardService._deduplicate_select_columns(
+        clean_sql, mapping_type=mapping_type
+    )
+    return clean_sql, _metric_view_sql_error(ctx, clean_sql)
+
+
 def tool_submit_entity_mapping(
     ctx: ToolContext,
     *,
@@ -61,14 +94,14 @@ def tool_submit_entity_mapping(
         logger.warning("tool_submit_entity_mapping: missing required fields")
         return json.dumps({"error": "class_uri and sql_query are required"})
 
-    clean_sql = (
-        re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql_query, flags=re.IGNORECASE)
-        .strip()
-        .rstrip(";")
-    )
-    clean_sql = SQLWizardService._deduplicate_select_columns(
-        clean_sql, mapping_type="entity"
-    )
+    clean_sql, metric_error = _prepare_mapping_sql(ctx, sql_query, "entity")
+    if metric_error:
+        logger.warning(
+            "tool_submit_entity_mapping: rejected metric-view SQL for '%s': %s",
+            class_name,
+            metric_error,
+        )
+        return json.dumps({"success": False, "error": metric_error})
 
     # Normalise ``unmapped_attributes`` — accept either form, persist as-is for
     # dicts, leave bare strings as strings (validation/coverage is downstream).
@@ -212,14 +245,14 @@ def tool_submit_relationship_mapping(
         logger.warning("tool_submit_relationship_mapping: missing required fields")
         return json.dumps({"error": "property_uri and sql_query are required"})
 
-    clean_sql = (
-        re.sub(r"\s+LIMIT\s+\d+\s*$", "", sql_query, flags=re.IGNORECASE)
-        .strip()
-        .rstrip(";")
-    )
-    clean_sql = SQLWizardService._deduplicate_select_columns(
-        clean_sql, mapping_type="relationship"
-    )
+    clean_sql, metric_error = _prepare_mapping_sql(ctx, sql_query, "relationship")
+    if metric_error:
+        logger.warning(
+            "tool_submit_relationship_mapping: rejected metric-view SQL for '%s': %s",
+            property_name,
+            metric_error,
+        )
+        return json.dumps({"success": False, "error": metric_error})
 
     def _extract_label(value: str) -> str:
         if not value:

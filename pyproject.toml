@@ -2,7 +2,7 @@
 name = "ontobricks"
 version = "0.10.0"
 description = "Ontology Management Tool for Databricks"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # fastapi>=0.129.0 added Starlette 1.0.0+ support (needed for starlette>=1.3.1 below).
     "fastapi>=0.129.0",
@@ -135,13 +135,18 @@ constraint-dependencies = [
     "gitpython>=3.1.62",
     # Security floors for transitive dependencies reported by Dependabot.
     "click>=8.3.3",
+    # certifi>=2026.10.19 removes a compromised root certificate
+    # (GHSA-6q48-6c7w-9gw2, Dependabot #210).
+    "certifi>=2026.10.19",
     # sqlparse>=0.6.0 fixes a ReDoS advisory (Dependabot high). Pulled in
     # transitively (mlflow / sqlglot).
     "sqlparse>=0.6.0",
     # mcp>=1.30.0: unbounded StreamableHTTP session accumulation
     # (GHSA-84m7-p3x7-pcfv / CVE-2026-59951, Dependabot #201/#202).
     "mcp>=1.30.0",
-    "pillow>=12.3.0",
+    # pillow>=13.0.0 resolves Dependabot #216–#243. Pillow 13 drops
+    # Python 3.10, so the project runtime floor is Python 3.11.
+    "pillow>=13.0.0",
     "pip>=26.2.0",
     "pyasn1>=0.6.4",
     "setuptools>=83.0.0",

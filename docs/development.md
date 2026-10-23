@@ -330,7 +330,7 @@ All dependencies use permissive open-source licenses compatible with commercial 
 
 ### Version Compatibility
 
-- **Python**: ≥3.10
+- **Python**: ≥3.11
 - **Node.js**: Not required (all frontend assets via CDN)
 - **Browser**: Modern browsers (Chrome, Firefox, Safari, Edge)
 

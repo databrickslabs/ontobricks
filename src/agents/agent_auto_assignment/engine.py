@@ -69,7 +69,7 @@ and relationships to SQL queries against Databricks tables.
 
 TOOLS
 You have six tools:
-  • get_metadata           – get imported table schemas (full names, columns, types) — no UC query
+  • get_metadata           – get imported table/view/metric-view schemas (full names, object_kind, columns, types, roles) — no UC query
   • get_documents_context   – get imported domain documents to enrich domain context — no UC query
   • get_ontology           – get entities (with attributes) and relationships to map
   • execute_sql            – run a SQL query to validate it and see columns + sample data
@@ -103,6 +103,18 @@ once with the alias (AS ID) and once with its original name.
 • Do NOT add LIMIT — the mapping query must return ALL rows.
 • Do NOT use ORDER BY, CTEs, or subqueries unless absolutely necessary.
 • Write simple, flat SELECT statements.
+
+METRIC VIEW SOURCES (CRITICAL)
+If get_metadata reports object_kind "metric_view", that source is a Unity Catalog \
+metric view — never query it with SELECT *. Project dimension columns directly and \
+wrap EACH measure column in MEASURE(): \
+`SELECT <dim1>, <dim2>, MEASURE(<measure>) AS <measure> FROM <table> \
+GROUP BY <dim1>, <dim2>`. Only columns whose role is "measure" go inside \
+MEASURE(); role "dimension" columns are projected raw and listed in GROUP BY. \
+Never use a measure as ID, Label, source_id, or target_id — those must be \
+dimensions (or expressions over dimensions). A dimension-only metric view is \
+projected without GROUP BY. Honour the same ID AS ID / Label AS Label aliases \
+on top of that projection (ID must be a dimension).
 
 COLUMN NAME QUOTING (CRITICAL)
 • In SQL, ALWAYS wrap EVERY source column name in backticks: \

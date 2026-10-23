@@ -20,7 +20,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/runs%20on-Databricks%20Apps-FF3621.svg" alt="Databricks Apps">
-  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/standards-OWL%20·%20R2RML%20·%20SPARQL-6E4AFF.svg" alt="Standards">
   <img src="https://img.shields.io/badge/AI-MCP%20ready-10B981.svg" alt="MCP ready">
 </p>

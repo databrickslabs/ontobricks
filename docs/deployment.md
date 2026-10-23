@@ -323,7 +323,7 @@ Implications for Layer 2:
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - `uv` package manager (recommended) or `pip`
 - Git
 - Access to a Databricks workspace (Databricks Apps must be enabled)
@@ -1821,7 +1821,7 @@ scripts/deploy.sh --dry-run
 
 | Requirement | Why | How to verify |
 |-------------|-----|---------------|
-| **Python ≥ 3.10** | App + tooling | `python3 --version` |
+| **Python ≥ 3.11** | App + tooling | `python3 --version` |
 | **uv** | Dependency install (`make install`, `make setup`) | `uv --version` (setup.sh installs it if missing) |
 | **Databricks CLI ≥ 0.250.0** | Bundle deploy, bootstrap scripts | `databricks version` |
 | **python3** | JSON parsing, app.yaml render | `python3 --version` |

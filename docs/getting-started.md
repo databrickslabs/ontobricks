@@ -24,7 +24,7 @@ By the end of this guide you will have OntoBricks running locally and connected 
 
 Before you begin, ensure you have:
 
-- **Python 3.10+** installed on your system
+- **Python 3.11+** installed on your system
 - **Databricks workspace** access (Databricks Apps must be enabled)
 - **Personal Access Token** from Databricks (local dev) or service-principal auth (Databricks Apps)
 - **SQL Warehouse** in the workspace (you will need its ID for local dev)
