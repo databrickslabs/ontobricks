@@ -1,0 +1,90 @@
+================================================================================
+## Paged Stage-3 completion — fix ontology Generate truncation loop (issue #173)
+================================================================================
+
+Context: GitHub issue #173 — Ontology Generate failed with the
+"ontology output is truncated. Retrying…" loop whenever a completion
+substage's full answer could not fit the endpoint's ~8k-token output cap:
+100+ tables × 15-20 columns, a single 360/164-column table, or a large
+attached document. Each substage asked for its ENTIRE JSON in one call; a
+length-capped answer got one hopeless "re-emit concisely" retry and then
+failed the whole run. Fixed per the maintainer-scoped design on the issue:
+bound each completion pass (pages), never one-shot the full output.
+
+Changes:
+
+1. `src/agents/agent_owl_generator/schemas.py`
+   `build_{relations,attributes,axioms}_response_format` now require a
+   `has_more` boolean page flag (strict schema: in `properties` AND
+   `required`); `parse_*_payload` returns `has_more` via the new
+   `_coerce_has_more` (missing field → False = single-page back-compat,
+   stray "true"/"false" strings coerced like the double-encoding quirk).
+2. `src/agents/agent_owl_generator/prompts.py`
+   New `_PAGINATION_RULE` block shared by the three completion system
+   prompts (bounded complete-item pages, `has_more` semantics); output
+   examples now show `"has_more": false`; new
+   `build_continuation_user_prompt` (next page) and
+   `build_truncated_page_retry_prompt` (same page, fewer items).
+3. `src/agents/agent_owl_generator/staged.py`
+   `_run_completion` is now a bounded paging loop instead of one call +
+   one concise-reemit retry: merges/dedupes pages per substage key_fn,
+   stops when `has_more` is false or a page adds zero new items, one
+   smaller-page retry on `finish_reason=length`, clear failure past
+   `_MAX_COMPLETION_PAGES` (16, `options["max_completion_pages"]`).
+   Schema validation + entity-closure `validate_references` run on every
+   page — reject-only unchanged. Extracted module helpers
+   `_call_completion_page`, `_accept_completion_page`,
+   `_completion_failure`, `_queue_truncation_retry`, `_queue_next_page`
+   (function-size baseline kept shrink-only: `_run_completion` is 118 LOC
+   vs the 119 baseline). Relations finalize via `drop_inverse_relations`
+   and axioms via `drop_multi_parent_subclass_axioms` over the merged set
+   so cross-page restatements collapse.
+4. `tests/units/agents/test_owl_generator_staged.py`
+   New `TestCompletionPagination` (11 tests): page merge, cross-page
+   dedupe, continuation message, zero-new-items stop, page-budget
+   failure, truncated-page retry/failure, per-page closure rejection,
+   semantic dedupe across relation pages, missing-`has_more` back-compat,
+   `has_more` required in the strict schema.
+5. `tests/eval/staged_contract.py`
+   New `paged_completion` constraint kind (`_c_paged_completion`) driving
+   scripted multi-page `infer_*` runs with `success|failure|rejected`
+   outcomes — deterministic, no live endpoint.
+6. `tests/eval/datasets/agent_owl_generator/baseline.jsonl` and
+   `.planning/agents/agent_owl_generator/eval/dataset.jsonl`
+   10 new `staged-paged-*` rows (kept byte-identical per the mirror test).
+7. `tests/eval/run_agent_owl_generator.py`
+   `_MIN_STAGED_EXAMPLES` 31 → 41; `paged_completion` added to
+   `_REQUIRED_STAGED_CONSTRAINT_KINDS` so the coverage cannot silently
+   disappear.
+8. `.planning/agents/agent_owl_generator/SPEC.md`
+   §2 `max_completion_pages` identity row, §3a "Paged completion output"
+   contract, §5 `stage_paged_completion` dimension, §6 failure-mode row.
+
+Not changed (deliberately): Stage-1 detection (output already bounded by
+the 40-candidate cap), checkpoint granularity (still substage-level —
+a page-level failure re-runs the substage), and `run_completion`'s
+merge/persistence contract (merged result shape unchanged).
+
+Modified files:
+- `src/agents/agent_owl_generator/schemas.py`
+- `src/agents/agent_owl_generator/prompts.py`
+- `src/agents/agent_owl_generator/staged.py`
+- `tests/units/agents/test_owl_generator_staged.py`
+- `tests/eval/staged_contract.py`
+- `tests/eval/datasets/agent_owl_generator/baseline.jsonl`
+- `tests/eval/run_agent_owl_generator.py`
+- `.planning/agents/agent_owl_generator/SPEC.md`
+- `.planning/agents/agent_owl_generator/eval/dataset.jsonl`
+
+Tests:
+- Touched-area suites: test_owl_generator_staged (75), test_owl_generator_schemas,
+  test_generate_workflow, test_generate_draft, test_generate_routes,
+  test_v090_generate_workflow, tests/eval/ (incl. 10 new staged-paged rows),
+  tests/units/architecture — all green.
+- Full routine: `uv run --frozen pytest -q -m "not scenario"` → 9,480 passed,
+  338 skipped, 21 failed, 14 errors. All failures are pre-existing
+  Windows-environment issues in areas untouched by this change
+  (app.yaml template render, deploy rename guards, lakebase preflight/perms
+  scripts, help deploy bundle, session symlink reaping, charmap decode) —
+  CI runs on Ubuntu; none import agents/agent_owl_generator or the eval
+  harness.

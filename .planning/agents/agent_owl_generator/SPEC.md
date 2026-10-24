@@ -58,6 +58,7 @@ persistence and the final append-only merge against the live ontology — see
 | `max_tokens` | `8192` per call (`_GEN_MAX_TOKENS`; Databricks endpoint output cap) |
 | `max_owl_eval_rounds` | `2` (`MAX_OWL_EVAL_ROUNDS`; Stage-1 PGE evaluator retry cap — **(staged, planned)** retained only as a reject/report check, not a rewrite trigger; see §6a) |
 | `max_classes` | `40` (`_DEFAULT_MAX_CLASSES`; over-generation guard — accepted ontology is asked to consolidate above this. Overridable via `options["max_classes"]`, `<=0` disables) |
+| `max_completion_pages` | `16` (`_MAX_COMPLETION_PAGES`; paged completion budget, issue #173 — see §3a "Paged completion output". Overridable via `options["max_completion_pages"]`, `<=0` falls back to the default) |
 | `mlflow_experiment` | `/Shared/ontobricks/agents/owl_generator` |
 | `stage_entry_points` | `detect_entities` (Stage 1), `infer_relations` / `infer_attributes` / `infer_axioms` (Stage 3, strict order) — **live** as of Task 3 (`agents.agent_owl_generator.staged`); wired into the async workflow + checkpoint persistence + append-only merge — **live as of Task 4** (`back.objects.ontology.GenerateWorkflow`, `POST /ontology/wizard/generate/detect` + `.../complete`). `run_agent` (`agents.agent_owl_generator.engine`) is deprecated, not re-exported from the package root, never called by the staged module, and has **no remaining production caller** as of Task 4 (`/wizard/generate-async` now returns `410 Gone`) |
 
@@ -178,6 +179,36 @@ anchors + included candidates, addressed by stable `id`) and return
 relations/attributes/axioms that reference only those ids — see the entity
 closure rule in §6a.
 
+- **Paged completion output (added this revision — issue #173, live
+  wide-table/large-draft failure fix).** Each Stage-3 substage previously
+  asked for its ENTIRE answer in a single structured call: when the full
+  JSON could not fit the ~8k-token completion budget (attributes of a
+  360-column table, attributes/relations across a 40-entity draft, a
+  fat-document-derived entity set), the answer hit `finish_reason=length`,
+  was re-asked once to "re-emit the complete JSON concisely" — which can
+  never succeed when the answer simply cannot fit — and then failed. This
+  is exactly the "ontology output is truncated. Retrying…" loop users
+  reported. Every completion response is now a **bounded page** carrying a
+  required `has_more` boolean in the strict `response_format` schema
+  (`schemas.build_*_response_format`) and an explicit pagination contract
+  in each system prompt (`prompts._PAGINATION_RULE`): complete items only,
+  `has_more=true` while items remain, `false` on the last page.
+  `staged._run_completion` keeps asking for the next page
+  (`prompts.build_continuation_user_prompt`) while `has_more` is true,
+  merges and dedupes pages (`key_fn` per substage; relations additionally
+  re-run `drop_inverse_relations`, axioms `drop_multi_parent_subclass_
+  axioms`, over the merged set so cross-page restatements collapse), and
+  stops early when a `has_more` page contributes zero new items. A page
+  that still truncates gets ONE "smaller page" retry
+  (`build_truncated_page_retry_prompt`), then fails clearly; exceeding the
+  `_MAX_COMPLETION_PAGES` (16) budget also fails clearly instead of looping.
+  Schema-shape validation and the entity-closure `validate_references`
+  check run on **every page** — reject-only is unchanged, a malformed or
+  out-of-closure page is never fed back for a rewrite. A missing
+  `has_more` field reads as `false` (single-page back-compat for endpoints
+  that ignore it). Detection (Stage 1) is unchanged — its output is already
+  bounded by the 40-candidate cap.
+
 - **Bare-id catalog + transport-level enum enforcement (added this
   revision, live id-bracketing bug fix).** The closed-entity catalog each
   completion substage's user prompt renders (`prompts._entity_catalog`) now
@@ -272,6 +303,7 @@ against every `staged`-tagged dataset row, gated by
 | `stage_zero_new_candidate_contract` (constraint kind `empty_candidates_when_fully_anchored`) | when every selected source entity's core entity already exists as a locked anchor (no genuinely NEW grounded entity), detection succeeds with `success=True`, `rejected=False`, and `candidate_entities == []` — never a malformed-JSON rejection or a stray placeholder candidate | `1.00` | contract | same |
 | `stage_transport_schema_enforcement` (added this revision — transport-level fix; **unit-tested, not yet a scored `staged_contract` dataset dimension** — see honesty note below) | Stage-1 tool-gathering calls never carry `response_format`; the schema-enforced finalization call never carries `tools`; there is exactly ONE finalization call per `detect_entities()` invocation (no second attempt after a malformed/truncated finalization answer); an unsupported `response_format` degrades transparently (stripped + retried once, cached per endpoint) | n/a (not in the `0.95`-gated aggregate) | test-only | `tests/units/agents/test_owl_generator_staged.py::TestTwoPhaseDetectionArchitecture` (6 tests) + `tests/units/agents/test_agent_engine_base.py`/`tests/units/shared/test_llm_target.py` (transport-layer unit tests) |
 | `stage_metric_view_detection` | Stage 1 treats UC metric-view dimensions as entity evidence and never proposes a class named after a measure; `get_metadata`/`get_table_detail` expose `object_kind` + column `role` | `1.00` | contract | unit tests `tests/units/agents/test_owl_generator_metric_views.py` + dataset `tests/eval/datasets/agent_owl_generator/metric_view.jsonl` (10 examples). Live MLflow eval run not executed in this change (warehouse + FM access). |
+| `stage_paged_completion` (added this revision — issue #173) | a substage answer that exceeds the output budget completes across `has_more`-flagged pages (merged + deduped); a truncated page gets exactly one smaller-page retry; page-budget exhaustion and a never-fitting page fail clearly; an out-of-closure page is still rejected | `1.00` | contract | `tests/eval/staged_contract.py::_c_paged_completion` + 10 `paged_completion` rows in `baseline.jsonl`/`.planning` mirror; unit tests `TestCompletionPagination` in `test_owl_generator_staged.py`. Live MLflow eval run not executed in this change (no FM access). |
 
 **Staged contract aggregate threshold:** ≥ `0.95`, enforced in
 `tests/eval/thresholds.yaml` and CI via `tests/eval/run_agent_owl_generator.py`
@@ -301,6 +333,7 @@ this dimension table, and its transport-level follow-up).
 | **Replace instead of append.** The final merge deletes or renames a pre-existing entity instead of appending validated new entities and enriching anchors. | Merge diff shows a removed or renamed pre-existing entity id. | **Live as of Task 4** (`GenerateWorkflow.merge_draft_into_ontology`). Merge is append-only by construction: existing classes/properties/`dataProperties` are read and only ever appended to (new classes/properties/`dataProperties`/axioms added; an existing class's unset `parent` may be set from a `subClassOf` axiom) — no existing entity's `name`/content is ever removed or overwritten. New candidate entities are minted a fresh, collision-free class `name` from their `canonical_label`; their detection-time `id` is the merge-time join key only, not carried into the live ontology. Tested by `tests/units/ontology/test_generate_workflow.py::TestMergePreservesExistingEntities`. |
 | **Duplicate merge on crash/retry.** A crash or draft-revision conflict between the merge's own `domain.save()` and the draft store recording that fact causes a resumed `run_completion` to re-run the merge and duplicate every appended class/relation/axiom. | Retrying `POST /wizard/generate/complete` on an already-(partially)-merged draft adds a second `Carrier2`/duplicate relation/duplicate axiom instead of a no-op. | **Fixed in the Task 4 review pass** — two layers of defense: (1) a durable `GenerateDraft.merge_checkpoint`, independent of `stage`/`completion_checkpoints`, checked before ever calling the merge again — once `done`, `run_completion` trusts it and never re-merges, regardless of what `stage` says; (2) `merge_draft_into_ontology` is itself idempotent (defense in depth): every added class is tagged `generated_from=<candidate id>` and skipped on a repeat call, relations are deduped by `(domain, range, label)`, binary axioms (`disjointWith`/`equivalentClass`) by `(type, subject, sorted(objects))`, and an exact-repeat `subClassOf` is a no-op. Tested by `tests/units/ontology/test_generate_workflow.py::TestIdempotentMerge` (crash-window resume, checkpoint-done short-circuit, repeated-complete-call rejection). |
 | **Silent type-hint mismatch at merge.** An included candidate carries a non-`class` `type_hint` (`object_property`/`data_property`) that the merge cannot yet place into the ontology model, but it gets silently merged as a (wrongly-shaped) class anyway. | A candidate hinted as a property appears as a top-level `owl:Class` after merge instead of being rejected. | **Fixed in the Task 4 review pass.** `merge_draft_into_ontology` rejects (raises `DraftValidationError`, atomic — nothing is merged) any included candidate whose `type_hint != "class"` before any mutation begins; the reviewer must edit the hint back to `class` or exclude the candidate. Tested by `tests/units/ontology/test_generate_workflow.py::TestTypeHintValidationInMerge`. |
+| **Completion output exceeds the ~8k-token budget → truncation-retry loop (issue #173, this revision).** A substage asked for its ENTIRE answer in one call; when the full JSON could not fit the output cap (attributes of a 360-column table, attributes/relations across a 40-entity draft, a fat-document-derived entity set), the answer hit `finish_reason=length`, got one hopeless "re-emit the complete JSON concisely" retry, and failed — the "ontology output is truncated. Retrying…" loop users reported. | Completion task fails with `<substage> output was truncated and could not be completed` on every retry for a large entity set. In tests: `tests/units/agents/test_owl_generator_staged.py::TestCompletionPagination`. | **Fixed this revision — paged completion.** Every substage answer is a bounded page carrying a required `has_more` field (strict `response_format` + `prompts._PAGINATION_RULE`); `staged._run_completion` continues pages until `has_more=false`, merging/deduping across pages (plus `drop_inverse_relations`/`drop_multi_parent_subclass_axioms` over the merged set), stopping early on a zero-new-items page, retrying a truncated page once as a *smaller* page, and failing clearly past `_MAX_COMPLETION_PAGES` (16, `options["max_completion_pages"]`). Schema + entity-closure validation run on every page — reject-only unchanged. Dataset rows `staged-paged-*-001..010` (`paged_completion` check, `tests/eval/staged_contract.py`); floor `31` → `41`. |
 | **Metric-view sources produce zero Generate candidates (this revision).** After loading Unity Catalog metric views, Ontology → Generate detection returned `{"candidate_entities": []}` even on an empty ontology. Mapping already knew metric views; Stage 1 did not: `get_metadata` stripped `object_kind`/column `role`, the prompt treated sources as flat tables ("never a class per column"), and the metadata SELECT probe used `SELECT * … LIMIT 0` (unsupported on metric views). | Detection draft with 0 candidates while selected sources are `object_kind=metric_view` with dimension columns. In tests: `tests/units/agents/test_owl_generator_metric_views.py`; SELECT probe: `tests/units/core/test_unity_catalog.py::TestCheckTableSelectPermission::test_metric_view_probe_uses_measure_sql_not_select_star`. | **Fixed this revision.** Metadata tools expose `object_kind` + `role`. Stage-1 prompt: dimensions are entity evidence, measures are never classes. Load/refresh SELECT probe uses `build_metric_view_base_sql` + `LIMIT 0`. Eval delta: `tests/eval/datasets/agent_owl_generator/metric_view.jsonl` (10 rows; planning mirror). Live MLflow eval not run here. |
 
 ## 6a. Prompt-first pitfall handling and append guarantees
