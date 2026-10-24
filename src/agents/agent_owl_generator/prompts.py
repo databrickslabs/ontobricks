@@ -213,6 +213,38 @@ _CLOSURE_RULE = (
 )
 
 
+# Paged-output contract (issue #173): a substage's full answer can exceed the
+# endpoint's ~8k-token output budget (a wide table's attributes, a large
+# draft's relations). The model emits one bounded page and sets ``has_more``
+# when items remain; the orchestrator asks for the next page until it is
+# false. Shared by the three completion system prompts.
+_PAGINATION_RULE = """\
+# PAGED OUTPUT (BOUNDED — CRITICAL)
+The COMPLETE answer may not fit in one response. Emit a bounded page of
+COMPLETE items and set "has_more": true when more items remain — you will be
+asked for the next page. Never cut an item mid-record. Set "has_more": false
+on the last page (or when nothing remains). Do not re-emit items you already
+returned on an earlier page."""
+
+
+def build_continuation_user_prompt(substage: str, emitted_count: int) -> str:
+    """Continuation turn asking for the next page of a completion substage."""
+    return (
+        f"Continue. Emit the NEXT page of {substage} — only NEW items, none "
+        f"of the {emitted_count} already emitted. Same JSON shape; set "
+        '"has_more": true only if more items remain after this page.'
+    )
+
+
+def build_truncated_page_retry_prompt(substage: str) -> str:
+    """Re-ask for the SAME page with fewer items after a length truncation."""
+    return (
+        "Your previous page was cut off by the output limit. Re-emit THAT "
+        f"page of {substage} with FEWER items — a smaller page is fine, set "
+        '"has_more": true and continue on the next turn. JSON only.'
+    )
+
+
 def build_relations_system_prompt() -> str:
     return f"""\
 You are an ontology engineer inferring OBJECT-PROPERTY RELATIONS between a
@@ -231,11 +263,13 @@ fixed, closed set of entities.
 • Never restate a relation listed under EXISTING OBJECT PROPERTIES, in
   either direction or as a paraphrase — only add genuinely new facts.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"relations": [
   {{"label": "placesOrder", "domain": "<entity_id>", "range": "<entity_id>",
     "evidence": "short justification"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def build_attributes_system_prompt() -> str:
@@ -250,11 +284,13 @@ set of entities.
 • Exclude surrogate keys, audit columns, and foreign keys already carried by
   relations.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"attributes": [
   {{"label": "orderDate", "domain": "<entity_id>", "datatype": "xsd:date",
     "evidence": "short justification"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def build_axioms_system_prompt() -> str:
@@ -275,10 +311,12 @@ closed set of entities.
   cannot represent multiple inheritance.
 • Never emit two subClassOf axioms with the same subject.
 
+{_PAGINATION_RULE}
+
 # OUTPUT (JSON ONLY — NO PROSE, NO CODE FENCES)
 {{"axioms": [
   {{"kind": "subClassOf", "subject": "<entity_id>", "object": "<entity_id>"}}
-]}}"""
+], "has_more": false}}"""
 
 
 def _prior_results_block(draft: GenerateDraft, substages: Sequence[str]) -> str:

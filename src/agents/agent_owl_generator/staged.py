@@ -76,9 +76,16 @@ _TEMPERATURE = 0.0  # deterministic for eval (SPEC §2)
 # more tools; keep it bounded. The schema-enforced FINALIZATION call that
 # follows is always exactly one additional call — never part of this budget.
 _MAX_GATHERING_ITERATIONS = 8
-# Stage-3 completion is a single structured call; the only reason to loop is a
-# token-truncated answer (re-emit concisely), never a validation rewrite.
+# Stage-3 completion is a paged structured exchange. A truncated PAGE gets at
+# most one "smaller page" retry (a truncated page's partial JSON is unusable);
+# this is never a validation rewrite loop.
 _MAX_COMPLETION_ATTEMPTS = 2
+# Paged completion (issue #173): each page is a bounded slice of the substage
+# answer flagged with ``has_more``. The page budget bounds total completion
+# output (~16 × the per-call output cap) so a model that never stops paging
+# fails clearly instead of looping forever. Overridable via
+# options["max_completion_pages"]; <= 0 falls back to the default.
+_MAX_COMPLETION_PAGES = 16
 # Candidate over-generation guard (mirrors the class cap). Overridable via
 # options["max_classes"]; <= 0 disables.
 _DEFAULT_MAX_CANDIDATES = 40
@@ -477,6 +484,74 @@ def _ordering_error(draft: GenerateDraft, substage: str) -> str:
     return ""
 
 
+def _accept_completion_page(
+    content: str,
+    *,
+    substage: str,
+    draft: GenerateDraft,
+    items_key: str,
+    key_fn: Callable[[Dict[str, Any]], Any],
+    parse_fn: Callable[[str], Dict[str, Any]],
+    refs_fn: Callable[[Dict[str, Any]], set],
+    items: List[Dict[str, Any]],
+    seen: set,
+) -> tuple[bool, str]:
+    """Parse, closure-check, and merge one completion page.
+
+    Returns ``(has_more, error)`` — a non-empty ``error`` is a reject-only
+    validation failure (malformed JSON or an out-of-closure entity id),
+    never a rewrite prompt. Otherwise the page's NEW items (by ``key_fn``)
+    are appended to ``items`` and recorded in ``seen``.
+    """
+    try:
+        page_result = parse_fn(content)
+    except schemas.SchemaValidationError as exc:
+        return False, str(exc)
+
+    page_items = page_result.get(items_key) or []
+
+    # Entity-closure check on every page (reject-only). A reference outside
+    # the locked anchors ∪ included candidates — including an excluded
+    # candidate id — is rejected outright; the output is never checkpointed,
+    # merged, or re-sent to the LLM for a rewrite.
+    try:
+        draft.validate_references(
+            refs_fn({items_key: page_items}), context=substage
+        )
+    except DraftValidationError as exc:
+        return False, str(exc)
+
+    new_items = [it for it in page_items if key_fn(it) not in seen]
+    for it in new_items:
+        seen.add(key_fn(it))
+    items.extend(new_items)
+    return bool(page_result.get("has_more")), ""
+
+
+def _call_completion_page(
+    host: str,
+    token: str,
+    endpoint_name: str,
+    messages: List[dict],
+    response_format: Optional[Dict[str, Any]],
+    trace_name: str,
+) -> Dict[str, Any]:
+    """One paged-completion LLM call — ``tools=None`` always (completion
+    never reads documents/metadata)."""
+    return call_serving_endpoint(
+        host,
+        token,
+        endpoint_name,
+        messages,
+        tools=None,
+        response_format=response_format,
+        max_tokens=_GEN_MAX_TOKENS,
+        temperature=_TEMPERATURE,
+        timeout=LLM_TIMEOUT,
+        trace_name=trace_name,
+    )
+
+
 def _run_completion(
     *,
     substage: str,
@@ -486,22 +561,22 @@ def _run_completion(
     draft: GenerateDraft,
     system_prompt: str,
     user_prompt: str,
+    items_key: str,
+    key_fn: Callable[[Dict[str, Any]], Any],
     parse_fn: Callable[[str], Dict[str, Any]],
     refs_fn: Callable[[Dict[str, Any]], set],
     response_format: Optional[Dict[str, Any]],
     on_step: Optional[Callable[[str], None]],
+    finalize_fn: Optional[Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]] = None,
+    options: Optional[Dict[str, Any]] = None,
 ) -> CompletionResult:
-    """Run one Stage-3 completion substage's single structured LLM call.
+    """Run one Stage-3 completion substage as a paged structured call.
 
-    ``response_format`` (live-bug fix) is the substage's enum-constrained
-    ``json_schema`` (see ``_completion_response_format``/``schemas.py``'s
-    ``build_relations_response_format``/etc.) — passed with ``tools=None``
-    always, so a bracketed/invented id is structurally impossible on an
-    endpoint that honours it. When ``None`` (empty closed set, or the
-    endpoint rejects the parameter and ``call_serving_endpoint`` strips it
-    after one retry), the strengthened bare-id prompt is the fallback
-    safety net, and the ``validate_references`` closure check below still
-    runs unconditionally either way — reject-only, never trust the wire.
+    Paged output (issue #173): each response is ONE bounded page carrying
+    ``has_more``; pages are merged/deduped by ``key_fn``, a ``has_more``
+    page contributing zero NEW items ends the loop, and
+    ``options["max_completion_pages"]`` bounds the total. Reject-only —
+    ``validate_references`` still runs on every page.
     """
     # Strict ordering gate — fail fast, before any LLM call.
     ordering_reason = _ordering_error(draft, substage)
@@ -514,6 +589,10 @@ def _run_completion(
             rejection_reason=ordering_reason,
         )
 
+    options = options or {}
+    max_pages = int(options.get("max_completion_pages") or 0)
+    max_pages = max_pages if max_pages > 0 else _MAX_COMPLETION_PAGES
+
     messages: List[dict] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
@@ -521,81 +600,118 @@ def _run_completion(
     usage = _new_usage()
     steps: List[AgentStep] = []
     trace_name = f"owl_generator.{substage}"
+    items: List[Dict[str, Any]] = []
+    seen: set = set()
 
     _notify(on_step, f"Inferring {substage}…")
 
-    for attempt in range(_MAX_COMPLETION_ATTEMPTS):
+    page = page_trunc_retries = 0
+    while True:
         try:
-            resp = call_serving_endpoint(
-                host,
-                token,
-                endpoint_name,
-                messages,
-                tools=None,  # completion never reads documents/metadata
-                response_format=response_format,
-                max_tokens=_GEN_MAX_TOKENS,
-                temperature=_TEMPERATURE,
-                timeout=LLM_TIMEOUT,
-                trace_name=trace_name,
+            resp = _call_completion_page(
+                host, token, endpoint_name, messages, response_format, trace_name
             )
         except requests.exceptions.RequestException as exc:
-            return CompletionResult(
-                success=False, substage=substage, steps=steps, usage=usage,
-                error=str(exc),
-            )
+            return _completion_failure(substage, steps, usage, str(exc))
 
         accumulate_usage(usage, resp.get("usage", {}))
         choice = resp.get("choices", [{}])[0]
-        finish_reason = choice.get("finish_reason", "?")
         content = extract_message_content(resp)
         steps.append(AgentStep(step_type="output", content=content[:200]))
 
-        if finish_reason == "length":
-            if attempt < _MAX_COMPLETION_ATTEMPTS - 1:
-                messages.append({"role": "assistant", "content": content})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "Your previous JSON was cut off by the output limit. "
-                            "Re-emit the COMPLETE JSON concisely. JSON only."
-                        ),
-                    }
-                )
+        if choice.get("finish_reason", "?") == "length":
+            # A page that ignored the bounded-page contract gets ONE retry
+            # asking for a smaller page — then the substage fails clearly
+            # (the pre-#173 "re-emit the complete JSON" retry could never
+            # succeed for an answer that cannot fit the output budget).
+            if page_trunc_retries < _MAX_COMPLETION_ATTEMPTS - 1:
+                page_trunc_retries += 1
+                _queue_truncation_retry(messages, content, substage)
                 continue
-            return CompletionResult(
-                success=False, substage=substage, steps=steps, usage=usage,
-                error=f"{substage} output was truncated and could not be completed.",
+            return _completion_failure(
+                substage, steps, usage,
+                f"{substage} output page was truncated and could not be "
+                "completed; reduce the entity set or retry.",
             )
-
-        try:
-            result = parse_fn(content)
-        except schemas.SchemaValidationError as exc:
-            return CompletionResult(
-                success=False, substage=substage, steps=steps, usage=usage,
-                error=str(exc), rejected=True, rejection_reason=str(exc),
-            )
-
-        # Entity-closure check (reject-only). A reference outside the locked
-        # anchors ∪ included candidates — including an excluded candidate id —
-        # is rejected outright; the output is never checkpointed, merged, or
-        # re-sent to the LLM for a rewrite.
-        try:
-            draft.validate_references(refs_fn(result), context=substage)
-        except DraftValidationError as exc:
-            return CompletionResult(
-                success=False, substage=substage, steps=steps, usage=usage,
-                error=str(exc), rejected=True, rejection_reason=str(exc),
-            )
-
-        return CompletionResult(
-            success=True, substage=substage, result=result, steps=steps, usage=usage
+        page_trunc_retries = 0
+        count_before = len(items)
+        has_more, error = _accept_completion_page(
+            content,
+            substage=substage,
+            draft=draft,
+            items_key=items_key,
+            key_fn=key_fn,
+            parse_fn=parse_fn,
+            refs_fn=refs_fn,
+            items=items,
+            seen=seen,
         )
+        if error:
+            return _completion_failure(
+                substage, steps, usage, error, rejected=True
+            )
 
+        if not has_more or len(items) == count_before:
+            break
+        page += 1
+        if page >= max_pages:
+            return _completion_failure(
+                substage, steps, usage,
+                f"{substage} did not finish within the {max_pages}-page "
+                "completion budget; reduce the entity set or retry.",
+            )
+        _notify(on_step, f"Inferring {substage}… ({len(items)} items so far)")
+        _queue_next_page(messages, content, substage, len(items))
+
+    merged = finalize_fn(items) if finalize_fn else items
+    return CompletionResult(
+        success=True,
+        substage=substage,
+        result={items_key: merged},
+        steps=steps,
+        usage=usage,
+    )
+
+
+def _completion_failure(
+    substage: str,
+    steps: List[AgentStep],
+    usage: Dict[str, int],
+    error: str,
+    *,
+    rejected: bool = False,
+) -> CompletionResult:
     return CompletionResult(
         success=False, substage=substage, steps=steps, usage=usage,
-        error=f"{substage} reached its attempt budget without a final answer.",
+        error=error, rejected=rejected,
+        rejection_reason=error if rejected else "",
     )
+
+
+def _queue_truncation_retry(
+    messages: List[dict], content: str, substage: str
+) -> None:
+    """Re-ask for the SAME page with fewer items after a length truncation."""
+    messages += [
+        {"role": "assistant", "content": content},
+        {
+            "role": "user",
+            "content": prompts.build_truncated_page_retry_prompt(substage),
+        },
+    ]
+
+
+def _queue_next_page(
+    messages: List[dict], content: str, substage: str, emitted: int
+) -> None:
+    """Ask for the next page of a completion substage."""
+    messages += [
+        {"role": "assistant", "content": content},
+        {
+            "role": "user",
+            "content": prompts.build_continuation_user_prompt(substage, emitted),
+        },
+    ]
 
 
 @trace_agent(name="owl_generator.relations", stage="relations")
@@ -624,11 +740,19 @@ def infer_relations(
         draft=draft,
         system_prompt=prompts.build_relations_system_prompt(),
         user_prompt=prompts.build_relations_user_prompt(draft, existing),
+        items_key="relations",
+        key_fn=lambda rel: (
+            str(rel.get("label") or "").casefold(),
+            str(rel.get("domain") or ""),
+            str(rel.get("range") or ""),
+        ),
         parse_fn=lambda text: schemas.parse_relations_payload(text, existing),
         refs_fn=schemas.relations_referenced_ids,
         response_format=_completion_response_format(
             schemas.build_relations_response_format, draft
         ),
+        finalize_fn=lambda items: schemas.drop_inverse_relations(items, existing),
+        options=options,
         on_step=on_step,
     )
 
@@ -645,7 +769,12 @@ def infer_attributes(
     draft_revision: Optional[int] = None,
     on_step: Optional[Callable[[str], None]] = None,
 ) -> CompletionResult:
-    """Stage 3b: infer datatype attributes (requires relations done)."""
+    """Stage 3b: infer datatype attributes (requires relations done).
+
+    Paged (issue #173): a wide table's attributes — or attributes across a
+    40-entity draft — cannot fit one completion; the answer arrives in
+    ``has_more``-flagged pages, merged and deduped by (label, domain).
+    """
     return _run_completion(
         substage=SUBSTAGE_ATTRIBUTES,
         host=host,
@@ -654,11 +783,17 @@ def infer_attributes(
         draft=draft,
         system_prompt=prompts.build_attributes_system_prompt(),
         user_prompt=prompts.build_attributes_user_prompt(draft),
+        items_key="attributes",
+        key_fn=lambda attr: (
+            str(attr.get("label") or "").casefold(),
+            str(attr.get("domain") or ""),
+        ),
         parse_fn=schemas.parse_attributes_payload,
         refs_fn=schemas.attributes_referenced_ids,
         response_format=_completion_response_format(
             schemas.build_attributes_response_format, draft
         ),
+        options=options,
         on_step=on_step,
     )
 
@@ -684,6 +819,12 @@ def infer_axioms(
         draft=draft,
         system_prompt=prompts.build_axioms_system_prompt(),
         user_prompt=prompts.build_axioms_user_prompt(draft),
+        items_key="axioms",
+        key_fn=lambda ax: (
+            str(ax.get("kind") or ""),
+            str(ax.get("subject") or ""),
+            str(ax.get("object") or ""),
+        ),
         parse_fn=lambda text: schemas.parse_axioms_payload(
             text, existing_parents=draft.existing_parents()
         ),
@@ -691,5 +832,9 @@ def infer_axioms(
         response_format=_completion_response_format(
             schemas.build_axioms_response_format, draft
         ),
+        finalize_fn=lambda items: schemas.drop_multi_parent_subclass_axioms(
+            items, draft.existing_parents()
+        ),
+        options=options,
         on_step=on_step,
     )
