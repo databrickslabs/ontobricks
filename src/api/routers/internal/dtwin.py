@@ -1815,6 +1815,7 @@ async def dtwin_nodes_action_cancel(
 async def dtwin_nodes_business_rule_request(
     request: Request,
     session_mgr: SessionManager = Depends(get_session_manager),
+    settings: Settings = Depends(get_settings),
 ):
     """Validate an entity + class-declared business rule and mint a one-time token.
 
@@ -1832,6 +1833,11 @@ async def dtwin_nodes_business_rule_request(
         domain, entity_uri=entity_uri, rule_name=rule_name
     )
     rule = resolved["rule"]
+    simulation_id = (data.get("simulation_id") or "").strip() or None
+    if simulation_id:
+        from back.objects.simulation import Simulation
+
+        Simulation(domain, settings).sandbox_relation(simulation_id)
 
     domain_key = _chat_domain_key(domain)
     cache = _chat_cache(session_mgr)
@@ -1842,6 +1848,7 @@ async def dtwin_nodes_business_rule_request(
         "domain": domain_key,
         "entity_uri": entity_uri,
         "rule": rule["name"],
+        "simulation_id": simulation_id,
         "expires_at": time.time() + _PENDING_ACTION_TTL_SEC,
         "used": False,
     }
@@ -1849,10 +1856,11 @@ async def dtwin_nodes_business_rule_request(
 
     entity_label = DigitalTwin.extract_local_id(entity_uri)
     logger.info(
-        "nodes/business-rule/request: minted token for entity=%s rule=%s domain=%s",
+        "nodes/business-rule/request: minted token for entity=%s rule=%s domain=%s sim=%s",
         entity_label,
         rule["name"],
         domain_key,
+        simulation_id or "live",
     )
     return {
         "success": True,
@@ -1861,6 +1869,7 @@ async def dtwin_nodes_business_rule_request(
             "entity_uri": entity_uri,
             "entity_label": entity_label,
             "rule": rule["name"],
+            "simulation_id": simulation_id,
             "description": rule.get("description"),
             "antecedent": rule.get("antecedent", ""),
             "consequent": rule.get("consequent", ""),
@@ -1911,6 +1920,7 @@ async def dtwin_nodes_business_rule_confirm(
         settings,
         entity_uri=entry["entity_uri"],
         rule_name=entry["rule"],
+        simulation_id=entry.get("simulation_id") or None,
     )
 
 

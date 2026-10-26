@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from back.core.errors import ValidationError
+from back.objects.digitaltwin.constants import RDF_TYPE
 from back.core.graphdb.lakebase import _companion_ddl
 from back.core.graphdb.lakebase.LakebaseSimulationStore import LakebaseSimulationStore
 from back.objects.simulation import (
@@ -392,6 +393,85 @@ class TestSandboxApply:
         with pytest.raises(ValidationError):
             SimulationSandbox(object(), "g", "s1")
 
+    def test_seed_neighbourhood_copies_related_subjects(self):
+        sandbox = object.__new__(SimulationSandbox)
+        seeded: list = []
+        sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
+        sandbox._graph_name = "g"
+
+        class Live:
+            def expand_and_fetch_subgraph(self, table, uris, hops, *a):
+                assert hops == 1
+                assert uris == [EX + "c2"]
+                return {
+                    "results": [
+                        {
+                            "subject": EX + "c2",
+                            "predicate": EX + "hasMeter",
+                            "object": EX + "m1",
+                        },
+                        {
+                            "subject": EX + "m1",
+                            "predicate": RDF_TYPE,
+                            "object": EX + "Meter",
+                        },
+                    ]
+                }
+
+        sandbox._live = Live()
+        sandbox.seed_neighbourhood([EX + "c2"], hops=1)
+        assert EX + "c2" in seeded
+        assert EX + "m1" in seeded
+        assert EX + "Meter" not in seeded
+
+    def test_seed_neighbourhood_walks_sandbox_objects_when_expand_empty(self):
+        sandbox = object.__new__(SimulationSandbox)
+        seeded: list = []
+        sandbox.seed = lambda uris: seeded.extend(uris) or len(uris)
+        sandbox._graph_name = "g"
+        sandbox.uri_objects_of = lambda subject: (
+            [EX + "m1"] if subject == EX + "c2" else []
+        )
+
+        class Live:
+            def expand_and_fetch_subgraph(self, *a):
+                return {"results": []}
+
+        sandbox._live = Live()
+        sandbox.seed_neighbourhood([EX + "c2"], hops=1)
+        assert EX + "c2" in seeded
+        assert EX + "m1" in seeded
+
+    def test_seed_focus_for_swrl_copies_sandbox_objects(self):
+        sandbox = object.__new__(SimulationSandbox)
+        calls = []
+        sandbox.seed_neighbourhood = (
+            lambda uris, hops=1: calls.append((list(uris), hops)) or len(uris)
+        )
+        sandbox.uri_objects_of = lambda subject: [EX + "c2", subject]
+        sandbox.seed_focus_for_swrl(EX + "cust")
+        assert calls[0] == ([EX + "cust"], 2)
+        assert calls[1] == ([EX + "c2"], 1)
+
+    def test_uri_objects_of_skips_rdf_type(self):
+        sandbox = object.__new__(SimulationSandbox)
+        sandbox.table = "g__sim_s1"
+
+        class Store:
+            def sql_table_reference(self, table):
+                return table
+
+            def execute_query(self, sql):
+                assert "g__sim_s1" in sql
+                return [
+                    {"predicate": RDF_TYPE, "object": EX + "Customer"},
+                    {"predicate": EX + "hasContract", "object": EX + "c2"},
+                    {"predicate": EX + "name", "object": "Jacob"},
+                ]
+
+        sandbox.store = Store()
+        assert sandbox.uri_objects_of(EX + "cust") == [EX + "c2"]
+
 
 class TestSandboxLifecycle:
     def test_reset_drops_explorer_views_before_sandbox(self, monkeypatch):
@@ -433,3 +513,20 @@ class TestSandboxLifecycle:
 def test_reasoning_service_targets_sandbox():
     svc = SimulationReasoningService(SimpleNamespace(info={"name": "Dom"}, current_version="1"), None, "dom_v1__sim_s1")
     assert svc._get_graph_name() == "dom_v1__sim_s1"
+
+
+def test_domain_snapshot_loads_swrl_from_ontology():
+    from back.objects.digitaltwin.models import DomainSnapshot
+
+    domain = SimpleNamespace(
+        info={},
+        databricks={},
+        ontology={
+            "swrl_rules": [{"name": "AttachMeter"}],
+            "classes": [],
+            "properties": [],
+        },
+        generated={},
+    )
+    snap = DomainSnapshot(domain)
+    assert snap.swrl_rules[0]["name"] == "AttachMeter"

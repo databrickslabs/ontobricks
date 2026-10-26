@@ -24,6 +24,7 @@ const SimulationWorkbench = {
         on('simWbRunBtn', 'click', () => this.run());
         on('simWbResetBtn', 'click', () => this.reset());
         on('simWbScopeType', 'change', () => this._syncScopeUi());
+        on('simWbFocusSearchBtn', 'click', () => this.openScopeEntityPicker());
         on('simWbFocus', 'change', () => this._onFocusUriChanged());
         on('simWbFocus', 'input', () => {
             clearTimeout(this._focusLookupTimer);
@@ -98,11 +99,15 @@ const SimulationWorkbench = {
     _syncScopeUi() {
         const type = this._val('simWbScopeType') || 'entity';
         const focus = this._el('simWbFocus');
+        const focusGroup = this._el('simWbFocusGroup');
+        const searchBtn = this._el('simWbFocusSearchBtn');
         const cohort = this._el('simWbCohort');
         const label = this._el('simWbFocusLabel');
         const hops = this._el('simWbHopsGroup');
         const isCohort = type === 'cohort';
-        if (focus) focus.classList.toggle('d-none', isCohort);
+        if (focusGroup) focusGroup.classList.toggle('d-none', isCohort);
+        else if (focus) focus.classList.toggle('d-none', isCohort);
+        if (searchBtn) searchBtn.classList.toggle('d-none', type !== 'entity');
         if (cohort) cohort.classList.toggle('d-none', !isCohort);
         if (hops) hops.classList.toggle('d-none', type !== 'entity');
         if (label) {
@@ -254,6 +259,28 @@ const SimulationWorkbench = {
             <button type="button" class="btn btn-outline-secondary" data-lookup="${field}" data-idx="${idx}"
                     title="Find existing ${esc(field)}"><i class="bi bi-search"></i></button>
         </div>`;
+    },
+
+    openScopeEntityPicker() {
+        if ((this._val('simWbScopeType') || 'entity') !== 'entity') return;
+        if (!window.SimulationFactWizard) return;
+        SimulationFactWizard.open({
+            pick: 'scope',
+            patch: { subject: this._val('simWbFocus') },
+        });
+    },
+
+    applyScopeEntity(uri, label) {
+        const subject = String(uri || '').trim();
+        if (!subject) return;
+        this._set('simWbScopeType', 'entity');
+        this._set('simWbFocus', subject);
+        this._applyFocusLabel(label, subject);
+        const name = this._el('simWbLabel');
+        if (name && (!name.value.trim() || /^What if: /.test(name.value))) {
+            name.value = `What if: ${this._focusLabel || SimulationPage.shortUri(subject)}`;
+        }
+        this._syncScopeUi();
     },
 
     openFactWizard({ idx = null, startField = 'subject' } = {}) {

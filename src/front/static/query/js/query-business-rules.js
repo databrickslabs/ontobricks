@@ -87,7 +87,7 @@ async function openEntityBusinessRuleModal(entityUri, ruleName) {
 
     let pending;
     try {
-        const data = await _brPost('/dtwin/nodes/business-rule/request', { entity_uri: entityUri, rule: ruleName });
+        const data = await _brPost('/dtwin/nodes/business-rule/request', _brRequestBody(entityUri, ruleName));
         pending = data.pending_business_rule;
         token = pending.token;
     } catch (err) {
@@ -103,7 +103,8 @@ async function openEntityBusinessRuleModal(entityUri, ruleName) {
         </div>
         <div class="alert alert-warning py-2 mb-0 small">
             <i class="bi bi-exclamation-triangle me-1"></i>
-            The rule is evaluated for this entity only. Inferred triples will be <strong>written to the graph</strong>.
+            The rule is evaluated for this entity only. Inferred triples will be
+            <strong>${pending.simulation_id ? 'written to the simulation sandbox' : 'written to the graph'}</strong>.
         </div>`;
     runBtn.classList.remove('d-none');
 
@@ -131,6 +132,18 @@ async function openEntityBusinessRuleModal(entityUri, ruleName) {
             body.innerHTML = `<div class="alert alert-danger mb-0">${esc(err.message)}</div>`;
         }
     }, { once: true });
+}
+
+function _brSimulationId() {
+    const sel = document.getElementById('sgSimulationSelect');
+    return (sel && sel.value) ? String(sel.value) : '';
+}
+
+function _brRequestBody(entityUri, ruleName) {
+    const body = { entity_uri: entityUri, rule: ruleName };
+    const simId = _brSimulationId();
+    if (simId) body.simulation_id = simId;
+    return body;
 }
 
 async function _brPost(url, payload) {
@@ -162,7 +175,7 @@ function _brRenderResult(result, esc) {
     const more = result.truncated ? `<div class="small text-muted mt-1">Showing the first ${(result.triples || []).length} triples.</div>` : '';
     return `
         <div class="alert alert-success py-2 mb-3"><i class="bi bi-check-circle me-1"></i>
-            ${inferred} triple(s) inferred, ${result.materialized_count || 0} written to the graph.</div>
+            ${inferred} triple(s) inferred, ${result.materialized_count || 0} written to the ${result.graph_target === 'simulation' ? 'simulation sandbox' : 'graph'}.</div>
         <div class="table-responsive"><table class="table table-sm table-striped table-bordered mb-0">
             <thead class="table-light"><tr><th>Subject</th><th>Predicate</th><th>Object</th></tr></thead>
             <tbody>${rows}</tbody>

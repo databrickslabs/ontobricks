@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, Optional
 
 from back.core.errors import InfrastructureError, OntoBricksError
-from back.core.helpers import effective_graph_name
+from back.core.helpers import effective_graph_name, is_uri
 from back.core.logging import get_logger
 from back.objects.simulation.SimulationDiff import SimulationDiff
 from back.objects.simulation.SimulationReasoningService import SimulationReasoningService
@@ -76,6 +76,55 @@ class SimulationRunner:
         from back.core.graphdb import get_graphdb
 
         return get_graphdb(self._domain, self._settings)
+
+    def _hypothesis_uris(self) -> list:
+        return list(
+            dict.fromkeys(
+                uri
+                for p in self._spec.patches
+                for uri in (p.subject, p.object)
+                if uri and (uri == p.subject or is_uri(uri))
+            )
+        )
+
+    def _seed_hypothesis(self, sandbox: Any) -> None:
+        """Copy every patched entity and two live hops so SWRL can join."""
+        uris = self._hypothesis_uris()
+        if not uris:
+            return
+        self._progress(30, f"Seeding {len(uris)} hypothesis entities and neighbours")
+        seed_nb = getattr(sandbox, "seed_neighbourhood", None)
+        if callable(seed_nb):
+            seed_nb(uris, hops=2)
+        else:
+            sandbox.seed(uris)
+
+    def _relink_hypothesis(self, sandbox: Any) -> None:
+        """After patches, copy objects of new links only (not the patched subjects).
+
+        Re-seeding a patched subject from live would restore values that a
+        Set/Remove hypothesis just replaced.
+        """
+        subjects = {
+            p.subject for p in self._spec.patches if p.subject
+        }
+        uri_objects = getattr(sandbox, "uri_objects_of", None)
+        if not subjects or not callable(uri_objects):
+            return
+        extra = [
+            obj
+            for subject in subjects
+            for obj in uri_objects(subject)
+            if obj and obj not in subjects
+        ]
+        extra = list(dict.fromkeys(extra))
+        if not extra:
+            return
+        seed_nb = getattr(sandbox, "seed_neighbourhood", None)
+        if callable(seed_nb):
+            seed_nb(extra, hops=2)
+        else:
+            sandbox.seed(extra)
 
     def run(self) -> None:
         started_at = _now_iso()
@@ -178,20 +227,12 @@ class SimulationRunner:
         self._progress(20, f"Seeding sandbox with {len(entities)} entities")
         sandbox.reset()
         sandbox.seed(entities)
-        scoped = set(entities)
-        patch_subjects = list(
-            dict.fromkeys(
-                p.subject
-                for p in self._spec.patches
-                if p.subject and p.subject not in scoped
-            )
-        )
-        if patch_subjects:
-            sandbox.seed(patch_subjects)
+        self._seed_hypothesis(sandbox)
         before = sandbox.triples()
 
         self._progress(40, f"Applying {len(self._spec.patches)} patches")
         asserted = sandbox.apply(self._spec.patches)
+        self._relink_hypothesis(sandbox)
 
         self._progress(50, "Running reasoning in the sandbox")
         svc = SimulationReasoningService(self._domain, sandbox.store, sandbox.table)
@@ -221,6 +262,10 @@ class SimulationRunner:
                 "entity_count": len(entities),
                 "patch_count": len(self._spec.patches),
                 "inferred_total": len(reasoning.inferred_triples),
+                "swrl_inferred_count": stats.get("swrl_inferred_count"),
+                "swrl_rules_count": stats.get("swrl_rules_count"),
+                "swrl_skipped": stats.get("swrl_skipped"),
+                "swrl_reason": stats.get("swrl_reason"),
                 "phase_errors": {
                     k[: -len("_error")]: v for k, v in stats.items() if k.endswith("_error")
                 },

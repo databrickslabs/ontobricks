@@ -88,20 +88,84 @@ class NodeBusinessRuleService:
         entity_uri: str,
         matched_cls: Dict[str, Any],
         rule_name: str,
+        simulation_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Run *rule_name* on *entity_uri* and materialise the inferred triples.
+
+        When *simulation_id* is set, the rule runs against that ready sandbox
+        and inferred triples are written there, not to the live graph.
 
         Raises:
             ValidationError: rule not declared on the class, or the rule has no
                 variable typed by the entity's class (or one of its ancestors).
             InfrastructureError: no writable graph store, or the rule failed.
         """
-        from back.core.reasoning import InferredTriple, ReasoningResult, ReasoningService
+        class_name, requested, focus_vars = NodeBusinessRuleService._focus_rule(
+            domain, matched_cls, rule_name
+        )
+        local_id = DigitalTwin.extract_local_id(entity_uri)
+        snap = DomainSnapshot(domain)
+        sid = (simulation_id or "").strip() or None
+        store = get_graphdb(snap, settings, for_write=sid is None)
+        if store is None:
+            raise InfrastructureError("Graph store is not available for this domain")
 
+        svc, graph_target, after_write = NodeBusinessRuleService._reasoning_target(
+            domain, settings, snap, store, entity_uri, sid
+        )
+        logger.info(
+            "nodes/business-rule: running %s on entity=%s class=%s focus=%s target=%s",
+            requested,
+            local_id,
+            class_name,
+            focus_vars,
+            graph_target,
+        )
+        result = await run_blocking(
+            svc.run_swrl_rules,
+            rule_names={requested},
+            focus={"vars": focus_vars, "uri": entity_uri},
+        )
+        if (result.stats or {}).get("errors"):
+            raise InfrastructureError(f"Business rule {requested!r} failed to run")
+        triples, written = await NodeBusinessRuleService._materialize_inferred(
+            svc, requested, entity_uri, result.inferred_triples
+        )
+        if after_write is not None:
+            after_write()
+
+        logger.info(
+            "nodes/business-rule: entity=%s class=%s rule=%s inferred=%d written=%d target=%s",
+            local_id,
+            class_name,
+            requested,
+            len(triples),
+            written,
+            graph_target,
+        )
+        return {
+            "success": True,
+            "entity_uri": entity_uri,
+            "entity_local_id": local_id,
+            "class_name": class_name,
+            "rule": requested,
+            "graph_target": graph_target,
+            "inferred_count": len(triples),
+            "materialized_count": written,
+            "triples": triples[:MAX_RETURNED_TRIPLES],
+            "truncated": len(triples) > MAX_RETURNED_TRIPLES,
+        }
+
+    @staticmethod
+    def _focus_rule(domain: Any, matched_cls: Dict[str, Any], rule_name: str):
+        """Return ``(class_name, rule_name, focus_vars)`` or raise."""
         class_name = matched_cls.get("name", "")
         requested = (rule_name or "").strip()
         swrl_rules = NodeBusinessRuleService.domain_swrl_rules(domain)
-        declared = {e["name"] for e in NodeBusinessRuleService.class_entries(matched_cls, swrl_rules)}
+        declared = {
+            e["name"]
+            for e in NodeBusinessRuleService.class_entries(matched_cls, swrl_rules)
+        }
         if requested not in declared:
             logger.warning(
                 "nodes/business-rule: %r is not declared on class %s — rejected",
@@ -111,85 +175,99 @@ class NodeBusinessRuleService:
             raise ValidationError(
                 f"Business rule {requested!r} is not configured on class {class_name!r}"
             )
-
         rule = next(r for r in swrl_rules if r.get("name") == requested)
-        lineage = Rules.class_lineage(domain.get_classes() or [], class_name)
-        focus_vars = Rules.swrl_focus_variables(rule, lineage)
+        focus_vars = Rules.swrl_focus_variables(
+            rule, Rules.class_lineage(domain.get_classes() or [], class_name)
+        )
         if not focus_vars:
             raise ValidationError(
                 f"Business rule {requested!r} has no variable typed by {class_name!r}"
             )
+        return class_name, requested, focus_vars
 
-        local_id = DigitalTwin.extract_local_id(entity_uri)
-        snap = DomainSnapshot(domain)
-        store = get_graphdb(snap, settings, for_write=True)
-        if store is None:
-            raise InfrastructureError("Graph store is not available for this domain")
-
-        svc = ReasoningService(snap, store)
-        focus = {"vars": focus_vars, "uri": entity_uri}
-        logger.info(
-            "nodes/business-rule: running %s on entity=%s class=%s focus=%s",
-            requested,
-            local_id,
-            class_name,
-            focus_vars,
-        )
-        result = await run_blocking(
-            svc.run_swrl_rules, rule_names={requested}, focus=focus
-        )
-        if (result.stats or {}).get("errors"):
-            raise InfrastructureError(f"Business rule {requested!r} failed to run")
+    @staticmethod
+    async def _materialize_inferred(
+        svc: Any, requested: str, entity_uri: str, inferred_triples: Any
+    ):
+        """Write inferred URI triples; return ``(triples, written_count)``."""
+        from back.core.reasoning import InferredTriple, ReasoningResult
 
         triples = TwinInferredMaterialize.uri_triples(
             [
                 {"subject": t.subject, "predicate": t.predicate, "object": t.object}
-                for t in result.inferred_triples
+                for t in inferred_triples
             ]
         )
-        written = 0
-        if triples:
-            inferred = [
-                InferredTriple(
-                    subject=t["subject"],
-                    predicate=t["predicate"],
-                    object=t["object"],
-                    provenance=f"swrl:{requested}",
-                    rule_name=requested,
-                )
-                for t in triples
-            ]
-            try:
-                written = await run_blocking(
-                    svc.materialize_inferred, ReasoningResult(inferred_triples=inferred)
-                )
-            except Exception as exc:
-                logger.warning(
-                    "nodes/business-rule: materialising %s failed for %s: %s",
-                    requested,
-                    entity_uri,
-                    exc,
-                )
-                raise InfrastructureError(
-                    "Writing inferred triples to the graph failed", detail=str(exc)
-                ) from exc
+        if not triples:
+            return triples, 0
+        inferred = [
+            InferredTriple(
+                subject=t["subject"],
+                predicate=t["predicate"],
+                object=t["object"],
+                provenance=f"swrl:{requested}",
+                rule_name=requested,
+            )
+            for t in triples
+        ]
+        try:
+            written = await run_blocking(
+                svc.materialize_inferred, ReasoningResult(inferred_triples=inferred)
+            )
+        except Exception as exc:
+            logger.warning(
+                "nodes/business-rule: materialising %s failed for %s: %s",
+                requested,
+                entity_uri,
+                exc,
+            )
+            raise InfrastructureError(
+                "Writing inferred triples to the graph failed", detail=str(exc)
+            ) from exc
+        return triples, written
 
-        logger.info(
-            "nodes/business-rule: entity=%s class=%s rule=%s inferred=%d written=%d",
-            local_id,
-            class_name,
-            requested,
-            len(triples),
-            written,
+    @staticmethod
+    def _reasoning_target(
+        domain: Any,
+        settings: Any,
+        snap: Any,
+        store: Any,
+        entity_uri: str,
+        simulation_id: Optional[str],
+    ):
+        """Return ``(service, graph_target, after_write)`` for live or sandbox SWRL."""
+        from back.core.reasoning import ReasoningService
+
+        if not simulation_id:
+            return ReasoningService(snap, store), "live", None
+
+        from back.core.helpers import effective_graph_name, effective_graph_query_table
+        from back.objects.simulation import (
+            Simulation,
+            SimulationReasoningService,
+            SimulationSandbox,
         )
-        return {
-            "success": True,
-            "entity_uri": entity_uri,
-            "entity_local_id": local_id,
-            "class_name": class_name,
-            "rule": requested,
-            "inferred_count": len(triples),
-            "materialized_count": written,
-            "triples": triples[:MAX_RETURNED_TRIPLES],
-            "truncated": len(triples) > MAX_RETURNED_TRIPLES,
-        }
+
+        sim = Simulation(domain, settings)
+        sim.sandbox_relation(simulation_id)
+        sandbox = SimulationSandbox(store, effective_graph_name(domain), simulation_id)
+        seed = getattr(sandbox, "seed_focus_for_swrl", None)
+        if callable(seed):
+            seed(entity_uri)
+        svc = SimulationReasoningService(snap, sandbox.store, sandbox.table)
+
+        def _refresh_views() -> None:
+            ensure = getattr(sandbox, "ensure_explorer_views", None)
+            if not callable(ensure):
+                return
+            live_union = effective_graph_query_table(
+                domain, settings, include_inferred=True, store=store
+            )
+            live_asserted = (
+                store.synced_table_name(effective_graph_name(domain))
+                if hasattr(store, "synced_table_name")
+                else live_union
+            )
+            ensure(live_union, live_asserted)
+
+        return svc, "simulation", _refresh_views

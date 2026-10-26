@@ -695,4 +695,158 @@ Modified files:
 
 Tests: uv run --frozen pytest -q -m "not scenario" → 9716 passed, 326 skipped, 8 deselected, 0 failed in 51.12s
 
+================================================================================
+## Search picker for entity neighbourhood scope
+================================================================================
+
+Context: Entity neighbourhood required pasting a URI. The fact wizard already
+knew how to search the live graph; reuse it as a one-step entity picker.
+
+Changes:
+
+1. src/front/templates/partials/simulation/_sim_workbench.html
+   Search button on the entity URI field.
+2. src/front/templates/partials/simulation/_sim_fact_wizard.html
+   Wrap the operation field so the picker can hide it.
+3. src/front/static/simulation/js/simulation-workbench.js
+   Open the wizard in scope-pick mode and apply URI + label.
+4. src/front/static/simulation/js/simulation-fact-wizard.js
+   pick:'scope' — subject search only, Use this entity.
+5. tests/units/front/test_simulation_fact_wizard.py
+   Contract for the neighbourhood search picker.
+6. docs/user-guide.md
+   Entity neighbourhood search button.
+
+Modified files:
+- src/front/templates/partials/simulation/_sim_workbench.html
+- src/front/templates/partials/simulation/_sim_fact_wizard.html
+- src/front/static/simulation/js/simulation-workbench.js
+- src/front/static/simulation/js/simulation-fact-wizard.js
+- tests/units/front/test_simulation_fact_wizard.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9717 passed, 326 skipped, 8 deselected, 0 failed in 52.64s
+
+================================================================================
+## Seed patch-object neighbourhood so SWRL can fire
+================================================================================
+
+Context: A scenario that Add-ed extra contracts on Jacob Martin showed the
+patches but no SWRL consequences (meters on the customer). The sandbox only
+copied the original entity slice, so the added contracts had no live
+hasMeter triples for the rules to join on.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   seed_neighbourhood() copies URIs plus one live hop of related subjects.
+2. src/back/objects/simulation/SimulationRunner.py
+   Before reasoning, seed patch subjects and URI objects with that hop.
+3. tests/units/simulation/test_simulation_core.py
+   Neighbourhood seed includes related meters, not rdf:type class objects.
+4. tests/units/simulation/test_simulation_runner_api.py
+   Runner seeds an added contract URI.
+5. docs/user-guide.md
+   Added entities are copied from live with one neighbour hop.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9719 passed, 326 skipped, 8 deselected, 0 failed in 53.01s
+
+================================================================================
+## Run Explorer entity SWRL against the simulation sandbox
+================================================================================
+
+Context: In Explorer simulation view, applying the entity SWRL rule
+"attach meter …" on Jacob Martin produced no results. The request wrote
+to the live graph, which does not contain extra contracts asserted in the
+sandbox, so the rule had nothing to join.
+
+Changes:
+
+1. src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+   With simulation_id, run SWRL on the sandbox store and materialise there.
+2. src/back/objects/digitaltwin/node/NodeContextService.py
+   Forward simulation_id from the Explorer confirm path.
+3. src/back/objects/simulation/SimulationSandbox.py
+   seed_focus_for_swrl copies the entity neighbourhood plus sandbox URI objects.
+4. src/api/routers/internal/dtwin.py
+   Persist simulation_id on the one-time token; confirm retargets execution.
+5. src/front/static/query/js/query-business-rules.js
+   Send the Explorer Graph dropdown id; warn that writes go to the sandbox.
+6. tests/units/dtwin/test_entity_business_rules.py
+   Simulation execution writes the sandbox, not the live store.
+7. tests/units/api/test_dtwin_nodes_business_rule.py
+   Confirm forwards simulation_id from the minted token.
+8. tests/units/simulation/test_simulation_core.py
+   Focus seed copies extra contract objects, skipping rdf:type.
+9. tests/units/front/test_entity_business_rules_ui.py
+   Explorer request body includes simulation_id.
+10. docs/user-guide.md
+    Entity SWRL in simulation view writes the sandbox.
+11. tests/units/architecture/baseline.json
+    Drop the execute() size-budget exception after the extract.
+
+Modified files:
+- src/back/objects/digitaltwin/node/NodeBusinessRuleService.py
+- src/back/objects/digitaltwin/node/NodeContextService.py
+- src/back/objects/simulation/SimulationSandbox.py
+- src/api/routers/internal/dtwin.py
+- src/api/routers/digitaltwin.py
+- src/front/static/query/js/query-business-rules.js
+- tests/units/dtwin/test_entity_business_rules.py
+- tests/units/api/test_dtwin_nodes_business_rule.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/front/test_entity_business_rules_ui.py
+- tests/units/architecture/baseline.json
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9723 passed, 326 skipped, 8 deselected, 0 failed in 54.07s
+
+================================================================================
+## Fire ticked SWRL after simulation hypotheses
+================================================================================
+
+Context: With SWRL ticked on a scenario, attach-meter still did not run
+after extra contracts were added. The runner called SWRL, but extra
+contracts were copied without their meter subjects, so the join had
+nothing to match. Re-seeding the patched customer from live after a Set
+would also restore the old value.
+
+Changes:
+
+1. src/back/objects/simulation/SimulationSandbox.py
+   After seeding, walk sandbox URI objects (and live expand) for two hops
+   so meters of extra contracts are copied.
+2. src/back/objects/simulation/SimulationRunner.py
+   Seed every hypothesis URI at 2 hops before the before-picture; after
+   apply, copy objects of new links only (not the patched subjects).
+3. src/back/objects/digitaltwin/models.py
+   DomainSnapshot falls back to ontology.swrl_rules / classes / properties.
+4. tests/units/simulation/test_simulation_core.py
+   Empty live expand still seeds meter objects; snapshot loads SWRL.
+5. tests/units/simulation/test_simulation_runner_api.py
+   Hypothesis neighbourhood is copied at 2 hops.
+6. docs/user-guide.md
+   Ticked SWRL runs after hypotheses; extra entities bring two hops.
+
+Modified files:
+- src/back/objects/simulation/SimulationSandbox.py
+- src/back/objects/simulation/SimulationRunner.py
+- src/back/objects/digitaltwin/models.py
+- tests/units/simulation/test_simulation_core.py
+- tests/units/simulation/test_simulation_runner_api.py
+- docs/user-guide.md
+- changelogs/v0.10.0/benoitcayladbx_2026-10-26.log
+
+Tests: uv run --frozen pytest -q -m "not scenario" → 9725 passed, 326 skipped, 8 deselected, 0 failed in 60.68s
+
 

@@ -33,6 +33,19 @@ def test_workbench_exposes_wizard_and_per_field_lookup():
     assert "SimulationFactWizard.open" in js
 
 
+def test_entity_neighbourhood_has_graph_search_picker():
+    html = _read(WORKBENCH)
+    js = _read(WB_JS)
+    wizard = _read(JS)
+    assert 'id="simWbFocusSearchBtn"' in html
+    assert "openScopeEntityPicker" in js
+    assert "applyScopeEntity" in js
+    assert "pick: 'scope'" in js
+    assert "_syncPickMode" in wizard
+    assert "Choose neighbourhood entity" in wizard
+    assert "Use this entity" in wizard
+
+
 def test_wizard_has_subject_predicate_object_steps_without_inline_handlers():
     html = _read(MODAL)
     assert 'id="simFactWizardModal"' in html

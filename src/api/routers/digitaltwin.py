@@ -350,6 +350,7 @@ class NodeBusinessRuleResponse(BaseModel):
     entity_local_id: str = ""
     class_name: Optional[str] = None
     rule: Optional[str] = None
+    graph_target: str = "live"
     inferred_count: int = 0
     materialized_count: int = 0
     triples: List[InferredTripleOut] = []

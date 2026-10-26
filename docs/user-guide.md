@@ -928,8 +928,10 @@ the targeted view. A **ready** simulation is the live knowledge graph
 **UNION** the sandbox after-picture: simulated predicates overlay live
 ones, and the rest of each entity (existing properties and relations)
 stays visible. Explorer behaviour is unchanged (search, expand, hops,
-inferred, max entities). Use **Live graph** to query the built knowledge
-graph only.
+inferred, max entities). Entity **Inference rules (SWRL)** run against
+the sandbox (not the live graph) and write inferred triples there, so a
+rule such as attach-meter can see extra contracts asserted by the
+scenario. Use **Live graph** to query the built knowledge graph only.
 
 **Find & Filter:**
 - **Find**: Search for entities by label or URI — matching entities and their neighbors are highlighted and the camera zooms to focus on results
@@ -1248,10 +1250,13 @@ graph. Deleting a scenario drops its sandbox.
   narrow the scope and run again.
 - Result lists keep the first 2000 rows, but the counts are always exact.
 
-**What a slice means for rules.** Rules only see what was copied. A rule that
-needs data about entities outside the scope will not fire. For example, an
-aggregate over all customers will not fire when you simulate a 2-hop
-neighbourhood. Widen the hops or use a cohort or class scope in that case.
+**What a slice means for rules.** Ticked reasoning phases (SWRL, graph, …)
+run automatically after the hypotheses are applied, against the sandbox.
+Rules only see what was copied. Each hypothetical entity is copied from
+live with two neighbour hops (so an extra contract brings its meters),
+then SWRL can attach those meters to the customer. A rule that needs a
+global aggregate still will not fire on a neighbourhood slice — widen the
+hops or use a cohort or class scope in that case.
 
 ### Cohorts (Sidebar)
 
@@ -1280,7 +1285,8 @@ opens the scenario editor — it is not a sidebar item.
 
 1. **Scenario** — give it a name and an optional description.
 2. **Scope** — choose the slice of the graph to copy into the sandbox:
-   - *Entity neighbourhood*: an entity URI and a number of hops (default 2);
+   - *Entity neighbourhood*: an entity URI and a number of hops (default 2).
+     The search button opens the same live-graph picker as the fact wizard;
    - *Cohort*: one of the saved Cohort Discovery rules;
    - *Class population*: every instance of a class, up to the entity cap
      (5000). A larger population fails the run — narrow the scope instead.
@@ -1293,10 +1299,12 @@ opens the scenario editor — it is not a sidebar item.
 4. **Reasoning phases** — SWRL rules and graph reasoning are on by default;
    decision tables, SPARQL rules, aggregate rules and OWL 2 RL are optional.
 5. **Run** saves the scenario and starts it as a background task; the progress
-   bar follows the phases (scope, seed, facts, reasoning, diff). When it
-   finishes, **Simulation → Results** opens with the before/after diff. You
-   can also click **View results** on the editor, or the clipboard icon
-   on the Scenarios list.
+   bar follows the phases (scope, seed, facts, reasoning, diff). Hypothetical
+   entities you **Add** (for example extra contracts) are copied from the live
+   graph with one hop of neighbours so SWRL can chain to meters, invoices,
+   and the rest. When it finishes, **Simulation → Results** opens with the
+   before/after diff. You can also click **View results** on the editor, or
+   the clipboard icon on the Scenarios list.
 
 Tip: in the Knowledge Graph Explorer, the entity details panel has a
 **Simulate from here** button that opens the editor pre-filled with that
@@ -3005,7 +3013,7 @@ After import you can:
 - **Class Actions (Unity Catalog functions)**: Bind any number of UC functions to an ontology class in **Ontology → Studio → Behaviour → Functions**, each with its own description. Run them on a node from the details pane or its right-click menu; the result (scalar or table) opens in a popup. Each function must take exactly one argument — the entity's ID — and the invocation endpoint enforces an allow-list so only functions declared on the node's own class can be called. The same actions are surfaced to the MCP server through `get_entity_context` and `invoke_entity_action`.
 - **Class Actions (Databricks Jobs)**: In the same **Behaviour** tab (**Jobs** section), bind workspace Jobs that declare an `entity_id` parameter. OntoBricks only starts the Job (`run_now`); Spark still uses the Job's run-as identity. On Lakehouse domains in App mode the trigger is on-behalf-of the signed-in user. Triggering a Job from Explorer opens a popup that checks the run actually started and tells you right away whether it is **Running** or **Queued**, with a link to the run in Databricks. The popup keeps following the run while it is open (Running → Succeeded / Failed), and you can close it at any time: the run stays in the navbar **Background Tasks** hourglass, which shows its live state and the same run link. Invoke the same `job:<job_id>` name from Explorer or MCP `invoke_entity_action`.
 
-- **Entity Inference Rules (SWRL)**: In **Ontology → Studio → Behaviour → Inference rules (SWRL)**, attach one or more SWRL rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Knowledge Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the SWRL editor updates the class references. Neo4j-backed domains infer nothing yet, because Cypher translation of SWRL rules is not implemented.
+- **Entity Inference Rules (SWRL)**: In **Ontology → Studio → Behaviour → Inference rules (SWRL)**, attach one or more SWRL rules to a class. The picker lists only the rules whose atoms cite the class or one of its parent classes. In **Knowledge Graph → Explorer**, run a rule on a node from the details pane or its right-click menu. A confirmation modal shows the rule, then the rule runs **scoped to that entity**, the inferred triples are materialised into the graph, and the canvas refreshes. With a **simulation** selected as the graph source, the same action reads and writes that sandbox instead of the live graph. MCP clients get the same capability through `run_entity_business_rule`, which runs immediately without a confirmation step against the live graph. Running a rule requires the **Builder** role on the domain. Renaming or deleting a rule in the SWRL editor updates the class references. Neo4j-backed domains infer nothing yet, because Cypher translation of SWRL rules is not implemented.
 - **Virtual Attributes (computed on demand)**: A class of attribute that no mapping feeds and no build materialises — a Unity Catalog function computes it from the entity's ID when someone asks. Declare them in **Ontology → Studio → Attrs. → Virtual attributes** by picking a UC function that takes exactly one parameter; one attribute is created per returned column (or a single one for a scalar function), read from `information_schema`. In the Graph Explorer they appear in their own **Virtual Attributes** section under the mapped ones with a per-function **Compute** button, a **Compute all**, and a right-click shortcut; computed values are cached per entity for the page's lifetime, with **Recompute** as the refresh. Over MCP the declarations always ride along with `get_entity_context`; when a question is about a virtual attribute's value, the model should call `compute_virtual_attributes(entity_uri)` to run the UC function — nothing is computed unless asked. A failing function reports its error without denying the attributes that still resolve. Because they are never materialised, virtual attributes are **not queryable** in SPARQL or GraphQL and take no part in mappings, R2RML, SHACL or data-quality checks.
 - **Entity SHACL facets**: Check one entity against every enabled SHACL shape that applies to it — the shapes on its class, on its parent classes, and the global ones. In **Knowledge Graph → Explorer**, right-click a node and choose **Data quality → Data Quality Checks (N)**, or use **Check** in the node's **Data quality** section. The **Data Quality Checks** popup shows a scrollable activity log while the
 check runs, then one gauge per dimension (completeness, cardinality, uniqueness, consistency, conformance, structural): the share of checked shapes that passed, ignoring the ones that did not apply, were not evaluated or errored — a dash means nothing in that dimension could be checked. Clicking a gauge opens its section. Below, the shapes are listed by dimension in sections that start collapsed, each with its status — passed, failed (with its severity), not applicable (guard condition false), not evaluated (no SQL translation, such as `sh:closed`) or error — the values the entity carries on the constrained property, and the ancestor an inherited shape comes from. The status chips filter the list and open the sections that hold a match. Results are cached per entity for the page's lifetime; **Re-check** recomputes them. Checked nodes get a ring on the canvas: red when a Violation failed, amber when a Warning/Info failed or a shape errored, green when every shape passed or did not apply. The **Quality** toolbar toggle hides the rings. MCP clients get the same check through `check_entity_shacl_facets(entity_uri)`, which can be disabled per domain in the MCP policy.

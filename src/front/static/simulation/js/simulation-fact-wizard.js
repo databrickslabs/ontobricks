@@ -9,6 +9,8 @@ const SimulationFactWizard = {
     _subjectType: '',
     _subjectTypeUri: '',
     _pickedSubjectUri: '',
+    _pickedLabel: '',
+    _pickMode: '',
     _predIsObject: false,
     _predRange: '',
     _busy: false,
@@ -40,7 +42,25 @@ const SimulationFactWizard = {
         document.getElementById('simFactSubjectHits')?.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-uri]');
             if (!btn) return;
-            this._pickSubject(btn.dataset.uri, btn.dataset.type || '', btn.dataset.typeUri || '', btn);
+            this._pickSubject(
+                btn.dataset.uri,
+                btn.dataset.type || '',
+                btn.dataset.typeUri || '',
+                btn.dataset.label || '',
+                btn,
+            );
+        });
+        document.getElementById('simFactSubjectHits')?.addEventListener('dblclick', (e) => {
+            const btn = e.target.closest('[data-uri]');
+            if (!btn || this._pickMode !== 'scope') return;
+            this._pickSubject(
+                btn.dataset.uri,
+                btn.dataset.type || '',
+                btn.dataset.typeUri || '',
+                btn.dataset.label || '',
+                btn,
+            );
+            this._apply();
         });
         document.getElementById('simFactPredHits')?.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-uri]');
@@ -55,11 +75,13 @@ const SimulationFactWizard = {
         });
     },
 
-    async open({ idx = null, startField = 'subject', patch = null } = {}) {
+    async open({ idx = null, startField = 'subject', patch = null, pick = '' } = {}) {
         this._idx = idx;
+        this._pickMode = pick === 'scope' ? 'scope' : '';
         this._subjectType = '';
         this._subjectTypeUri = '';
         this._pickedSubjectUri = '';
+        this._pickedLabel = '';
         this._predIsObject = false;
         this._predRange = '';
         await this._ensureOntology();
@@ -68,7 +90,7 @@ const SimulationFactWizard = {
         this._set('simFactSubjectUri', p.subject || '');
         this._set('simFactPredicateUri', p.predicate || '');
         this._set('simFactObjectValue', p.object || '');
-        this._set('simFactSearch', '');
+        this._set('simFactSearch', p.subject ? this._local(p.subject) : '');
         this._set('simFactObjectSearch', '');
         this._set('simFactPredFilter', '');
         const subjectHits = this._el('simFactSubjectHits');
@@ -76,7 +98,10 @@ const SimulationFactWizard = {
         if (subjectHits) subjectHits.innerHTML = '';
         if (objectHits) objectHits.innerHTML = '';
         this._fillClassSelect();
-        const start = { subject: 1, predicate: 2, object: 3 }[startField] || 1;
+        this._syncPickMode();
+        const start = this._pickMode === 'scope'
+            ? 1
+            : ({ subject: 1, predicate: 2, object: 3 }[startField] || 1);
         await this._go(start);
         bootstrap.Modal.getOrCreateInstance(this._el('simFactWizardModal')).show();
     },
@@ -298,9 +323,10 @@ const SimulationFactWizard = {
         }).join('');
     },
 
-    _pickSubject(uri, type, typeUri, btn) {
+    _pickSubject(uri, type, typeUri, label, btn) {
         this._set('simFactSubjectUri', uri);
         this._pickedSubjectUri = uri;
+        this._pickedLabel = label || '';
         this._subjectType = type;
         this._subjectTypeUri = typeUri;
         this._markActive('simFactSubjectHits', btn);
@@ -362,6 +388,10 @@ const SimulationFactWizard = {
     },
 
     _syncOpUi() {
+        if (this._pickMode === 'scope') {
+            this._syncPickMode();
+            return;
+        }
         const copy = this._opCopy();
         const intro = this._el('simFactIntro');
         const predHint = this._el('simFactPredHint');
@@ -387,6 +417,14 @@ const SimulationFactWizard = {
     },
 
     async _go(step) {
+        if (this._pickMode === 'scope') {
+            this._step = 1;
+            this._el('simFactStepSubject')?.classList.remove('d-none');
+            this._el('simFactStepPredicate')?.classList.add('d-none');
+            this._el('simFactStepObject')?.classList.add('d-none');
+            this._syncPickMode();
+            return;
+        }
         const next = Math.min(3, Math.max(1, Number(step) || 1));
         if (next > this._step) {
             if (next >= 2 && !this._val('simFactSubjectUri')) {
@@ -496,7 +534,8 @@ const SimulationFactWizard = {
                 + seeds.map((s) => `<button type="button" class="list-group-item list-group-item-action small"
                     data-uri="${SimulationPage.esc(s.uri)}"
                     data-type="${SimulationPage.esc(s.type || '')}"
-                    data-type-uri="${SimulationPage.esc(s.type_uri || '')}">
+                    data-type-uri="${SimulationPage.esc(s.type_uri || '')}"
+                    data-label="${SimulationPage.esc(s.label || this._local(s.uri))}">
                     <strong>${SimulationPage.esc(s.label || this._local(s.uri))}</strong>
                     <span class="badge bg-secondary bg-opacity-25 text-dark ms-1">${SimulationPage.esc(s.type || 'Unknown')}</span>
                     <div class="text-muted text-break">${SimulationPage.esc(s.uri)}</div>
@@ -509,9 +548,46 @@ const SimulationFactWizard = {
         }
     },
 
+    _syncPickMode() {
+        const pick = this._pickMode === 'scope';
+        this._el('simFactOpWrap')?.classList.toggle('d-none', pick);
+        this._el('simFactWizardTabs')?.classList.toggle('d-none', pick);
+        const title = this._el('simFactWizardTitle');
+        if (title) {
+            title.innerHTML = pick
+                ? '<i class="bi bi-search me-2"></i>Choose neighbourhood entity'
+                : '<i class="bi bi-magic me-2"></i>Hypothetical fact';
+        }
+        const intro = this._el('simFactIntro');
+        if (intro && pick) {
+            intro.textContent = 'Search the live graph for the entity whose neighbourhood becomes the simulation slice.';
+        }
+        const apply = this._el('simFactApplyBtn');
+        if (apply && pick) {
+            apply.innerHTML = '<i class="bi bi-check2 me-1"></i>Use this entity';
+        }
+        this._el('simFactNextBtn')?.classList.toggle('d-none', pick);
+        this._el('simFactBackBtn')?.classList.toggle('d-none', pick);
+        this._el('simFactApplyBtn')?.classList.toggle('d-none', !pick && this._step !== 3);
+    },
+
     _apply() {
-        const op = this._val('simFactOp') || 'set';
         const subject = this._val('simFactSubjectUri');
+        if (this._pickMode === 'scope') {
+            if (!subject) {
+                showNotification('Pick or type a subject URI first.', 'warning');
+                return;
+            }
+            if (window.SimulationWorkbench) {
+                SimulationWorkbench.applyScopeEntity(
+                    subject,
+                    this._pickedLabel || this._local(subject),
+                );
+            }
+            bootstrap.Modal.getInstance(this._el('simFactWizardModal'))?.hide();
+            return;
+        }
+        const op = this._val('simFactOp') || 'set';
         const predicate = this._val('simFactPredicateUri');
         const object = this._el('simFactObjectValue') ? this._el('simFactObjectValue').value : '';
         if (!subject || !predicate) {

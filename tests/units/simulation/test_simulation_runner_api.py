@@ -250,8 +250,17 @@ class _FakeSandbox:
 
     def seed(self, entities):
         self.seeded = list(entities)
+        self.seed_calls = getattr(self, "seed_calls", [])
+        self.seed_calls.append(list(entities))
         for t in ({"subject": EX + "acme", "predicate": EX + "score", "object": "700"},):
             self.rows[SimulationDiff.key(t)] = t
+
+    def seed_neighbourhood(self, uris, hops=1):
+        self.neighbourhood_calls = getattr(self, "neighbourhood_calls", [])
+        self.neighbourhood_calls.append((list(uris), hops))
+        self.neighbourhood = list(uris)
+        self.neighbourhood_hops = hops
+        return self.seed(uris)
 
     def triples(self):
         return list(self.rows.values())
@@ -320,6 +329,50 @@ class TestSimulationRunner:
         assert s["sandbox_table"] == "dom_v1__sim_s1"
         assert reg.runs[-1]["status"] == "success"
         assert tm.completed and not tm.failed
+
+    def test_seeds_added_contract_neighbourhood(self, monkeypatch):
+        _FakeSandbox.instances = []
+        monkeypatch.setattr(runner_mod, "SimulationSandbox", _FakeSandbox)
+        monkeypatch.setattr(runner_mod, "SimulationReasoningService", _FakeReasoning)
+        monkeypatch.setattr(
+            SimulationScope,
+            "resolve_entities",
+            lambda self, store, g, **kw: [EX + "acme"],
+        )
+        contract = EX + "contract2"
+        spec = SimulationSpec.from_dict(
+            _body(
+                patches=[
+                    {
+                        "op": "add",
+                        "subject": EX + "acme",
+                        "predicate": EX + "hasContract",
+                        "object": contract,
+                    }
+                ]
+            ),
+            default_hops=2,
+            default_cap=100,
+            sim_id="s1",
+        )
+        reg, tm = _Registry(), _TM()
+        SimulationRunner(
+            tm=tm,
+            task_id="task-1",
+            settings=None,
+            domain_snap=_Domain(),
+            registry=reg,
+            folder="dom",
+            version="1",
+            spec=spec,
+            owner="a@b.c",
+            get_store=lambda d, s: object(),
+        ).run()
+        sandbox = _FakeSandbox.instances[0]
+        assert any(
+            contract in uris and hops == 2
+            for uris, hops in sandbox.neighbourhood_calls
+        )
 
     def test_failure_marks_failed_without_leaking_internals(self, monkeypatch):
         reg, tm = _Registry(), _TM()

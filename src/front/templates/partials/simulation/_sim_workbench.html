@@ -69,7 +69,13 @@
                         </div>
                         <div class="col-12 col-md-8">
                             <label for="simWbFocus" class="form-label small" id="simWbFocusLabel">Entity</label>
-                            <input type="text" class="form-control form-control-sm" id="simWbFocus" placeholder="https://…">
+                            <div class="input-group input-group-sm" id="simWbFocusGroup">
+                                <input type="text" class="form-control" id="simWbFocus" placeholder="https://…">
+                                <button type="button" class="btn btn-outline-secondary" id="simWbFocusSearchBtn"
+                                        title="Search the live graph">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
                             <select class="form-select form-select-sm d-none" id="simWbCohort"></select>
                             <div id="simWbFocusCaption" class="form-text d-none"></div>
                         </div>
